@@ -290,6 +290,11 @@ class ReKepLiberoEnv:
         """Always read through to the live MjSim — never cache it (see __init__)."""
         return self.env.sim
 
+    #: Radius around a waypoint whose obstacles are exempt from collision.
+    #: Sized to the gripper: it must cover what sits between the fingers at the
+    #: target and nothing more, so the arm still avoids everything else.
+    GRASP_EXEMPT_M = 0.07
+
     ROBOT_BODY_PREFIXES = ("robot", "gripper", "mount")
 
     # sim steps between captured video frames; 1 = real time at 20 fps
@@ -1251,6 +1256,24 @@ class ReKepLiberoEnv:
             from .world_depth import perceived_world
 
             world, _info = perceived_world(self, warn=None)
+            # ALLOWED-COLLISION VOLUME around the goal. A grasp pose is IN
+            # CONTACT with the thing being grasped, so a collision check that
+            # forbids contact rejects every grasp -- measured: solves came back
+            # ok=False at 0.4-0.6 mm position error, i.e. the pose was found
+            # and vetoed on contact, not accuracy.
+            #
+            # The perceived world is voxels with no object identity (removed on
+            # purpose), so there is no name to exempt. The geometric equivalent
+            # is better anyway: whatever occupies the TARGET is what we intend
+            # to touch. Everything else still collides.
+            cub = world.get("cuboid", {})
+            if cub:
+                tgt = np.asarray(target_pose[:3], dtype=float)
+                kept = {k: v for k, v in cub.items()
+                        if np.linalg.norm(np.asarray(v["pose"][:3]) - tgt)
+                        > self.GRASP_EXEMPT_M}
+                self._last_exempt = len(cub) - len(kept)
+                world = {"cuboid": kept}
             m, d = self.sim.model, self.sim.data
             b = m.body_name2id("robot0_base")
             T_wb = np.eye(4)
@@ -1259,6 +1282,10 @@ class ReKepLiberoEnv:
             goal = inv(T_wb) @ flange_from_obs(target_pose[:3], target_pose[3:])
             r = self._ik_client.solve(self.get_arm_joint_postions().tolist(),
                                       pose_to_curobo(goal), world, [])
+            if r and r.get("ok"):
+                print(f"curobo-ik: solved, {r.get('obstacles')} obstacles, "
+                      f"{getattr(self, '_last_exempt', 0)} exempt near target, "
+                      f"{r.get('ms', 0):.0f} ms")
             if not r or not r.get("ok"):
                 print(f"{bcolors.WARNING}curobo-ik: no solution "
                       f"({r.get('pos_err', 0) * 1000:.1f} mm, "
