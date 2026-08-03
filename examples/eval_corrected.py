@@ -98,8 +98,17 @@ def main():
     for ep in a.init_states:
         START = None
         if a.align_start:
-            f = f"{R}/pairs/traj/traj_{a.suite}_Panda_raw_init{ep}.npy"
-            START = np.load(f)[0] if os.path.exists(f) else None
+            # Gripper-tagged name first, then the pre-rename one. A miss used
+            # to leave START=None and skip alignment SILENTLY -- the run then
+            # looks like a legitimate 0/3 rather than a misconfiguration.
+            cands = [f"{R}/pairs/traj/traj_{a.suite}_Panda_PandaGripper_raw_init{ep}.npy",
+                     f"{R}/pairs/traj/traj_{a.suite}_Panda_raw_init{ep}.npy"]
+            f = next((c for c in cands if os.path.exists(c)), None)
+            if f is None:
+                raise FileNotFoundError(
+                    f"--align-start needs a Panda reference trajectory for "
+                    f"{a.suite} init{ep}; looked for {cands}")
+            START = np.load(f)[0]
         np.random.seed(0); env.reset()
         obs = env.set_init_state(U.remap_init_state(init[ep], env.sim))
         model.reset(task.language); frames = []; done = False; traj = []

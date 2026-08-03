@@ -42,7 +42,7 @@ def target_xpos(env, task_lang):
     return best
 
 
-def run(gripper, model, ref, cam=False):
+def run(gripper, model, ref, cam=False, corr=None):
     env, suite, task = U.build(SUITE, TASK, robot="UR5e", gripper=gripper, fixture_ref=ref)
     o = __import__("torch").load
     import torch as _t
@@ -77,6 +77,8 @@ def run(gripper, model, ref, cam=False):
                 (obs["robot0_eef_pos"], q2aa(obs["robot0_eef_quat"]),
                  grip2(obs["robot0_gripper_qpos"]))), 0))["raw_action"]
         act = from_raw(raw)
+        if corr is not None:
+            act = corr(act, obs["robot0_eef_pos"], U.gripper_geom(env))[0]
         obs, _, done, _ = env.step(to_env(act).tolist())
         tcp = np.asarray(d.site_xpos[site], float).copy()
         log.append(dict(t=t, tcp=tcp.tolist(),
@@ -94,10 +96,26 @@ def main():
     p, _, _ = U.build(SUITE, TASK); ref = U.fixture_snapshot(p.sim); p.close()
     model = M1Inference(policy_ckpt_path=CK, unnorm_key="franka",
                         policy_setup="franka", host="127.0.0.1", port=15090)
+    import glob
+    from xembody.adapt import Corrector, featurise
+    from xembody.pairs import WV
+    T, S, TCP, G = [], [], [], []
+    for f in sorted(glob.glob(f"{R}/pairs/*/[pr]_*.npz")):
+        d = np.load(f); T.append(d["a_target"]); S.append(d["a_source"]); TCP.append(d["tcp"])
+        G.append(d["geom"] if "geom" in d.files
+                 else np.full((len(d["tcp"]), 2), np.nan, np.float32))
+    T = np.concatenate(T); S = np.concatenate(S)
+    TCP = np.concatenate(TCP); G = np.concatenate(G)
+    c = Corrector(hidden=64)
+    c.fit(featurise(T, TCP, G), S[:, :6].astype(np.float32),
+          np.linalg.norm(S[:, WV], axis=1).astype(np.float32), epochs=600, verbose=False)
+
     out = [run("PandaGripper", model, ref),
            run("Robotiq85Gripper", model, ref),
-           run("Robotiq85Gripper", model, ref, cam=True)]
+           run("Robotiq85Gripper", model, ref, cam=True),
+           run("Robotiq85Gripper", model, ref, cam=True, corr=c)]
     out[2]["gripper"] = "Robotiq85+cam"
+    out[3]["gripper"] = "Robotiq85+cam+corr"
     json.dump(out, open(f"{R}/pairs/diag/diag_gripper.json", "w"))
 
     print(f"\ntask: {out[0]['lang']}   target body: {out[0]['target']}\n")
