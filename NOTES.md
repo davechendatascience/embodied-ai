@@ -615,6 +615,18 @@ DINOv3 is available for the features.
   0.16 m stops short of LIBERO's success threshold.
 - `libero_goal/0` opens by travelling **+Y** even though its joint qpos goes
   **negative** (range `[-0.16, 0.01]`); `_check_success()` is True at −0.16.
+- **Two PointWorld artefacts were deleted to reclaim 14.2 GB** (28 G → 15 G),
+  and neither is a loss:
+  - `pretrained_checkpoints/large-droid/` (13 G) — **zero references** in
+    `src/`, `tests/`, `scripts/` or the docs. Every measurement here uses
+    `large-droid+behavior` or `small-droid`, both kept.
+  - `third_party/dinov3/checkpoints/dinov3_vitl16_pretrain_lvd1689m-*.pth`
+    (1.2 G) — a GENERATED file, not a download. It is the output of
+    `scripts/extract_dinov3_from_checkpoint.py`, which pulls the weights out of
+    `small-droid/model-best.pt`. `pointworld_bridge/model.py:85` already raises
+    with that command when it is missing, so PointWorld reports the fix itself.
+  Not deleted, deliberately: `spconv/spconv/build` (4.7 G) holds JIT-compiled
+  kernels and is a slow rebuild for modest space.
 
 ---
 
