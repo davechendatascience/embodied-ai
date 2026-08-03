@@ -53,6 +53,21 @@ def main():
                     help="Give the target gripper the Panda's fingertip pad "
                          "(sliding friction 2.0). Without it a gripper swap "
                          "measures robosuite's pad asset, not the embodiment.")
+    ap.add_argument("--cam-offset", type=float, nargs=3, default=(0., 0., 0.),
+                    metavar=("DX", "DY", "DZ"),
+                    help="mm, in the CAMERA frame, added to the alignment "
+                         "target. The policy servos the CAMERA, so biasing the "
+                         "camera->TCP target by d makes the TCP settle d away "
+                         "from where it otherwise would -- i.e. it tells the "
+                         "arm it is somewhere it is not. z is depth.")
+    ap.add_argument("--act-bias", type=float, nargs=3, default=(0., 0., 0.),
+                    metavar=("BX", "BY", "BZ"),
+                    help="Constant bias on the policy's translation action, in "
+                         "action units, base frame. The policy is a closed-loop "
+                         "visual servo: it does not drift, it settles where its "
+                         "own output equals -bias. This is the 3-number, "
+                         "systematic-only version of the corrector -- the part "
+                         "the pair data identifies robustly.")
     ap.add_argument("--align-camera", action="store_true",
                     help="Slide the wrist camera so camera-to-TCP matches the "
                          "Panda's 0.1091 m. A longer gripper moves the TCP away "
@@ -123,7 +138,8 @@ def main():
             # from XML, so a cam_pos written before the loop is silently
             # discarded on every reset and the rollout runs UNALIGNED -- which
             # reads as a legitimate failure, not a configuration bug.
-            b, af = U.align_wrist_camera(env.sim)
+            tgt = U.PANDA_CAM_TO_TCP_VEC + np.asarray(a.cam_offset) / 1000.0
+            b, af = U.align_wrist_camera(env.sim, target=tgt)
             print(f"    wrist camera realigned: cam->TCP "
                   f"{np.round(b*1000,1)} -> {np.round(af*1000,1)} mm (cam frame)")
         if a.align_start and START is not None:
@@ -145,6 +161,7 @@ def main():
                     (obs["robot0_eef_pos"], q2aa(obs["robot0_eef_quat"]),
                      grip2(obs["robot0_gripper_qpos"]))), 0))["raw_action"]
             act = from_raw(raw)
+            act[:3] = act[:3] + np.asarray(a.act_bias)
             if corr is not None:
                 act = corr(act, obs["robot0_eef_pos"], GEOM)[0]
             obs, _, done, _ = env.step(to_env(act).tolist())
