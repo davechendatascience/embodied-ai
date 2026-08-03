@@ -1122,6 +1122,12 @@ class ReKepLiberoEnv:
         return self.last_gripper_action
 
     def open_gripper(self):
+        # Record the command BEFORE stepping: LIBERO raises EpisodeFinished the
+        # instant it reports done, and for a place task that happens INSIDE
+        # this call. Setting the flag afterwards leaves it stale at "shut",
+        # which made the proprioceptive grasp test read a 71.6 mm OPEN jaw as
+        # a held object.
+        self.last_gripper_action = -1.0
         if self.last_gripper_action == -1.0:
             return
         for _ in range(15):

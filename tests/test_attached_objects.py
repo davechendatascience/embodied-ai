@@ -79,6 +79,7 @@ def main():
     worst_drift, worst_obj = 0.0, ""
     saw_held = False
     counts_seen = []
+    agree = []
 
     for idx, why in marks:
         s = steps[idx]
@@ -92,6 +93,13 @@ def main():
                 env.open_gripper()
         except EpisodeFinished:
             pass
+
+        # cross-check the proprioceptive detector against the contact list it
+        # replaces: they must agree, or the swap changed behaviour
+        from rekep_libero.grasp_detect import report as grasp_report
+        w_hold, width, cmd_closed = grasp_report(env)
+        c_hold = bool(env._contacting_objects()) and env.is_grasping()
+        agree.append((w_hold, c_hold, width, cmd_closed))
 
         world, att, held, _skipped = refresh(env)
         n_world = sum(counts(world).values())
@@ -133,6 +141,18 @@ def main():
     print(f"  worst tool-frame drift while held: {worst_drift:.2f} mm "
           f"({worst_obj or 'n/a'})")
     print(f"  world obstacle count across keyposes: {counts_seen}")
+    print(f"  {'cmd':>6}{'width-based':>14}{'contact-list':>14}{'jaw':>12}")
+    for w, c, wid, cmd in agree:
+        print(f"  {('shut' if cmd else 'open'):>6}{str(w):>14}{str(c):>14}"
+              f"{wid * 1000:>9.1f} mm")
+    # Only require agreement while the gripper is commanded SHUT. At release
+    # the contact list still sees the object brushing the fingers as it drops;
+    # width correctly says "not holding", because the command is open. That is
+    # the proprioceptive detector being better, not worse.
+    mismatch = [i for i, (w, c, _, cmd) in enumerate(agree) if cmd and w != c]
+    if mismatch:
+        failures.append(f"width vs contact-list disagree while COMMANDED SHUT "
+                        f"at keyposes {mismatch} -- not a drop-in replacement")
     print()
     if failures:
         print("FAILED")

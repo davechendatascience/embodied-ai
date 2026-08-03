@@ -269,7 +269,13 @@ def refresh(env, meshes="obb"):
     as it opens and a grasped object moves with the hand, so a world computed
     once is stale by the second keypose.
     """
-    held = tuple(env._contacting_objects()) if env.is_grasping() else ()
+    # DETECTION is proprioceptive: gripper commanded shut + jaws stopped short
+    # of empty. No contact list, so this survives the move off the simulator.
+    # IDENTITY still comes from the model and is the remaining privileged step
+    # -- on a robot it is segmentation of the cloud between the fingers.
+    from .grasp_detect import holding_by_width
+
+    held = tuple(env._contacting_objects()) if holding_by_width(env) else ()
     world, skipped = export(env.sim, meshes=meshes, exclude_bodies=held)
     return world, attached(env.sim, held, meshes=meshes), held, skipped
 
