@@ -41,6 +41,21 @@ import numpy as np
 #: obstacles than the solver is configured to hold.
 VOXEL_M = 0.03
 
+#: Emitted cuboid edge as a fraction of the grid pitch.
+#:
+#: A cuboid CENTRED on a surface point extends half a voxel in every direction,
+#: so at 3 cm the table reads 15 mm taller than it is and the cabinet face
+#: 15 mm nearer. For a gripper approaching a handle just above a table that
+#: margin decides feasibility: the same poses solve 45/45 at 0.000 mm with
+#: collision off, and fail at 1.8-6.2 mm against this world.
+#:
+#: THE TRADE IS REAL AND IN THE UNSAFE DIRECTION. Shrinking leaves gaps of
+#: (1 - scale) * pitch between adjacent boxes -- 9 mm at 0.7 -- which a planner
+#: may thread. It is tolerable here only because the robot's own collision
+#: spheres are 40-90 mm, far larger than the gaps, so no sphere fits through
+#: one. Do not raise this without re-checking that.
+DIMS_SCALE = 0.7
+
 #: Hard cap on emitted obstacles. Exceeding the collision cache silently
 #: truncates inside cuRobo, which is the worst possible failure -- the planner
 #: would treat dropped obstacles as free space. Truncating HERE is loud.
@@ -97,7 +112,7 @@ def perceived_points(env, exclude_robot=True, exclude_held=True):
 
 
 def voxelise(points, bounds_min, bounds_max, voxel=VOXEL_M,
-             max_obstacles=MAX_OBSTACLES, warn=print):
+             max_obstacles=MAX_OBSTACLES, warn=print, dims_scale=DIMS_SCALE):
     """Occupied voxels as cuRobo cuboids, in the WORLD frame."""
     if not len(points):
         return {}, 0
@@ -121,7 +136,7 @@ def voxelise(points, bounds_min, bounds_max, voxel=VOXEL_M,
 
     centres = bounds_min + (uniq + 0.5) * voxel
     cuboid = {
-        f"vox_{i}": {"dims": [voxel] * 3,
+        f"vox_{i}": {"dims": [voxel * dims_scale] * 3,
                      "pose": [*c.tolist(), 1.0, 0.0, 0.0, 0.0]}
         for i, c in enumerate(centres)
     }
