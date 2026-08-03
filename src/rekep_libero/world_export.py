@@ -116,8 +116,16 @@ def _mesh_obb(model, geom_id, mat):
 
 
 def export(sim, meshes="obb", include_visual=False,
-           robot_prefixes=ROBOT_BODY_PREFIXES):
-    """Build a cuRobo WorldConfig dict from the live simulator state."""
+           robot_prefixes=ROBOT_BODY_PREFIXES, exclude_bodies=()):
+    """Build a cuRobo WorldConfig dict from the live simulator state.
+
+    `exclude_bodies` omits objects the robot is HOLDING. A grasped object is
+    rigidly attached to the tool and travels with it; leaving it in the world
+    means the planner is asked to avoid something moving with the gripper, and
+    it will correctly report every subsequent motion infeasible. Pair this with
+    `attached()`, which re-expresses the same geometry in the tool frame so it
+    can be added to the robot model instead.
+    """
     m, d = sim.model, sim.data
     cuboid, sphere, cylinder, mesh_out = {}, {}, {}, {}
     skipped = {"robot": 0, "visual": 0, "unsupported": 0}
@@ -129,6 +137,9 @@ def export(sim, meshes="obb", include_visual=False,
             continue
         if not include_visual and int(m.geom_group[g]) != 0:
             skipped["visual"] += 1
+            continue
+        if any(body.startswith(e) for e in exclude_bodies):
+            skipped["held"] = skipped.get("held", 0) + 1
             continue
 
         name = m.geom_id2name(g) or f"geom{g}"
@@ -197,6 +208,70 @@ def export(sim, meshes="obb", include_visual=False,
     if mesh_out:
         world["mesh"] = mesh_out
     return world, skipped
+
+
+def attached(sim, object_names, tool_body="robot0_right_hand",
+             meshes="obb", include_visual=False):
+    """The held object's geometry, expressed in the TOOL frame.
+
+    cuRobo needs a grasped object as part of the ROBOT, not the world: its
+    spheres ride on the tool link and are exempt from collision with the
+    gripper that holds them. Expressing the geometry in the tool frame is what
+    makes that possible, and it is also the claim to verify -- while an object
+    is genuinely held, this transform is CONSTANT. A drifting one means the
+    grasp is slipping, which is worth knowing separately from a planning
+    failure.
+    """
+    m, d = sim.model, sim.data
+    tool = m.body_name2id(tool_body)
+    R_wt = np.asarray(d.body_xmat[tool], dtype=np.float64).reshape(3, 3)
+    p_wt = np.asarray(d.body_xpos[tool], dtype=np.float64)
+
+    out = {}
+    for g in range(m.ngeom):
+        if not include_visual and int(m.geom_group[g]) != 0:
+            continue
+        body = m.body_id2name(m.geom_bodyid[g]) or ""
+        if not any(body.startswith(o) for o in object_names):
+            continue
+
+        name = m.geom_id2name(g) or f"geom{g}"
+        gtype = int(m.geom_type[g])
+        size = np.asarray(m.geom_size[g], dtype=np.float64)
+        # world -> tool
+        R_wg = np.asarray(d.geom_xmat[g], dtype=np.float64).reshape(3, 3)
+        p_wg = np.asarray(d.geom_xpos[g], dtype=np.float64)
+        R_tg = R_wt.T @ R_wg
+        p_tg = R_wt.T @ (p_wg - p_wt)
+
+        if gtype == MESH:
+            centre_local, half = _mesh_obb(m, g, R_wg)
+            centre = p_tg + R_tg @ centre_local
+            dims = (half * 2.0).tolist()
+        elif gtype == BOX:
+            centre, dims = p_tg, (size * 2.0).tolist()
+        elif gtype == SPHERE:
+            centre, dims = p_tg, [size[0] * 2.0] * 3
+        elif gtype in (CAPSULE, CYLINDER):
+            centre = p_tg
+            dims = [size[0] * 2.0, size[0] * 2.0, size[1] * 2.0]
+        else:
+            continue
+        out[name] = {"dims": dims,
+                     "pose": [*centre.tolist(), *_mat_to_quat_wxyz(R_tg).tolist()]}
+    return {"cuboid": out} if out else {}
+
+
+def refresh(env, meshes="obb"):
+    """Current world and held-object geometry, split correctly.
+
+    Call this at every replan. `world_export` is a SNAPSHOT: the drawer moves
+    as it opens and a grasped object moves with the hand, so a world computed
+    once is stale by the second keypose.
+    """
+    held = tuple(env._contacting_objects()) if env.is_grasping() else ()
+    world, skipped = export(env.sim, meshes=meshes, exclude_bodies=held)
+    return world, attached(env.sim, held, meshes=meshes), held, skipped
 
 
 def counts(world):
