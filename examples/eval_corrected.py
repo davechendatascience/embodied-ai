@@ -26,6 +26,8 @@ def q2aa(q):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--robot", default="UR5e")
+    ap.add_argument("--suite", default="libero_object")
+    ap.add_argument("--task-id", type=int, default=0)
     ap.add_argument("--init-states", type=int, nargs="+", default=[5, 6, 7])
     ap.add_argument("--steps", type=int, default=280)
     ap.add_argument("--port", type=int, default=15090)
@@ -53,20 +55,20 @@ def main():
                  epochs=600, verbose=False)
 
     if a.robot == "Panda":
-        env, suite, task = U.build("libero_object", 0)
+        env, suite, task = U.build(a.suite, a.task_id)
     else:
-        p, suite, _ = U.build("libero_object", 0); ref = U.fixture_snapshot(p.sim); p.close()
-        env, suite, task = U.build("libero_object", 0, robot=a.robot,
+        p, suite, _ = U.build(a.suite, a.task_id); ref = U.fixture_snapshot(p.sim); p.close()
+        env, suite, task = U.build(a.suite, a.task_id, robot=a.robot,
                                    gripper="PandaGripper", fixture_ref=ref)
     o = _t.load; _t.load = lambda *x, **k: o(*x, **{**k, "weights_only": False})
-    init = suite.get_task_init_states(0); _t.load = o
+    init = suite.get_task_init_states(a.task_id); _t.load = o
     model = M1Inference(policy_ckpt_path=CK, unnorm_key="franka",
                         policy_setup="franka", host="127.0.0.1", port=a.port)
     succ = 0
     for ep in a.init_states:
         START = None
         if a.align_start:
-            f = f"{R}/pairs/traj_Panda_raw_init{ep}.npy"
+            f = f"{R}/pairs/traj_{a.suite}_Panda_raw_init{ep}.npy"
             START = np.load(f)[0] if os.path.exists(f) else None
         np.random.seed(0); env.reset()
         obs = env.set_init_state(U.remap_init_state(init[ep], env.sim))
@@ -99,10 +101,10 @@ def main():
             traj.append(np.asarray(obs["robot0_eef_pos"], float).copy())
             if done: break
         succ += int(done)
-        np.save(f"{R}/pairs/traj_{a.robot}_{'corr' if corr is not None else 'raw'}_init{ep}.npy",
+        np.save(f"{R}/pairs/traj_{a.suite}_{a.robot}_{'corr' if corr is not None else 'raw'}_init{ep}.npy",
                 np.stack(traj))
         tag = "corr" if corr is not None else "raw"
-        imageio.mimsave(f"{R}/videos/eval_{a.robot}_{tag}_init{ep}_{'ok' if done else 'fail'}.mp4",
+        imageio.mimsave(f"{R}/videos/eval_{a.suite}_{a.robot}_{tag}_init{ep}_{'ok' if done else 'fail'}.mp4",
                         frames, fps=20, macro_block_size=1)
         print(f"  {a.robot} {tag} init{ep}: success={bool(done)} steps={len(frames)}")
     print(f"{a.robot} {'corrected' if corr else 'raw'}: {succ}/{len(a.init_states)}")

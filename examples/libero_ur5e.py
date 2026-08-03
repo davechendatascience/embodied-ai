@@ -68,7 +68,13 @@ def register_ur5e():
             return {"bins": (-0.5, -0.1, 0), "empty": (-0.6, 0, 0),
                     "table": lambda L: (-0.16 - L / 2, 0, 0),
                     "study_table": lambda L: (-0.25 - L / 2, 0, 0),
-                    "kitchen_table": lambda L: (-0.16 - L / 2, 0, 0)}
+                    "kitchen_table": lambda L: (-0.16 - L / 2, 0, 0),
+                    # libero_10 uses a LIVING ROOM arena and libero_90 a coffee
+                    # table. MountedPanda declares neither, so LIBERO's own
+                    # Panda would KeyError there too -- these come from
+                    # bddl_base_domain.py:337,347 which index them by name.
+                    "coffee_table": lambda L: (-0.16 - L / 2, 0, 0),
+                    "living_room_table": lambda L: (-0.16 - L / 2, 0, 0)}
 
     # LIBERO prefixes by ARENA, not just by robot: table scenes ask for
     # `MountedX`, floor scenes for `OnTheGroundX`. libero_object is a floor
@@ -83,9 +89,19 @@ def register_ur5e():
 
         @property
         def default_mount(self):
-            # THE 912 mm. RethinkMount is a pedestal; the floor arena stands
-            # the arm on the ground. It was never the base_xpos_offset.
+            # THE 912 mm. RethinkMount is a pedestal; floor arenas stand the
+            # arm on the ground (LIBERO uses NullMount there).
             return None
+
+        @property
+        def base_xpos_offset(self):
+            # Delegate to LIBERO's OWN floor-arena Panda rather than copying
+            # the table values. The living-room and coffee-table arenas carry a
+            # z offset (0.42 / 0.41) that the table arena does not; guessing
+            # z=0 put the arm ~800 mm out and LIBERO then reported `done` after
+            # ONE step -- a spurious success, not a result.
+            import libero.libero.envs.robots.on_the_ground_panda as G
+            return G.OnTheGroundPanda.base_xpos_offset.fget(self)
 
     ROBOT_CLASS_MAPPING.update({"MountedUR5e": SingleArm,
                                 "OnTheGroundUR5e": SingleArm})
