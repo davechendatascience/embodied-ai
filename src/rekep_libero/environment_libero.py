@@ -132,7 +132,7 @@ class ReKepLiberoEnv:
     def __init__(self, config, task_suite="libero_spatial", task_id=0,
                  robot="Panda", resolution=256, verbose=False, horizon=20000,
                  init_state_id=0, reset_seed=0, gripper="default",
-                 controller="OSC_POSE"):
+                 controller="OSC_POSE", ik_socket=None):
         from libero.libero import benchmark, get_libero_path
         from libero.libero.envs import OffScreenRenderEnv
 
@@ -187,6 +187,11 @@ class ReKepLiberoEnv:
             assert robots_ur5e.registered(), "MountedUR5e failed to register"
         self._robot_name = robot
         self._controller = controller
+        # Collision-aware IK, if the cuRobo service is up. The world sent with
+        # each request is the PERCEIVED one (depth, no simulator geometry), so
+        # the executor avoids what it can SEE rather than what the model knows.
+        self._ik_client = None
+        self._ik_socket = ik_socket
         self._bddl = bddl
         self._fixture_ref = None
 
@@ -1188,6 +1193,17 @@ class ReKepLiberoEnv:
         """
         from .arm_ik import solve_ik
 
+        q_remote = self._solve_ik_remote(target_pose)
+        if q_remote is not None:
+            for _ in range(max_steps):
+                q = self.get_arm_joint_postions()
+                dq = q_remote - q
+                if np.abs(dq).max() < 0.005:
+                    break
+                self._step(np.concatenate([np.clip(dq / 0.05, -1, 1),
+                                           [self.last_gripper_action]]))
+            return
+
         sim = self.sim
         idx = self.arm_qpos_idx
         limits = self.arm_joint_limits
@@ -1214,6 +1230,46 @@ class ReKepLiberoEnv:
             action = np.concatenate([np.clip(dq / 0.05, -1, 1),
                                      [self.last_gripper_action]])
             self._step(action)
+
+    def _solve_ik_remote(self, target_pose):
+        """Collision-aware IK from the cuRobo service, or None if unavailable.
+
+        The world is rebuilt from DEPTH on every call: `world_export` is a
+        snapshot and the drawer moves as it opens, so a world uploaded once is
+        stale by the second waypoint.
+        """
+        if not self._ik_socket:
+            return None
+        try:
+            if self._ik_client is None:
+                import sys as _sys
+                _sys.path.insert(0, os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+                from curobo_bridge.protocol import Client
+                self._ik_client = Client(self._ik_socket)
+            from .frames import flange_from_obs, inv, pose_to_curobo
+            from .world_depth import perceived_world
+
+            world, _info = perceived_world(self, warn=None)
+            m, d = self.sim.model, self.sim.data
+            b = m.body_name2id("robot0_base")
+            T_wb = np.eye(4)
+            T_wb[:3, :3] = d.body_xmat[b].reshape(3, 3)
+            T_wb[:3, 3] = d.body_xpos[b]
+            goal = inv(T_wb) @ flange_from_obs(target_pose[:3], target_pose[3:])
+            r = self._ik_client.solve(self.get_arm_joint_postions().tolist(),
+                                      pose_to_curobo(goal), world, [])
+            if not r or not r.get("ok"):
+                print(f"{bcolors.WARNING}curobo-ik: no solution "
+                      f"({r.get('pos_err', 0) * 1000:.1f} mm, "
+                      f"{r.get('error', '')[:40]}){bcolors.ENDC}")
+                return None
+            return np.asarray(r["q"][:len(self.arm_qpos_idx)], dtype=float)
+        except Exception as exc:  # noqa: BLE001 - degrade to local IK, loudly
+            print(f"{bcolors.WARNING}curobo-ik unavailable: "
+                  f"{type(exc).__name__}: {str(exc)[:60]}{bcolors.ENDC}")
+            self._ik_socket = None
+            return None
 
     def _move_to_waypoint(self, target_pose, pos_threshold=0.02, rot_threshold=3.0, max_steps=10):
         """Absolute-pose move, routed by whichever controller the env was built with."""

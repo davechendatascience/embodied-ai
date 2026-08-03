@@ -108,8 +108,12 @@ def main():
     # OSC's local task-space descent. cuRobo IK showed all 45 of this test's
     # waypoints are reachable on the UR5e (45/45), so the misses were descent.
     controller = "JOINT_POSITION" if "--joint-control" in sys.argv else "OSC_POSE"
+    ik_socket = None
+    if "--curobo" in sys.argv:
+        ik_socket = sys.argv[sys.argv.index("--curobo") + 1]
     env = ReKepLiberoEnv(ec, task_suite="libero_goal", task_id=0,
                          robot=robot, gripper=gripper, controller=controller,
+                         ik_socket=ik_socket,
                          resolution=config["libero"]["resolution"])
     print(f"robot   : {robot} + {gripper} + {controller}")
 
@@ -214,6 +218,7 @@ def main():
     if "--video" in sys.argv:
         # name by arm, or the second embodiment silently overwrites the first
         tag = f"_{robot}" + ("_joint" if controller == "JOINT_POSITION" else "")
+        tag += "_curobo" if ik_socket else ""
         outcome = "opened" if opened > 0.02 else "failed"
         path = env.save_video(
             os.path.join("videos", f"drawer_open{tag}_{outcome}.mp4"))
