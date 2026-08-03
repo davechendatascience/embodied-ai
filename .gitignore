@@ -1,0 +1,30 @@
+# Environments — rebuilt by scripts/setup_*.sh, never committed.
+# Each is pinned for one stack and they must not reference each other.
+.venv/
+.venv-pw/
+.venv-gam/
+.venv-jepa/
+.venv-curobo/
+
+# Upstream checkouts and their checkpoints. Reproduced by:
+#   scripts/setup_third_party.sh   ReKep (+ patches/) and LIBERO
+#   scripts/setup_pointworld.sh    cumm, spconv, PointWorld
+#   scripts/setup_gam.sh           GAM, Depth-Anything-3
+#   scripts/setup_vla_jepa.sh      VLA-JEPA, Qwen3-VL, V-JEPA2
+#   scripts/setup_curobo.sh        cuRobo
+# 28 GB of PointWorld checkpoints alone; nothing here belongs in git.
+third_party/
+
+# Datasets (11 GB) and the pristine upstream ReKep reference copy.
+data/
+reference/
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Rollout traces and scratch outputs live in /tmp by default; catch strays.
+*.jsonl
+!docs/**/*.jsonl
+results/

@@ -1,0 +1,48 @@
+# Working ReKep + LIBERO stack on DGX Spark (GB10, aarch64, glibc 2.39, CUDA 13, Python 3.12).
+# Every pin below is here because the unpinned version fails. Verified 2026-07-31.
+#
+#   .venv/bin/pip install -r requirements-libero.txt
+#   MUJOCO_GL=egl PYTHONPATH=third_party/LIBERO .venv/bin/python ...
+#
+# GOTCHA 1: robosuite must be 1.4.x. LIBERO imports
+#   `robosuite.environments.manipulation.single_arm_env`, which 1.5.x removed.
+#   Unpinned pip resolves to 1.5.2 and LIBERO fails at import.
+robosuite==1.4.1
+#
+# GOTCHA 2: mujoco must be 3.1.6. robosuite 1.4.1 calls `sim.data.qM`
+#   (base_controller.py:156), and mujoco >=3.3 replaced `qM` with `M`, so the
+#   OSC controller dies during env reset. The obvious fix -- mujoco 2.3.7, what
+#   robosuite 1.4.1 actually targets -- has NO aarch64/cp312 wheel and fails to
+#   build from source. 3.1.6 is the newest release that still exposes `qM`
+#   *and* ships an aarch64 wheel.
+mujoco==3.1.6
+#
+# GOTCHA 3: numpy must stay <2. robosuite 1.4.1 and LIBERO both predate the
+#   numpy 2 ABI break.
+numpy==1.26.4
+#
+# LIBERO's own transitive imports. Each one below was a separate ModuleNotFound
+# during env construction; `bddl` additionally needs `future` at import time.
+bddl==1.0.1
+future
+easydict
+gym
+matplotlib
+einops
+cloudpickle
+
+# ReKep's solver stack (open3d deliberately absent -- see utils.py
+# farthest_point_sampling, reimplemented in numpy because open3d publishes no
+# aarch64/cp312 wheel and it was the only thing the solvers used it for).
+numba
+scipy
+opencv-python-headless
+parse
+omegaconf
+pyyaml
+
+# VLM backends (vlm_backends.py). transformers/accelerate only needed for the
+# in-process `qwen_local` backend; `openai_compat` against ollama needs just openai.
+openai
+pillow
+requests

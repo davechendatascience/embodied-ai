@@ -1,0 +1,270 @@
+robot_cfg:
+  kinematics:
+    urdf_path: /home/edge-host/Documents/GitHub/embodied_ai/configs/curobo/ur5e_pandagripper.urdf
+    base_link: robot0_base
+    tool_frames:
+    - robot0_right_hand
+    collision_link_names:
+    - gripper0_finger_joint1_tip
+    - gripper0_finger_joint2_tip
+    - gripper0_leftfinger
+    - gripper0_right_gripper
+    - gripper0_rightfinger
+    - robot0_base
+    - robot0_forearm_link
+    - robot0_shoulder_link
+    - robot0_upper_arm_link
+    - robot0_wrist_1_link
+    - robot0_wrist_2_link
+    - robot0_wrist_3_link
+    collision_spheres:
+      robot0_base:
+      - center:
+        - -0.04289477981619552
+        - -0.03932031080905458
+        - 0.03563460565060557
+        radius: 0.09182999182911765
+      - center:
+        - -0.013279771018512366
+        - 0.05673891844021059
+        - 0.035427663218063725
+        radius: 0.09218801973852954
+      - center:
+        - 0.056449072442092574
+        - -0.01832512195109139
+        - 0.033174932296779966
+        radius: 0.08896716378533251
+      robot0_shoulder_link:
+      - center:
+        - -0.0005387399604379216
+        - -0.015087855199515802
+        - 0.05249800892585925
+        radius: 0.07817162373591227
+      - center:
+        - 0.001631581701208607
+        - 0.07026490475449058
+        - -0.012185177120454718
+        radius: 0.07573163111737234
+      - center:
+        - 5.912679836346773e-09
+        - -0.017416478537409887
+        - -0.06390127963039369
+        radius: 0.07575975584601329
+      robot0_upper_arm_link:
+      - center:
+        - 0.0372232703305155
+        - -0.07754232510855673
+        - 0.4420184065719709
+        radius: 0.08817930785192224
+      - center:
+        - -0.03604513916246897
+        - 0.04954972150667153
+        - -0.026611141274295754
+        radius: 0.09399748949274521
+      - center:
+        - -0.037461587400147156
+        - 0.0500929816569949
+        - 0.44868709341692015
+        radius: 0.093356958940662
+      - center:
+        - 0.04005184921147956
+        - -0.06360092564839438
+        - -0.03410960333804999
+        radius: 0.04309954631253683
+      - center:
+        - -0.03604670204849232
+        - -0.06360095460428425
+        - -0.03654877827173438
+        radius: 0.04720521415957574
+      - center:
+        - -0.038833619433257006
+        - -0.07753780683943735
+        - 0.44103582878715913
+        radius: 0.0862948048198906
+      - center:
+        - 0.03578902599533823
+        - 0.04993196629842445
+        - 0.45038279430746014
+        radius: 0.0914700874436433
+      - center:
+        - 0.0375543145781176
+        - 0.049531531818229495
+        - -0.02592387286820057
+        radius: 0.09368413256982426
+      robot0_forearm_link:
+      - center:
+        - 0.020797670719707194
+        - -0.04111607761610981
+        - 0.4118071638954361
+        radius: 0.055624617437467105
+      - center:
+        - -0.005645438373852054
+        - 0.035056417234274266
+        - -0.050744812797366166
+        radius: 0.0489143572396716
+      - center:
+        - 0.00020719260909803094
+        - -0.034329610889464325
+        - 0.032801724974036016
+        radius: 0.05719018660442004
+      - center:
+        - -0.0002288806667187383
+        - 0.05246258280523498
+        - 0.4020048132903896
+        radius: 0.05238399672014085
+      - center:
+        - 0.040185566489478734
+        - 0.017591905414830782
+        - -0.019806992421371204
+        radius: 0.05557846846604712
+      - center:
+        - -0.04139941551476286
+        - 0.014893705178739112
+        - -0.014761126428025753
+        radius: 0.05723045194355047
+      - center:
+        - -0.022833973965672383
+        - -0.043581124192164686
+        - 0.4090592587124731
+        radius: 0.05849924998003589
+      robot0_wrist_1_link:
+      - center:
+        - -0.00010609044983672617
+        - 0.13962469676808323
+        - -0.044984316715549165
+        radius: 0.05242082609797614
+      - center:
+        - -0.00030819643016212966
+        - 0.053449277998110466
+        - 0.00024703187767912674
+        radius: 0.043095000705132516
+      - center:
+        - 0.0002835712945028686
+        - 0.13415019801320818
+        - 0.053299936071078295
+        radius: 0.04995089471985733
+      robot0_wrist_2_link:
+      - center:
+        - 1.349465240778326e-05
+        - -0.044333004753057265
+        - 0.10451172914437597
+        radius: 0.07882646045603073
+      - center:
+        - 0.0002822234785438694
+        - 0.047031946374441885
+        - 0.09154817319886972
+        radius: 0.07835673213937751
+      robot0_wrist_3_link:
+      - center:
+        - 0.001225691553065584
+        - 0.08716851829235132
+        - 0.008196703089553878
+        radius: 0.056320585461692385
+      - center:
+        - -0.004205288737351362
+        - 0.07824058436518232
+        - -0.027182823820778298
+        radius: 0.052241987504808594
+      gripper0_right_gripper:
+      - center:
+        - -0.0890407075506955
+        - 0.0006458802515236248
+        - 0.024901901229428855
+        radius: 0.06851347009119113
+      - center:
+        - 0.09579019073757225
+        - 0.0002806618219562919
+        - 0.056592290770445294
+        radius: 0.04358504092671669
+      - center:
+        - 0.07385804310791799
+        - -0.0006335794676849986
+        - -0.010863197273021138
+        radius: 0.08687065708981369
+      gripper0_leftfinger:
+      - center:
+        - -0.0008554673367700953
+        - 0.01165974351187432
+        - 0.03237608342669204
+        radius: 0.0421669588059137
+      gripper0_finger_joint1_tip:
+      - center:
+        - 0.0
+        - -0.005000000000000004
+        - -0.015000000000000006
+        radius: 0.017000000000000005
+      gripper0_rightfinger:
+      - center:
+        - 0.0008554673367700954
+        - -0.011659743511874317
+        - 0.03237608342669204
+        radius: 0.0421669588059137
+      gripper0_finger_joint2_tip:
+      - center:
+        - 0.0
+        - 0.005000000000000003
+        - -0.015000000000000006
+        radius: 0.017000000000000005
+    collision_sphere_buffer: 0.0
+    self_collision_ignore:
+      robot0_base:
+      - robot0_shoulder_link
+      robot0_shoulder_link:
+      - robot0_base
+      - robot0_upper_arm_link
+      robot0_upper_arm_link:
+      - robot0_forearm_link
+      - robot0_shoulder_link
+      robot0_forearm_link:
+      - robot0_upper_arm_link
+      - robot0_wrist_1_link
+      robot0_wrist_1_link:
+      - robot0_forearm_link
+      - robot0_wrist_2_link
+      robot0_wrist_2_link:
+      - robot0_wrist_1_link
+      - robot0_wrist_3_link
+      robot0_wrist_3_link:
+      - robot0_right_hand
+      - robot0_wrist_2_link
+      robot0_right_hand:
+      - gripper0_right_gripper
+      - robot0_wrist_3_link
+      gripper0_right_gripper:
+      - gripper0_eef
+      - gripper0_leftfinger
+      - gripper0_rightfinger
+      - robot0_right_hand
+      gripper0_eef:
+      - gripper0_right_gripper
+      gripper0_leftfinger:
+      - gripper0_finger_joint1_tip
+      - gripper0_finger_joint2_tip
+      - gripper0_right_gripper
+      - gripper0_rightfinger
+      gripper0_finger_joint1_tip:
+      - gripper0_finger_joint2_tip
+      - gripper0_leftfinger
+      - gripper0_rightfinger
+      gripper0_rightfinger:
+      - gripper0_finger_joint1_tip
+      - gripper0_finger_joint2_tip
+      - gripper0_leftfinger
+      - gripper0_right_gripper
+      gripper0_finger_joint2_tip:
+      - gripper0_finger_joint1_tip
+      - gripper0_leftfinger
+      - gripper0_rightfinger
+    self_collision_buffer:
+      robot0_base: 0.0
+      robot0_shoulder_link: 0.0
+      robot0_upper_arm_link: 0.0
+      robot0_forearm_link: 0.0
+      robot0_wrist_1_link: 0.0
+      robot0_wrist_2_link: 0.0
+      robot0_wrist_3_link: 0.0
+      gripper0_right_gripper: 0.0
+      gripper0_leftfinger: 0.0
+      gripper0_finger_joint1_tip: 0.0
+      gripper0_rightfinger: 0.0
+      gripper0_finger_joint2_tip: 0.0
