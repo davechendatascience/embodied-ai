@@ -47,8 +47,8 @@ import numpy as np
 SPHERE, CAPSULE, CYLINDER, BOX, MESH = 2, 3, 5, 6, 7
 
 #: metres of link extent per sphere; smaller = more spheres = tighter cover
-EXTENT_PER_SPHERE = 0.07
-MAX_SPHERES_PER_LINK = 14
+EXTENT_PER_SPHERE = 0.025
+MAX_SPHERES_PER_LINK = 48
 MIN_SPHERES_PER_LINK = 1
 
 
@@ -71,8 +71,33 @@ def _geom_points(model, g, n_box=4):
         did = int(model.geom_dataid[g])
         adr = int(model.mesh_vertadr[did])
         num = int(model.mesh_vertnum[did])
-        return np.asarray(model.mesh_vert[adr:adr + num],
-                          dtype=np.float64).reshape(-1, 3)
+        verts = np.asarray(model.mesh_vert[adr:adr + num],
+                           dtype=np.float64).reshape(-1, 3)
+        fa = int(model.mesh_faceadr[did])
+        fn = int(model.mesh_facenum[did])
+        faces = np.asarray(model.mesh_face[fa:fa + fn],
+                           dtype=np.int64).reshape(-1, 3)
+        # AREA-WEIGHTED SURFACE SAMPLES, not raw vertices. Clustering vertices
+        # clusters by MESH DENSITY, and meshes pack vertices at the caps: on
+        # the UR5e upper arm that left 159 mm of the shaft outside every
+        # sphere -- a hole a planner drives a link straight through.
+        # tests/test_collision_spheres.py measures exactly that.
+        tri = verts[faces]
+        area = 0.5 * np.linalg.norm(
+            np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]), axis=1)
+        if area.sum() <= 0:
+            return verts
+        rng = np.random.default_rng(0)
+        n = 4000
+        pick = rng.choice(len(tri), size=n, p=area / area.sum())
+        a = rng.random((n, 1))
+        b = rng.random((n, 1))
+        flip = (a + b) > 1.0
+        a = np.where(flip, 1.0 - a, a)
+        b = np.where(flip, 1.0 - b, b)
+        t = tri[pick]
+        pts = t[:, 0] + a * (t[:, 1] - t[:, 0]) + b * (t[:, 2] - t[:, 0])
+        return np.concatenate([pts, verts])
     if gtype == SPHERE:
         return np.zeros((1, 3))
     if gtype == BOX:
