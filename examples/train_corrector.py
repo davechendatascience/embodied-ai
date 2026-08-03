@@ -32,7 +32,7 @@ for g in np.unique(SRC):
     print(f"  {g:<12}{sel.sum():>5} pairs   geom "
           f"[{gm[0]*1000:6.1f}, {gm[1]*1000:6.1f}] mm")
 
-X = featurise(T, TCP, G); Y = S[:, :6].astype(np.float32)
+X = featurise(T, TCP, G); Y = S[:, :7].astype(np.float32)
 # weight by SOURCE magnitude: a near-zero command has an ill-conditioned
 # direction, and fitting it teaches the model noise
 W = np.linalg.norm(S[:, WV], axis=1).astype(np.float32)
@@ -55,4 +55,10 @@ rows += [(f"{g} only", SRC == g) for g in np.unique(SRC)]
 for lbl, sel in rows:
     print(f"  {lbl:<22}{np.median(ci[sel]):>12.4f}{np.median(cp[sel]):>12.4f}"
           f"   frac<0.9 {100*(ci[sel]<0.9).mean():5.1f}% -> {100*(cp[sel]<0.9).mean():5.1f}%")
-print(f"\n  gripper channel untouched: {bool(np.allclose(pred[:,6], T[:,6]))}")
+gt, gp, gs = np.sign(T[:, 6]), np.sign(pred[:, 6]), np.sign(S[:, 6])
+print(f"\n  gripper channel: identity agrees {100*(gt==gs).mean():.1f}% of the time,"
+      f" corrected {100*(gp==gs).mean():.1f}%")
+for g in np.unique(SRC):
+    m = SRC == g
+    print(f"    {g:<12} identity {100*(gt[m]==gs[m]).mean():5.1f}%"
+          f"  ->  corrected {100*(gp[m]==gs[m]).mean():5.1f}%")

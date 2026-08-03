@@ -165,7 +165,13 @@ def pin_fixtures(sim, ref):
     return worst
 
 
-PANDA_CAM_TO_TCP = 0.1091   # metres, robosuite Panda + PandaGripper
+#: camera->TCP as a VECTOR in the camera frame, metres: [x_img, y_img, z_depth].
+#: robosuite Panda + PandaGripper, and bit-for-bit identical on a UR5e wearing
+#: the same gripper -- which is exactly why the arm swap transfers and the
+#: gripper swap does not. A Robotiq85 gives [0, -0.050, -0.145]: it perturbs
+#: DEPTH ONLY, leaving the 50 mm image-plane offset untouched.
+PANDA_CAM_TO_TCP_VEC = np.array([0.0, -0.0500, -0.0970])
+PANDA_CAM_TO_TCP = float(np.linalg.norm(PANDA_CAM_TO_TCP_VEC))   # 0.1091 m
 
 
 def gripper_geom(env):
@@ -183,18 +189,27 @@ def gripper_geom(env):
     ], float)
 
 
-def align_wrist_camera(sim, target=PANDA_CAM_TO_TCP):
-    """Slide the wrist camera so camera-to-TCP matches the policy's training arm.
+def align_wrist_camera(sim, target=PANDA_CAM_TO_TCP_VEC):
+    """Move the wrist camera so the camera->TCP VECTOR matches the training arm.
 
-    The camera is mounted on the wrist LINK (pos="0.05 0 0"), identically for the
-    Panda and the UR5e -- so swapping the gripper does not move the camera, it
-    moves the TCP away from it. A Robotiq85 puts the grasp point 0.1534 m out
-    instead of 0.1091 m, and a policy that servos on that image drives the TCP
-    ~44 mm past the object.
+    The camera is mounted on the wrist LINK (pos="0.05 0 0"), identically for
+    the Panda and the UR5e -- so swapping the gripper does not move the camera,
+    it moves the TCP away from it. A policy that servos on that image has no
+    access to the TCP: it learned to drive the CAMERA, and the TCP followed
+    because camera->TCP was a rigid constant. That constant is the thing to
+    preserve.
+
+    Preserve the VECTOR, not its length. Measured in the camera frame
+    [x_img, y_img, z_depth], the Panda is [0, -50.0, -97.0] mm and a Robotiq85
+    is [0, -50.0, -145.0] mm -- the swap perturbs DEPTH ONLY. Rescaling along
+    the whole vector to fix the length instead drags the image-plane offset from
+    -50.0 to -35.6 mm, i.e. it repairs depth while moving the grasp point 14 mm
+    across the field of view, which the policy reads as the object having
+    shifted sideways.
 
     Every camera extrinsic is a free design choice on a real robot, so this
-    restores the training-time geometry rather than papering over it downstream.
-    Returns (before, after) camera-to-TCP distance in metres.
+    restores training-time geometry rather than papering over it downstream.
+    Returns (before, after) camera->TCP vectors in the camera frame, metres.
     """
     m, d = sim.model, sim.data
     cid = m.camera_name2id("robot0_eye_in_hand")
@@ -202,13 +217,46 @@ def align_wrist_camera(sim, target=PANDA_CAM_TO_TCP):
     site = m.site_name2id(next(n for n in ("gripper0_grip_site",
                                            "robot0_grip_site")
                                if n in m.site_names))
-    v = d.site_xpos[site] - d.cam_xpos[cid]
-    before = float(np.linalg.norm(v))
-    world_shift = v / before * (before - target)
+    Rc = d.cam_xmat[cid].reshape(3, 3)
+    before = Rc.T @ (d.site_xpos[site] - d.cam_xpos[cid])
+    # Camera orientation is untouched, so matching the vector is a pure
+    # translation of the camera by the difference, rotated into its parent body.
+    world_shift = Rc @ (before - np.asarray(target, float))
     bid = m.cam_bodyid[cid]
     m.cam_pos[cid] += d.xmat[bid].reshape(3, 3).T @ world_shift
     sim.forward()
-    return before, float(np.linalg.norm(d.site_xpos[site] - d.cam_xpos[cid]))
+    Rc = d.cam_xmat[cid].reshape(3, 3)
+    after = Rc.T @ (d.site_xpos[site] - d.cam_xpos[cid])
+    return before, after
+
+
+PANDA_TIP_FRICTION = (2.0, 0.05, 0.0)   # robosuite PandaGripper fingertip pads
+
+
+def equalise_finger_friction(sim, friction=PANDA_TIP_FRICTION):
+    """Give the target gripper the SAME fingertip pad as the policy's gripper.
+
+    robosuite's PandaGripper carries a dedicated high-friction pad -- sliding
+    friction 2.0 -- while every other gripper's fingers sit at 1.0 or below. The
+    bowl is 0.95 with condim 3, and MuJoCo takes the element-wise MAX, so a
+    Panda grips this object with TWICE the sliding friction of any replacement.
+
+    That is a property of the benchmark's asset, not of the embodiment. Leaving
+    it in place means a gripper-swap experiment silently measures friction and
+    reports it as a transfer failure. Returns the number of geoms changed.
+    """
+    m = sim.model
+    n = 0
+    for gi in range(m.ngeom):
+        bn = m.body_id2name(m.geom_bodyid[gi]) or ""
+        if "finger" not in bn.lower() and "pad" not in bn.lower():
+            continue
+        if m.geom_contype[gi] == 0 and m.geom_conaffinity[gi] == 0:
+            continue                      # visual-only geom
+        m.geom_friction[gi] = friction
+        n += 1
+    sim.forward()
+    return n
 
 
 def build(suite_name, task_id, robot="Panda", gripper="default", res=256,

@@ -54,14 +54,18 @@ def featurise(a_target, tcp, geom=None):
     g = np.where(np.isnan(g), PANDA_GEOM[None], g) - PANDA_GEOM[None]
     n = np.linalg.norm(a[:, WV], axis=1, keepdims=True)
     d = a[:, WV] / np.maximum(n, 1e-6)
-    return np.concatenate([a[:, :6], d, n, t, g], axis=1).astype(np.float32)
+    # a[:, GRIP] is included: correcting WHEN to close is impossible without
+    # knowing what was commanded.
+    return np.concatenate([a[:, :6], a[:, GRIP:GRIP + 1], d, n, t, g],
+                          axis=1).astype(np.float32)
 
 
 class Corrector:
     """Small MLP on [action, direction, magnitude, tcp] -> corrected 6-vector."""
 
-    def __init__(self, hidden=64, seed=0):
+    def __init__(self, hidden=64, seed=0, grip_w=1.0, correct_grip=True):
         self.hidden, self.seed, self.net, self.mu, self.sd = hidden, seed, None, None, None
+        self.grip_w, self.correct_grip = grip_w, correct_grip
 
     def fit(self, X, Y, W, epochs=400, lr=1e-3, val_frac=0.2, verbose=True):
         import torch
@@ -75,22 +79,28 @@ class Corrector:
         nv = int(n * val_frac); vi, ti = perm[:nv], perm[nv:]
         self.net = nn.Sequential(nn.Linear(Xn.shape[1], self.hidden), nn.SiLU(),
                                  nn.Linear(self.hidden, self.hidden), nn.SiLU(),
-                                 nn.Linear(self.hidden, 6))
+                                 nn.Linear(self.hidden, 7))
         opt = torch.optim.Adam(self.net.parameters(), lr=lr)
         best, best_state = float("inf"), None
         for ep in range(epochs):
             self.net.train()
             # predict a RESIDUAL: identity is the right prior, since most
             # samples already agree
-            pred = X[ti, :6] + self.net(Xn[ti])
-            loss = ((pred - Y[ti]) ** 2).sum(1)
-            loss = (loss * W[ti]).sum() / W[ti].sum()
+            pred = X[ti, :7] + self.net(Xn[ti])
+            # Two losses. The motion channels are weighted by source magnitude
+            # (a near-zero command has an ill-conditioned direction). The
+            # GRIPPER channel is not: it is a discrete decision whose timing is
+            # what matters, and weighting it by translation speed would mute it
+            # exactly at contact, where the arm is barely moving.
+            loss = (((pred[:, :6] - Y[ti, :6]) ** 2).sum(1) * W[ti]).sum() / W[ti].sum()
+            loss = loss + self.grip_w * ((pred[:, 6] - Y[ti, 6]) ** 2).mean()
             opt.zero_grad(); loss.backward(); opt.step()
             if ep % 20 == 0 or ep == epochs - 1:
                 self.net.eval()
                 with torch.no_grad():
-                    pv = X[vi, :6] + self.net(Xn[vi])
-                    vl = (((pv - Y[vi]) ** 2).sum(1) * W[vi]).sum() / W[vi].sum()
+                    pv = X[vi, :7] + self.net(Xn[vi])
+                    vl = (((pv[:, :6] - Y[vi, :6]) ** 2).sum(1) * W[vi]).sum() / W[vi].sum()
+                    vl = vl + self.grip_w * ((pv[:, 6] - Y[vi, 6]) ** 2).mean()
                 if vl.item() < best:
                     best = vl.item()
                     best_state = {k: v.clone() for k, v in self.net.state_dict().items()}
@@ -103,7 +113,12 @@ class Corrector:
         import torch
         X = torch.as_tensor(featurise(a_target, tcp, geom))
         with torch.no_grad():
-            out = X[:, :6] + self.net((X - self.mu) / self.sd)
+            out = (X[:, :7] + self.net((X - self.mu) / self.sd)).numpy()
         a = np.atleast_2d(np.asarray(a_target, np.float32)).copy()
-        a[:, :6] = out.numpy()
-        return a            # gripper channel passed through untouched
+        a[:, :6] = out[:, :6]
+        if self.correct_grip:
+            # The env reads the SIGN, so clip rather than round: a corrected
+            # command that merely shifts closure a few steps earlier or later is
+            # the whole point.
+            a[:, GRIP] = np.clip(out[:, 6], -1.0, 1.0)
+        return a

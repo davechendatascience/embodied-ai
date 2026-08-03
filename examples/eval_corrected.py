@@ -49,6 +49,10 @@ def main():
     ap.add_argument("--steps", type=int, default=280)
     ap.add_argument("--port", type=int, default=15090)
     ap.add_argument("--corrector", action="store_true")
+    ap.add_argument("--grip-friction", action="store_true",
+                    help="Give the target gripper the Panda's fingertip pad "
+                         "(sliding friction 2.0). Without it a gripper swap "
+                         "measures robosuite's pad asset, not the embodiment.")
     ap.add_argument("--align-camera", action="store_true",
                     help="Slide the wrist camera so camera-to-TCP matches the "
                          "Panda's 0.1091 m. A longer gripper moves the TCP away "
@@ -74,7 +78,7 @@ def main():
         T = np.concatenate(T); S = np.concatenate(S); TCP = np.concatenate(TCP)
         G = np.concatenate(G)
         corr = Corrector(hidden=64)
-        corr.fit(featurise(T, TCP, G), S[:, :6].astype(np.float32),
+        corr.fit(featurise(T, TCP, G), S[:, :7].astype(np.float32),
                  np.linalg.norm(S[:, :3], axis=1).astype(np.float32),
                  epochs=600, verbose=False)
 
@@ -87,9 +91,6 @@ def main():
     GEOM = U.gripper_geom(env)
     print(f"    gripper geom [flange->TCP, cam->TCP] = "
           f"[{GEOM[0]*1000:.1f}, {GEOM[1]*1000:.1f}] mm")
-    if a.align_camera:
-        b, af = U.align_wrist_camera(env.sim)
-        print(f"    wrist camera realigned: cam-to-TCP {b*1000:.1f} -> {af*1000:.1f} mm")
     o = _t.load; _t.load = lambda *x, **k: o(*x, **{**k, "weights_only": False})
     init = suite.get_task_init_states(a.task_id); _t.load = o
     model = M1Inference(policy_ckpt_path=CK, unnorm_key="franka",
@@ -114,6 +115,17 @@ def main():
         model.reset(task.language); frames = []; done = False; traj = []
         for _ in range(10):
             obs, _, done, _ = env.step([0.] * (env.env.action_dim - 1) + [-1.])
+        if a.grip_friction:
+            n = U.equalise_finger_friction(env.sim)
+            print(f"    fingertip pads equalised to the Panda's on {n} geoms")
+        if a.align_camera:
+            # MUST be inside the episode loop. env.reset() rebuilds the model
+            # from XML, so a cam_pos written before the loop is silently
+            # discarded on every reset and the rollout runs UNALIGNED -- which
+            # reads as a legitimate failure, not a configuration bug.
+            b, af = U.align_wrist_camera(env.sim)
+            print(f"    wrist camera realigned: cam->TCP "
+                  f"{np.round(b*1000,1)} -> {np.round(af*1000,1)} mm (cam frame)")
         if a.align_start and START is not None:
             m, d = env.sim.model, env.sim.data
             site = m.site_name2id(env.env.robots[0].controller.eef_name)
