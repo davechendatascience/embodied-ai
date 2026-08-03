@@ -24,7 +24,7 @@ sys.path.insert(0, __file__.rsplit("/src/", 1)[0] + "/src")
 from curobo_bridge.protocol import SOCKET_PATH, serve  # noqa: E402
 
 
-def build(robot_yml):
+def build(robot_yml, world_dict):
     from curobo.inverse_kinematics import (
         InverseKinematics,
         InverseKinematicsCfg,
@@ -32,11 +32,16 @@ def build(robot_yml):
 
     cfg_dict = yaml.safe_load(open(robot_yml))
     kin = cfg_dict["robot_cfg"]["kinematics"]
+    # scene_model MUST be a real scene at construction. With None, cuRobo
+    # allocates no collision cache and update_world() then dies with
+    # `NoneType has no attribute load_collision_...`. Bootstrapping with a
+    # world exported from the same task sizes the cache correctly; every
+    # subsequent request replaces its contents via update_world().
     cfg = InverseKinematicsCfg.create(
         robot=cfg_dict, num_seeds=32,
         self_collision_check=True, load_collision_spheres=True,
         position_tolerance=0.002, orientation_tolerance=0.05,
-        scene_model=None, collision_cache={"obb": 256, "mesh": 8},
+        scene_model=world_dict, collision_cache={"obb": 512, "mesh": 8},
     )
     return InverseKinematics(cfg), kin
 
@@ -45,13 +50,18 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("robot_yml")
     ap.add_argument("--socket", default=SOCKET_PATH)
+    ap.add_argument("--world", required=True,
+                    help="bootstrap world JSON; sizes the collision cache")
     args = ap.parse_args()
 
     import torch
     from curobo.scene import Cuboid, Scene
     from curobo.types import GoalToolPose
 
-    ik, kin_cfg = build(args.robot_yml)
+    import json as _json
+
+    bootstrap = _json.load(open(args.world))
+    ik, kin_cfg = build(args.robot_yml, bootstrap)
     tool = kin_cfg["tool_frames"][0]
     print(f"curobo-ik: {args.robot_yml} joints={list(ik.kinematics.joint_names)}",
           flush=True)
