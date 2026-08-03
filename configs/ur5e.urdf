@@ -1,0 +1,181 @@
+<robot name="ur5e_pandagripper">
+  <link name="robot0_base">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0" />
+      <inertia ixx="0" iyy="0" izz="0" ixy="0" ixz="0" iyz="0" />
+    </inertial>
+  </link>
+  <link name="robot0_shoulder_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="3.7" />
+      <inertia ixx="0.0102675" iyy="0.0102675" izz="0.00666" ixy="0" ixz="0" iyz="0" />
+    </inertial>
+  </link>
+  <link name="robot0_upper_arm_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="8.393" />
+      <inertia ixx="0.133886" iyy="0.133886" izz="0.0151074" ixy="0" ixz="0" iyz="0" />
+    </inertial>
+  </link>
+  <link name="robot0_forearm_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="2.275" />
+      <inertia ixx="0.0311796" iyy="0.0311796" izz="0.004095" ixy="0" ixz="0" iyz="0" />
+    </inertial>
+  </link>
+  <link name="robot0_wrist_1_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="1.219" />
+      <inertia ixx="0.0025599" iyy="0.0025599" izz="0.0021942" ixy="0" ixz="0" iyz="0" />
+    </inertial>
+  </link>
+  <link name="robot0_wrist_2_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="1.219" />
+      <inertia ixx="0.0025599" iyy="0.0025599" izz="0.0021942" ixy="0" ixz="0" iyz="0" />
+    </inertial>
+  </link>
+  <link name="robot0_wrist_3_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0.1889" />
+      <inertia ixx="0.000132134" iyy="9.90863e-05" izz="9.90863e-05" ixy="0" ixz="0" iyz="0" />
+    </inertial>
+  </link>
+  <link name="robot0_right_hand">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0" />
+      <inertia ixx="0" iyy="0" izz="0" ixy="0" ixz="0" iyz="0" />
+    </inertial>
+  </link>
+  <link name="gripper0_right_gripper">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0.3" />
+      <inertia ixx="0.09" iyy="0.07" izz="0.05" ixy="0" ixz="0" iyz="0" />
+    </inertial>
+  </link>
+  <link name="gripper0_eef">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0" />
+      <inertia ixx="0" iyy="0" izz="0" ixy="0" ixz="0" iyz="0" />
+    </inertial>
+  </link>
+  <link name="gripper0_leftfinger">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0.1" />
+      <inertia ixx="0.01" iyy="0.01" izz="0.005" ixy="0" ixz="0" iyz="0" />
+    </inertial>
+  </link>
+  <link name="gripper0_finger_joint1_tip">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0.01" />
+      <inertia ixx="0.01" iyy="0.01" izz="0.01" ixy="0" ixz="0" iyz="0" />
+    </inertial>
+  </link>
+  <link name="gripper0_rightfinger">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0.1" />
+      <inertia ixx="0.01" iyy="0.01" izz="0.005" ixy="0" ixz="0" iyz="0" />
+    </inertial>
+  </link>
+  <link name="gripper0_finger_joint2_tip">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0.01" />
+      <inertia ixx="0.01" iyy="0.01" izz="0.01" ixy="0" ixz="0" iyz="0" />
+    </inertial>
+  </link>
+  <joint name="robot0_shoulder_pan_joint" type="revolute">
+    <origin xyz="0 0 0.163" rpy="0 -0 0" />
+    <parent link="robot0_base" />
+    <child link="robot0_shoulder_link" />
+    <axis xyz="0 0 1" />
+    <limit lower="-6.28319" upper="6.28319" effort="1000" velocity="3.14" />
+  </joint>
+  <joint name="robot0_shoulder_lift_joint" type="revolute">
+    <origin xyz="0 0.138 0" rpy="-0 1.57079633 0" />
+    <parent link="robot0_shoulder_link" />
+    <child link="robot0_upper_arm_link" />
+    <axis xyz="0 1 0" />
+    <limit lower="-6.28319" upper="6.28319" effort="1000" velocity="3.14" />
+  </joint>
+  <joint name="robot0_elbow_joint" type="revolute">
+    <origin xyz="0 -0.131 0.425" rpy="0 -0 0" />
+    <parent link="robot0_upper_arm_link" />
+    <child link="robot0_forearm_link" />
+    <axis xyz="0 1 0" />
+    <limit lower="-3.14159" upper="3.14159" effort="1000" velocity="3.14" />
+  </joint>
+  <joint name="robot0_wrist_1_joint" type="revolute">
+    <origin xyz="0 0 0.392" rpy="-0 1.57079633 0" />
+    <parent link="robot0_forearm_link" />
+    <child link="robot0_wrist_1_link" />
+    <axis xyz="0 1 0" />
+    <limit lower="-6.28319" upper="6.28319" effort="1000" velocity="3.14" />
+  </joint>
+  <joint name="robot0_wrist_2_joint" type="revolute">
+    <origin xyz="0 0.127 0" rpy="0 -0 0" />
+    <parent link="robot0_wrist_1_link" />
+    <child link="robot0_wrist_2_link" />
+    <axis xyz="0 0 1" />
+    <limit lower="-6.28319" upper="6.28319" effort="1000" velocity="3.14" />
+  </joint>
+  <joint name="robot0_wrist_3_joint" type="revolute">
+    <origin xyz="0 0 0.1" rpy="0 -0 0" />
+    <parent link="robot0_wrist_2_link" />
+    <child link="robot0_wrist_3_link" />
+    <axis xyz="0 1 0" />
+    <limit lower="-6.28319" upper="6.28319" effort="1000" velocity="3.14" />
+  </joint>
+  <joint name="robot0_wrist_3_link_to_robot0_right_hand" type="fixed">
+    <origin xyz="0 0.098 0" rpy="-1.57079633 -0 0" />
+    <parent link="robot0_wrist_3_link" />
+    <child link="robot0_right_hand" />
+  </joint>
+  <joint name="robot0_right_hand_to_gripper0_right_gripper" type="fixed">
+    <origin xyz="0 0 0" rpy="0 -0 -1.57079633" />
+    <parent link="robot0_right_hand" />
+    <child link="gripper0_right_gripper" />
+  </joint>
+  <joint name="gripper0_right_gripper_to_gripper0_eef" type="fixed">
+    <origin xyz="0 0 0.097" rpy="0 -0 0" />
+    <parent link="gripper0_right_gripper" />
+    <child link="gripper0_eef" />
+  </joint>
+  <joint name="gripper0_finger_joint1" type="prismatic">
+    <origin xyz="0 0 0.0524" rpy="0 -0 1.57079633" />
+    <parent link="gripper0_right_gripper" />
+    <child link="gripper0_leftfinger" />
+    <axis xyz="0 1 0" />
+    <limit lower="0" upper="0.04" effort="1000" velocity="3.14" />
+  </joint>
+  <joint name="gripper0_leftfinger_to_gripper0_finger_joint1_tip" type="fixed">
+    <origin xyz="0 0.0085 0.056" rpy="0 -0 0" />
+    <parent link="gripper0_leftfinger" />
+    <child link="gripper0_finger_joint1_tip" />
+  </joint>
+  <joint name="gripper0_finger_joint2" type="prismatic">
+    <origin xyz="0 0 0.0524" rpy="0 -0 1.57079633" />
+    <parent link="gripper0_right_gripper" />
+    <child link="gripper0_rightfinger" />
+    <axis xyz="0 1 0" />
+    <limit lower="-0.04" upper="0" effort="1000" velocity="3.14" />
+  </joint>
+  <joint name="gripper0_rightfinger_to_gripper0_finger_joint2_tip" type="fixed">
+    <origin xyz="0 -0.0085 0.056" rpy="0 -0 0" />
+    <parent link="gripper0_rightfinger" />
+    <child link="gripper0_finger_joint2_tip" />
+  </joint>
+</robot>

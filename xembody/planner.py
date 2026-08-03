@@ -35,7 +35,7 @@ class Planner:
 
     def __init__(self, robot_yml, bootstrap_world, num_seeds=32,
                  position_tolerance=0.002, orientation_tolerance=0.05,
-                 self_collision=True, obb_cache=512):
+                 self_collision=True, obb_cache=2048):
         """`bootstrap_world` MUST be a real scene, not None.
 
         With `scene_model=None` cuRobo allocates no collision cache and the
@@ -53,6 +53,9 @@ class Planner:
             else robot_yml
         self.kin_cfg = cfg_dict["robot_cfg"]["kinematics"]
         self.tool = self.kin_cfg["tool_frames"][0]
+        # obb_cache must be >= world.MAX_OBSTACLES. cuRobo does not complain
+        # when a scene exceeds its cache; it truncates, and the planner then
+        # treats the missing obstacles as empty space.
         cfg = InverseKinematicsCfg.create(
             robot=cfg_dict, num_seeds=num_seeds,
             self_collision_check=self_collision, load_collision_spheres=True,

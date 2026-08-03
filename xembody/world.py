@@ -9,7 +9,11 @@ VOXEL_M = 0.03
 #: The trade is gaps of (1-scale)*pitch between adjacent boxes; safe only while
 #: the robot's collision spheres are much larger than the gaps.
 DIMS_SCALE = 0.7
-MAX_OBSTACLES = 480
+#: Obstacle budget. MUST match the planner's `obb_cache`: cuRobo silently
+#: truncates beyond its cache, and a dropped obstacle reads as FREE SPACE.
+#: Measured: a LIBERO tabletop at 3 cm yields ~950-1000 occupied voxels, so
+#: 480 was dropping half the scene.
+MAX_OBSTACLES = 1536
 
 
 def backproject(depth, K, T_world_cam):
@@ -43,11 +47,21 @@ def voxelise(points, bounds_min, bounds_max, voxel=VOXEL_M,
     if not len(pts):
         return {}, 0
     lo, hi = np.asarray(bounds_min, float), np.asarray(bounds_max, float)
+    n_in = len(pts)
     pts = pts[np.all((pts >= lo) & (pts < hi), axis=1)]
     if not len(pts):
+        # An EMPTY world is not a benign result: the planner then believes
+        # every configuration is free and drives through everything. With
+        # points present this is always a bounds mismatch, so it is loud.
+        if warn and n_in:
+            warn(f"world: ALL {n_in} points fell outside bounds "
+                 f"{lo.tolist()}..{hi.tolist()} -- the world is EMPTY and the "
+                 f"planner will treat the whole scene as free space. Use "
+                 f"bounds_from_points().")
         return {}, 0
 
     idx = np.floor((pts - lo) / voxel).astype(np.int64)
+
     uniq, counts = np.unique(idx, axis=0, return_counts=True)
     uniq = uniq[np.argsort(-counts)]      # densest first: truncation drops the
     total = len(uniq)                     # flimsiest evidence, not the best
@@ -63,7 +77,22 @@ def voxelise(points, bounds_min, bounds_max, voxel=VOXEL_M,
              for i, c in enumerate(centres)}, total)
 
 
-def from_depth(depth_maps, Ks, T_world_cams, bounds_min, bounds_max,
+def bounds_from_points(points, pad=0.10, pct=0.5):
+    """Workspace bounds from the observed cloud itself.
+
+    Hardcoded bounds are a per-scene constant that silently empties the world
+    when the scene moves -- measured: LIBERO's goal suite sits near z=1.0 and
+    its object suite near z=0.15, and bounds written for one produce ZERO
+    obstacles on the other. Percentiles trim depth outliers at the frustum
+    edges; `pad` keeps the table edge inside.
+    """
+    p = np.asarray(points, dtype=np.float64)
+    lo = np.percentile(p, pct, axis=0) - pad
+    hi = np.percentile(p, 100 - pct, axis=0) + pad
+    return lo, hi
+
+
+def from_depth(depth_maps, Ks, T_world_cams, bounds_min=None, bounds_max=None,
                robot_spheres=None, **kw):
     """The whole perception path: depth in, obstacle boxes out.
 
@@ -76,5 +105,7 @@ def from_depth(depth_maps, Ks, T_world_cams, bounds_min, bounds_max,
     if robot_spheres is not None and len(pts):
         c, r = robot_spheres
         pts = drop_spheres(pts, c, r)
+    if bounds_min is None or bounds_max is None:
+        bounds_min, bounds_max = bounds_from_points(pts)
     boxes, total = voxelise(pts, bounds_min, bounds_max, **kw)
     return boxes, {"points": int(len(pts)), "voxels": int(total)}
