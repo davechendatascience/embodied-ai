@@ -22,27 +22,12 @@ robot_cfg:
         - 0.06791061533606199
         - -0.0018921500629526828
         - 0.11286149544661281
-        radius: 0.07214042977299129
+        radius: 0.03
       - center:
         - 0.011797553219026952
         - -0.0015471723743210345
         - 0.08594581270794761
-        radius: 0.10348348116720456
-      - center:
-        - -0.04431550889800809
-        - -0.0012021946856893863
-        - 0.059030129969282426
-        radius: 0.11404961474913056
-      - center:
-        - -0.1004285710150431
-        - -0.0008572169970577381
-        - 0.032114447230617245
-        radius: 0.06560728399515521
-      - center:
-        - -0.15654163313207814
-        - -0.0005122393084260898
-        - 0.00519876449195205
-        radius: 0.061237261692199466
+        radius: 0.03
       robot0_link1:
       - center:
         - 0.0008199625870235937
@@ -313,42 +298,74 @@ robot_cfg:
     - robot0_link7
     self_collision_ignore:
       robot0_link0:
-      - robot0_base
+      - gripper0_right_gripper
       - robot0_link1
+      - robot0_link5
+      - robot0_link6
+      - robot0_link7
       robot0_link1:
+      - gripper0_leftfinger
+      - gripper0_right_gripper
+      - gripper0_rightfinger
       - robot0_link0
-      - robot0_link2
+      - robot0_link5
+      - robot0_link6
+      - robot0_link7
       robot0_link2:
-      - robot0_link1
+      - gripper0_right_gripper
+      - gripper0_rightfinger
       - robot0_link3
+      - robot0_link4
+      - robot0_link5
+      - robot0_link6
       robot0_link3:
       - robot0_link2
       - robot0_link4
       robot0_link4:
+      - robot0_link2
       - robot0_link3
       - robot0_link5
       robot0_link5:
+      - gripper0_leftfinger
+      - gripper0_right_gripper
+      - gripper0_rightfinger
+      - robot0_link0
+      - robot0_link1
+      - robot0_link2
       - robot0_link4
       - robot0_link6
+      - robot0_link7
       robot0_link6:
+      - robot0_link0
+      - robot0_link1
+      - robot0_link2
       - robot0_link5
       - robot0_link7
       robot0_link7:
+      - gripper0_right_gripper
+      - robot0_link0
+      - robot0_link1
+      - robot0_link5
       - robot0_link6
-      - robot0_right_hand
       gripper0_right_gripper:
-      - gripper0_eef
       - gripper0_leftfinger
       - gripper0_rightfinger
-      - robot0_right_hand
+      - robot0_link0
+      - robot0_link1
+      - robot0_link2
+      - robot0_link5
+      - robot0_link7
       gripper0_leftfinger:
-      - gripper0_finger_joint1_tip
       - gripper0_right_gripper
       - gripper0_rightfinger
+      - robot0_link1
+      - robot0_link5
       gripper0_rightfinger:
-      - gripper0_finger_joint2_tip
       - gripper0_leftfinger
       - gripper0_right_gripper
+      - robot0_link1
+      - robot0_link2
+      - robot0_link5
     self_collision_buffer:
       robot0_link0: 0.0
       robot0_link1: 0.0

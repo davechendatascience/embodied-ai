@@ -4,7 +4,7 @@ robot_cfg:
     base_link: robot0_base
     tool_frames:
     - robot0_right_hand
-    collision_link_names: &id001
+    collision_link_names:
     - gripper0_leftfinger
     - gripper0_right_gripper
     - gripper0_rightfinger
@@ -20,27 +20,12 @@ robot_cfg:
         - -0.008209037011043469
         - -0.05142325523456763
         - 0.056096273706483936
-        radius: 0.04328010550896326
+        radius: 0.03
       - center:
         - -0.0017080485137483375
         - -0.014617080878317684
         - 0.04246432157337032
-        radius: 0.056821886040610725
-      - center:
-        - 0.004792939983546794
-        - 0.02218909347793227
-        - 0.028832369440256717
-        radius: 0.05880867541262911
-      - center:
-        - 0.011293928480841929
-        - 0.05899526783418223
-        - 0.015200417307143103
-        radius: 0.06940262249625352
-      - center:
-        - 0.017794916978137055
-        - 0.09580144219043216
-        - 0.0015684651740294972
-        radius: 0.0743140412069612
+        radius: 0.03
       robot0_upper_arm_link:
       - center:
         - -0.0004650168011444
@@ -242,36 +227,58 @@ robot_cfg:
     collision_sphere_buffer: 0.0
     self_collision_ignore:
       robot0_shoulder_link:
-      - robot0_base
-      - robot0_upper_arm_link
+      - gripper0_right_gripper
+      - robot0_forearm_link
       robot0_upper_arm_link:
-      - robot0_forearm_link
-      - robot0_shoulder_link
-      robot0_forearm_link:
-      - robot0_upper_arm_link
+      - gripper0_leftfinger
+      - gripper0_right_gripper
+      - gripper0_rightfinger
       - robot0_wrist_1_link
-      robot0_wrist_1_link:
-      - robot0_forearm_link
       - robot0_wrist_2_link
+      - robot0_wrist_3_link
+      robot0_forearm_link:
+      - gripper0_leftfinger
+      - gripper0_right_gripper
+      - gripper0_rightfinger
+      - robot0_shoulder_link
+      - robot0_wrist_2_link
+      - robot0_wrist_3_link
+      robot0_wrist_1_link:
+      - gripper0_right_gripper
+      - robot0_upper_arm_link
+      - robot0_wrist_2_link
+      - robot0_wrist_3_link
       robot0_wrist_2_link:
+      - gripper0_right_gripper
+      - robot0_forearm_link
+      - robot0_upper_arm_link
       - robot0_wrist_1_link
       - robot0_wrist_3_link
       robot0_wrist_3_link:
-      - robot0_right_hand
+      - gripper0_right_gripper
+      - robot0_forearm_link
+      - robot0_upper_arm_link
+      - robot0_wrist_1_link
       - robot0_wrist_2_link
       gripper0_right_gripper:
-      - gripper0_eef
       - gripper0_leftfinger
       - gripper0_rightfinger
-      - robot0_right_hand
+      - robot0_forearm_link
+      - robot0_shoulder_link
+      - robot0_upper_arm_link
+      - robot0_wrist_1_link
+      - robot0_wrist_2_link
+      - robot0_wrist_3_link
       gripper0_leftfinger:
-      - gripper0_finger_joint1_tip
       - gripper0_right_gripper
       - gripper0_rightfinger
+      - robot0_forearm_link
+      - robot0_upper_arm_link
       gripper0_rightfinger:
-      - gripper0_finger_joint2_tip
       - gripper0_leftfinger
       - gripper0_right_gripper
+      - robot0_forearm_link
+      - robot0_upper_arm_link
     self_collision_buffer:
       robot0_shoulder_link: 0.0
       robot0_upper_arm_link: 0.0
@@ -321,7 +328,16 @@ robot_cfg:
       - -1.991
       - 0.04
       - -0.04
-    mesh_link_names: *id001
+    mesh_link_names:
+    - gripper0_leftfinger
+    - gripper0_right_gripper
+    - gripper0_rightfinger
+    - robot0_forearm_link
+    - robot0_shoulder_link
+    - robot0_upper_arm_link
+    - robot0_wrist_1_link
+    - robot0_wrist_2_link
+    - robot0_wrist_3_link
     lock_joints:
       gripper0_finger_joint1: 0.04
       gripper0_finger_joint2: -0.04

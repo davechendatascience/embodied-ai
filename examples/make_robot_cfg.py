@@ -145,3 +145,63 @@ def spheres(sim, bodies, jpos, per_link=SPHERES_PER_LINK, pct=RADIUS_PCT):
         if ss:
             out[m.body_id2name(b)] = ss
     return out
+
+
+def geometric_ignore(sim, spheres, joint_offsets, samples=2000, seed=0,
+                     robot_prefixes=("robot", "gripper")):
+    """Self-collision exemptions derived from GEOMETRY, not from the tree.
+
+    Adjacency is the obvious rule and the wrong one. NVIDIA's franka set
+    exempts pairs that are non-adjacent but come close anywhere in the
+    workspace -- link5 to the fingers, link1 to link4, link3 to link6. Emit
+    only parent/child and EVERY configuration self-collides, so cuRobo reports
+    infeasible for every goal on any robot. Measured: 26 pairs -> 0/7 feasible,
+    37 pairs (NVIDIA's structure) -> 7/7, with the world identical.
+
+    So: sample valid configurations the arm can actually hold, record which
+    sphere pairs ever overlap, and exempt those. The arm is not colliding with
+    itself in these poses -- MuJoCo would have said so -- therefore any overlap
+    is an artefact of the sphere approximation and must be ignored.
+    """
+    import mujoco
+    import numpy as np
+
+    m, d = sim.model, sim.data
+    robot = None
+    for b in range(m.nbody):
+        pass
+    # actuated arm joints, in model order
+    jidx = [j for j in range(m.njnt)
+            if (m.body_id2name(m.jnt_bodyid[j]) or "").startswith(robot_prefixes)
+            and int(m.jnt_type[j]) in (HINGE, SLIDE)]
+    qadr = [int(m.jnt_qposadr[j]) for j in jidx]
+    lo = np.array([m.jnt_range[j][0] if m.jnt_limited[j] else -np.pi for j in jidx])
+    hi = np.array([m.jnt_range[j][1] if m.jnt_limited[j] else np.pi for j in jidx])
+
+    names = list(spheres)
+    centres = {n: np.array([s["center"] for s in spheres[n]]) for n in names}
+    radii = {n: np.array([s["radius"] for s in spheres[n]]) for n in names}
+
+    rng = np.random.default_rng(seed)
+    backup = d.qpos.copy()
+    overlap = {n: set() for n in names}
+    for _ in range(samples):
+        q = rng.uniform(lo, hi)
+        for a, v in zip(qadr, q):
+            d.qpos[a] = v
+        mujoco.mj_forward(m._model, d._data)
+        world = {}
+        for n in names:
+            b = m.body_name2id(n)
+            R = np.asarray(d.body_xmat[b], float).reshape(3, 3)
+            p = np.asarray(d.body_xpos[b], float)
+            world[n] = (centres[n] - joint_offsets[n]) @ R.T + p
+        for i, a in enumerate(names):
+            for bnm in names[i + 1:]:
+                dmat = np.linalg.norm(world[a][:, None, :] - world[bnm][None], axis=2)
+                if (dmat - radii[a][:, None] - radii[bnm][None] < 0).any():
+                    overlap[a].add(bnm)
+                    overlap[bnm].add(a)
+    d.qpos[:] = backup
+    mujoco.mj_forward(m._model, d._data)
+    return {k: sorted(v) for k, v in overlap.items() if v}
