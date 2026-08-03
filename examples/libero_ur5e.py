@@ -70,7 +70,25 @@ def register_ur5e():
                     "study_table": lambda L: (-0.25 - L / 2, 0, 0),
                     "kitchen_table": lambda L: (-0.16 - L / 2, 0, 0)}
 
-    ROBOT_CLASS_MAPPING.update({"MountedUR5e": SingleArm})
+    # LIBERO prefixes by ARENA, not just by robot: table scenes ask for
+    # `MountedX`, floor scenes for `OnTheGroundX`. libero_object is a floor
+    # scene, so registering only MountedUR5e means the UR5e is never built
+    # there -- KeyError: 'OnTheGroundUR5e'. Base positions differ by 0.912 m
+    # between the two arenas, so goals are not portable across them either.
+    class OnTheGroundUR5e(MountedUR5e):
+        """Floor arena. Offsets come from OnTheGroundPanda, NOT the table
+        mount: subclassing MountedUR5e inherits `table` offsets and puts the
+        arm 912 mm above where the Panda stands in the same scene, which the
+        planner then reports as 'unreachable'."""
+
+        @property
+        def default_mount(self):
+            # THE 912 mm. RethinkMount is a pedestal; the floor arena stands
+            # the arm on the ground. It was never the base_xpos_offset.
+            return None
+
+    ROBOT_CLASS_MAPPING.update({"MountedUR5e": SingleArm,
+                                "OnTheGroundUR5e": SingleArm})
     return MountedUR5e
 
 

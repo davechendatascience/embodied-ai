@@ -35,7 +35,7 @@ class Planner:
 
     def __init__(self, robot_yml, bootstrap_world, num_seeds=32,
                  position_tolerance=0.002, orientation_tolerance=0.05,
-                 self_collision=True, obb_cache=2048):
+                 self_collision=True, obb_cache=2048, max_batch=256):
         """`bootstrap_world` MUST be a real scene, not None.
 
         With `scene_model=None` cuRobo allocates no collision cache and the
@@ -63,9 +63,48 @@ class Planner:
             orientation_tolerance=orientation_tolerance,
             scene_model={"cuboid": bootstrap_world},
             collision_cache={"obb": obb_cache, "mesh": 8},
+            max_batch_size=max_batch,
         )
         self.ik = InverseKinematics(cfg)
+        self._world_key = None
         self.joint_names = list(self.ik.kinematics.joint_names)
+
+    def set_world(self, world_boxes, exempt_radius=0.0, exempt_around=None):
+        """Upload obstacles ONCE. Re-uploading per solve dominates runtime:
+        3840 boxes pushed for every candidate pose turned a batch problem into
+        a serial one."""
+        from curobo.scene import Cuboid, Scene
+
+        boxes = world_boxes
+        if exempt_around is not None and exempt_radius > 0:
+            c = np.asarray(exempt_around, float)
+            boxes = {k: v for k, v in world_boxes.items()
+                     if np.linalg.norm(np.asarray(v["pose"][:3]) - c) > exempt_radius}
+        key = (id(world_boxes), len(boxes),
+               None if exempt_around is None else tuple(np.round(exempt_around, 4)))
+        if key != self._world_key and boxes:
+            self.ik.update_world(Scene(cuboid=[
+                Cuboid(name=k, pose=list(v["pose"]), dims=list(v["dims"]))
+                for k, v in boxes.items()]))
+            self._world_key = key
+        return len(boxes)
+
+    def solve_many(self, goal_Ts):
+        """One GPU batch for N poses. This is what cuRobo is for -- solving
+        candidates one at a time throws away the entire point of it."""
+        import torch
+        from curobo.types import GoalToolPose
+
+        g = np.array([to_curobo(T) for T in goal_Ts], dtype=np.float64)
+        n = len(g)
+        pos = torch.as_tensor(np.ascontiguousarray(g[:, :3]).reshape(n, 1, 1, 1, 3),
+                              dtype=torch.float32, device="cuda").contiguous()
+        quat = torch.as_tensor(np.ascontiguousarray(g[:, 3:]).reshape(n, 1, 1, 1, 4),
+                               dtype=torch.float32, device="cuda").contiguous()
+        res = self.ik.solve_pose(GoalToolPose(
+            tool_frames=[self.tool], position=pos, quaternion=quat))
+        return (res.success.detach().cpu().numpy().reshape(-1),
+                res.position_error.detach().cpu().numpy().reshape(-1) * 1e3)
 
     def solve(self, goal_T_base, world_boxes, exempt_radius=0.07,
               exempt_around=None):

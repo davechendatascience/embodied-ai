@@ -4,11 +4,10 @@ robot_cfg:
     base_link: robot0_base
     tool_frames:
     - robot0_right_hand
-    collision_link_names:
+    collision_link_names: &id001
     - gripper0_leftfinger
     - gripper0_right_gripper
     - gripper0_rightfinger
-    - robot0_base
     - robot0_forearm_link
     - robot0_shoulder_link
     - robot0_upper_arm_link
@@ -16,32 +15,6 @@ robot_cfg:
     - robot0_wrist_2_link
     - robot0_wrist_3_link
     collision_spheres:
-      robot0_base:
-      - center:
-        - -0.06634565758967703
-        - 0.035841763391561206
-        - 0.03497854888604292
-        radius: 0.054829207871517245
-      - center:
-        - -0.03330407547890236
-        - 0.017571501333433475
-        - 0.03486624652472567
-        radius: 0.07309758247119696
-      - center:
-        - -0.00026249336812768684
-        - -0.0006987607246942485
-        - 0.03475394416340842
-        radius: 0.08222442896068125
-      - center:
-        - 0.03277908874264698
-        - -0.018969022782821976
-        - 0.03464164180209117
-        radius: 0.0733942856824086
-      - center:
-        - 0.06582067085342166
-        - -0.0372392848409497
-        - 0.034529339440773923
-        radius: 0.05577028901646828
       robot0_shoulder_link:
       - center:
         - -0.008209037011043469
@@ -271,8 +244,6 @@ robot_cfg:
       robot0_shoulder_link:
       - robot0_base
       - robot0_upper_arm_link
-      robot0_base:
-      - robot0_shoulder_link
       robot0_upper_arm_link:
       - robot0_forearm_link
       - robot0_shoulder_link
@@ -302,7 +273,6 @@ robot_cfg:
       - gripper0_leftfinger
       - gripper0_right_gripper
     self_collision_buffer:
-      robot0_base: 0.0
       robot0_shoulder_link: 0.0
       robot0_upper_arm_link: 0.0
       robot0_forearm_link: 0.0
@@ -312,3 +282,47 @@ robot_cfg:
       gripper0_right_gripper: 0.0
       gripper0_leftfinger: 0.0
       gripper0_rightfinger: 0.0
+    cspace:
+      joint_names:
+      - robot0_shoulder_pan_joint
+      - robot0_shoulder_lift_joint
+      - robot0_elbow_joint
+      - robot0_wrist_1_joint
+      - robot0_wrist_2_joint
+      - robot0_wrist_3_joint
+      - gripper0_finger_joint1
+      - gripper0_finger_joint2
+      null_space_weight:
+      - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
+      cspace_distance_weight:
+      - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
+      max_acceleration: 15.0
+      max_jerk: 500.0
+      default_joint_position:
+      - -0.47
+      - -1.735
+      - 2.48
+      - -2.275
+      - -1.59
+      - -1.991
+      - 0.04
+      - -0.04
+    mesh_link_names: *id001
+    lock_joints:
+      gripper0_finger_joint1: 0.04
+      gripper0_finger_joint2: -0.04
+    use_global_cumul: true
