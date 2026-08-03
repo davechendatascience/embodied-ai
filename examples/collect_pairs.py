@@ -22,6 +22,17 @@ def q2aa(q):
     return np.zeros(3) if np.isclose(den, 0) else q[:3] * 2 * np.arccos(q[3]) / den
 
 
+def grip2(qpos):
+    """Panda-shaped 2-vector: the policy's state input is fixed-width and a
+    Robotiq85 reports 6 joints instead of 2. Faithful because the policy was
+    measured to ignore proprioception entirely (state swap -> cos 1.000)."""
+    q = np.asarray(qpos, float).ravel()
+    if q.size == 2:
+        return q
+    w = float(np.abs(q).max()) if q.size else 0.0
+    return np.array([w / 2.0, -w / 2.0])
+
+
 def drive_and_query(env, model, task, targets, jitter, rng):
     """Move to each target, query the policy, record action + achieved TCP."""
     m, d = env.sim.model, env.sim.data
@@ -36,7 +47,7 @@ def drive_and_query(env, model, task, targets, jitter, rng):
             env.step(np.concatenate([np.clip(dp / 0.05, -1, 1), np.zeros(3), [-1.]]).tolist())
         o = env.env._get_observations()
         st = np.concatenate((o["robot0_eef_pos"], q2aa(o["robot0_eef_quat"]),
-                             o["robot0_gripper_qpos"]))
+                             grip2(o["robot0_gripper_qpos"])))
         model.reset(task)
         raw = model.step(images=[np.ascontiguousarray(o["agentview_image"][::-1, ::-1]),
                                  np.ascontiguousarray(o["robot0_eye_in_hand_image"][::-1, ::-1])],
@@ -56,12 +67,28 @@ def main():
     ap.add_argument("--port", type=int, default=15090)
     ap.add_argument("--out", default="/tmp/pairs.npz")
     ap.add_argument("--init-state", type=int, default=0)
+    ap.add_argument("--gripper", default="PandaGripper",
+                    help="TARGET-arm gripper. The source is always a Panda "
+                         "with a PandaGripper -- that is the policy's arm.")
+    ap.add_argument("--traj", default=None,
+                    help="Reference TCP trajectory .npy to sample targets from, "
+                         "instead of a jsonl trace.")
     a = ap.parse_args()
 
-    steps = [json.loads(l) for l in open(a.trace)]
-    steps = [s for s in steps if s.get("record_type") == "env_step"]
-    idx = np.linspace(0, len(steps) - 1, a.n).astype(int)
-    targets = [np.array(steps[i]["obs_after_step"]["robot0_eef_pos"]) for i in idx]
+    if a.traj:
+        # A trajectory from a SUCCESSFUL rollout: the targets are then poses the
+        # task actually visits, including the contact phase where the two arms
+        # disagree most. A jsonl trace is the older path and equivalent here.
+        arr = np.load(a.traj)
+        idx = np.linspace(0, len(arr) - 1, a.n).astype(int)
+        targets = [arr[i] for i in idx]
+        n_steps = len(arr)
+    else:
+        steps = [json.loads(l) for l in open(a.trace)]
+        steps = [s for s in steps if s.get("record_type") == "env_step"]
+        idx = np.linspace(0, len(steps) - 1, a.n).astype(int)
+        targets = [np.array(steps[i]["obs_after_step"]["robot0_eef_pos"]) for i in idx]
+        n_steps = len(steps)
 
     from examples.LIBERO.model2libero_interface import M1Inference
     import torch as _t
@@ -82,11 +109,12 @@ def main():
     src = drive_and_query(p, model, task.language, targets, a.jitter, rng)
     ref = U.fixture_snapshot(p.sim); p.close()
 
-    u, _, _ = U.build(a.suite, a.task_id, robot="UR5e", gripper="PandaGripper",
+    u, _, _ = U.build(a.suite, a.task_id, robot="UR5e", gripper=a.gripper,
                       fixture_ref=ref)
     u.reset(); u.set_init_state(U.remap_init_state(init[a.init_state], u.sim))
     for _ in range(10): u.step([0.] * (u.env.action_dim - 1) + [-1.])
     # drive the UR5e to the poses the Panda ACHIEVED, not the ones requested
+    geom = U.gripper_geom(u)
     tgt = drive_and_query(u, model, task.language, [s[0] for s in src], 0.0, rng)
     u.close()
 
@@ -94,14 +122,16 @@ def main():
     for k, ((p_tcp, p_a), (u_tcp, u_a)) in enumerate(zip(src, tgt)):
         ps.add(u_tcp, u_a, p_a,
                gap_mm=float(np.linalg.norm(p_tcp - u_tcp) * 1000),
-               phase=float(idx[k]) / max(len(steps) - 1, 1),
+               geom=geom.tolist(),
+               phase=float(idx[k]) / max(n_steps - 1, 1),
                step=int(idx[k]), init=a.init_state, task=a.task_id)
     ps.save(a.out)
     import json as _j
     _j.dump(ps.meta, open(a.out.replace('.npz', '_meta.json'), 'w'))
     st = ps.stats()
     gaps = np.array([m["gap_mm"] for m in ps.meta])
-    print(f"pairs {len(ps)} -> {a.out}")
+    print(f"pairs {len(ps)} -> {a.out}  gripper={a.gripper} "
+          f"geom=[{geom[0]*1000:.1f}, {geom[1]*1000:.1f}] mm")
     print(f"  TCP gap median {np.median(gaps):.1f} mm (max {gaps.max():.1f})")
     print(f"  cos median {st['cos_median']:+.3f} (min {st['cos_min']:+.3f})")
     print(f"  |v| ratio median {st['ratio_median']:.2f}  IQR {np.round(st['ratio_iqr'],2).tolist()}")

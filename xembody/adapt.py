@@ -23,15 +23,38 @@ import numpy as np
 from .pairs import GRIP, WV
 
 
-def featurise(a_target, tcp):
+#: robosuite Panda + PandaGripper: [flange-to-TCP, wristcam-to-TCP], metres.
+#: The policy's training geometry, and the origin the `geom` feature is
+#: measured from -- a Robotiq85 is (0.1450, 0.1534), i.e. +48 mm and +44 mm.
+PANDA_GEOM = np.array([0.0970, 0.1091], np.float32)
+
+
+def featurise(a_target, tcp, geom=None):
     """Inputs available at run time. NOT proprioception -- the policy ignores
     it (state swap changed the output by cos 1.000), so feeding it here would
-    invite the model to fit noise."""
+    invite the model to fit noise.
+
+    `geom` is the target gripper's [flange-to-TCP, wristcam-to-TCP] in metres,
+    entering as a DIFFERENCE from the Panda's. It is what lets one corrector
+    serve several grippers: swapping a PandaGripper for a Robotiq85 moves the
+    grasp point 48 mm further out from a wrist camera that did not move, so the
+    policy sees the object as further away and drives the TCP past it. Without
+    this column the model can only learn one gripper's offset as a bias, and
+    silently applies it to every other gripper.
+
+    Defaults to the Panda's own geometry so pair files collected before the
+    column existed read back as zeros -- i.e. as "no gripper difference".
+    """
     a = np.atleast_2d(np.asarray(a_target, np.float32))
     t = np.atleast_2d(np.asarray(tcp, np.float32))
+    g = PANDA_GEOM[None] if geom is None else np.atleast_2d(
+        np.asarray(geom, np.float32))
+    if len(g) == 1 and len(a) > 1:
+        g = np.repeat(g, len(a), 0)
+    g = np.where(np.isnan(g), PANDA_GEOM[None], g) - PANDA_GEOM[None]
     n = np.linalg.norm(a[:, WV], axis=1, keepdims=True)
     d = a[:, WV] / np.maximum(n, 1e-6)
-    return np.concatenate([a[:, :6], d, n, t], axis=1).astype(np.float32)
+    return np.concatenate([a[:, :6], d, n, t, g], axis=1).astype(np.float32)
 
 
 class Corrector:
@@ -76,9 +99,9 @@ class Corrector:
         if best_state: self.net.load_state_dict(best_state)
         return best
 
-    def __call__(self, a_target, tcp):
+    def __call__(self, a_target, tcp, geom=None):
         import torch
-        X = torch.as_tensor(featurise(a_target, tcp))
+        X = torch.as_tensor(featurise(a_target, tcp, geom))
         with torch.no_grad():
             out = X[:, :6] + self.net((X - self.mu) / self.sd)
         a = np.atleast_2d(np.asarray(a_target, np.float32)).copy()

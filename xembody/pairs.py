@@ -83,9 +83,15 @@ class PairSet:
         return len(self.tcp)
 
     def save(self, path):
+        # `geom` is the TARGET gripper's [tcp_len, cam_to_tcp] in metres. It is
+        # stored per-pair, not per-file, so one corrector can be trained across
+        # several grippers -- a constant column carries no gradient, and the
+        # whole point is for the model to see the depth difference vary.
         np.savez(path, tcp=np.stack(self.tcp),
                  a_target=np.stack(self.a_target),
                  a_source=np.stack(self.a_source),
+                 geom=np.array([m.get("geom", (np.nan, np.nan))
+                                for m in self.meta], np.float32),
                  gap_mm=np.array([m.get("gap_mm", np.nan) for m in self.meta],
                                  np.float32))
 

@@ -165,6 +165,52 @@ def pin_fixtures(sim, ref):
     return worst
 
 
+PANDA_CAM_TO_TCP = 0.1091   # metres, robosuite Panda + PandaGripper
+
+
+def gripper_geom(env):
+    """[flange-to-TCP, wristcam-to-TCP] in metres, measured from the live model.
+
+    Both are gripper-dependent and NEITHER appears in any observation, so a
+    corrector cannot infer them -- they have to be handed to it. PandaGripper
+    is (0.0970, 0.1091); Robotiq85Gripper is (0.1450, 0.1534).
+    """
+    m, d = env.sim.model, env.sim.data
+    site = m.site_name2id(env.env.robots[0].controller.eef_name)
+    return np.array([
+        np.linalg.norm(d.site_xpos[site] - d.body_xpos[m.body_name2id("robot0_right_hand")]),
+        np.linalg.norm(d.site_xpos[site] - d.cam_xpos[m.camera_name2id("robot0_eye_in_hand")]),
+    ], float)
+
+
+def align_wrist_camera(sim, target=PANDA_CAM_TO_TCP):
+    """Slide the wrist camera so camera-to-TCP matches the policy's training arm.
+
+    The camera is mounted on the wrist LINK (pos="0.05 0 0"), identically for the
+    Panda and the UR5e -- so swapping the gripper does not move the camera, it
+    moves the TCP away from it. A Robotiq85 puts the grasp point 0.1534 m out
+    instead of 0.1091 m, and a policy that servos on that image drives the TCP
+    ~44 mm past the object.
+
+    Every camera extrinsic is a free design choice on a real robot, so this
+    restores the training-time geometry rather than papering over it downstream.
+    Returns (before, after) camera-to-TCP distance in metres.
+    """
+    m, d = sim.model, sim.data
+    cid = m.camera_name2id("robot0_eye_in_hand")
+    # The grasp site is namespaced by the GRIPPER, not the robot.
+    site = m.site_name2id(next(n for n in ("gripper0_grip_site",
+                                           "robot0_grip_site")
+                               if n in m.site_names))
+    v = d.site_xpos[site] - d.cam_xpos[cid]
+    before = float(np.linalg.norm(v))
+    world_shift = v / before * (before - target)
+    bid = m.cam_bodyid[cid]
+    m.cam_pos[cid] += d.xmat[bid].reshape(3, 3).T @ world_shift
+    sim.forward()
+    return before, float(np.linalg.norm(d.site_xpos[site] - d.cam_xpos[cid]))
+
+
 def build(suite_name, task_id, robot="Panda", gripper="default", res=256,
           fixture_ref=None, seed=0):
     from libero.libero import benchmark, get_libero_path
