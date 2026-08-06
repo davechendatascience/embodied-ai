@@ -189,6 +189,77 @@ def gripper_geom(env):
     ], float)
 
 
+def _support(m, gi, axis):
+    """Half-extent of geom `gi` along unit `axis` -- its support radius.
+
+    geom_rbound is a bounding SPHERE and is far too loose here: it reads the
+    PandaGripper's 80 mm span as 32 mm, which is what made the first aperture
+    measurement in this project useless. Project the actual primitive instead.
+    """
+    t, s = m.geom_type[gi], m.geom_size[gi]
+    a = np.abs(axis)                          # caller passes it in the geom frame
+    if t == 2:                                # sphere
+        return float(s[0])
+    if t == 3:                                # capsule
+        return float(s[0] + s[1] * a[2])
+    if t == 4:                                # ellipsoid
+        return float(np.sqrt(np.sum((s[:3] * a) ** 2)))
+    if t == 5:                                # cylinder
+        return float(s[0] * np.sqrt(max(0.0, 1 - a[2] ** 2)) + s[1] * a[2])
+    if t == 6:                                # box
+        return float(np.dot(a, s[:3]))
+    return float(m.geom_rbound[gi])           # mesh / unknown
+
+
+def _finger_geoms(m):
+    return [gi for gi in range(m.ngeom)
+            if (("finger" in (m.body_id2name(m.geom_bodyid[gi]) or "").lower()
+                 or "pad" in (m.body_id2name(m.geom_bodyid[gi]) or "").lower())
+                and not (m.geom_contype[gi] == 0 and m.geom_conaffinity[gi] == 0))]
+
+
+def gripper_span(env):
+    """Free gap between the two finger groups, in metres, from real surfaces.
+
+    THE DEGREE OF FREEDOM THIS PROJECT WAS BLIND TO. The policy's gripper
+    channel is binary, so "open" means whatever the mounted hardware's maximum
+    happens to be -- 80 mm on the PandaGripper it trained with, ~42 mm on a
+    RethinkGripper. Nothing in the observation, the action, or `gripper_geom`
+    carried that number, so every "aligned" grasp was attempted with an
+    unaligned aperture. The libero_spatial/0 bowl is grasped by pinching its
+    RIM, fingertips straddling a wall at ~43 mm radius; a jaw that cannot open
+    that far fails at every TCP offset (measured: Rethink 0/37).
+    """
+    m, d = env.sim.model, env.sim.data
+    gs = _finger_geoms(m)
+    if len(gs) < 2:
+        return float("nan")
+    p = np.array([d.geom_xpos[g] for g in gs])
+    c = p - p.mean(0)
+    axis = np.linalg.svd(c, full_matrices=False)[2][0]      # closing direction
+    s = c @ axis
+    lo, hi = s < 0, s >= 0
+    if not lo.any() or not hi.any():
+        return float("nan")
+    r = np.array([_support(m, g, d.geom_xmat[g].reshape(3, 3).T @ axis) for g in gs])
+    return float((s[hi] - r[hi]).min() - (s[lo] + r[lo]).max())
+
+
+def gripper_limits(env, settle=40):
+    """(span_open, span_closed) in metres -- the gripper's physical range.
+
+    Commands the jaw fully open, then fully closed, holding the arm still.
+    Static per gripper, so measure once and cache.
+    """
+    a = env.env.action_dim - 1
+    for _ in range(settle):
+        env.step([0.] * a + [-1.])
+    lo = gripper_span(env)
+    for _ in range(settle):
+        env.step([0.] * a + [1.])
+    return lo, gripper_span(env)
+
+
 def align_wrist_camera(sim, target=PANDA_CAM_TO_TCP_VEC):
     """Move the wrist camera so the camera->TCP VECTOR matches the training arm.
 
