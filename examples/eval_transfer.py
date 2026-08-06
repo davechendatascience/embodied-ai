@@ -83,13 +83,15 @@ class Follower:
     """The real robot, in its own process. Cartesian goals in, state out."""
 
     def __init__(self, suite, task_id, init_state, gripper, robot="UR5e",
-                 video=False):
+                 video=False, fixtures=None):
         env = dict(os.environ, MUJOCO_GL="egl", PYTHONPATH=R)
         self.p = subprocess.Popen(
             [sys.executable, "-m", "xembody.follower",
              "--suite", suite, "--task-id", str(task_id),
              "--init-state", str(init_state), "--robot", robot,
-             "--gripper", gripper] + (["--video"] if video else []),
+             "--gripper", gripper]
+            + (["--video"] if video else [])
+            + (["--fixtures", fixtures] if fixtures else []),
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=sys.stderr,
             cwd=R, env=env, text=True, bufsize=1)
         hello = json.loads(self._readline())
@@ -188,17 +190,25 @@ def leader_obj(env, lang):
     m = env.sim.model
     toks = [w for w in lang.lower().replace("_", " ").split() if len(w) > 3]
     best, sc = None, 0
+    best_name = None
     for i in range(m.nbody):
         nm = m.body_id2name(i)
-        if nm and sum(t in nm.lower() for t in toks) > sc:
-            best, sc = i, sum(t in nm.lower() for t in toks)
+        if not nm:
+            continue
+        k = sum(t in nm.lower() for t in toks)
+        if k > sc or (k == sc and k > 0 and best_name and len(nm) > len(best_name)):
+            best, sc, best_name = i, k, nm
     return best
 
 
 def rollout(model, ref, init, init_id, a):
     # Follower FIRST and in its own process; the leader then owns this process
     # alone and is the only thing that renders.
-    foll = Follower(a.suite, a.task_id, init_id, a.gripper, video=a.video)
+    fx = f"{R}/pairs/diag/_fixtures_{a.suite}_{a.task_id}.json"
+    json.dump({k: [v[0].tolist(), v[1].tolist()] for k, v in ref.items()},
+              open(fx, "w"))
+    foll = Follower(a.suite, a.task_id, init_id, a.gripper, video=a.video,
+                    fixtures=fx)
     lead, suite, task = U.build(a.suite, a.task_id, robot="UR5e",
                                 gripper=a.source, fixture_ref=ref)
     lead.env.horizon = 10 ** 9
@@ -408,8 +418,15 @@ def main():
               f"steps={r['steps']}  lift {(z.max()-z[0])*1000:+.1f} mm  "
               f"contacts max {int(c.max())}  track med {np.median(tr)*1000:.1f} mm")
     n = sum(r["follower_ok"] for r in out); nl = sum(r["leader_ok"] for r in out)
-    print(f"\n  {a.gripper} following {a.source}  offset_ee={a.offset_ee}:  "
-          f"FOLLOWER {n}/{len(out)}   (leader {nl}/{len(out)})\n")
+    # Conditional score is the honest one: the follower can only succeed where
+    # the leader did, so a weak source baseline caps it and must be reported
+    # separately rather than folded into a single number.
+    both = sum(1 for r in out if r["leader_ok"] or r["follower_ok"])
+    cond = sum(1 for r in out if r["follower_ok"])
+    reachable = sum(1 for r in out if r["leader_ok"] or r["follower_ok"])
+    print(f"\n  {a.gripper} following {a.source}:  FOLLOWER {n}/{len(out)}"
+          f"   leader {nl}/{len(out)}"
+          f"   follower/reachable {cond}/{max(reachable, 1)}\n")
     json.dump(out, open(f"{R}/pairs/diag/transfer_{a.suite}_{a.gripper}.json", "w"))
 
 

@@ -47,18 +47,38 @@ def main():
     ap.add_argument("--robot", default="UR5e")
     ap.add_argument("--gripper", default="Robotiq85Gripper")
     ap.add_argument("--object", default="")
+    ap.add_argument("--fixtures", default="",
+                    help="JSON path: the LEADER's fixture snapshot, to pin against")
     ap.add_argument("--video", action="store_true",
                     help="return an agentview frame each step (base64 PNG)")
     a = ap.parse_args()
 
     import libero_ur5e as U
     import torch as _t
+    # PIN THE LEADER'S FIXTURES. Without this the two environments lay out the
+    # scene differently and the follower tracks the leader perfectly while
+    # standing somewhere else entirely -- on libero_goal the leader reached the
+    # cabinet drawer while the follower hovered over the plate, 3.6 mm of
+    # tracking error and zero contacts.
+    #
+    # The cause is in libero_ur5e.py's own docstring: robosuite draws
+    # initialization noise whose LENGTH depends on the robot's DOF, even at zero
+    # magnitude. A PandaGripper has 2 finger joints and a Robotiq85 has 6, so the
+    # two processes leave the RNG in different states and every sampled fixture
+    # moves. It is the same failure the UR5e port had against the Panda.
+    ref = None
+    if a.fixtures:
+        raw = json.load(open(a.fixtures))
+        ref = {k: (np.array(v[0]), np.array(v[1])) for k, v in raw.items()}
     env, suite, task = U.build(a.suite, a.task_id, robot=a.robot,
-                               gripper=a.gripper, res=256 if a.video else 84)
+                               gripper=a.gripper, res=256 if a.video else 84,
+                               fixture_ref=ref)
     env.env.horizon = 10 ** 9
     o = _t.load; _t.load = lambda *x, **k: o(*x, **{**k, "weights_only": False})
     init = suite.get_task_init_states(a.task_id)[a.init_state]; _t.load = o
     np.random.seed(0); env.reset()
+    if ref:
+        U.pin_fixtures(env.sim, ref)
     env.set_init_state(U.remap_init_state(init, env.sim))
     for _ in range(10):
         env.step([0.] * (env.env.action_dim - 1) + [-1.])
@@ -72,8 +92,15 @@ def main():
         best, sc = None, 0
         for i in range(m.nbody):
             nm = m.body_id2name(i)
-            if nm and sum(t in nm.lower() for t in toks) > sc:
-                best, sc = nm, sum(t in nm.lower() for t in toks)
+            if not nm:
+                continue
+            k = sum(t in nm.lower() for t in toks)
+            # Tie-break on SPECIFICITY: a longer name that still matches every
+            # token is the more precise referent. Without this, "middle drawer of
+            # the cabinet" resolves to the cabinet shell rather than the drawer,
+            # and contacts are counted against a body the fingers never touch.
+            if k > sc or (k == sc and k > 0 and best and len(nm) > len(best)):
+                best, sc = nm, k
         name = best
     bid = m.body_name2id(name)
     fing = [g for g in range(m.ngeom)
