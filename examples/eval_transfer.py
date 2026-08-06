@@ -189,11 +189,23 @@ def live_offset(lead_g, foll_g, feature_radius_mm):
 def leader_obj(env, lang):
     m = env.sim.model
     toks = [w for w in lang.lower().replace("_", " ").split() if len(w) > 3]
+    # The manipulated object must be MOVABLE. Without this filter, "pick up the
+    # black bowl ... place it on the plate" selects flat_stove_1_burner_plate --
+    # "plate" appears twice and that body name is long -- so contacts and lift
+    # were measured against a stove part while the bowl was ignored. Fixtures
+    # have no joints; the bowl has a free joint and the drawer a slide joint, so
+    # requiring a joint keeps every real target and drops the furniture.
+    movable = set()
+    for j in range(m.njnt):
+        b = m.jnt_bodyid[j]
+        nm = m.body_id2name(b)
+        if nm and not nm.startswith(("robot", "gripper", "mount")):
+            movable.add(nm)
     best, sc = None, 0
     best_name = None
     for i in range(m.nbody):
         nm = m.body_id2name(i)
-        if not nm:
+        if not nm or nm not in movable:
             continue
         k = sum(t in nm.lower() for t in toks)
         if k > sc or (k == sc and k > 0 and best_name and len(nm) > len(best_name)):
