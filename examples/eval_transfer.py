@@ -248,6 +248,43 @@ def rollout(model, ref, init, init_id, a):
             break
 
     lo_bid = leader_obj(lead, task.language)
+    # CLOSING THE LOOP. The leader is the policy's window onto the world, so it
+    # must show the REAL object state -- otherwise a dropped object is narrated
+    # as a success and never retried. Writes the object qpos slices directly and
+    # calls forward(), rather than a get_state/set_state round trip.
+    #
+    # An earlier attempt at this destabilised the leader, but the cause was NOT
+    # the write: it was that the follower's fixtures were unpinned at the time,
+    # so its objects sat elsewhere and the leader's bowl was being teleported
+    # away from where it was reaching. With fixtures pinned the mirror is
+    # meaningful. Verified separately: an identity write through set_state
+    # changes the leader's trajectory by 0.00 mm over 60 steps.
+    lm = lead.sim.model
+    lj = {}
+    for j in range(lm.njnt):
+        b = lm.body_id2name(lm.jnt_bodyid[j]) or ""
+        nm = lm.joint_id2name(j)
+        if nm and not b.startswith(("robot", "gripper", "mount")):
+            lj[nm] = (int(lm.jnt_qposadr[j]),
+                      {0: 7, 1: 4, 2: 1, 3: 1}[int(lm.jnt_type[j])])
+
+    def mirror_objects(objq, grasped):
+        # ONLY BEFORE THE GRASP. Retry-on-failure needs the approach phase to be
+        # truthful -- if the follower knocks the object aside or fails to close,
+        # the policy must see that and try again. After both hands hold the
+        # object, mirroring becomes a fight: the leader's gripper holds it at one
+        # pose while we teleport it to the follower's slightly different pose
+        # every step, and the leader's contact solver reacts to being yanked.
+        # Measured: mirroring throughout took the can from 3/3 to 1/3 and the
+        # leader itself from 3/3 to 2/3.
+        if not objq or not a.closed_loop or grasped:
+            return
+        q = lead.sim.data.qpos
+        for n, vals in objq.items():
+            if n in lj:
+                adr, w = lj[n]
+                q[adr:adr + w] = np.asarray(vals, float)[:w]
+        lead.sim.forward()
     model.reset(task.language)
     log, done_l, done_f, frames, st_prev = [], False, False, [], None
     # PHASE-DEPENDENT CORRECTION. Before the grasp, the offset positions the
@@ -286,6 +323,7 @@ def rollout(model, ref, init, init_id, a):
         st = foll.step(tcp(lead) + blend, env_act[3:6], env_act[6],
                        n=a.follow_steps)
         st_prev = st
+        mirror_objects(st.get("objq"), carry is not None)
         if carry is not None:
             # Ramp rate matters: the approach->carry swing is ~45 mm, so 0.1
             # per step moves the held object 4.5 mm per step and drags it out of
@@ -399,6 +437,9 @@ def main():
                          "and the one the TARGET can grip. The ONLY "
                          "object-dependent input; everything else is read from "
                          "the mounted hardware each step.")
+    ap.add_argument("--closed-loop", action="store_true",
+                    help="mirror the follower's object state into the leader so "
+                         "the policy sees reality and can retry")
     ap.add_argument("--grace", type=int, default=40,
                     help="follower steps allowed after the leader finishes")
     ap.add_argument("--carry-ramp", type=float, default=0.02,

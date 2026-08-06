@@ -86,6 +86,17 @@ def main():
     m, d = env.sim.model, env.sim.data
     site = m.site_name2id(env.env.robots[0].controller.eef_name)
 
+    # Non-robot joints by name, so the parent can mirror the real scene state
+    # back into the leader. Mapped by NAME, never by address: the two robots
+    # carry different gripper DOF, so their qpos layouts do not line up.
+    objs = {}
+    for j in range(m.njnt):
+        b = m.body_id2name(m.jnt_bodyid[j]) or ""
+        nm = m.joint_id2name(j)
+        if nm and not b.startswith(("robot", "gripper", "mount")):
+            objs[nm] = (int(m.jnt_qposadr[j]),
+                        {0: 7, 1: 4, 2: 1, 3: 1}[int(m.jnt_type[j])])
+
     name = a.object
     if not name:
         toks = [w for w in task.language.lower().replace("_", " ").split() if len(w) > 3]
@@ -179,7 +190,9 @@ def main():
                               [float(req.get("grip", -1.0))]])
         _, _, dn, _ = env.step(act.tolist())
         done = done or bool(dn)
-        msg = {"tcp": d.site_xpos[site].tolist(),
+        msg = {"objq": {n: [float(x) for x in d.qpos[adr:adr + w]]
+                        for n, (adr, w) in objs.items()},
+               "tcp": d.site_xpos[site].tolist(),
                "obj": d.body_xpos[bid].tolist(),
                "obj_z": float(d.body_xpos[bid][2]),
                "contacts": contacts(), "done": done,
