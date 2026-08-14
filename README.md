@@ -96,6 +96,38 @@ tightened the floor to 0.92-0.97 and recovered the effect. Both corrections
 matter: the first version was measuring flipped boxes, and the second was
 underpowered.
 
+**Burning the box into the pixels does not steer an UNTRAINED policy either.**
+The literature says serialized coordinates are the weakest channel and pixel
+overlay is where the causal evidence lives (Point-VLA on pi-0.5: box-as-text
+70/37/83/73 versus box-as-overlay 86.7/80/94.3/95.0; RoboGround reproduces the
+ordering; TraceVLA +2.4% text against +6.4% pixels). Same conditions, same
+power, the mark drawn on the image and the prompt held constant:
+
+| task | floor | target | all | distractor | **causal: mark moved** |
+|---|---|---|---|---|---|
+| `PnPCounterToSink` | 4.9 deg | 10.3 | 17.1 | 29.0 | **27.8 deg — ambiguous** |
+| `PnPCounterToMicrowave` | 30.8 deg | 15.4 | 14.3 | 14.2 | **11.9 deg — inert** |
+| `PnPCounterToCab` | 17.4 deg | 20.3 | 15.7 | 10.5 | **9.8 deg — inert** |
+
+Here the causal test is `target` versus `distractor`: identical instruction,
+identical mark, moved to another object. An overlay has no label to falsify, so
+`mislabel` does not exist and relocation IS the test -- which also removes
+prompt length and token count as explanations, something the serialized channel
+could never do.
+
+No redirection on any task. `PnPCounterToSink` is the one suggestive row: 27.8
+degrees against a 4.9 degree floor is the largest signal-to-floor ratio in this
+repo, but it is one frame and the floors vary 4.9-30.8 degrees across tasks, so
+cross-task comparison here is weak.
+
+THIS IS NOT A REFUTATION OF THE OVERLAY LITERATURE. Every published overlay
+success fine-tuned on overlaid frames -- Point-VLA needed roughly two hours of
+demos per scenario, co-trained 1:1 against text-only. What is measured here is
+whether an UNTRAINED policy reacts to a mark it has never seen, which nobody
+published because everybody trained first. The answer appears to be no, and
+that prices the intervention: grounding on these architectures costs a
+fine-tune, not a renderer.
+
 **pi-0.5 cannot be asked this question on RoboCasa at all**, which is how the
 GR00T path was chosen rather than assumed:
 

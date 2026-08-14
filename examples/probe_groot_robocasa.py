@@ -39,6 +39,7 @@ sys.path.insert(0, R)
 sys.path.insert(0, R + "/examples")
 
 from xembody.groot import LANG_KEY, GrootPolicy
+from xembody.boxes import overlay_conditions
 from xembody.grounding import build_prompt, pretty
 from xembody.probe import compare, noise_floor, verdict
 
@@ -260,6 +261,66 @@ def run_sweep(policy, obs, instruction, boxes, size, style, repeats,
             "target": target, "distractor": distractor}
 
 
+def run_pixels(policy, obs, img_key, rgb, instruction, boxes, target,
+               distractor, repeats, draws):
+    """The pixel-injection channel: the mark goes in the IMAGE, not the prompt.
+
+    The literature this was built to test says serialized coordinates are the
+    weakest channel and pixel burn-in is where the causal steering evidence
+    lives (Point-VLA on pi-0.5: box-as-text 70/37/83/73 vs box-as-overlay
+    86.7/80/94.3/95.0; RoboGround reproduces the ordering; TraceVLA +2.4% text
+    vs +6.4% pixels).
+
+    THE CAUSAL TEST IS DIFFERENT HERE, and it is cleaner. An overlay carries
+    LOCATION, not IDENTITY -- there is no label to falsify, so `mislabel` does
+    not exist and "box on the distractor" IS the relocation. The test is
+    `target` versus `distractor`: identical instruction, identical mark, moved
+    to another object. If the policy follows the mark they diverge. Nothing
+    about the prompt changes at all, which removes prompt length and token
+    count as explanations in a way the serialized channel never could.
+
+    CAVEAT THIS RUN CANNOT ESCAPE: every published overlay success FINE-TUNED on
+    overlaid frames. This measures whether an untrained policy reacts to a mark
+    it has never seen, which is a different and unanswered question. A null here
+    is consistent with Point-VLA rather than a refutation of it.
+    """
+    variants = overlay_conditions(rgb, boxes, target, distractor)
+    print(f"\npixel channel: {sorted(variants)}  (prompt held constant)")
+
+    def query(image):
+        o = dict(obs)
+        o[img_key] = image
+        return mean_chunk(policy, o, instruction, draws)
+
+    base = [query(variants["none"]) for _ in range(max(2, repeats))]
+    floor = noise_floor(base)
+    print(f"noise floor  n={floor['n']} means of {draws} draws  "
+          f"cos_dir>={floor['cos_dir']:.6f}  d_dir<={floor['d_dir']:.6f}\n")
+    print(f"{'condition':<12} {'cos_dir':>9} {'deg':>7} {'d_dir':>9}  verdict")
+    chunks, rows = {"none": base[0]}, {}
+    for name in ("target", "all", "distractor"):
+        if name not in variants:
+            continue
+        chunks[name] = query(variants[name])
+        e = compare(chunks["none"], chunks[name])
+        v, deg = verdict(e, floor)
+        e["verdict"], e["deg"] = v, deg
+        rows[name] = e
+        print(f"{name:<12} {e['cos_dir']:>9.4f} {deg:>7.1f} {e['d_dir']:>9.4f}"
+              f"  {v}")
+    causal = None
+    if "target" in chunks and "distractor" in chunks:
+        causal = compare(chunks["target"], chunks["distractor"])
+        v, deg = verdict(causal, floor)
+        causal["verdict"], causal["deg"] = v, deg
+        print(f"\ncausal test   mark on target vs mark on distractor: "
+              f"cos_dir={causal['cos_dir']:.4f} ({deg:.1f} deg) -> {v}")
+        print("              redirected/ambiguous => the mark steers; "
+              "inert => the mark is noticed but not followed")
+    return {"floor": floor, "effects": rows, "causal": causal,
+            "channel": "pixels"}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--task", default="PnPCounterToSink")
@@ -274,6 +335,8 @@ def main():
                     help="which of the embodiment's cameras to ground in")
     ap.add_argument("--style", default="paligemma")
     ap.add_argument("--language", action="store_true")
+    ap.add_argument("--inject", default="prompt",
+                    choices=("prompt", "pixels"))
     ap.add_argument("--repeats", type=int, default=8)
     ap.add_argument("--min-px", type=int, default=12)
     ap.add_argument("--host", default="localhost")
@@ -314,10 +377,18 @@ def main():
     print(f"objects     {len(boxes)}  {dict(boxes)}")
 
     policy = GrootPolicy(host=a.host, port=a.port)
-    out = (run_language(policy, obs, instruction, boxes, a.repeats, a.draws)
-           if a.language else
-           run_sweep(policy, obs, instruction, boxes, (w, h), a.style,
-                     a.repeats, a.draws))
+    if a.language:
+        out = run_language(policy, obs, instruction, boxes, a.repeats, a.draws)
+    elif a.inject == "pixels":
+        from probe_conditions import pick_distractor, pick_target
+        tgt = pick_target(boxes, instruction)
+        dis = pick_distractor(boxes, tgt, instruction)
+        print(f"target      {tgt}\ndistractor  {dis}")
+        out = run_pixels(policy, obs, mapped[idx], img, instruction, boxes,
+                         tgt, dis, a.repeats, a.draws)
+    else:
+        out = run_sweep(policy, obs, instruction, boxes, (w, h), a.style,
+                        a.repeats, a.draws)
 
     if a.json:
         os.makedirs(os.path.dirname(os.path.abspath(a.json)), exist_ok=True)
