@@ -46,7 +46,7 @@ UNRELATED = "open the top drawer of the cabinet"
 NONSENSE = "qwerty asdf zxcv plugh xyzzy"
 
 
-def build_env(task, robot="PandaOmron", seed=0):
+def build_env(task, robot="PandaOmron", seed=0, layout=1, style=1):
     """GR00T's gymnasium RoboCasa env, plus the robosuite env underneath it.
 
     The wrapper is what the policy talks to (it emits `video.*`, `state.*` and
@@ -57,8 +57,16 @@ def build_env(task, robot="PandaOmron", seed=0):
     import gymnasium as gym
     import robocasa.utils.gym_utils.gymnasium_groot  # noqa: F401  registers ids
 
+    # SEED, LAYOUT AND STYLE MUST GO THROUGH gym.make, NOT reset().
+    # RoboCasa samples the kitchen layout, style and object instances from its
+    # own RNG at construction. `reset(seed=...)`, `np.random.seed` and
+    # `random.seed` all leave it free-running: three consecutive builds of the
+    # same task gave "condiment bottle", "corn" and "teapot". Every condition in
+    # one run still saw one frozen frame, so a sweep was internally valid -- but
+    # nothing was reproducible and no two tasks were matched scenes. Passing
+    # these as kwargs pins it.
     env_id = f"robocasa_panda_omron/{task}_{robot}_Env"
-    genv = gym.make(env_id)
+    genv = gym.make(env_id, seed=seed, layout_ids=layout, style_ids=style)
     obs, _ = genv.reset(seed=seed)
     return genv, genv.unwrapped.env, obs
 
@@ -69,22 +77,42 @@ def camera_config(genv):
     return list(mapped), list(cams)
 
 
-def segmentation(inner, cam, h, w):
-    """Per-geom segmentation, in the same frame the wrapper's image uses.
+def segmentation(inner, cam, h, w, reference):
+    """Per-geom segmentation, in the same frame as `reference`.
 
-    Same approach and same reasoning as probe_robocasa.segmentation: RoboCasa's
-    Kitchen does not forward `camera_segmentations`, so MuJoCo is called
-    directly and the convention flip is applied by hand.
+    THE ORIENTATION IS CALIBRATED, NOT LOOKED UP. The first version of this
+    function trusted `IMAGE_CONVENTION_MAPPING[macros.IMAGE_CONVENTION]` the way
+    the pi-0.5 host does. That is wrong here: on robosuite master "opengl" maps
+    to +1 (no flip), yet GR00T's wrapper image is the VERTICAL FLIP of a raw
+    render -- measured, mean|diff| 1.2 flipped versus 93 unflipped. So the
+    segmentation was upside down relative to the image the policy sees, and
+    every box named the wrong pixels while looking perfectly plausible.
+
+    The constant differs between robosuite generations, so no constant is
+    trusted. The RGB is re-rendered, compared against the wrapper's own image
+    under each candidate flip, and whichever wins is applied to the
+    segmentation. If none wins clearly this raises, because a silently
+    misaligned box is worse than a crash.
+
+    `reference` is the wrapper's image for this camera -- the actual array the
+    policy is fed.
     """
-    import robosuite.macros as macros
-    try:
-        from robosuite.utils.mjcf_utils import IMAGE_CONVENTION_MAPPING
-    except ImportError:
-        from robosuite.utils.camera_utils import IMAGE_CONVENTION_MAPPING
-    conv = IMAGE_CONVENTION_MAPPING[macros.IMAGE_CONVENTION]
+    ref = np.asarray(reference, dtype=np.int16)
+    rgb = np.asarray(inner.sim.render(camera_name=cam, width=w, height=h),
+                     dtype=np.int16)
+    cands = {"as-is": (lambda a: a), "vflip": (lambda a: a[::-1]),
+             "hflip": (lambda a: a[:, ::-1]),
+             "rot180": (lambda a: a[::-1, ::-1])}
+    errs = {k: float(np.abs(f(rgb) - ref).mean()) for k, f in cands.items()}
+    best = min(errs, key=errs.get)
+    runner = min((k for k in errs if k != best), key=errs.get)
+    if errs[best] > 0.25 * errs[runner]:
+        raise RuntimeError(
+            f"cannot align a re-render of {cam} with the wrapper's image: "
+            f"mean|diff| {errs}. Boxes would name the wrong pixels.")
     seg = inner.sim.render(camera_name=cam, width=w, height=h,
-                           segmentation=True)[::conv]
-    return seg[:, :, 1]
+                           segmentation=True)
+    return cands[best](seg)[:, :, 1]
 
 
 def object_boxes(inner, seg, min_px=12):
@@ -237,6 +265,8 @@ def main():
     ap.add_argument("--task", default="PnPCounterToSink")
     ap.add_argument("--robot", default="PandaOmron")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--layout", type=int, default=1)
+    ap.add_argument("--style-id", dest="style_id", type=int, default=1)
     ap.add_argument("--draws", type=int, default=8,
                     help="samples averaged per condition; the action head "
                          "is stochastic, so 1 is not enough")
@@ -251,7 +281,7 @@ def main():
     ap.add_argument("--json", default=None)
     a = ap.parse_args()
 
-    genv, inner, obs = build_env(a.task, a.robot, a.seed)
+    genv, inner, obs = build_env(a.task, a.robot, a.seed, a.layout, a.style_id)
     mapped, cams = camera_config(genv)
     instruction = obs.get(LANG_KEY) or inner.get_ep_meta().get("lang", "")
     # PICK THE VIEW THAT ACTUALLY SEES THE OBJECTS.
@@ -266,7 +296,7 @@ def main():
         for i, (mk, cm) in enumerate(zip(mapped, cams)):
             im = np.asarray(obs[mk])
             hh, ww = im.shape[:2]
-            b = object_boxes(inner, segmentation(inner, cm, hh, ww), a.min_px)
+            b = object_boxes(inner, segmentation(inner, cm, hh, ww, im), a.min_px)
             scored.append((len(b), i, cm, b))
         scored.sort(key=lambda t: -t[0])
         print("camera object counts: "
@@ -275,7 +305,7 @@ def main():
     cam = cams[idx]
     img = np.asarray(obs[mapped[idx]])
     h, w = img.shape[:2]
-    boxes = object_boxes(inner, segmentation(inner, cam, h, w), a.min_px)
+    boxes = object_boxes(inner, segmentation(inner, cam, h, w, img), a.min_px)
 
     print(f"task        {a.task}  ({a.robot})")
     print(f"instruction {instruction!r}")

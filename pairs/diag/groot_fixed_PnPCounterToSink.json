@@ -1,0 +1,76 @@
+{
+  "task": "PnPCounterToSink",
+  "instruction": "pick the wine from the counter and place it in the sink",
+  "boxes": {
+    "wine": [
+      239,
+      104,
+      255,
+      139
+    ],
+    "squash": [
+      31,
+      141,
+      46,
+      151
+    ],
+    "orange": [
+      162,
+      148,
+      171,
+      157
+    ]
+  },
+  "result": {
+    "floor": {
+      "cos_dir": 0.6254094017375199,
+      "d_dir": 0.021663193883120924,
+      "n": 4,
+      "deterministic": false
+    },
+    "effects": {
+      "target": {
+        "cos_dir": 0.7945103523316732,
+        "d_dir": 0.017558437819844036,
+        "cos_first": 0.7945103523316732,
+        "grip_agree": 1.0,
+        "verdict": "inert",
+        "deg": 37.39096837074013
+      },
+      "all": {
+        "cos_dir": 0.7566150235835166,
+        "d_dir": 0.03305683445838435,
+        "cos_first": 0.7566150235835166,
+        "grip_agree": 0.0,
+        "verdict": "inert",
+        "deg": 40.833312240138646
+      },
+      "distractor": {
+        "cos_dir": 0.7003245156305685,
+        "d_dir": 0.018605363809088196,
+        "cos_first": 0.7003245156305685,
+        "grip_agree": 0.0,
+        "verdict": "inert",
+        "deg": 45.54695426320124
+      },
+      "mislabel": {
+        "cos_dir": 0.6221544838268818,
+        "d_dir": 0.020027560275495678,
+        "cos_first": 0.6221544838268818,
+        "grip_agree": 1.0,
+        "verdict": "inert",
+        "deg": 51.526362440944624
+      }
+    },
+    "causal": {
+      "cos_dir": 0.927255426348511,
+      "d_dir": 0.011444213866536466,
+      "cos_first": 0.927255426348511,
+      "grip_agree": 1.0,
+      "verdict": "inert",
+      "deg": 21.989050563503234
+    },
+    "target": "wine",
+    "distractor": "squash"
+  }
+}

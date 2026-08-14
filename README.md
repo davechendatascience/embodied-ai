@@ -46,35 +46,55 @@ interpretable: gibberish moves nothing, a real instruction moves a lot, so the
 checkpoint is parsing meaning rather than reacting to token count, and the box
 null is about the boxes.
 
-**On RoboCasa with GR00T N1.6, the boxes move the policy but their CONTENT does
-not.** Three tasks, oracle boxes, means of 8 draws per condition:
+**On RoboCasa with GR00T N1.6, the boxes move the policy but their CONTENT
+mostly does not.** Three tasks, oracle boxes, means of 32 draws per condition,
+scenes pinned (layout 1 / style 1):
 
-| task | target | all | distractor | mislabel | **causal: mislabel vs target** |
-|---|---|---|---|---|---|
-| `PnPCounterToSink` | 53.3 deg | 94.5 deg | 59.1 deg | 65.6 deg | **12.3 deg — inert** |
-| `PnPCounterToMicrowave` | 57.4 deg | 76.4 deg | 29.4 deg | 52.9 deg | **8.5 deg — inert** |
-| `PnPCounterToCab` | 9.0 deg | 13.8 deg | 28.7 deg | 10.7 deg | **7.9 deg — inert** |
+| task | floor | target | all | distractor | mislabel | **causal: mislabel vs target** |
+|---|---|---|---|---|---|---|
+| `PnPCounterToSink` | 13.6 deg | 26.7 | 32.7 | 29.5 | 31.7 | **6.6 deg — inert** |
+| `PnPCounterToMicrowave` | 22.5 deg | 64.1 | 75.2 | 44.4 | 40.7 | **24.7 deg — ambiguous** |
+| `PnPCounterToCab` | 13.5 deg | 25.7 | 30.0 | 24.0 | 22.0 | **3.9 deg — inert** |
 
 Read the last column first. If the model understood that `<loc>` tokens say
 *where* the named object is, then putting the target's label on the
-distractor's coordinates would send the arm somewhere else. It does not, on any
-task. Adding a box is worth 53-57 degrees; moving that box to a different
-object is worth 8. The reaction is to the presence of box-shaped text, not to
-its meaning.
+distractor's coordinates would send the arm somewhere else. Adding a box is
+worth 26-64 degrees; moving that box to a different object is worth 4-25. On
+two of three tasks the causal test is inert and `distractor` is
+indistinguishable from `target` -- the reaction is to the presence of
+box-shaped text, not to what it points at.
 
-Two corroborations, both from conditions that exist for exactly this purpose:
+`PnPCounterToMicrowave` is the exception worth watching rather than explaining
+away: `target` (64.1) clearly exceeds `distractor` (44.4), and its causal test
+is ambiguous rather than inert. That is a hint of partial content sensitivity on
+the one task with the most published headroom (19.0% zero-shot). One frame, one
+seed -- not enough to claim it, enough to test it properly.
 
-* `distractor` -- a box on an irrelevant object, labelled as itself -- moves the
-  policy 59.1 and 28.7 degrees on two tasks, comparable to the CORRECT box. A
-  model reading box semantics should largely ignore it.
-* In the language control, **nonsense text moved GR00T 72.8 degrees, MORE than a
-  wrong instruction at 66.7**. Compare pi-0.5, where nonsense was 3.5 degrees.
-  GR00T's prompt sensitivity here is not semantic.
+### CORRECTION: an earlier version of this table was wrong
 
-**Where grounding could help, it is not the grounding that is missing.**
-`PnPCounterToMicrowave` is the task with the most published headroom (19.0%
-zero-shot) and it behaves like the others. No task in this set showed the box
-content being used.
+Commit `0f71aa2` reported 53-57 degrees for `target` and 8-12 for the causal
+test. Those numbers were measured with two bugs:
+
+* **The segmentation was vertically flipped** relative to the image the policy
+  sees, so every box named the wrong pixels. `probe_robocasa.segmentation`
+  asserts its orientation; the GR00T host was written later and the assert was
+  dropped. On robosuite master `IMAGE_CONVENTION="opengl"` maps to +1, but
+  GR00T's wrapper image is the vertical flip of a raw render -- measured
+  mean|diff| 1.2 flipped versus 93 unflipped. `segmentation` now CALIBRATES the
+  orientation against the wrapper's own image instead of trusting a constant.
+* **Scenes were not reproducible.** RoboCasa samples layout, style and object
+  instances from its own RNG at construction, and `reset(seed=...)`,
+  `np.random.seed` and `random.seed` all leave it free-running -- three builds
+  of one task gave "condiment bottle", "corn", "teapot". Every condition within
+  a run still saw one frozen frame, so each row was internally valid, but no two
+  rows were matched scenes. Seed, layout and style now go through `gym.make`.
+
+The conclusion survived the fix; the magnitudes did not. Re-running with correct
+boxes at the original power made everything inert, because the noise floor on
+these scenes is much larger (cos_dir 0.58-0.75 at 8 draws). Raising to 32 draws
+tightened the floor to 0.92-0.97 and recovered the effect. Both corrections
+matter: the first version was measuring flipped boxes, and the second was
+underpowered.
 
 **pi-0.5 cannot be asked this question on RoboCasa at all**, which is how the
 GR00T path was chosen rather than assumed:

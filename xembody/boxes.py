@@ -115,6 +115,43 @@ def oracle_boxes(model, seg, movable, min_px=12):
     return {n: b for n, b in boxes.items() if counts[n] >= min_px}
 
 
+def overlay_conditions(rgb, boxes, target, distractor, width=2):
+    """Per-condition IMAGES for the pixel-injection channel.
+
+    THE PIXEL CHANNEL CARRIES LOCATION, NOT IDENTITY, and that changes the
+    experiment. In the prompt channel a box has a label, so `mislabel` -- the
+    distractor's coordinates under the target's name -- is the causal test. An
+    overlay has no label to falsify: "box on the distractor, called the target"
+    and "box on the distractor" are the SAME IMAGE. So `mislabel` does not
+    exist here and pretending it does would just duplicate a condition.
+
+    The causal test becomes `target` vs `distractor`: identical instruction, the
+    mark moved to a different object. If the policy follows the mark those two
+    diverge; if it merely notices that something was drawn, they do not. That is
+    the same design as the published results that actually steer (moving a gaze
+    heatmap, moving a trace), and it is a cleaner test than the prompt version
+    because nothing about the prompt changes at all.
+
+    `all` is kept because it is the one condition that still poses a BINDING
+    problem: several marks at once, and the policy must know which one the
+    instruction means. That is the token-to-pixel binding measured as absent in
+    the prompt channel, so `all` behaving unlike `target` is informative rather
+    than redundant.
+
+    Every mark is drawn identically -- same colour, same width -- so `target`
+    and `distractor` differ in POSITION and nothing else.
+    """
+    one = lambda name: {name: boxes[name]} if name in boxes else None
+    out = {"none": np.array(rgb, dtype=np.uint8, copy=True)}
+    if target is not None:
+        out["target"] = draw_overlay(rgb, one(target), width)
+    if boxes:
+        out["all"] = draw_overlay(rgb, boxes, width)
+    if distractor is not None:
+        out["distractor"] = draw_overlay(rgb, one(distractor), width)
+    return out
+
+
 def draw_overlay(rgb, boxes, width=2):
     """Boxes burned into a copy of `rgb`, for looking at. Both in policy frame.
 
