@@ -1,0 +1,61 @@
+{
+  "task": "put both the alphabet soup and the tomato sauce in the basket",
+  "target": "alphabet_soup_1_main",
+  "distractor": "butter_1_main",
+  "style": "qwen_json",
+  "floor": {
+    "cos_dir": 0.9953291651157283,
+    "d_dir": 1.1670762921861966,
+    "n": 8,
+    "deterministic": false
+  },
+  "effects": {
+    "target": {
+      "cos_dir": 0.9962544245056977,
+      "d_dir": 0.39412680135177264,
+      "cos_first": 0.9795252886808954,
+      "grip_agree": 1.0,
+      "verdict": "inert",
+      "deg": 4.96058114042331
+    },
+    "all": {
+      "cos_dir": 0.9682536453073338,
+      "d_dir": 1.1551396368641171,
+      "cos_first": 0.8164799159035108,
+      "grip_agree": 0.0,
+      "verdict": "inert",
+      "deg": 14.47572244273911
+    },
+    "distractor": {
+      "cos_dir": 0.9990884015301852,
+      "d_dir": 0.11313429050671447,
+      "cos_first": 0.9219760346388987,
+      "grip_agree": 1.0,
+      "verdict": "inert",
+      "deg": 2.446653236995016
+    },
+    "mislabel": {
+      "cos_dir": 0.9971151880890415,
+      "d_dir": 0.546260238868238,
+      "cos_first": 0.9203060238350018,
+      "grip_agree": 1.0,
+      "verdict": "inert",
+      "deg": 4.353122027880783
+    }
+  },
+  "causal": {
+    "cos_dir": 0.9993422570456559,
+    "d_dir": 0.8374146624408068,
+    "cos_first": 0.9799443263270348,
+    "grip_agree": 1.0,
+    "verdict": "inert",
+    "deg": 2.0782105250301717
+  },
+  "prompts": {
+    "none": "put both the alphabet soup and the tomato sauce in the basket",
+    "target": "put both the alphabet soup and the tomato sauce in the basket ; objects: [{\"bbox_2d\": [173, 132, 199, 167], \"label\": \"alphabet soup\"}]",
+    "all": "put both the alphabet soup and the tomato sauce in the basket ; objects: [{\"bbox_2d\": [173, 132, 199, 167], \"label\": \"alphabet soup\"}, {\"bbox_2d\": [0, 96, 57, 180], \"label\": \"basket\"}, {\"bbox_2d\": [103, 175, 120, 200], \"label\": \"butter\"}, {\"bbox_2d\": [202, 188, 228, 219], \"label\": \"cream cheese\"}, {\"bbox_2d\": [160, 93, 180, 133], \"label\": \"ketchup\"}, {\"bbox_2d\": [159, 156, 186, 205], \"label\": \"milk\"}, {\"bbox_2d\": [220, 140, 253, 187], \"label\": \"orange juice\"}, {\"bbox_2d\": [105, 117, 129, 153], \"label\": \"tomato sauce\"}]",
+    "distractor": "put both the alphabet soup and the tomato sauce in the basket ; objects: [{\"bbox_2d\": [103, 175, 120, 200], \"label\": \"butter\"}]",
+    "mislabel": "put both the alphabet soup and the tomato sauce in the basket ; objects: [{\"bbox_2d\": [103, 175, 120, 200], \"label\": \"alphabet soup\"}]"
+  }
+}

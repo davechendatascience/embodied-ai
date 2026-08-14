@@ -1,0 +1,39 @@
+{
+  "task": "put both the alphabet soup and the tomato sauce in the basket",
+  "floor": {
+    "cos_dir": 0.9905501831238777,
+    "d_dir": 1.224704392683994,
+    "n": 8,
+    "deterministic": false
+  },
+  "rows": {
+    "wrong": {
+      "cos_dir": 0.8904518459446936,
+      "d_dir": 2.0838178631882864,
+      "cos_first": 0.9427593082862274,
+      "grip_agree": 0.5,
+      "verdict": "ambiguous",
+      "deg": 27.06991934425195,
+      "prompt": "pick up the butter and place it in the basket"
+    },
+    "unrelated": {
+      "cos_dir": 0.6165289596742198,
+      "d_dir": 3.6475717122651203,
+      "cos_first": 0.8268512275768494,
+      "grip_agree": 0.5,
+      "verdict": "ambiguous",
+      "deg": 51.93689858344522,
+      "prompt": "open the top drawer of the cabinet"
+    },
+    "nonsense": {
+      "cos_dir": 0.9981017899689208,
+      "d_dir": 0.31792187341349565,
+      "cos_first": 0.8606607692669198,
+      "grip_agree": 0.5,
+      "verdict": "inert",
+      "deg": 3.5308436322145154,
+      "prompt": "qwerty asdf zxcv plugh xyzzy"
+    }
+  },
+  "open_channel": true
+}

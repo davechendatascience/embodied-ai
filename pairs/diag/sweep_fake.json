@@ -1,0 +1,51 @@
+{
+  "task": "put both the alphabet soup and the tomato sauce in the basket",
+  "target": "alphabet_soup_1_main",
+  "distractor": "butter_1_main",
+  "style": "paligemma",
+  "floor": {
+    "cos_dir": 1.0,
+    "d_dir": 0.0,
+    "n": 4,
+    "deterministic": true
+  },
+  "effects": {
+    "target": {
+      "cos_dir": 0.20263694242945451,
+      "d_dir": 0.2416276922258511,
+      "cos_first": 0.20263694242945454,
+      "grip_agree": 1.0
+    },
+    "all": {
+      "cos_dir": 0.20263694242945451,
+      "d_dir": 0.2416276922258511,
+      "cos_first": 0.20263694242945454,
+      "grip_agree": 1.0
+    },
+    "distractor": {
+      "cos_dir": 1.0,
+      "d_dir": 0.0,
+      "cos_first": 1.0,
+      "grip_agree": 1.0
+    },
+    "mislabel": {
+      "cos_dir": 0.20298699466670914,
+      "d_dir": 0.24119314521930604,
+      "cos_first": 0.2029869946667092,
+      "grip_agree": 1.0
+    }
+  },
+  "causal": {
+    "cos_dir": 0.12203476941240099,
+    "d_dir": 0.3266860655130406,
+    "cos_first": 0.122034769412401,
+    "grip_agree": 1.0
+  },
+  "prompts": {
+    "none": "put both the alphabet soup and the tomato sauce in the basket",
+    "target": "put both the alphabet soup and the tomato sauce in the basket ; objects: <loc0530><loc0694><loc0670><loc0798> alphabet soup",
+    "all": "put both the alphabet soup and the tomato sauce in the basket ; objects: <loc0530><loc0694><loc0670><loc0798> alphabet soup ; <loc0385><loc0000><loc0722><loc0229> basket ; <loc0702><loc0413><loc0802><loc0481> butter ; <loc0754><loc0810><loc0879><loc0915> cream cheese ; <loc0373><loc0642><loc0534><loc0722> ketchup ; <loc0626><loc0638><loc0822><loc0746> milk ; <loc0562><loc0883><loc0750><loc1015> orange juice ; <loc0469><loc0421><loc0614><loc0518> tomato sauce",
+    "distractor": "put both the alphabet soup and the tomato sauce in the basket ; objects: <loc0702><loc0413><loc0802><loc0481> butter",
+    "mislabel": "put both the alphabet soup and the tomato sauce in the basket ; objects: <loc0702><loc0413><loc0802><loc0481> alphabet soup"
+  }
+}

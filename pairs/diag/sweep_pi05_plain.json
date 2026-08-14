@@ -1,0 +1,61 @@
+{
+  "task": "put both the alphabet soup and the tomato sauce in the basket",
+  "target": "alphabet_soup_1_main",
+  "distractor": "butter_1_main",
+  "style": "plain",
+  "floor": {
+    "cos_dir": 0.9965193134616597,
+    "d_dir": 0.9286209096277938,
+    "n": 8,
+    "deterministic": false
+  },
+  "effects": {
+    "target": {
+      "cos_dir": 0.9978493803613132,
+      "d_dir": 0.21859752854201492,
+      "cos_first": 0.9816892488195083,
+      "grip_agree": 1.0,
+      "verdict": "inert",
+      "deg": 3.7583506609625017
+    },
+    "all": {
+      "cos_dir": 0.9884579250378159,
+      "d_dir": 0.523108448998659,
+      "cos_first": 0.8568461283440657,
+      "grip_agree": 1.0,
+      "verdict": "inert",
+      "deg": 8.713611320793408
+    },
+    "distractor": {
+      "cos_dir": 0.9975310506308512,
+      "d_dir": 0.32167915239775885,
+      "cos_first": 0.9808784373368835,
+      "grip_agree": 1.0,
+      "verdict": "inert",
+      "deg": 4.0270137912848085
+    },
+    "mislabel": {
+      "cos_dir": 0.9977131171419957,
+      "d_dir": 0.58351106304265,
+      "cos_first": 0.9249529854147303,
+      "grip_agree": 1.0,
+      "verdict": "inert",
+      "deg": 3.8756307192195836
+    }
+  },
+  "causal": {
+    "cos_dir": 0.9999929054183259,
+    "d_dir": 0.5019729290288861,
+    "cos_first": 0.9803781729824845,
+    "grip_agree": 1.0,
+    "verdict": "inert",
+    "deg": 0.21582476831705505
+  },
+  "prompts": {
+    "none": "put both the alphabet soup and the tomato sauce in the basket",
+    "target": "put both the alphabet soup and the tomato sauce in the basket ; objects: alphabet soup at (0.68, 0.52)-(0.78, 0.65)",
+    "all": "put both the alphabet soup and the tomato sauce in the basket ; objects: alphabet soup at (0.68, 0.52)-(0.78, 0.65); basket at (0.0, 0.38)-(0.22, 0.71); butter at (0.4, 0.69)-(0.47, 0.78); cream cheese at (0.79, 0.74)-(0.89, 0.86); ketchup at (0.63, 0.36)-(0.71, 0.52); milk at (0.62, 0.61)-(0.73, 0.8); orange juice at (0.86, 0.55)-(0.99, 0.73); tomato sauce at (0.41, 0.46)-(0.51, 0.6)",
+    "distractor": "put both the alphabet soup and the tomato sauce in the basket ; objects: butter at (0.4, 0.69)-(0.47, 0.78)",
+    "mislabel": "put both the alphabet soup and the tomato sauce in the basket ; objects: alphabet soup at (0.4, 0.69)-(0.47, 0.78)"
+  }
+}

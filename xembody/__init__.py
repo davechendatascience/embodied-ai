@@ -1,12 +1,6 @@
-"""VLA intent -> planner feasibility, in four small modules.
+"""xembody -- portable core.
 
-    from xembody import keypose, world, frames
-    from xembody.planner import Planner     # imports cuRobo; the others do not
-
-Read README.md first: six failure modes are documented there, each of which
-cost days to find and none of which is visible from the code.
+Nothing in this package imports mujoco, robosuite, LIBERO or torch. Modules take
+plain values and return plain values, so they drop into any host simulator or a
+real robot. Host-specific code lives in `examples/`.
 """
-
-from . import frames, keypose, world
-
-__all__ = ["frames", "keypose", "world"]

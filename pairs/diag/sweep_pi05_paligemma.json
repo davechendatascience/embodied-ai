@@ -1,0 +1,61 @@
+{
+  "task": "put both the alphabet soup and the tomato sauce in the basket",
+  "target": "alphabet_soup_1_main",
+  "distractor": "butter_1_main",
+  "style": "paligemma",
+  "floor": {
+    "cos_dir": 0.9749669576101573,
+    "d_dir": 0.6459818309166594,
+    "n": 8,
+    "deterministic": false
+  },
+  "effects": {
+    "target": {
+      "cos_dir": 0.9997126193013397,
+      "d_dir": 0.21262394188522368,
+      "cos_first": 0.9133483351124136,
+      "grip_agree": 1.0,
+      "verdict": "inert",
+      "deg": 1.373652337710241
+    },
+    "all": {
+      "cos_dir": 0.9901292192422108,
+      "d_dir": 0.74202154548749,
+      "cos_first": 0.7292911266085409,
+      "grip_agree": 1.0,
+      "verdict": "inert",
+      "deg": 8.05696110037017
+    },
+    "distractor": {
+      "cos_dir": 0.9987896259306857,
+      "d_dir": 0.5103218871159461,
+      "cos_first": 0.9600105862352742,
+      "grip_agree": 1.0,
+      "verdict": "inert",
+      "deg": 2.8192997337218126
+    },
+    "mislabel": {
+      "cos_dir": 0.9999218326582833,
+      "d_dir": 0.689291351648521,
+      "cos_first": 0.9674831534590228,
+      "grip_agree": 1.0,
+      "verdict": "inert",
+      "deg": 0.716395964373017
+    }
+  },
+  "causal": {
+    "cos_dir": 0.9998625650464038,
+    "d_dir": 0.889693419634487,
+    "cos_first": 0.9204619216213648,
+    "grip_agree": 1.0,
+    "verdict": "inert",
+    "deg": 0.9499291270750897
+  },
+  "prompts": {
+    "none": "put both the alphabet soup and the tomato sauce in the basket",
+    "target": "put both the alphabet soup and the tomato sauce in the basket ; objects: <loc0530><loc0694><loc0670><loc0798> alphabet soup",
+    "all": "put both the alphabet soup and the tomato sauce in the basket ; objects: <loc0530><loc0694><loc0670><loc0798> alphabet soup ; <loc0385><loc0000><loc0722><loc0229> basket ; <loc0702><loc0413><loc0802><loc0481> butter ; <loc0754><loc0810><loc0879><loc0915> cream cheese ; <loc0373><loc0642><loc0534><loc0722> ketchup ; <loc0626><loc0638><loc0822><loc0746> milk ; <loc0562><loc0883><loc0750><loc1015> orange juice ; <loc0469><loc0421><loc0614><loc0518> tomato sauce",
+    "distractor": "put both the alphabet soup and the tomato sauce in the basket ; objects: <loc0702><loc0413><loc0802><loc0481> butter",
+    "mislabel": "put both the alphabet soup and the tomato sauce in the basket ; objects: <loc0702><loc0413><loc0802><loc0481> alphabet soup"
+  }
+}

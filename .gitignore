@@ -1,30 +1,36 @@
-# Environments — rebuilt by scripts/setup_*.sh, never committed.
-# Each is pinned for one stack and they must not reference each other.
+# Environments. Each is a pinned stack for exactly ONE dependency set, rebuilt
+# by scripts/, never committed. They must not reference each other: openpi pins
+# jax 0.5.3 + torch 2.7.1 + numpy<2, the LIBERO venv pins robosuite 1.4.1 +
+# mujoco 3.1.6, and the only thing installed in both is the pure-python
+# openpi-client.
 .venv/
-.venv-pw/
-.venv-gam/
-.venv-jepa/
-.venv-curobo/
+.venv-*/
 
 # Upstream checkouts and their checkpoints. Reproduced by:
-#   scripts/setup_third_party.sh   ReKep (+ patches/) and LIBERO
-#   scripts/setup_pointworld.sh    cumm, spconv, PointWorld
-#   scripts/setup_gam.sh           GAM, Depth-Anything-3
-#   scripts/setup_vla_jepa.sh      VLA-JEPA, Qwen3-VL, V-JEPA2
-#   scripts/setup_curobo.sh        cuRobo
-# 28 GB of PointWorld checkpoints alone; nothing here belongs in git.
+#   scripts/setup_libero.sh   robosuite/mujoco/numpy pins + LIBERO checkout
+#   scripts/serve_pi05.sh     openpi (expects `uv sync` in third_party/openpi)
+# Tens of GB of model weights; nothing here belongs in git.
 third_party/
+!third_party/LIBERO.commit
 
-# Datasets (11 GB) and the pristine upstream ReKep reference copy.
-data/
-reference/
+# THE SCRIPTS THAT REBUILD THE ABOVE ARE TRACKED, DELIBERATELY.
+# A previous `scripts/` was never committed. When the working tree was cleared,
+# third_party/ and five venvs went with it and the recipe to rebuild them did
+# not exist anywhere. Ignoring the outputs is correct; ignoring the recipe is
+# how a project becomes unreproducible in one command.
+!scripts/
+
+# Model caches
+.cache/
+*.safetensors
+*.pt
+*.ckpt
 
 __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
 
-# Rollout traces and scratch outputs live in /tmp by default; catch strays.
-*.jsonl
-!docs/**/*.jsonl
+# Rollout traces and scratch outputs
 results/
+*.jsonl
