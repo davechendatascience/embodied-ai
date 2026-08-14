@@ -1,0 +1,62 @@
+{
+  "PickPlaceCounterToMicrowave": {
+    "floor": {
+      "cos_dir": 0.2155263293154789,
+      "d_dir": 2.4282154759038828,
+      "n": 8,
+      "deterministic": false
+    },
+    "objs": 3,
+    "open": false,
+    "probes": {
+      "wrong": [
+        21.12629227917847,
+        "inert"
+      ],
+      "nonsense": [
+        35.94620987722311,
+        "inert"
+      ]
+    }
+  },
+  "PickPlaceSinkToCounter": {
+    "floor": {
+      "cos_dir": -0.30035899300724944,
+      "d_dir": 1.105711869334985,
+      "n": 8,
+      "deterministic": false
+    },
+    "objs": 3,
+    "open": false,
+    "probes": {
+      "wrong": [
+        99.19279029357087,
+        "inert"
+      ],
+      "nonsense": [
+        76.65289216319039,
+        "inert"
+      ]
+    }
+  },
+  "PickPlaceCounterToStove": {
+    "floor": {
+      "cos_dir": -0.3428257262940551,
+      "d_dir": 5.353134828329996,
+      "n": 8,
+      "deterministic": false
+    },
+    "objs": 2,
+    "open": false,
+    "probes": {
+      "wrong": [
+        119.37155309147167,
+        "inert"
+      ],
+      "nonsense": [
+        108.14549716961568,
+        "inert"
+      ]
+    }
+  }
+}

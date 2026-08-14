@@ -1,0 +1,76 @@
+{
+  "task": "PnPCounterToMicrowave",
+  "instruction": "pick the cheese from the counter and place it in the microwave",
+  "boxes": {
+    "cheese": [
+      29,
+      73,
+      49,
+      90
+    ],
+    "plate": [
+      26,
+      58,
+      155,
+      209
+    ],
+    "apple": [
+      43,
+      113,
+      52,
+      123
+    ]
+  },
+  "result": {
+    "floor": {
+      "cos_dir": 0.8749054951454852,
+      "d_dir": 0.013638439015632609,
+      "n": 4,
+      "deterministic": false
+    },
+    "effects": {
+      "target": {
+        "cos_dir": 0.5381973325843554,
+        "d_dir": 0.053100895195641415,
+        "cos_first": 0.5381973325843554,
+        "grip_agree": 1.0,
+        "verdict": "ambiguous",
+        "deg": 57.43899241994615
+      },
+      "all": {
+        "cos_dir": 0.23475090618082067,
+        "d_dir": 0.07611039866294345,
+        "cos_first": 0.23475090618082067,
+        "grip_agree": 1.0,
+        "verdict": "redirected",
+        "deg": 76.42305999412119
+      },
+      "distractor": {
+        "cos_dir": 0.8712054672186199,
+        "d_dir": 0.012276609136674724,
+        "cos_first": 0.8712054672186199,
+        "grip_agree": 1.0,
+        "verdict": "inert",
+        "deg": 29.400973842898665
+      },
+      "mislabel": {
+        "cos_dir": 0.6029725671048013,
+        "d_dir": 0.02060913419438223,
+        "cos_first": 0.6029725671048013,
+        "grip_agree": 1.0,
+        "verdict": "ambiguous",
+        "deg": 52.91690994966337
+      }
+    },
+    "causal": {
+      "cos_dir": 0.9888932785308749,
+      "d_dir": 0.04098070611705229,
+      "cos_first": 0.9888932785308749,
+      "grip_agree": 1.0,
+      "verdict": "inert",
+      "deg": 8.547386791446657
+    },
+    "target": "cheese",
+    "distractor": "plate"
+  }
+}

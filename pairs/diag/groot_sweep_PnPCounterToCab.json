@@ -1,0 +1,76 @@
+{
+  "task": "PnPCounterToCab",
+  "instruction": "pick the yogurt from the counter and place it in the cabinet",
+  "boxes": {
+    "yogurt": [
+      166,
+      91,
+      176,
+      107
+    ],
+    "hot dog": [
+      164,
+      110,
+      173,
+      127
+    ],
+    "broccoli": [
+      184,
+      201,
+      203,
+      210
+    ]
+  },
+  "result": {
+    "floor": {
+      "cos_dir": 0.9841335724112618,
+      "d_dir": 0.11120672466524306,
+      "n": 4,
+      "deterministic": false
+    },
+    "effects": {
+      "target": {
+        "cos_dir": 0.9877935240342013,
+        "d_dir": 0.05966691486033529,
+        "cos_first": 0.9877935240342013,
+        "grip_agree": 1.0,
+        "verdict": "inert",
+        "deg": 8.96139332657808
+      },
+      "all": {
+        "cos_dir": 0.9711780594366624,
+        "d_dir": 0.16643500370670486,
+        "cos_first": 0.9711780594366624,
+        "grip_agree": 1.0,
+        "verdict": "perturbed",
+        "deg": 13.78948021786183
+      },
+      "distractor": {
+        "cos_dir": 0.877471439009346,
+        "d_dir": 0.25841441296119105,
+        "cos_first": 0.877471439009346,
+        "grip_agree": 1.0,
+        "verdict": "ambiguous",
+        "deg": 28.66116715115132
+      },
+      "mislabel": {
+        "cos_dir": 0.9827316746893676,
+        "d_dir": 0.20153843713888048,
+        "cos_first": 0.9827316746893676,
+        "grip_agree": 1.0,
+        "verdict": "perturbed",
+        "deg": 10.663252435534178
+      }
+    },
+    "causal": {
+      "cos_dir": 0.9904142592994457,
+      "d_dir": 0.19011354858728277,
+      "cos_first": 0.9904142592994457,
+      "grip_agree": 1.0,
+      "verdict": "inert",
+      "deg": 7.939588600504056
+    },
+    "target": "yogurt",
+    "distractor": "broccoli"
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "task": "PnPCounterToSink",
+  "instruction": "pick the boxed drink from the counter and place it in the sink",
+  "boxes": {
+    "boxed drink": [
+      177,
+      95,
+      186,
+      113
+    ],
+    "egg": [
+      173,
+      108,
+      181,
+      117
+    ],
+    "ladle": [
+      97,
+      77,
+      108,
+      97
+    ]
+  },
+  "result": {
+    "floor": {
+      "cos_dir": 0.9576737487648541,
+      "d_dir": 0.19516776026618107,
+      "n": 4,
+      "deterministic": false
+    },
+    "effects": {
+      "target": {
+        "cos_dir": 0.5973449595883968,
+        "d_dir": 0.35074225742123993,
+        "cos_first": 0.5973449595883968,
+        "grip_agree": 1.0,
+        "verdict": "ambiguous",
+        "deg": 53.32001989576394
+      },
+      "all": {
+        "cos_dir": -0.07907164449464286,
+        "d_dir": 0.6760548006261416,
+        "cos_first": -0.07907164449464286,
+        "grip_agree": 1.0,
+        "verdict": "redirected",
+        "deg": 94.53520583777373
+      },
+      "distractor": {
+        "cos_dir": 0.5138710284407403,
+        "d_dir": 0.3670030648089893,
+        "cos_first": 0.5138710284407403,
+        "grip_agree": 1.0,
+        "verdict": "ambiguous",
+        "deg": 59.07797722668877
+      },
+      "mislabel": {
+        "cos_dir": 0.41283163420061875,
+        "d_dir": 0.638130331699018,
+        "cos_first": 0.41283163420061875,
+        "grip_agree": 1.0,
+        "verdict": "redirected",
+        "deg": 65.61716180606949
+      }
+    },
+    "causal": {
+      "cos_dir": 0.9770553679728095,
+      "d_dir": 0.3407190877564103,
+      "cos_first": 0.9770553679728095,
+      "grip_agree": 1.0,
+      "verdict": "inert",
+      "deg": 12.297365692533303
+    },
+    "target": "boxed drink",
+    "distractor": "ladle"
+  }
+}

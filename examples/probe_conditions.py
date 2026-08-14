@@ -72,7 +72,7 @@ sys.path.insert(0, R)
 sys.path.insert(0, R + "/examples")
 sys.path.insert(0, R + "/third_party/LIBERO")
 
-from probe_grounding import build_env, movable_bodies, oracle_boxes, policy_view
+from xembody.boxes import movable_bodies, oracle_boxes, policy_view
 from xembody.grounding import (build_prompt, decode_paligemma_items,
                                pretty)
 from xembody.probe import angle_deg, compare, exceeds, noise_floor, verdict
@@ -319,62 +319,30 @@ def run(policy, images, state, instruction, conds, size, style, repeats):
     return chunks, prompts, base
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--suite", default="libero_10")
-    ap.add_argument("--task-id", type=int, default=0)
-    ap.add_argument("--robot", default="Panda")
-    ap.add_argument("--res", type=int, default=256)
-    ap.add_argument("--cam", default="agentview")
-    ap.add_argument("--style", default="paligemma")
-    ap.add_argument("--policy", default="fake",
-                    choices=("fake", "blind", "pi05"))
-    ap.add_argument("--host", default="0.0.0.0")
-    ap.add_argument("--port", type=int, default=8000)
-    ap.add_argument("--noise", type=float, default=0.0,
-                    help="fake policy only: per-element action noise, to check "
-                         "that the floor actually suppresses a spread")
-    ap.add_argument("--repeats", type=int, default=4,
-                    help="baseline re-queries; this IS the noise floor")
-    ap.add_argument("--json", default=None)
-    a = ap.parse_args()
+def sweep_and_report(policy, images, state, boxes, instruction, size, style,
+                     repeats, policy_name="", json_path=None, extra=None):
+    """The whole measurement, given a frame. Host-agnostic on purpose.
 
-    env, _, task, obs = build_env(a.suite, a.task_id, robot=a.robot, res=a.res)
-    model = env.sim.model
-    seg = policy_view(obs[f"{a.cam}_segmentation_element"])
-    boxes = oracle_boxes(model, seg, movable_bodies(model))
-    size = (a.res, a.res)
-    images = [policy_view(obs[f"{c}_image"])
-              for c in ("agentview", "robot0_eye_in_hand")]
-    # Real proprioception, in openpi's LIBERO layout: eef_pos(3) +
-    # axis-angle(3) + gripper_qpos(2). Zeros would be a silent out-of-
-    # distribution input applied EQUALLY to every condition -- which biases
-    # nothing in the comparison, but makes each individual chunk a reading of a
-    # state the robot is not in. The comparison is the result; the chunks are
-    # the evidence for it, so both have to be honest.
-    state = np.concatenate((obs["robot0_eef_pos"],
-                            quat2axisangle(obs["robot0_eef_quat"]),
-                            np.asarray(obs["robot0_gripper_qpos"]).ravel()))
-
-    target = pick_target(boxes, task.language)
-    distractor = pick_distractor(boxes, target, task.language)
+    LIBERO and RoboCasa cannot share an interpreter -- robosuite 1.4.1 versus
+    master -- so everything downstream of "here is an image, a state and a set
+    of boxes" has to live somewhere neither of them owns. Both hosts call this
+    with their own env built in their own venv, and get the identical
+    conditions, floor and verdict bands. A comparison between two benchmarks
+    measured by two slightly different scripts is not a comparison.
+    """
+    target = pick_target(boxes, instruction)
+    distractor = pick_distractor(boxes, target, instruction)
     conds = conditions(boxes, target, distractor)
 
-    print(f"task        {task.language!r}")
-    print(f"objects     {len(boxes)}  ({', '.join(pretty(n) for n in sorted(boxes))})")
+    print(f"task        {instruction!r}")
+    print(f"objects     {len(boxes)}  "
+          f"({', '.join(pretty(n) for n in sorted(boxes))})")
     print(f"target      {target}   <- ORACLE, from a string heuristic. Check it.")
     print(f"distractor  {distractor}")
-    print(f"style       {a.style}   policy={a.policy}\n")
+    print(f"style       {style}   policy={policy_name}\n")
 
-    if a.policy in ("fake", "blind"):
-        policy = FakePolicy(size, task.language, noise=a.noise,
-                            blind=(a.policy == "blind"))
-    else:
-        policy = Pi05Policy(host=a.host, port=a.port)
-        print(f"server      {a.host}:{a.port}  {policy.meta}\n")
-
-    chunks, prompts, base = run(policy, images, state, task.language, conds,
-                                size, a.style, a.repeats)
+    chunks, prompts, base = run(policy, images, state, instruction, conds,
+                                size, style, repeats)
     floor = noise_floor(base)
     det = floor["deterministic"]
     print(f"noise floor  n={floor['n']}  cos_dir>={floor['cos_dir']:.6f}  "
@@ -396,25 +364,19 @@ def main():
 
     # THE CAUSAL TEST IS NOT `mislabel` VS `none`.
     # Against `none`, `mislabel` and `target` both differ simply because both
-    # added a box, and on this run they differ by almost exactly the same amount
-    # (a coincidence that reads as a finding). What separates "the false box was
-    # followed" from "the false box was ignored" is `mislabel` vs `target`:
-    #
-    #   coincides with target  -> the box was ignored; the policy grounded the
-    #                             referent itself, and the layer is inert
-    #   diverges from target   -> the box was read and followed to the wrong
-    #                             object; the channel is real and causal
-    #
-    # Only the second is evidence for grounding. The first is the outcome to
-    # expect from a backbone that already localises well, and it is a result,
-    # not a failure.
+    # added a box. What separates "the false box was followed" from "the false
+    # box was ignored" is `mislabel` vs `target`: coinciding with target means
+    # the box was ignored and the policy grounded the referent itself; diverging
+    # means it was read and followed to the wrong object. Only the second is
+    # evidence for grounding.
     causal = None
     if "mislabel" in chunks and "target" in chunks:
         causal = compare(chunks["target"], chunks["mislabel"])
         v, deg = verdict(causal, floor)
         causal["verdict"], causal["deg"] = v, deg
-        print(f"\ncausal test   mislabel vs target: cos_dir={causal['cos_dir']:.4f} "
-              f"({deg:.1f} deg)  d_dir={causal['d_dir']:.4f}")
+        print(f"\ncausal test   mislabel vs target: "
+              f"cos_dir={causal['cos_dir']:.4f} ({deg:.1f} deg)  "
+              f"d_dir={causal['d_dir']:.4f}")
         say = {
             "inert": "false box IGNORED -- inside the noise floor",
             "perturbed": "false box NOT followed -- detectable, but the aim "
@@ -429,15 +391,69 @@ def main():
         print("\ncausal test   not run: no unnamed distractor visible in this "
               "task.")
 
-    if a.json:
-        os.makedirs(os.path.dirname(os.path.abspath(a.json)), exist_ok=True)
-        json.dump({"task": task.language, "target": target,
-                   "distractor": distractor, "style": a.style,
-                   "floor": floor, "effects": rows, "causal": causal,
-                   "prompts": prompts},
-                  open(a.json, "w"), indent=2)
-        print(f"\njson -> {a.json}")
+    if json_path:
+        os.makedirs(os.path.dirname(os.path.abspath(json_path)), exist_ok=True)
+        out = {"task": instruction, "target": target, "distractor": distractor,
+               "style": style, "policy": policy_name, "floor": floor,
+               "effects": rows, "causal": causal, "prompts": prompts}
+        out.update(extra or {})
+        json.dump(out, open(json_path, "w"), indent=2)
+        print(f"\njson -> {json_path}")
+    return {"floor": floor, "effects": rows, "causal": causal}
 
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--suite", default="libero_10")
+    ap.add_argument("--task-id", type=int, default=0)
+    ap.add_argument("--robot", default="Panda")
+    ap.add_argument("--res", type=int, default=256)
+    ap.add_argument("--cam", default="agentview")
+    ap.add_argument("--style", default="paligemma")
+    ap.add_argument("--policy", default="fake",
+                    choices=("fake", "blind", "pi05"))
+    ap.add_argument("--host", default="0.0.0.0")
+    ap.add_argument("--port", type=int, default=8000)
+    ap.add_argument("--noise", type=float, default=0.0,
+                    help="fake policy only: per-element action noise, to check "
+                         "that the floor actually suppresses a spread")
+    ap.add_argument("--repeats", type=int, default=4,
+                    help="baseline re-queries; this IS the noise floor")
+    ap.add_argument("--json", default=None)
+    a = ap.parse_args()
+
+    # Imported HERE, not at module scope. probe_robocasa imports this module
+    # from a venv that has no LIBERO and no robosuite 1.4.1, and a top-level
+    # import would make the shared sweep unimportable there.
+    sys.path.insert(0, R + "/third_party/LIBERO")
+    from probe_grounding import build_env
+
+    env, _, task, obs = build_env(a.suite, a.task_id, robot=a.robot, res=a.res)
+    model = env.sim.model
+    seg = policy_view(obs[f"{a.cam}_segmentation_element"])
+    boxes = oracle_boxes(model, seg, movable_bodies(model))
+    size = (a.res, a.res)
+    images = [policy_view(obs[f"{c}_image"])
+              for c in ("agentview", "robot0_eye_in_hand")]
+    # Real proprioception, in openpi's LIBERO layout: eef_pos(3) +
+    # axis-angle(3) + gripper_qpos(2). Zeros would be a silent out-of-
+    # distribution input applied EQUALLY to every condition -- which biases
+    # nothing in the comparison, but makes each individual chunk a reading of a
+    # state the robot is not in. The comparison is the result; the chunks are
+    # the evidence for it, so both have to be honest.
+    state = np.concatenate((obs["robot0_eef_pos"],
+                            quat2axisangle(obs["robot0_eef_quat"]),
+                            np.asarray(obs["robot0_gripper_qpos"]).ravel()))
+    if a.policy in ("fake", "blind"):
+        policy = FakePolicy(size, task.language, noise=a.noise,
+                            blind=(a.policy == "blind"))
+    else:
+        policy = Pi05Policy(host=a.host, port=a.port)
+
+    sweep_and_report(policy, images, state, boxes, task.language, size,
+                     a.style, a.repeats, policy_name=a.policy,
+                     json_path=a.json, extra={"suite": a.suite,
+                                              "task_id": a.task_id})
     env.close()
 
 
