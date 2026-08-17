@@ -78,7 +78,13 @@ def camera_config(genv):
     return list(mapped), list(cams)
 
 
-def segmentation(inner, cam, h, w, reference):
+#: The four orientations a render can differ from its observation by. Named so
+#: a calibration result can be stored and replayed instead of recomputed.
+FLIPS = {"as-is": (lambda a: a), "vflip": (lambda a: a[::-1]),
+         "hflip": (lambda a: a[:, ::-1]), "rot180": (lambda a: a[::-1, ::-1])}
+
+
+def segmentation(inner, cam, h, w, reference, flip=None):
     """Per-geom segmentation, in the same frame as `reference`.
 
     THE ORIENTATION IS CALIBRATED, NOT LOOKED UP. The first version of this
@@ -98,22 +104,50 @@ def segmentation(inner, cam, h, w, reference):
     `reference` is the wrapper's image for this camera -- the actual array the
     policy is fed.
     """
+    if flip is not None:
+        # Orientation already calibrated for this camera. Re-checking per frame
+        # is not just wasteful, it is FRAGILE: the residual between the cached
+        # observable and a fresh render grows with how many other renders
+        # happened in between (measured 3.4 to 25 on the same camera), so a
+        # per-frame separation test eventually reports a false ambiguity on a
+        # setup that was already proven correct.
+        seg = inner.sim.render(camera_name=cam, width=w, height=h,
+                               segmentation=True)
+        return FLIPS[flip](seg)[:, :, 1]
+
     ref = np.asarray(reference, dtype=np.int16)
     rgb = np.asarray(inner.sim.render(camera_name=cam, width=w, height=h),
                      dtype=np.int16)
-    cands = {"as-is": (lambda a: a), "vflip": (lambda a: a[::-1]),
-             "hflip": (lambda a: a[:, ::-1]),
-             "rot180": (lambda a: a[::-1, ::-1])}
+    cands = FLIPS
     errs = {k: float(np.abs(f(rgb) - ref).mean()) for k, f in cands.items()}
     best = min(errs, key=errs.get)
     runner = min((k for k in errs if k != best), key=errs.get)
-    if errs[best] > 0.25 * errs[runner]:
+    # SEPARATION, NOT IDENTITY. A fresh sim.render never matches the cached
+    # observable exactly -- measured 3.4 mean against a byte-identical res512
+    # key, and up to ~18 in other call contexts. Demanding near-identity
+    # rejected correct alignments. What must be caught is a WRONG FLIP, and a
+    # wrong flip costs 60-86 against 3-18, so a 2x margin separates them with
+    # room to spare while still failing on a genuine ambiguity.
+    if errs[best] > 0.5 * errs[runner]:
         raise RuntimeError(
             f"cannot align a re-render of {cam} with the wrapper's image: "
             f"mean|diff| {errs}. Boxes would name the wrong pixels.")
     seg = inner.sim.render(camera_name=cam, width=w, height=h,
                            segmentation=True)
     return cands[best](seg)[:, :, 1]
+
+
+def calibrate_flip(inner, cam, h, w, reference):
+    """Which flip maps a fresh render onto the wrapper's image. Do this ONCE."""
+    ref = np.asarray(reference, dtype=np.int16)
+    rgb = np.asarray(inner.sim.render(camera_name=cam, width=w, height=h),
+                     dtype=np.int16)
+    errs = {k: float(np.abs(f(rgb) - ref).mean()) for k, f in FLIPS.items()}
+    best = min(errs, key=errs.get)
+    runner = min((k for k in errs if k != best), key=errs.get)
+    if errs[best] > 0.5 * errs[runner]:
+        raise RuntimeError(f"ambiguous orientation for {cam}: {errs}")
+    return best
 
 
 def object_boxes(inner, seg, min_px=12):
