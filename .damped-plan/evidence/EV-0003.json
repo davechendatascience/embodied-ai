@@ -1,0 +1,14 @@
+{
+  "id": "EV-0003",
+  "project_id": "embodied_ai:-grounding-a-vla-without-fine-tuning",
+  "source_type": "manual_review",
+  "artifact_uri": "third_party/Isaac-GR00T@n1.6.1-release gr00t/policy/gr00t_policy.py, gr00t/eval/run_gr00t_server.py",
+  "summary": "GR00T's served policy exposes no sampling-diversity control. Gr00tPolicy.get_action documents its options parameter as 'currently unused' (gr00t/policy/gr00t_policy.py:320 and :580), and run_gr00t_server.py's ServerConfig has no temperature, cfg_scale, denoising-steps or noise-scale field. Diversity therefore cannot be raised through the server API without modifying model or server code.",
+  "polarity": "supports",
+  "linked_hypothesis_ids": [],
+  "linked_constraint_ids": [
+    "C-0003"
+  ],
+  "linked_plan_id": null,
+  "created_at": "2026-08-17T06:29:04.827726Z"
+}

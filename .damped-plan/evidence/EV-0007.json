@@ -1,0 +1,15 @@
+{
+  "id": "EV-0007",
+  "project_id": "embodied_ai:-grounding-a-vla-without-fine-tuning",
+  "source_type": "benchmark",
+  "artifact_uri": "pairs/diag/baseline_none_run1.json, pairs/diag/baseline_none_run2.json",
+  "summary": "BASELINE ESTABLISHED for G2/G3. Ungrounded GR00T N1.6 (K=1, no selection, no overlay) on RoboCasa PnPCounterToSink, scenes pinned: 8/15 = 53.3% in BOTH independent runs, Wilson 95% CI [30.1%, 75.2%]. The interval contains NVIDIA's published 46.0% zero-shot figure, so the serving and observation pipeline reproduces the published behaviour and the harness can be trusted for comparisons. The CI is wide at n=15: a grounded arm would need roughly a 25-30 point improvement to clear it at this sample size, so any future comparison should either raise n substantially or use a paired per-scene test rather than comparing marginal rates.",
+  "polarity": "supports",
+  "linked_hypothesis_ids": [],
+  "linked_constraint_ids": [
+    "C-0002",
+    "C-0004"
+  ],
+  "linked_plan_id": "P-baseline-trust",
+  "created_at": "2026-08-17T07:27:45.856743Z"
+}

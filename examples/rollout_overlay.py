@@ -190,14 +190,27 @@ def main():
 
     # The harness's return shape has moved between releases, so pull the
     # successes defensively rather than assuming a key.
+    # The harness returns a TUPLE: (env_name, [bool per episode], info).
+    # Taking `succ = results` for any tuple measured the truthiness of a
+    # string, a list and an empty dict -- reporting "66.7% (2/3)" for a
+    # 15-episode run. Pull the boolean sequence explicitly, and fail loudly
+    # rather than silently scoring the wrong object.
     succ = None
     if isinstance(results, dict):
         for k in ("episode_successes", "successes", "success"):
             if k in results:
                 succ = results[k]
                 break
-    if succ is None and isinstance(results, (list, tuple)):
-        succ = results
+    elif isinstance(results, (list, tuple)):
+        for item in results:
+            if isinstance(item, (list, tuple)) and item and all(
+                    isinstance(x, bool) or hasattr(x, "item") for x in item):
+                succ = list(item)
+                break
+    if succ is None:
+        raise RuntimeError(
+            f"could not locate the per-episode success sequence in a "
+            f"{type(results).__name__} return: {str(results)[:200]}")
     rate = float(np.mean([bool(s) for s in succ])) if succ else float("nan")
     print(f"\ntask {a.task}  overlay={a.overlay}  "
           f"success {rate:.1%}  ({sum(bool(s) for s in succ or [])}/"

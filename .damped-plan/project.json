@@ -1,0 +1,227 @@
+{
+  "project_id": "embodied_ai:-grounding-a-vla-without-fine-tuning",
+  "name": "embodied_ai: grounding a VLA without fine-tuning",
+  "goals": [
+    {
+      "id": "G1",
+      "statement": "",
+      "metric_name": "causal_test_degrees (mark-relocation: action-direction change between mark-on-target and mark-on-distractor, measured against a noise floor of >=8 repeats)",
+      "target": ">= 60 deg (the 'redirected' band); currently 3.9-27.8 deg, i.e. inert-to-ambiguous",
+      "evaluation_protocol": null,
+      "priority": 1,
+      "met": false
+    },
+    {
+      "id": "G2",
+      "statement": "",
+      "metric_name": "success_rate on RoboCasa PnPCounterToSink, >=15 episodes, scenes pinned",
+      "target": "> 46.0% (GR00T N1.6 published zero-shot baseline)",
+      "evaluation_protocol": null,
+      "priority": 1,
+      "met": false
+    },
+    {
+      "id": "G3",
+      "statement": "",
+      "metric_name": "success_rate with grounding disabled, same task and scenes",
+      "target": ">= 46.0% (no regression vs baseline)",
+      "evaluation_protocol": null,
+      "priority": 1,
+      "met": false
+    }
+  ],
+  "constraints": [
+    {
+      "id": "C-0001",
+      "statement": "C1: candidate action diversity at ROLLOUT time is large enough for selection to change the executed action. Measured 9.5 deg mean spread in-distribution (max 30), against 150 deg on a synthetic single-frame probe input. The 150 was an artefact.",
+      "kind": "hard",
+      "severity": "high",
+      "status": "not_applicable",
+      "evidence_ids": [
+        "EV-0001",
+        "EV-0003"
+      ],
+      "validator_ids": [],
+      "rationale": "Re-scoped, not excused. C-0001 was written as a project-level hard constraint but is actually a precondition of ONE approach: selecting among K samples drawn from the same observation. EV-0001 refuted that precondition (9.5 deg in-distribution vs the 150 deg it assumed) and EV-0003 showed the diversity cannot be raised through the server API, so that approach is abandoned rather than pending -- which is precisely what not_applicable means here. The measurement stands permanently as EV-0001 and the selection code remains committed at c330902 as a record. If input-perturbation selection (MG-Select's actual mechanism: randomly masked states and language) is ever attempted, it needs its OWN constraint and its own measurement; it must not inherit this one's resolution."
+    },
+    {
+      "id": "C-0002",
+      "statement": "C2: the rollout harness reports success and episode counts correctly. It returned 2/3 successes for a 1-episode request; accounting is unverified.",
+      "kind": "hard",
+      "severity": "high",
+      "status": "sat",
+      "evidence_ids": [
+        "EV-0005",
+        "EV-0007"
+      ],
+      "validator_ids": [],
+      "rationale": "The harness counts correctly: 15 booleans returned for 15 requested episodes, in two independent runs. The 2/3-for-1-episode symptom that raised this constraint was a client-side extraction bug in our own runners, now fixed to locate the boolean sequence explicitly and raise rather than silently score the wrong object. Artifacts corrected in place from the raw harness output."
+    },
+    {
+      "id": "C-0003",
+      "statement": "C3: GR00T's server exposes no sampling temperature or diversity control (options is documented 'currently unused'), so diversity cannot be raised through the API.",
+      "kind": "hard",
+      "severity": "high",
+      "status": "sat",
+      "evidence_ids": [
+        "EV-0003"
+      ],
+      "validator_ids": [],
+      "rationale": "Resolved as a known limitation rather than an open question: the server exposes no diversity control, confirmed by reading the served policy and the server config. Any approach needing more sampling diversity must obtain it outside the API (input perturbation) or by modifying third_party code."
+    },
+    {
+      "id": "C-0004",
+      "statement": "C4: any grounded-vs-ungrounded comparison runs on identical scenes. RoboCasa samples layout, style AND object instances from its own RNG at construction, so unpinned arms run in different kitchens.",
+      "kind": "hard",
+      "severity": "high",
+      "status": "sat",
+      "evidence_ids": [
+        "EV-0006"
+      ],
+      "validator_ids": [],
+      "rationale": "Verified by construction rather than by settings: two independent processes with identical layout/style/seed traversed a byte-identical 17-entry scene sequence, recorded at each env reset. Arms can therefore be paired scene-for-scene. Caveat carried forward: the target object varies per episode within a run, and identical scenes still produce different per-episode outcomes because the policy is stochastic, so paired comparison must average over policy noise."
+    },
+    {
+      "id": "C-0005",
+      "statement": "C5: boxes and masks are computed in the exact frame the policy is fed. Orientation and resolution conventions differ per camera and per robosuite generation and must be calibrated, not assumed.",
+      "kind": "hard",
+      "severity": "high",
+      "status": "sat",
+      "evidence_ids": [
+        "EV-0002"
+      ],
+      "validator_ids": [],
+      "rationale": "Frames and conventions are calibrated rather than assumed, and each calibration is checked against a ground truth: world frame confirmed by equality with the sim grip site, world->base transform reproduces the reported relative state to 0.00000, camera orientation chosen by comparing a re-render against the wrapper's own image under all four flips (and raising if none wins), and boxes measured at the cameras' native 512 then scaled into the 256 frame the policy consumes."
+    },
+    {
+      "id": "C-0006",
+      "statement": "C6: evaluation and training cannot run concurrently on this GPU; a 3B fine-tune and an inference server do not coexist.",
+      "kind": "hard",
+      "severity": "high",
+      "status": "sat",
+      "evidence_ids": [
+        "EV-0004"
+      ],
+      "validator_ids": [],
+      "rationale": "Measured and now designed around: serving and training cannot share this GPU, so scripts/finetune_overlay.sh stops any running inference server before training, and evaluation requires stopping the trainer (resume from the newest checkpoint is automatic)."
+    },
+    {
+      "id": "C-0007",
+      "statement": "C7: thermal envelope. Under sustained training the SoC ACPI zones reach 88 C; GB10 exposes no nvidia-smi power limit and clock capping requires root.",
+      "kind": "hard",
+      "severity": "high",
+      "status": "sat",
+      "evidence_ids": [
+        "EV-0004"
+      ],
+      "validator_ids": [],
+      "rationale": "Thermal envelope characterised and mitigated within the levers available to a non-root user: the SIGSTOP/SIGCONT governor holds the SoC near 80 C at ~64% throughput. Note the mitigation is throughput-for-heat, not free; a root-level clock cap (nvidia-smi -lgc) would be strictly better and remains unavailable."
+    }
+  ],
+  "facts": [
+    {
+      "id": "FACT-0001",
+      "statement": "pi-0.5 (pi05_libero) on LIBERO: prompt-serialised boxes inert in 3 formats (PaliGemma <loc>, plain, Qwen JSON); causal test 0.9 deg. Language control OPEN (wrong instruction 27.1 deg, unrelated 51.9, nonsense 3.5) so the null is about the boxes.",
+      "truth_status": "assumed",
+      "evidence_ids": [],
+      "confidence": null
+    },
+    {
+      "id": "FACT-0002",
+      "statement": "GR00T N1.6 on RoboCasa: prompt boxes perturb but are content-blind. Adding a box 26-64 deg; moving it 3.9-24.7 deg. Two of three causal tests inert.",
+      "truth_status": "assumed",
+      "evidence_ids": [],
+      "confidence": null
+    },
+    {
+      "id": "FACT-0003",
+      "statement": "GR00T N1.6 on RoboCasa, pixel overlay, UNTRAINED: no redirection on any task (causal 27.8 / 11.9 / 9.8 deg, floors 4.9 / 30.8 / 17.4).",
+      "truth_status": "assumed",
+      "evidence_ids": [],
+      "confidence": null
+    },
+    {
+      "id": "FACT-0004",
+      "statement": "Every published overlay success fine-tuned on overlaid frames first. Point-VLA on pi-0.5: box-as-text 70/37/83/73 vs box-as-overlay 86.7/80/94.3/95.0, ~2h demos per scenario, co-trained 1:1 against text-only.",
+      "truth_status": "assumed",
+      "evidence_ids": [],
+      "confidence": null
+    },
+    {
+      "id": "FACT-0005",
+      "statement": "pi05_libero is NOT competent on RoboCasa: 8 identical queries disagreed by up to 110 deg (floor cos_dir down to -0.34). Not the state convention -- zeroed and LIBERO-shaped states leave the instability.",
+      "truth_status": "assumed",
+      "evidence_ids": [],
+      "confidence": null
+    },
+    {
+      "id": "FACT-0006",
+      "statement": "Action convention VERIFIED: end_effector_position is a BASE-FRAME DELTA fed to OSC_POSE (default_pandaomron.json: input_type=delta, input_ref_frame=base), despite the checkpoint's rep=ABSOLUTE normalisation flag. state.end_effector_position_absolute == the sim grip site (world). base_rotation is xyzw and R^T(abs-base_pos) reproduces the relative state to 0.00000.",
+      "truth_status": "assumed",
+      "evidence_ids": [],
+      "confidence": null
+    },
+    {
+      "id": "FACT-0007",
+      "statement": "A Point-VLA-style fine-tune of GR00T on 55 overlaid RoboCasa demos ran to step 2515; checkpoint-1000 and -2000 exist and resume is automatic. checkpoint-1000 evaluation showed no consistent effect, at 1/20th of Point-VLA's step count.",
+      "truth_status": "assumed",
+      "evidence_ids": [],
+      "confidence": null
+    },
+    {
+      "id": "FACT-0008",
+      "statement": "Thermal governor holds the SoC near 80 C at ~64% of uncooled throughput (4.32 vs 2.77 s/step).",
+      "truth_status": "assumed",
+      "evidence_ids": [],
+      "confidence": null
+    }
+  ],
+  "failure_modes": [
+    {
+      "id": "F1",
+      "symptom": "",
+      "severity": "high",
+      "subsystem": null,
+      "evidence_ids": []
+    },
+    {
+      "id": "F2",
+      "symptom": "",
+      "severity": "high",
+      "subsystem": null,
+      "evidence_ids": []
+    },
+    {
+      "id": "F3",
+      "symptom": "",
+      "severity": "high",
+      "subsystem": null,
+      "evidence_ids": []
+    },
+    {
+      "id": "F4",
+      "symptom": "",
+      "severity": "high",
+      "subsystem": null,
+      "evidence_ids": []
+    },
+    {
+      "id": "F5",
+      "symptom": "",
+      "severity": "high",
+      "subsystem": null,
+      "evidence_ids": []
+    },
+    {
+      "id": "F6",
+      "symptom": "",
+      "severity": "high",
+      "subsystem": null,
+      "evidence_ids": []
+    }
+  ],
+  "available_resources": [],
+  "forbidden_actions": [],
+  "current_baseline": null,
+  "version": 9
+}

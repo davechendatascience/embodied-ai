@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-17T07:28:17.738374+00:00",
+  "project_id": "embodied_ai:-grounding-a-vla-without-fine-tuning",
+  "gate_open": false,
+  "open_plans": [],
+  "always_allowed": [
+    ".damped-plan/**",
+    "docs/**",
+    "*.md"
+  ],
+  "unresolved_hard_constraints": [],
+  "recommended_next_action": "stop",
+  "deny_message": "No plan is approved for execution. Create a plan via the damped-plan MCP (create_plan), get it to READY_FOR_REVIEW, and have the human approve it."
+}

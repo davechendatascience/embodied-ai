@@ -1,0 +1,15 @@
+{
+  "id": "EV-0004",
+  "project_id": "embodied_ai:-grounding-a-vla-without-fine-tuning",
+  "source_type": "profiling",
+  "artifact_uri": "scripts/thermal_governor.sh; scripts/finetune_overlay.sh; nvidia-smi -q -d POWER/PERFORMANCE",
+  "summary": "GPU capacity and thermals measured on the DGX Spark (GB10, aarch64, sm_121). (1) An inference server and a 3B fine-tune cannot coexist: with openpi's JAX server holding the GPU, a 1024x1024 bf16 matmul in a separate torch process failed with 'CUDA error: out of memory' on a 121 GB unified-memory machine; stopping the server made the same op succeed. (2) Under sustained training the SoC ACPI zones reach 88 C while the GPU die reads 80 C, with SW power capping already engaged and SM clocks at 2483 of 3003 MHz. nvidia-smi reports every power-limit field as N/A and 'nvidia-smi -lgc' is refused for a non-root user, so the only available lever is pausing the trainer. A SIGSTOP/SIGCONT governor at an 80 C ceiling holds the SoC near 80 C at 4.32 s/step against 2.77 uncooled (~64% throughput).",
+  "polarity": "supports",
+  "linked_hypothesis_ids": [],
+  "linked_constraint_ids": [
+    "C-0006",
+    "C-0007"
+  ],
+  "linked_plan_id": null,
+  "created_at": "2026-08-17T06:29:14.433837Z"
+}

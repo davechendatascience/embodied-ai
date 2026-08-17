@@ -31,6 +31,11 @@ data/
 # is .pth not .pt), and a checkpoint without its weights is not a checkpoint.
 checkpoints/
 
+# damped-plan records ARE committed -- plans, evidence and the append-only
+# events.jsonl are plain JSON that diffs well, and this project's value is
+# disproportionately in its retracted claims. Only the runtime lock is not.
+.damped-plan/.lock
+
 # Model caches
 .cache/
 *.safetensors
@@ -45,3 +50,7 @@ __pycache__/
 # Rollout traces and scratch outputs
 results/
 *.jsonl
+# ...but NOT damped-plan's append-only event log, which the *.jsonl rule
+# above would otherwise swallow. It is the audit trail of every state
+# transition and is the whole point of committing .damped-plan/.
+!.damped-plan/events.jsonl

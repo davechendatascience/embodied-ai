@@ -67,6 +67,7 @@ def main():
     # Capture the env as it is built so the target can be read from the live
     # sim. The harness owns env construction, so this is the only seam.
     built = {}
+    scenes = []   # C-0004: one entry per env reset
 
     def _make(env_name, env_idx, total_n_envs):
         import gymnasium as gym
@@ -80,6 +81,28 @@ def main():
         env = gym.make(env_name, enable_render=True, seed=a.scene_seed,
                        layout_ids=a.layout, style_ids=a.style_id)
         built["env"] = env
+
+        # C-0004: record the scene ACTUALLY traversed on every reset. Passing
+        # identical layout/style/seed is not evidence that pinning holds --
+        # RoboCasa samples object instances from its own RNG at construction,
+        # so only an identical instruction/target sequence across two
+        # independent runs demonstrates it.
+        _reset = env.reset
+
+        def reset_recording(*args, **kw):
+            out = _reset(*args, **kw)
+            try:
+                inner = env.unwrapped.env
+                obj = inner.objects.get("obj")
+                scenes.append({
+                    "instruction": inner.get_ep_meta().get("lang", ""),
+                    "target": getattr(obj, "root_body", None),
+                })
+            except Exception as exc:
+                scenes.append({"error": repr(exc)})
+            return out
+
+        env.reset = reset_recording
         return env
 
     RP.get_gym_env = _make
@@ -121,16 +144,48 @@ def main():
         env_name=env_name, policy=sel, wrapper_configs=WrapperConfigs(),
         n_episodes=a.episodes, n_envs=1)
 
+    # C-0002: print the harness's RAW return before any key extraction. The
+    # smoke run reported 2/3 successes for a 1-episode request, so a
+    # requested-vs-recorded mismatch must be visible rather than averaged into
+    # a rate.
+    print("\n--- raw harness return (C-0002) ---")
+    print(f"  type: {type(results).__name__}")
+    if isinstance(results, dict):
+        for _k, _v in results.items():
+            _n = len(_v) if isinstance(_v, (list, tuple)) else "-"
+            print(f"  {_k}: type={type(_v).__name__} len={_n} value={str(_v)[:120]}")
+    else:
+        print(f"  {str(results)[:400]}")
+
+    # The harness returns a TUPLE: (env_name, [bool per episode], info).
+    # The previous fallback took `succ = results` for any tuple, so it measured
+    # the truthiness of a string, a list and an empty dict -> "66.7% (2/3)" for
+    # a 15-episode run. The number had nothing to do with the robot. Pull the
+    # boolean sequence explicitly and fail loudly if it cannot be found.
     succ = None
     if isinstance(results, dict):
         for key in ("episode_successes", "successes", "success"):
             if key in results:
                 succ = results[key]
                 break
-    if succ is None and isinstance(results, (list, tuple)):
-        succ = results
-    succ = [bool(s) for s in (succ or [])]
+    elif isinstance(results, (list, tuple)):
+        for item in results:
+            if isinstance(item, (list, tuple)) and item and all(
+                    isinstance(x, (bool,)) or hasattr(x, "item") for x in item):
+                succ = list(item)
+                break
+    if succ is None:
+        raise RuntimeError(
+            f"could not locate the per-episode success sequence in a "
+            f"{type(results).__name__} return: {str(results)[:200]}")
+    succ = [bool(s) for s in succ]
     rate = float(np.mean(succ)) if succ else float("nan")
+    accounting_ok = len(succ) == a.episodes
+    print(f"  requested episodes={a.episodes}  recorded successes={len(succ)}  "
+          f"-> accounting {'OK' if accounting_ok else 'MISMATCH'}")
+    print(f"  scenes recorded (C-0004): {len(scenes)}")
+    for i, sc in enumerate(scenes[:20]):
+        print(f"    ep{i}: {sc}")
 
     # Candidate spread is the premise of the method: if the samples agree,
     # there is nothing to select between and a null is about the sampler, not
@@ -152,6 +207,9 @@ def main():
         json.dump({"task": a.task, "mode": a.mode, "k": sel.k,
                    "episodes": a.episodes, "success_rate": rate,
                    "successes": succ,
+                   "accounting_ok": accounting_ok,
+                   "recorded_episodes": len(succ),
+                   "scenes": scenes,
                    "spread_mean": float(np.mean(spreads)) if spreads else None,
                    "ungrounded_steps": ungrounded,
                    "total_steps": len(sel.log)},

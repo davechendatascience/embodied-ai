@@ -1,0 +1,14 @@
+{
+  "id": "EV-0005",
+  "project_id": "embodied_ai:-grounding-a-vla-without-fine-tuning",
+  "source_type": "test",
+  "artifact_uri": "pairs/diag/baseline_none_run1.json, pairs/diag/baseline_none_run2.json; examples/rollout_select.py, examples/rollout_overlay.py",
+  "summary": "C-0002 RESOLVED, and the bug was mine, not the harness's. run_rollout_gymnasium_policy returns a TUPLE (env_name, [bool per episode], info). For 15 requested episodes it returned exactly 15 booleans in both runs, so the harness counts correctly. The '2/3 successes for 1 episode' symptom came from client-side extraction in rollout_select.py/rollout_overlay.py, which fell through to 'succ = results' for any tuple and thus scored the truthiness of a string, a list and an empty dict -> a constant 66.7% (2/3) regardless of what the robot did. Both runners now locate the boolean sequence explicitly and raise if they cannot, instead of silently scoring the wrong object. The two artifacts were corrected in place from the raw harness output.",
+  "polarity": "supports",
+  "linked_hypothesis_ids": [],
+  "linked_constraint_ids": [
+    "C-0002"
+  ],
+  "linked_plan_id": "P-baseline-trust",
+  "created_at": "2026-08-17T07:27:22.322996Z"
+}

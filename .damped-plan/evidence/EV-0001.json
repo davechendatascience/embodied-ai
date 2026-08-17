@@ -1,0 +1,14 @@
+{
+  "id": "EV-0001",
+  "project_id": "embodied_ai:-grounding-a-vla-without-fine-tuning",
+  "source_type": "benchmark",
+  "artifact_uri": "examples/rollout_select.py (spread logged per step); smoke run PnPCounterToSink K=4, 1 episode",
+  "summary": "Candidate action diversity at rollout time is ~9.5 deg mean (min 0.006, max 30 deg), measured as 1-cos to the candidate mean over K=4 samples per replan step across a full PnPCounterToSink episode with GR00T N1.6. This is 15x smaller than the 150 deg spread measured earlier on a SYNTHETIC single-frame probe input. In-distribution, with real state and video history, the flow-matching sampler is confident. Selection among K samples of the same observation therefore has almost nothing to choose between.",
+  "polarity": "refutes",
+  "linked_hypothesis_ids": [],
+  "linked_constraint_ids": [
+    "C-0001"
+  ],
+  "linked_plan_id": null,
+  "created_at": "2026-08-17T06:28:49.772987Z"
+}

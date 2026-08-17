@@ -1,0 +1,147 @@
+{
+  "id": "P-baseline-trust",
+  "project_id": "embodied_ai:-grounding-a-vla-without-fine-tuning",
+  "title": "Establish a trustworthy rollout baseline: verify episode accounting and scene pinning, then measure the ungrounded success rate",
+  "status": "validated",
+  "kind": "measurement",
+  "goal_ids": [
+    "G2",
+    "G3"
+  ],
+  "addresses_failure_ids": [
+    "F2",
+    "F3"
+  ],
+  "hypothesis": {
+    "id": "H-P-baseline-trust",
+    "statement": "Every goal here is a success_rate goal, but the rollout harness has never been shown to count episodes or successes correctly -- it reported 2/3 successes for a 1-episode request -- and scene pinning is implemented but unverified across independent runs. Until both hold, no grounded-vs-ungrounded difference can be attributed to grounding rather than to miscounting or to different kitchens. If the harness counts correctly and scenes are pinned, a K=1 ungrounded run should reproduce GR00T N1.6's published 46.0% on PnPCounterToSink within sampling error, and that becomes the baseline every later arm is measured against.",
+    "linked_failure_ids": [],
+    "alternative_hypothesis_ids": []
+  },
+  "intervention": {
+    "id": "I-P-baseline-trust",
+    "description": "Run the existing rollout harness ungrounded (mode=none, K=1) on pinned scenes, twice with identical settings, inspecting the returned success structure directly rather than trusting the printed rate. Fix success/episode extraction only if demonstrably wrong. No model, dataset, checkpoint or training changes.",
+    "kind": "measurement",
+    "allowed_files": [
+      "examples/rollout_select.py",
+      "examples/rollout_overlay.py",
+      "pairs/diag/baseline_none_run1.json",
+      "pairs/diag/baseline_none_run2.json"
+    ],
+    "expected_api_changes": [],
+    "reversible": true,
+    "estimated_cost": null
+  },
+  "constraint_audit": [
+    {
+      "constraint_id": "C-0001",
+      "status": "not_applicable",
+      "evidence": "Precondition of the abandoned same-observation selection approach, refuted by EV-0001 (9.5 deg in-distribution vs the assumed 150) and EV-0003 (no diversity control on the server). Not exercised by this plan, which runs K=1 ungrounded.",
+      "blocker": null
+    },
+    {
+      "constraint_id": "C-0002",
+      "status": "unknown",
+      "evidence": "MEASURED BY THIS PLAN. Run with --episodes 15 and assert len(successes) == 15, printing the raw object returned by run_rollout_gymnasium_policy BEFORE any key extraction so a requested-vs-recorded mismatch is visible rather than averaged into a rate. The specific symptom to reproduce or refute is the 2/3-successes-for-1-episode result from the smoke run. Artifact: pairs/diag/baseline_none_run1.json",
+      "blocker": null
+    },
+    {
+      "constraint_id": "C-0003",
+      "status": "sat",
+      "evidence": "EV-0003: no sampling-diversity control on the server. Not exercised here; this plan runs K=1.",
+      "blocker": null
+    },
+    {
+      "constraint_id": "C-0004",
+      "status": "unknown",
+      "evidence": "MEASURED BY THIS PLAN. Run the identical command twice (layout 1, style 1, seed 0) in separate processes and compare per-episode instruction strings and target object identity. RoboCasa samples layout, style and object instances at construction, so identical scene sequences across two independent runs is the only evidence pinning actually holds; passing identical settings is not itself evidence. Artifacts: baseline_none_run1.json vs baseline_none_run2.json",
+      "blocker": null
+    },
+    {
+      "constraint_id": "C-0005",
+      "status": "sat",
+      "evidence": "EV-0002: frames and camera conventions calibrated against ground truth. Not exercised by the ungrounded arm, which draws no boxes, but the path is unchanged.",
+      "blocker": null
+    },
+    {
+      "constraint_id": "C-0006",
+      "status": "sat",
+      "evidence": "EV-0004: serving and training cannot share this GPU. Respected by construction -- the trainer is stopped before the server starts.",
+      "blocker": null
+    },
+    {
+      "constraint_id": "C-0007",
+      "status": "sat",
+      "evidence": "EV-0004: thermal envelope characterised; the governor is not needed for inference-only rollouts, which draw far less sustained power than training.",
+      "blocker": null
+    }
+  ],
+  "assumptions": [],
+  "unknowns": [],
+  "validation_steps": [
+    {
+      "id": "V-001",
+      "description": "Stop any running trainer, then serve base nvidia/GR00T-N1.6-3B via scripts/serve_groot.sh (C-0006: they cannot coexist).",
+      "kind": "manual",
+      "command": null,
+      "expected_result": "",
+      "required": true
+    },
+    {
+      "id": "V-002",
+      "description": "Run examples/rollout_select.py --task PnPCounterToSink --mode none --episodes 15 --layout 1 --style-id 1 --scene-seed 0 --json pairs/diag/baseline_none_run1.json",
+      "kind": "manual",
+      "command": null,
+      "expected_result": "",
+      "required": true
+    },
+    {
+      "id": "V-003",
+      "description": "ACCOUNTING (C-0002): assert len(successes) == 15 and print the raw harness return before extraction, so a requested-vs-recorded mismatch cannot be averaged away.",
+      "kind": "manual",
+      "command": null,
+      "expected_result": "",
+      "required": true
+    },
+    {
+      "id": "V-004",
+      "description": "PINNING (C-0004): repeat identically to baseline_none_run2.json in a separate process; compare per-episode instruction strings and target object identity.",
+      "kind": "manual",
+      "command": null,
+      "expected_result": "",
+      "required": true
+    },
+    {
+      "id": "V-005",
+      "description": "BASELINE (G2/G3): report the success rate with a binomial 95% interval at n=15 against the published 46.0%.",
+      "kind": "manual",
+      "command": null,
+      "expected_result": "",
+      "required": true
+    },
+    {
+      "id": "V-006",
+      "description": "Record accounting, pinning and baseline as separate evidence entries with the JSON artifacts as provenance.",
+      "kind": "manual",
+      "command": null,
+      "expected_result": "",
+      "required": false
+    }
+  ],
+  "decision_rule": {
+    "adopt_if": [
+      "recorded episodes == requested episodes AND both runs traverse an identical scene sequence AND the binomial 95% interval contains 46.0%. Then mark C-0002 and C-0004 sat and register the measured rate as current_baseline."
+    ],
+    "reject_if": [
+      "episode counts disagree with the request, or the two runs traverse different scenes. The harness is wrong and every comparison built on it is void until repaired."
+    ]
+  },
+  "rollback_description": "Read-only with respect to models and data: no weights, datasets or checkpoints are touched, and the trainer resumes from checkpoint-2000 whenever restarted. Any edit is confined to success/episode extraction in two runner scripts, both committed at c330902 and revertable with git checkout. Worst case the runs are discarded and ~40 minutes of GPU time is lost.",
+  "parent_plan_id": null,
+  "approved_by": "the Craftman",
+  "approval_note": "Approved by the human (nickname \"the Craftman\") in-session. Scope: read-only measurement -- serve base GR00T-N1.6-3B, two ungrounded K=1 rollouts on pinned scenes (PnPCounterToSink, layout 1 / style 1 / seed 0, 15 episodes each) to resolve C-0002 (episode/success accounting) and C-0004 (scene pinning) and establish the baseline for G2/G3. No weights, datasets or checkpoints touched; the fine-tune resumes from checkpoint-2000 when restarted.",
+  "outcome_summary": "All three adopt_if conditions hold, though one required a repair inside the plan's allowed files first. (1) ACCOUNTING: the harness returned exactly 15 booleans for 15 requested episodes in both runs -- it counts correctly. The 2/3-for-1-episode symptom that motivated this plan was a client-side extraction bug in our own runners, which scored the truthiness of (env_name, successes, info) and produced a constant 66.7% regardless of robot behaviour; both runners now extract explicitly and raise rather than score the wrong object, and the artifacts were corrected from the raw output. Strictly, reject_if ('episode counts disagree with the request') fired on the FIRST reading -- that reading was the defect this measurement was designed to expose, it was localised to two allowed files, and the corrected reading satisfies adopt_if. (2) PINNING: two independent processes traversed a byte-identical 17-entry scene sequence. (3) BASELINE: 8/15 = 53.3% in both runs, Wilson 95% CI [30.1%, 75.2%], containing the published 46.0%. Baseline for G2/G3 is 53.3% (n=15, pinned). Carried forward: the CI is wide enough that a grounded arm would need ~25-30 points to clear it at n=15, so future comparisons need a larger n or a paired per-scene test; and the extraction bug never touched the checkpoint-1000 evaluation, which used the probe rather than this harness.",
+  "version": 3,
+  "created_at": "2026-08-17T06:30:41.647614Z",
+  "updated_at": "2026-08-17T06:33:41.204604Z"
+}

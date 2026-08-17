@@ -1,0 +1,14 @@
+{
+  "id": "EV-0002",
+  "project_id": "embodied_ai:-grounding-a-vla-without-fine-tuning",
+  "source_type": "test",
+  "artifact_uri": "examples/probe_groot_robocasa.py:calibrate_flip/segmentation; examples/select_grounded.py:world_to_base; third_party robosuite default_pandaomron.json",
+  "summary": "Action and frame conventions verified empirically, not assumed. (1) default_pandaomron.json sets arms.right.type=OSC_POSE with input_type=delta and input_ref_frame=base, so action.end_effector_position is a BASE-FRAME DELTA -- the checkpoint's rep=ABSOLUTE describes GR00T's normalisation, not the controller. (2) state.end_effector_position_absolute equals the sim grip site exactly ([3.0463,-0.55,1.2928]), so 'absolute' is world frame. (3) base_rotation is xyzw ([0,0,0.7071,0.7071]) and R(base_rotation)^T @ (abs - base_position) reproduces end_effector_position_relative with error 0.00000, giving an exact world->base transform. Also: GR00T's wrapper image is the vertical flip of a raw MuJoCo render (mean|diff| 1.2 flipped vs 93 unflipped) and cameras render at 512 while the policy consumes downsampled 256 copies -- both calibrated per camera rather than assumed.",
+  "polarity": "supports",
+  "linked_hypothesis_ids": [],
+  "linked_constraint_ids": [
+    "C-0005"
+  ],
+  "linked_plan_id": null,
+  "created_at": "2026-08-17T06:28:58.711806Z"
+}

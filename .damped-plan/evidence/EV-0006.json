@@ -1,0 +1,14 @@
+{
+  "id": "EV-0006",
+  "project_id": "embodied_ai:-grounding-a-vla-without-fine-tuning",
+  "source_type": "test",
+  "artifact_uri": "pairs/diag/baseline_none_run1.json vs baseline_none_run2.json (scenes field)",
+  "summary": "C-0004 RESOLVED: scene pinning holds. Two independent processes with identical --layout 1 --style-id 1 --scene-seed 0 traversed a byte-identical 17-entry scene sequence (wine, corn, garlic, kettle non electric, cup, pan, garlic, pear, can, lime, ketchup, banana, kiwi, orange, spray, mug), recorded at every env reset rather than inferred from the settings passed in. Note two things this does NOT mean: the object instance varies per EPISODE within a run (each episode draws a different target), and per-episode outcomes still differ between the two runs (run1 and run2 succeeded on different episodes despite identical scenes) because the policy is stochastic. So arms can be paired scene-for-scene, but paired comparison still has to average over policy noise.",
+  "polarity": "supports",
+  "linked_hypothesis_ids": [],
+  "linked_constraint_ids": [
+    "C-0004"
+  ],
+  "linked_plan_id": "P-baseline-trust",
+  "created_at": "2026-08-17T07:27:34.704601Z"
+}
