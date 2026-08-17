@@ -57,6 +57,8 @@ OVERLAY_KEYS = ("video.res256_image_side_0", "video.res256_image_side_1")
 KEEP_VIDEO = ("video.res256_image_side_0", "video.res256_image_side_1",
               "video.res256_image_wrist_0")
 FPS = 20
+#: Emitted frame size; must match what the wrapper feeds the policy.
+RES = 256
 
 
 def groot_obs(genv, inner, lang):
@@ -242,9 +244,23 @@ def main():
                      "episode_{episode_index:06d}.parquet",
         "video_path": "videos/chunk-{episode_chunk:03d}/{video_key}/"
                       "episode_{episode_index:06d}.mp4",
+        # VIDEO FEATURES ARE REQUIRED, not optional metadata. The loader
+        # asserts that every `original_key` named in modality.json exists here:
+        #   AssertionError: Original key observation.images.res256_image_side_0
+        #   not found in feature config
+        # and it fires inside a DataLoader worker after the model has loaded,
+        # which reads like a training bug rather than a missing dict entry.
         "features": {
             "action": {"dtype": "float32", "shape": [int(actions.shape[1])]},
             "observation.state": {"dtype": "float32", "shape": [off]},
+            **{f"observation.images.{k.split('.')[-1]}": {
+                "dtype": "video", "shape": [RES, RES, 3],
+                "names": ["height", "width", "channels"],
+                "info": {"video.height": RES, "video.width": RES,
+                         "video.codec": "h264", "video.pix_fmt": "yuv420p",
+                         "video.is_depth_map": False, "video.fps": FPS,
+                         "video.channels": 3, "has_audio": False},
+            } for k in KEEP_VIDEO},
         },
     }
     json.dump(info, open(f"{a.out}/meta/info.json", "w"), indent=2)

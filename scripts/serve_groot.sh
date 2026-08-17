@@ -62,7 +62,12 @@ fi
 # pins. `Gr00tN1d6Config` imports cleanly under them, but if inference produces
 # something structurally odd, this mismatch is the first place to look.
 cd "$GROOT"
+# MODEL is overridable so a fine-tuned checkpoint can be served with the same
+# script the baseline was measured through -- same server, same client, same
+# probe. Evaluating a fine-tune against a differently-served baseline would
+# confound the comparison with the serving path.
+#   MODEL=checkpoints/groot_overlay/checkpoint-5000 bash scripts/serve_groot.sh
 exec ./.venv/bin/python gr00t/eval/run_gr00t_server.py \
-    --model-path nvidia/GR00T-N1.6-3B \
+    --model-path "${MODEL:-nvidia/GR00T-N1.6-3B}" \
     --embodiment-tag ROBOCASA_PANDA_OMRON \
     "$@"

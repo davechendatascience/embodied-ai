@@ -20,6 +20,17 @@ third_party/
 # how a project becomes unreproducible in one command.
 !scripts/
 
+# Generated training datasets (overlay-augmented RoboCasa replays).
+# Rebuilt by examples/emit_lerobot.py; tens of GB of video.
+data/
+
+# Fine-tuning outputs. ~22 GB per checkpoint (weights + optimizer state), and
+# reproducible from scripts/finetune_overlay.sh + examples/emit_lerobot.py.
+# The whole directory, not just the weights: extension globs let the fragments
+# through (config.json, trainer_state.json, training_args.bin, and rng_state
+# is .pth not .pt), and a checkpoint without its weights is not a checkpoint.
+checkpoints/
+
 # Model caches
 .cache/
 *.safetensors

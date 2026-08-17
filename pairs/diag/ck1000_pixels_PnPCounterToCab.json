@@ -1,0 +1,67 @@
+{
+  "task": "PnPCounterToCab",
+  "instruction": "pick the sweet potato from the counter and place it in the cabinet",
+  "boxes": {
+    "sweet potato": [
+      155,
+      141,
+      175,
+      150
+    ],
+    "knife": [
+      107,
+      133,
+      114,
+      161
+    ],
+    "jam": [
+      189,
+      42,
+      199,
+      54
+    ]
+  },
+  "result": {
+    "floor": {
+      "cos_dir": 0.8901551283664085,
+      "d_dir": 0.09069425107535645,
+      "n": 4,
+      "deterministic": false
+    },
+    "effects": {
+      "target": {
+        "cos_dir": 0.638262258138693,
+        "d_dir": 0.1511172700730747,
+        "cos_first": 0.638262258138693,
+        "grip_agree": 1.0,
+        "verdict": "ambiguous",
+        "deg": 50.33763782276279
+      },
+      "all": {
+        "cos_dir": 0.9542579714772893,
+        "d_dir": 0.12118450601683788,
+        "cos_first": 0.9542579714772893,
+        "grip_agree": 1.0,
+        "verdict": "inert",
+        "deg": 17.396619316146822
+      },
+      "distractor": {
+        "cos_dir": 0.980847309909163,
+        "d_dir": 0.03815134042530262,
+        "cos_first": 0.980847309909163,
+        "grip_agree": 1.0,
+        "verdict": "inert",
+        "deg": 11.231768065436297
+      }
+    },
+    "causal": {
+      "cos_dir": 0.749207638459844,
+      "d_dir": 0.12976556037380033,
+      "cos_first": 0.749207638459844,
+      "grip_agree": 1.0,
+      "verdict": "ambiguous",
+      "deg": 41.47821236726056
+    },
+    "channel": "pixels"
+  }
+}
