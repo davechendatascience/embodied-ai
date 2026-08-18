@@ -1,0 +1,12 @@
+{
+  "id": "EV-0008",
+  "project_id": "embodied_ai:-grounding-a-vla-without-fine-tuning",
+  "source_type": "benchmark",
+  "artifact_uri": "pairs/diag/ckpt2000_overlay_off.json, pairs/diag/ckpt2000_overlay_on.json",
+  "summary": "PRESERVATION FAILED, decisively. checkpoint-2000 scored 0/15 with the overlay OFF and 0/15 with it ON, against a committed base-model baseline of 8/15 (53.3%, CI [30.1%, 75.2%]) on the same pinned scenes through the same code path. 2000 steps of fine-tuning did not merely fail to help -- it destroyed the policy on this task. Ruled out as causes: (a) serving the wrong weights -- the server log names checkpoint-2000 explicitly; (b) a normalization artifact -- action.end_effector_position, end_effector_rotation and gripper_close statistics are BYTE-IDENTICAL between the checkpoint and the base model; (c) an extraction bug -- both artifacts record 15 booleans for 15 episodes through the runner fixed in EV-0005. The overlay arm being equally dead means the mark cannot rescue a broken policy, which is uninformative about grounding.",
+  "polarity": "refutes",
+  "linked_hypothesis_ids": [],
+  "linked_constraint_ids": [],
+  "linked_plan_id": "P-ckpt2000-screen",
+  "created_at": "2026-08-18T01:18:57.768518Z"
+}

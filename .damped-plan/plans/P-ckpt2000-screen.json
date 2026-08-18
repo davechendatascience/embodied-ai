@@ -1,0 +1,146 @@
+{
+  "id": "P-ckpt2000-screen",
+  "project_id": "embodied_ai:-grounding-a-vla-without-fine-tuning",
+  "title": "Screen the overlay fine-tune at checkpoint-2000: does it preserve ungrounded behaviour, and does the mark buy anything yet?",
+  "status": "rejected",
+  "kind": "measurement",
+  "goal_ids": [
+    "G2",
+    "G3"
+  ],
+  "addresses_failure_ids": [
+    "F2",
+    "F3"
+  ],
+  "hypothesis": {
+    "id": "H-P-ckpt2000-screen",
+    "statement": "Point-VLA's recipe claims a large grounded gain (32.4->92.5%) bought without losing ungrounded ability, via 1:1 co-training. Two things follow that are separately checkable and have different consequences. (a) PRESERVATION: if co-training worked, checkpoint-2000 with NO mark should still score near the 53.3% baseline. If it has already collapsed at 1/10th of Point-VLA's step count, the recipe is damaging this model and further training makes it worse -- that is a stop signal, and it is knowable in ~13 minutes. (b) MOVEMENT: if the mark is beginning to be read, checkpoint-2000 WITH the oracle overlay should score above its own ungrounded arm. A null on (b) at 2000 steps is expected and weak evidence; a collapse on (a) is strong evidence regardless of (b). This is a SCREEN to decide whether to spend ~8 more GPU hours reaching 10000 steps, not a test of the recipe.",
+    "linked_failure_ids": [],
+    "alternative_hypothesis_ids": []
+  },
+  "intervention": {
+    "id": "I-P-ckpt2000-screen",
+    "description": "Serve checkpoints/groot_overlay/checkpoint-2000 (MODEL= is already supported by scripts/serve_groot.sh) and run two 15-episode arms on the pinned scenes: overlay off, then overlay on. Compare each against the other and against the committed 53.3% baseline, pairing per scene. No training, no dataset changes, no model edits.",
+    "kind": "measurement",
+    "allowed_files": [
+      "examples/rollout_overlay.py",
+      "pairs/diag/ckpt2000_overlay_off.json",
+      "pairs/diag/ckpt2000_overlay_on.json"
+    ],
+    "expected_api_changes": [],
+    "reversible": true,
+    "estimated_cost": null
+  },
+  "constraint_audit": [
+    {
+      "constraint_id": "C-0001",
+      "status": "not_applicable",
+      "evidence": "Selection is not used here; both arms run the served policy directly at K=1.",
+      "blocker": null
+    },
+    {
+      "constraint_id": "C-0002",
+      "status": "sat",
+      "evidence": "EV-0005: harness counts correctly; the client-side extraction bug is fixed in both runners and both now raise rather than mis-score.",
+      "blocker": null
+    },
+    {
+      "constraint_id": "C-0003",
+      "status": "sat",
+      "evidence": "EV-0003: no diversity control needed or used; K=1.",
+      "blocker": null
+    },
+    {
+      "constraint_id": "C-0004",
+      "status": "sat",
+      "evidence": "EV-0006: pinning verified. Both arms and the existing baseline use layout 1 / style 1 / seed 0, so all three are paired scene-for-scene.",
+      "blocker": null
+    },
+    {
+      "constraint_id": "C-0005",
+      "status": "sat",
+      "evidence": "EV-0002: the overlay path draws boxes with the calibrated per-camera orientation and native-resolution scaling that the TRAINING frames used, so train and eval marks match.",
+      "blocker": null
+    },
+    {
+      "constraint_id": "C-0006",
+      "status": "sat",
+      "evidence": "EV-0004: the trainer is already stopped; only the inference server runs during this plan.",
+      "blocker": null
+    },
+    {
+      "constraint_id": "C-0007",
+      "status": "sat",
+      "evidence": "EV-0004: inference-only rollouts ran at 58-71 C, well inside the envelope; no governor needed.",
+      "blocker": null
+    }
+  ],
+  "assumptions": [],
+  "unknowns": [],
+  "validation_steps": [
+    {
+      "id": "V-001",
+      "description": "Confirm no trainer is running, then serve the fine-tuned checkpoint: MODEL=$PWD/checkpoints/groot_overlay/checkpoint-2000 bash scripts/serve_groot.sh. Verify the server log names checkpoint-2000, not the HF base model -- serving the wrong weights would silently reproduce the baseline.",
+      "kind": "manual",
+      "command": null,
+      "expected_result": "",
+      "required": true
+    },
+    {
+      "id": "V-002",
+      "description": "PRESERVATION arm (G3): rollout_overlay.py --task PnPCounterToSink --overlay off --episodes 15 --layout 1 --style-id 1 --scene-seed 0 --json pairs/diag/ckpt2000_overlay_off.json",
+      "kind": "manual",
+      "command": null,
+      "expected_result": "",
+      "required": true
+    },
+    {
+      "id": "V-003",
+      "description": "MOVEMENT arm (G2): identical command with --overlay on --json pairs/diag/ckpt2000_overlay_on.json",
+      "kind": "manual",
+      "command": null,
+      "expected_result": "",
+      "required": true
+    },
+    {
+      "id": "V-004",
+      "description": "Verify the scene sequence recorded in both arms matches the committed baseline runs episode-for-episode; if it does not, the arms are not paired and only marginal rates may be compared.",
+      "kind": "manual",
+      "command": null,
+      "expected_result": "",
+      "required": true
+    },
+    {
+      "id": "V-005",
+      "description": "Report three rates with Wilson 95% intervals AND the paired per-scene contingency (how many scenes flipped each way between arms), since at n=15 the paired discordant count is more informative than the marginal difference.",
+      "kind": "manual",
+      "command": null,
+      "expected_result": "",
+      "required": true
+    },
+    {
+      "id": "V-006",
+      "description": "Record preservation and movement as separate evidence entries with both JSON artifacts.",
+      "kind": "manual",
+      "command": null,
+      "expected_result": "",
+      "required": false
+    }
+  ],
+  "decision_rule": {
+    "adopt_if": [
+      "The ungrounded arm stays within the baseline CI (no collapse) AND the overlay arm exceeds the ungrounded arm by >= 25 points, or the paired contingency shows >= 5 scenes flipping fail->success against <= 1 the other way. Then continue training toward 10000 steps and re-evaluate."
+    ],
+    "reject_if": [
+      "The ungrounded arm falls clearly below the baseline CI (< 30%). Co-training has NOT preserved ungrounded behaviour at 1/10th of the reference step count, the recipe is damaging this model on this data, and further training should stop rather than continue."
+    ]
+  },
+  "rollback_description": "Read-only: no weights, datasets or checkpoints are modified. The fine-tune resumes from checkpoint-2000 whenever restarted, unaffected. Any edit is confined to examples/rollout_overlay.py, committed at 3d38526 and revertable with git checkout. Worst case ~30 minutes of GPU time is discarded.",
+  "parent_plan_id": null,
+  "approved_by": "the Craftman",
+  "approval_note": "Approved in-session by the human (nickname \"the Craftman\"), responding \"sure\" to the drafted plan. Scope: read-only measurement -- serve checkpoints/groot_overlay/checkpoint-2000 and run two 15-episode arms (overlay off, overlay on) on pinned scenes, paired against the committed 53.3% baseline. No training, dataset or checkpoint changes.",
+  "outcome_summary": "reject_if fired unambiguously: the ungrounded arm scored 0/15 (0%), far below the baseline CI floor of 30.1%. Co-training has not preserved ungrounded behaviour at 2000 steps -- the fine-tune destroyed the policy, taking it from 53.3% to zero on identical pinned scenes. The overlay arm was also 0/15, which says nothing about grounding: a mark cannot rescue a policy that no longer acts. Per the rule, training STOPS rather than continuing toward 10000 steps; the screen did its job and saved roughly 8 GPU hours. Three alternative explanations were checked and eliminated (wrong weights served, normalization drift, extraction bug -- see EV-0008). A concrete probable cause was found instead, in our own pipeline rather than in the recipe (EV-0009): the dataset declares 20 Hz while being emitted at --stride 4 over 20 Hz demos, so it is really 5 Hz mislabelled, and against a 16-step action horizon that is a 4x temporal mismatch between training and inference. IMPORTANT SCOPE NOTE: this outcome rejects THIS TRAINING RUN, not Point-VLA's recipe. No conclusion about overlay fine-tuning can be drawn until the dataset is re-emitted with consistent temporal spacing and the run repeated.",
+  "version": 1,
+  "created_at": "2026-08-17T07:37:46.745531Z",
+  "updated_at": "2026-08-17T07:37:46.745531Z"
+}

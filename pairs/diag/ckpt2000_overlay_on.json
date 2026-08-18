@@ -1,0 +1,23 @@
+{
+  "task": "PnPCounterToSink",
+  "overlay": "on",
+  "episodes": 15,
+  "success_rate": 0.0,
+  "successes": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+  ]
+}

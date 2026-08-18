@@ -179,8 +179,20 @@ def main():
         print("overlay: off")
 
     env_name = f"robocasa_panda_omron/{a.task}_{a.robot}_Env"
-    policy = PolicyClient(host=a.host, port=a.port, timeout_ms=120000)
-    if not policy.ping():
+    # A BARE PolicyClient DOES NOT WORK WITH THIS HARNESS.
+    # rollout_policy hands out FLAT observation keys (video.res256_image_side_0)
+    # while Gr00tPolicy._validate requires nested modality dicts and rejects
+    # anything else with "Observation must contain a 'video' key". The harness
+    # also unpacks `actions, _ = policy.get_action(obs)` and the env's action
+    # space uses `action.`-prefixed keys while the server answers unprefixed.
+    # GroundedSelector already handles all three; mode="none" means K=1 with no
+    # selection, so it is a pure adapter here and the arms stay comparable to
+    # the committed baseline, which was measured through the same code path.
+    from select_grounded import GroundedSelector
+
+    policy = GroundedSelector(
+        PolicyClient(host=a.host, port=a.port, timeout_ms=120000), mode="none")
+    if not policy.client.ping():
         raise SystemExit(f"no policy server at {a.host}:{a.port}")
 
     print(f"env {env_name}  episodes {a.episodes}")

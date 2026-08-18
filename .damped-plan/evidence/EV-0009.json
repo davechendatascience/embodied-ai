@@ -1,0 +1,12 @@
+{
+  "id": "EV-0009",
+  "project_id": "embodied_ai:-grounding-a-vla-without-fine-tuning",
+  "source_type": "manual_review",
+  "artifact_uri": "examples/emit_lerobot.py (FPS constant vs --stride), data/robocasa_overlay/meta/info.json, episode_000000.parquet timestamps",
+  "summary": "PROBABLE CAUSE of the collapse, and it is a defect in OUR data pipeline rather than in Point-VLA's recipe. examples/emit_lerobot.py writes timestamps as arange(n)/FPS with FPS=20 and declares fps=20 in meta/info.json, but the dataset was emitted with --stride 4 over 20 Hz RoboCasa demos. Consecutive rows are therefore 4 sim steps (0.2 s) apart in reality while being labelled 0.05 s apart -- a dataset that is actually 5 Hz masquerading as 20 Hz. With the checkpoint's 16-step action horizon, training chunks span 64 sim steps (~3.2 s) of real motion while an inference chunk is executed over 16 steps (~0.8 s): a 4x temporal mismatch, which is sufficient on its own to produce total failure. This was invisible in the loss curve and is exactly the class of defect that trains cleanly and evaluates as noise. NOT YET PROVEN to be the sole cause -- a 3B full fine-tune at lr 1e-4 on 55 single-task demos could also overfit destructively -- but it must be fixed before any conclusion about the recipe is drawn from this run.",
+  "polarity": "neutral",
+  "linked_hypothesis_ids": [],
+  "linked_constraint_ids": [],
+  "linked_plan_id": "P-ckpt2000-screen",
+  "created_at": "2026-08-18T01:19:07.879124Z"
+}
