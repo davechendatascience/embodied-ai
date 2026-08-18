@@ -1,0 +1,146 @@
+{
+  "id": "P-base-overlay-success",
+  "project_id": "embodied_ai:-grounding-a-vla-without-fine-tuning",
+  "title": "Does an oracle overlay help or hurt the BASE model's task success? EXPLORATORY screen, paired per scene, no hypothesis test",
+  "status": "validated",
+  "kind": "measurement",
+  "goal_ids": [
+    "G2",
+    "G3"
+  ],
+  "addresses_failure_ids": [
+    "F2",
+    "F3"
+  ],
+  "hypothesis": {
+    "id": "H-P-base-overlay-success",
+    "statement": "The probes showed a pixel overlay does not causally STEER an untrained policy (mark relocation 9.8-27.8 deg, inert-to-ambiguous) but could not say whether it helps or hurts the TASK -- action-direction change and success are different metrics, a confusion this project already made once. Base ungrounded success is measured and stable at 8/15 in each of two runs (16/30), with per-scene successes b = [0,0,2,0,2,0,0,2,0,2,1,2,1,2,2] and 13/15 concordance by episode index. THIS PLAN IS EXPLORATORY AND PRE-REGISTERS NO SIGNIFICANCE TEST. The previous version made a paired per-scene exact Wilcoxon the primary test and asserted that this was 'where the power actually is'. THAT CLAIM WAS FALSE AND IS WITHDRAWN. Simulated against the committed b vector, that test has realized type-I error of 0.000-0.003 rather than the stated 0.05 -- 1.5 to 2 orders of magnitude off -- because 6 scenes are floored at b=0 and 7 are ceilinged at b=2, so most per-scene differences are structurally forced toward zero. The expected number of nonzero pairs depends on the scene model and ranges from about 1 (deterministic scenes, the model most consistent with the observed 13/15 concordance) through about 5 (shrunk per-scene difficulty) to about 11 (flat equal-difficulty scenes, a model the data itself refutes: it predicts 7.5 scenes with b_i=1 where 2 were observed, P(<=2) = 0.004). The conclusion that the Wilcoxon is powerless here is robust across all three, with realized alpha 0.000-0.003 in every case. Its P(adopt) is 0.04-0.23 at a true +20-point per-episode effect and 0.20-0.52 at +30, against 0.594 P(decide) for the plain 30-vs-30 marginal comparison it was introduced to replace: at 2 runs per arm the paired test is LESS able to decide than the marginal one, not more. Two further defects: significance requires 6 scenes to move while a nonzero median requires 8, so about 47% of significant results would have satisfied neither branch of the old decision rule; and d_i in {+-1,+-2} guarantees tied |d| ranks, making scipy.stats.wilcoxon(method='exact') invalid as specified. A design that can actually decide with a hypothesis test needs 4 runs per arm (P(adopt) 0.53-0.64 at +20, 0.86-0.91 at +30, realized alpha 0.025-0.035) at roughly 3x the GPU cost. David Chen chose the cheaper exploratory route on 2026-08-18. This plan therefore measures the overlay arm at the SAME budget as the committed baseline and reports the comparison descriptively, with one pre-registered decision: whether the observed difference is large enough to justify commissioning the powered follow-up as a separate plan.",
+    "linked_failure_ids": [],
+    "alternative_hypothesis_ids": []
+  },
+  "intervention": {
+    "id": "I-P-base-overlay-success",
+    "description": "Serve the BASE nvidia/GR00T-N1.6-3B and run the overlay-ON arm TWICE at 15 episodes on the pinned scenes, mirroring the baseline's two-run design so both sides carry the same policy noise at the same budget. Additively instrument examples/rollout_overlay.py so the run PROVES what it did: (1) record one scenes entry per env reset, ported verbatim from rollout_select.py:90-105; (2) inside OverlayWrapper._paint count painted_frames and skipped_frames per camera and accumulate mean_box_area_fraction over painted frames; (3) count inner env STEPS and env RESETS separately and write both to the artifact, since _paint runs on reset as well as on step (rollout_overlay.py:110-116) and V-002's accounting identity is unevaluable without them; (4) write accounting_ok and recorded_episodes as the baseline artifacts do. FORBIDDEN by this plan: any change to the action path, the painting geometry, the extraction guard, or the scene-pinning machinery. No training, no dataset changes, no checkpoints, no additional runs beyond the two.",
+    "kind": "measurement",
+    "allowed_files": [
+      "examples/rollout_overlay.py",
+      "pairs/diag/base_overlay_on_run1.json",
+      "pairs/diag/base_overlay_on_run2.json"
+    ],
+    "expected_api_changes": [],
+    "reversible": true,
+    "estimated_cost": null
+  },
+  "constraint_audit": [
+    {
+      "constraint_id": "C-0001",
+      "status": "not_applicable",
+      "evidence": "No selection; GroundedSelector forces k=1 for mode='none' (examples/select_grounded.py:111), the same adapter the baseline used.",
+      "blocker": null
+    },
+    {
+      "constraint_id": "C-0002",
+      "status": "sat",
+      "evidence": "EV-0005: extraction fixed and verified; both runners raise rather than mis-score.",
+      "blocker": null
+    },
+    {
+      "constraint_id": "C-0003",
+      "status": "sat",
+      "evidence": "EV-0003: no diversity control needed; K=1.",
+      "blocker": null
+    },
+    {
+      "constraint_id": "C-0004",
+      "status": "sat",
+      "evidence": "EV-0006: pinning verified for the baseline. This plan does NOT assume it transfers -- V-004 verifies the scene sequence through the overlay path, which requires the scene recorder to be ported into rollout_overlay.py (see intervention).",
+      "blocker": null
+    },
+    {
+      "constraint_id": "C-0005",
+      "status": "sat",
+      "evidence": "EV-0002: calibrated per-camera orientation, native-512 box scaled into the 256 frame.",
+      "blocker": null
+    },
+    {
+      "constraint_id": "C-0006",
+      "status": "sat",
+      "evidence": "EV-0004: no trainer runs during this plan; the GPU hosts only the inference server. Verified idle at plan time: no trainer process, GPU 37 C, 0% utilisation.",
+      "blocker": null
+    },
+    {
+      "constraint_id": "C-0007",
+      "status": "not_applicable",
+      "evidence": "READ THIS AS 'GPU THERMAL EXPOSURE UNDER INFERENCE IS UNMEASURED AND IS BEING MEASURED HERE', NOT AS 'DOES NOT APPLY'. EV-0004 characterises the thermal envelope under sustained TRAINING (SoC 88 C) and says nothing about the inference regime, so it cannot be cited as SAT for an inference-only plan; an earlier version of this audit asserted SAT on an inference figure that appears in no evidence record, which was a manufactured citation and is withdrawn. V-002 logs the SoC/GPU thermal zones once mid-run so the inference envelope is measured here rather than assumed, and the resulting evidence can promote this constraint later.",
+      "blocker": null
+    }
+  ],
+  "assumptions": [],
+  "unknowns": [],
+  "validation_steps": [
+    {
+      "id": "V-001",
+      "description": "Confirm no trainer is running, serve base nvidia/GR00T-N1.6-3B, and check which weights loaded.",
+      "kind": "manual",
+      "command": null,
+      "expected_result": "PASS if the server log line 'Model path:' names nvidia/GR00T-N1.6-3B. FAIL if it names any path under checkpoints/. (The fine-tuned weights were deleted, so this guard now fails loudly rather than silently serving a fine-tune.)",
+      "required": true
+    },
+    {
+      "id": "V-002",
+      "description": "Run examples/rollout_overlay.py --task PnPCounterToSink --overlay on --episodes 15 --layout 1 --style-id 1 --scene-seed 0 --json pairs/diag/base_overlay_on_run1.json, and log the SoC/GPU thermal zones once mid-run.",
+      "kind": "manual",
+      "command": null,
+      "expected_result": "PASS requires ALL of: the artifact records exactly 15 booleans; painted_frames + skipped_frames == 2 x (env_steps + env_resets), where BOTH counts are written to the artifact -- _paint runs on reset as well as on step (rollout_overlay.py:110-116), so the previous form '2 x env steps' was off by exactly 34 on a 15-episode run and would have failed on a perfectly healthy run; painted_frames / (painted_frames + skipped_frames) >= 0.5; and mean_box_area_fraction > 0. The last two are the substantive criteria and replace 'painted_frames > 0', which passes on one painted frame out of thousands. The accounting identity alone is close to a tautology, since gymnasium_groot.py:98-116 emits both res256 side keys unconditionally so the 'key not in obs' skip never fires -- the only skip path that can actually fire is box is None (occlusion, rollout_overlay.py:100), which is exactly what the painted FRACTION measures. The 'overlay: ON' console line is NOT a pass criterion: it prints at rollout_overlay.py:177 before any episode runs and survives every silent no-op path, which is how the 0/15 ckpt2000 run was indistinguishable from 'nothing was painted'. Thermal zones are recorded for C-0007 rather than cited.",
+      "required": true
+    },
+    {
+      "id": "V-003",
+      "description": "Repeat identically to base_overlay_on_run2.json, matching the baseline's two-run design so both sides carry the same policy noise at the same budget.",
+      "kind": "manual",
+      "command": null,
+      "expected_result": "PASS if the second artifact also records exactly 15 booleans and meets the same painted-fraction and box-area criteria as V-002. The two runs need NOT agree episode-for-episode; the baseline's own runs were 13/15 concordant because the policy is stochastic.",
+      "required": true
+    },
+    {
+      "id": "V-004",
+      "description": "Verify the scene sequence recorded through the OVERLAY path matches the committed baseline runs.",
+      "kind": "manual",
+      "command": null,
+      "expected_result": "PASS if the 17-entry sequence is identical to baseline_none_run1.json: wine, corn, garlic, kettle non electric, cup, pan, garlic, pear, can, lime, ketchup, banana, kiwi, can, orange, spray, mug. Note the SECOND 'can' at index 13, omitted from the sequence quoted in EV-0006. Mapping: episode i corresponds to scenes[i] for i=0..14; scenes[15] is the trailing autoreset and scenes[16] the harness's final env.reset() (rollout_policy.py:317, :391). IF THE SEQUENCE DIFFERS the arms are NOT paired: report the marginal rates only, state explicitly that the per-scene contingency of V-005 is void, and record the plan outcome as yielding NEITHER the adopt nor the reject branch of the decision rule -- the screen requires pairing and does not apply.",
+      "required": true
+    },
+    {
+      "id": "V-005",
+      "description": "PRIMARY ANALYSIS, DESCRIPTIVE, pre-registered before the run. NO SIGNIFICANCE TEST IS PERFORMED AND NO p-VALUE IS REPORTED. For each of the 15 pinned scenes compute b_i = baseline successes across its two committed runs (0,1,2) and o_i = overlay successes across its two runs (0,1,2), then d_i = o_i - b_i. Report: the full per-scene contingency; the counts of scenes improving / worsening / unchanged; n_nonzero; the total difference D = sum(d_i) in episodes out of 30; and the pooled marginal rates with Wilson intervals, labelled descriptive.",
+      "kind": "manual",
+      "command": null,
+      "expected_result": "PASS once the per-scene contingency, n_nonzero, D and the descriptive pooled intervals are all reported. Two things are FORBIDDEN. (1) Running any hypothesis test on {d_i} post hoc: scipy.stats.wilcoxon(method='exact') is invalid here because d_i in {+-1,+-2} guarantees tied |d| ranks, and even a correct sign-flip permutation test on midranks has realized alpha 0.000-0.003 at this n -- with fewer than 6 nonzero pairs no two-sided exact p <= 0.05 is reachable at all. Report n_nonzero precisely so this limit is visible; note that its expectation is model-dependent (about 1 under deterministic scenes, about 5 under shrunk difficulty, about 11 under flat difficulty), so an observed n_nonzero near 5 does NOT contradict this plan's power analysis, which holds across all three. (2) Selecting any favourable subset of scenes: the contingency characterises WHERE a difference arises and is never a basis for a claim about whether one exists.",
+      "required": true
+    },
+    {
+      "id": "V-006",
+      "description": "Record the result as evidence citing both artifacts, with polarity set by the pre-registered screen in the decision rule.",
+      "kind": "manual",
+      "command": null,
+      "expected_result": "polarity 'supports' if D >= +4 episodes; 'refutes' if D <= -4; 'neutral' if |D| <= 3. A neutral result MUST be described as 'no effect detectable at this budget (screen threshold 4 episodes; null SD of D approximately 2.4 episodes, at most 2.74 by construction conditional on the committed baseline; screen false-positive rate approximately 10%, power approximately 80% at a true +20-point effect)' and MUST NOT be described as 'the mark is inert' -- this design cannot support that claim and the project has already recorded one number that measured nothing.",
+      "required": false
+    }
+  ],
+  "decision_rule": {
+    "adopt_if": [
+      "|D| >= 4 episodes out of 30, where D = sum of the 15 per-scene differences, AND V-004 confirmed the arms are paired. ADOPT MEANS EXACTLY ONE THING: commission the powered follow-up (4 runs per arm, P(adopt) 0.53-0.64 at a true +20-point effect, realized alpha 0.025-0.035, roughly 3x the GPU cost) as a SEPARATE plan. It does NOT mean the overlay helps or hurts -- this design cannot establish either, and the sign of D is reported as a direction to test, not a finding. CALIBRATION OF THE THRESHOLD: conditional on the committed baseline b, the null SD of D is approximately 2.4 episodes and at most 2.74 by construction (Var(D) = sum of 2p_i(1-p_i) <= 15 x 2 x 0.25), so a threshold of 4 sits at roughly 1.5-1.9 SD and gives the screen an approximately 10% false-positive rate with approximately 80% power at a true +20-point effect. The screen is therefore CONSERVATIVE, not permissive. An earlier version of this rule described the threshold as 'approximately 1 SD (3.86 episodes) and therefore deliberately permissive'; that figure came from an unpaired two-independent-binomials model which does not apply when the baseline is fixed and committed, and it is withdrawn. Any grounding claim from the follow-up additionally requires a distractor/shuffled-mark control, since no overlay result can separate 'the grounding content helps' from 'any salient mark changes behaviour'; the probe machinery for one exists in examples/probe_groot_robocasa.py."
+    ],
+    "reject_if": [
+      "|D| <= 3 episodes out of 30. The training-free overlay shows no effect large enough at this budget to justify 3x the GPU cost, and the powered follow-up is NOT commissioned. Recorded as an exploratory screen returning below threshold -- explicitly NOT as evidence that the mark is inert, which this design has no power to establish. These two branches are exhaustive over integer D: there is no undecided band and no basis for re-running to move the number."
+    ]
+  },
+  "rollback_description": "Read-only with respect to models and data: no weights, datasets or checkpoints are touched, and none exist to damage. Instrumentation in examples/rollout_overlay.py is additive and revertable with git checkout (clean at HEAD 73dac04); two new JSON artifacts are written. Worst case ~30 minutes of GPU time is discarded.",
+  "parent_plan_id": "P-baseline-trust",
+  "approved_by": "David Chen (delegated to damped-loop, standing approval 2026-08-17)",
+  "approval_note": "Approved under the standing delegation after plan-reviewer returned VERDICT: APPROVE-RECOMMENDED on version 4 with no required repairs. Version 5 differs from the reviewed version 4 ONLY by the three text-only corrections the reviewer itself dictated as its condition of approval: (1) the null SD of D corrected from 3.86 (unpaired two-independent-binomials model, inapplicable when the baseline is fixed and committed) to approximately 2.4, at most 2.74 by construction, with the screen restated as conservative (approximately 10% false-positive rate, approximately 80% power at +20 points) rather than permissive, in decision_rule.adopt_if and V-006; (2) the \"expected n_nonzero about 1\" figure qualified as the deterministic-scene model with the 1/5/11 range across scene models stated, so a run returning n_nonzero near 5 does not read as falsifying the pre-registration, in the hypothesis and V-005; (3) C-0007's not_applicable status prefaced with an explicit reading instruction that inference-regime thermal exposure is UNMEASURED and is being measured by V-002, not that the constraint does not apply. Nothing about what is run, recorded or decided differs between versions 4 and 5. Design choice between the powered 4-runs-per-arm option and this exploratory 2-runs-per-arm screen was made directly by David Chen on 2026-08-18. Two repair rounds were used, which is the maximum; a third would have ended autonomy.",
+  "outcome_summary": "Plan ran exactly as pre-registered and its reject_if branch fired. D = -2 episodes out of 30 (overlay 14/30 = 46.7%, baseline 16/30 = 53.3%), so |D| = 2 <= 3 and the powered 4-runs-per-arm follow-up is NOT commissioned. Polarity neutral, recorded per V-006 as 'no effect detectable at this budget' and explicitly NOT as 'the mark is inert', which this design has no power to establish. 'validated' here means the MEASUREMENT executed and its pre-registered rule was applied without deviation -- not that the overlay was shown to work. All five required validation steps passed: V-001 confirmed base nvidia/GR00T-N1.6-3B weights with no checkpoints/ path; V-002 and V-003 confirmed the mark actually reached the policy (painted 14832 and 16409 frames, painted fractions 0.686 and 0.758, mean box area 0.0044 of the 256 frame, and the accounting identity painted + skipped = 21634 = 2 x (10800 steps + 17 resets) exact in both runs); V-004 confirmed the 17-entry scene sequence is identical across all four runs so the arms are genuinely paired; V-005 reported the per-scene contingency (3 improved, 4 worsened, 8 unchanged, n_nonzero = 7) with no significance test, as pre-registered. NO N-HACKING: the result fell cleanly in reject_if, no re-runs were performed, and no post-hoc test was applied to the 7 nonzero pairs. WHAT THIS DOES AND DOES NOT ESTABLISH. It does not establish that a training-free oracle overlay helps, hurts, or does nothing; at 2 runs per arm the screen would miss any effect below roughly 20 points. It does establish, for the first time in this project, that the overlay pipeline genuinely paints the target into the frames the policy consumes during a live rollout -- previous overlay runs asserted this from a console line printed before any episode began, which is how the 0/15 ckpt2000 result was indistinguishable from 'nothing was painted'. Combined with the probe results (mark relocation 9.8-27.8 deg, inert-to-ambiguous), the picture is consistent: an untrained policy is not visibly steered by a 0.44%-of-frame outline, and any Point-VLA-style gain would have to come from fine-tuning on overlaid frames, not from the mark alone. PROCESS NOTE WORTH KEEPING: this plan needed both permitted repair rounds. Round 1 introduced a paired exact Wilcoxon as the primary test and claimed it was 'where the power actually is'; review showed it had realized alpha 0.000-0.003 rather than 0.05 and was LESS able to decide than the marginal comparison it replaced, and that about 47% of its significant results would have satisfied neither decision branch. Round 1 also carried a fabricated citation attributing an inference thermal range to EV-0004. Round 2 withdrew both, dropped hypothesis testing entirely at David Chen's direction, and replaced it with this screen. EV-0011 now supplies the real inference thermals the fabricated citation had invented.",
+  "version": 5,
+  "created_at": "2026-08-18T01:46:55.742433Z",
+  "updated_at": "2026-08-18T07:02:32.296581Z"
+}

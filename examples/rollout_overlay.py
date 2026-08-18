@@ -76,6 +76,33 @@ class OverlayWrapper:
         self._cams = env.unwrapped.key_converter.get_camera_config()[1]
         self._mapped = env.unwrapped.key_converter.get_camera_config()[0]
 
+        # V-002 ACCOUNTING. `_paint` runs on reset AND on step and loops over
+        # both side cameras, so the identity the plan checks is
+        #     painted + skipped == 2 * (env_steps + env_resets)
+        # An earlier form of that criterion said `2 * env_steps` and was off by
+        # exactly 34 on a 15-episode run -- 17 resets times two cameras -- so it
+        # would have FAILED on a perfectly healthy run. Resets are counted
+        # separately for that reason.
+        #
+        # The identity alone is close to a tautology: gymnasium_groot emits both
+        # res256 side keys unconditionally, so the `key not in obs` skip cannot
+        # fire and the only live skip is `box is None` (occlusion). The
+        # substantive quantities are therefore the painted FRACTION and the mean
+        # box area -- `painted_frames > 0` passes on one frame in thousands,
+        # which is exactly how the 0/15 ckpt2000 run was indistinguishable from
+        # "nothing was painted".
+        self.painted_frames = 0
+        self.skipped_frames = 0
+        self.env_steps = 0
+        self.env_resets = 0
+        self._area_sum = 0.0
+
+    @property
+    def mean_box_area_fraction(self):
+        """Mean box area as a fraction of the 256 frame, over PAINTED frames."""
+        return (self._area_sum / self.painted_frames
+                if self.painted_frames else 0.0)
+
     def __getattr__(self, name):
         return getattr(self.env, name)
 
@@ -86,6 +113,7 @@ class OverlayWrapper:
 
         for key in OVERLAY_KEYS:
             if key not in obs:
+                self.skipped_frames += 1
                 continue
             img = np.asarray(obs[key], np.uint8)
             native_key = key.replace("res256", "res512")
@@ -98,21 +126,26 @@ class OverlayWrapper:
                                native.shape[1], native, flip=self._flips[cam])
             box = target_box(self._inner, seg)
             if box is None:          # occluded: leave the frame clean, exactly
-                continue             # as the training set does
+                self.skipped_frames += 1   # as the training set does. THIS is
+                continue                   # the only skip path that can fire.
             sx = img.shape[1] / native.shape[1]
             sy = img.shape[0] / native.shape[0]
-            obs[key] = draw_overlay(img, {"t": (int(box[0] * sx),
-                                                int(box[1] * sy),
-                                                int(box[2] * sx),
-                                                int(box[3] * sy))})
+            x0, y0 = int(box[0] * sx), int(box[1] * sy)
+            x1, y1 = int(box[2] * sx), int(box[3] * sy)
+            obs[key] = draw_overlay(img, {"t": (x0, y0, x1, y1)})
+            self.painted_frames += 1
+            self._area_sum += (abs(x1 - x0) * abs(y1 - y0)) / float(
+                img.shape[0] * img.shape[1])
         return obs
 
     def reset(self, **kw):
         obs, info = self.env.reset(**kw)
+        self.env_resets += 1
         return self._paint(obs), info
 
     def step(self, action):
         obs, rew, term, trunc, info = self.env.step(action)
+        self.env_steps += 1
         return self._paint(obs), rew, term, trunc, info
 
 
@@ -165,13 +198,52 @@ def main():
         print(f"scenes pinned: layout={a.layout} style={a.style_id} "
               f"seed={a.scene_seed}")
 
+    # C-0004 / V-004: RECORD THE SCENE ACTUALLY TRAVERSED ON EVERY RESET.
+    # Ported from rollout_select.py:90-105. The committed baseline artifacts
+    # carry this sequence; without the same record on this side the two arms
+    # cannot be SHOWN to be paired, and the plan's per-scene analysis would rest
+    # on an assumption rather than a measurement. Passing identical
+    # layout/style/seed is not evidence that pinning held -- RoboCasa samples
+    # object instances from its own RNG at construction, so only an identical
+    # instruction/target sequence demonstrates it.
+    #
+    # This wraps the FACTORY rather than living inside OverlayWrapper, so the
+    # record exists for both arms and not only when the overlay is on.
+    scenes = []
+    _factory = RP.get_gym_env
+
+    def _recording(env_name, env_idx, total_n_envs):
+        env = _factory(env_name, env_idx, total_n_envs)
+        _reset = env.reset
+
+        def reset_recording(*args, **kw):
+            out = _reset(*args, **kw)
+            try:
+                inner = env.unwrapped.env
+                obj = inner.objects.get("obj")
+                scenes.append({
+                    "instruction": inner.get_ep_meta().get("lang", ""),
+                    "target": getattr(obj, "root_body", None),
+                })
+            except Exception as exc:
+                scenes.append({"error": repr(exc)})
+            return out
+
+        env.reset = reset_recording
+        return env
+
+    RP.get_gym_env = _recording
+
+    wrapper = {}
     if a.overlay == "on":
         # Wrap the BASE env, so VideoRecordingWrapper and MultiStepWrapper are
         # applied on top exactly as in an unmodified GR00T evaluation.
-        original = RP.get_gym_env   # already pinned above, if requested
+        original = RP.get_gym_env   # already pinned and recording, as requested
 
         def patched(env_name, env_idx, total_n_envs):
-            return OverlayWrapper(original(env_name, env_idx, total_n_envs))
+            w = OverlayWrapper(original(env_name, env_idx, total_n_envs))
+            wrapper["w"] = w        # kept so V-002 can read its counters
+            return w
 
         RP.get_gym_env = patched
         print("overlay: ON (oracle box burned into the side views)")
@@ -223,16 +295,53 @@ def main():
         raise RuntimeError(
             f"could not locate the per-episode success sequence in a "
             f"{type(results).__name__} return: {str(results)[:200]}")
-    rate = float(np.mean([bool(s) for s in succ])) if succ else float("nan")
+    succ = [bool(s) for s in succ]
+    rate = float(np.mean(succ)) if succ else float("nan")
+    accounting_ok = len(succ) == a.episodes
     print(f"\ntask {a.task}  overlay={a.overlay}  "
-          f"success {rate:.1%}  ({sum(bool(s) for s in succ or [])}/"
-          f"{len(succ or [])})")
+          f"success {rate:.1%}  ({sum(succ)}/{len(succ)})")
+    print(f"  requested episodes={a.episodes}  recorded={len(succ)}  "
+          f"-> accounting {'OK' if accounting_ok else 'MISMATCH'}")
+    print(f"  scenes recorded (C-0004): {len(scenes)}")
+    for i, sc in enumerate(scenes[:20]):
+        print(f"    ep{i}: {sc}")
+
+    # V-002: PROVE THE MARK WAS ACTUALLY PAINTED.
+    # The "overlay: ON" line above prints before any episode runs and survives
+    # every silent no-op path, so it is not evidence of anything. These counters
+    # are.
+    paint = None
+    w = wrapper.get("w")
+    if w is not None:
+        total = w.painted_frames + w.skipped_frames
+        expected = 2 * (w.env_steps + w.env_resets)
+        frac = (w.painted_frames / total) if total else 0.0
+        paint = {"painted_frames": w.painted_frames,
+                 "skipped_frames": w.skipped_frames,
+                 "env_steps": w.env_steps,
+                 "env_resets": w.env_resets,
+                 "expected_frames": expected,
+                 "identity_ok": total == expected,
+                 "painted_fraction": frac,
+                 "mean_box_area_fraction": w.mean_box_area_fraction}
+        print("\n  V-002 paint accounting:")
+        print(f"    painted={w.painted_frames}  skipped={w.skipped_frames}  "
+              f"steps={w.env_steps}  resets={w.env_resets}")
+        print(f"    painted+skipped={total}  2*(steps+resets)={expected}  "
+              f"-> identity {'OK' if total == expected else 'MISMATCH'}")
+        print(f"    painted fraction {frac:.3f} (>= 0.5 required)")
+        print(f"    mean box area fraction {w.mean_box_area_fraction:.5f} "
+              f"(> 0 required)")
 
     if a.json:
         os.makedirs(os.path.dirname(os.path.abspath(a.json)), exist_ok=True)
         json.dump({"task": a.task, "overlay": a.overlay,
                    "episodes": a.episodes, "success_rate": rate,
-                   "successes": [bool(s) for s in (succ or [])]},
+                   "successes": succ,
+                   "accounting_ok": accounting_ok,
+                   "recorded_episodes": len(succ),
+                   "scenes": scenes,
+                   "paint": paint},
                   open(a.json, "w"), indent=2)
         print(f"json -> {a.json}")
 

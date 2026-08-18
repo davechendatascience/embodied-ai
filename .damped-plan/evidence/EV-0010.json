@@ -1,0 +1,16 @@
+{
+  "id": "EV-0010",
+  "project_id": "embodied_ai:-grounding-a-vla-without-fine-tuning",
+  "source_type": "benchmark",
+  "artifact_uri": "pairs/diag/base_overlay_on_run1.json, pairs/diag/base_overlay_on_run2.json; against committed pairs/diag/baseline_none_run1.json, baseline_none_run2.json; runner examples/rollout_overlay.py",
+  "summary": "OVERLAY-ON vs BASELINE ON THE BASE MODEL, PAIRED PER SCENE: D = -2 episodes out of 30, BELOW the pre-registered screen threshold of 4. Base nvidia/GR00T-N1.6-3B served (V-001: log line 'Model path: nvidia/GR00T-N1.6-3B', no checkpoints/ path). Two overlay runs of 15 episodes on pinned scenes (layout 1, style 1, seed 0) returned 7/15 and 7/15 = 14/30 = 46.7%, against the committed baseline's 8/15 and 8/15 = 16/30 = 53.3%. Wilson 95% intervals, DESCRIPTIVE ONLY: overlay [30.2%, 63.9%], baseline [36.1%, 69.8%]. V-004 PASS: the 17-entry scene sequence is identical across all four runs, so the arms are genuinely paired. Per-scene b = [0,0,2,0,2,0,0,2,0,2,1,2,1,2,2], o = [0,2,0,0,0,0,1,2,0,2,2,2,1,1,1], d = [0,2,-2,0,-2,0,1,0,0,0,1,0,0,-1,-1]; n_nonzero = 7, with 3 scenes improving, 4 worsening and 8 unchanged. n_nonzero = 7 sits between this plan's deterministic-scene (about 1) and shrunk-difficulty (about 5) models and does NOT contradict the pre-registered power analysis, which holds across all three scene models. NO SIGNIFICANCE TEST WAS RUN, as pre-registered. V-002/V-003 PASS on every criterion and this is the first overlay run in this project that PROVES the mark reached the policy rather than asserting it: run 1 painted 14832 frames and skipped 6802, run 2 painted 16409 and skipped 5225, both with painted + skipped = 21634 = 2 x (10800 steps + 17 resets) exactly; painted fractions 0.686 and 0.758 (>= 0.5 required); mean box area fractions 0.00436 and 0.00424 of the 256 frame (> 0 required). The residual skips are occlusion (box is None), the only skip path that can fire. INTERPRETATION, STATED AS THE PLAN REQUIRES: no effect detectable at this budget (screen threshold 4 episodes; null SD of D approximately 2.4 episodes, at most 2.74 by construction conditional on the committed baseline; screen false-positive rate approximately 10%, power approximately 80% at a true +20-point effect). THIS IS NOT EVIDENCE THAT THE MARK IS INERT -- this design has no power to establish that. The observed direction is mildly negative, which is consistent with the plan's stated occlusion concern but far too small to distinguish from noise at |D| = 2.",
+  "polarity": "neutral",
+  "linked_hypothesis_ids": [],
+  "linked_constraint_ids": [
+    "C-0002",
+    "C-0004",
+    "C-0005"
+  ],
+  "linked_plan_id": "P-base-overlay-success",
+  "created_at": "2026-08-18T07:57:49.117072Z"
+}

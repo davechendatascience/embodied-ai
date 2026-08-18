@@ -27,6 +27,61 @@ null would have been uninterpretable is guarded by an explicit control.
 
 ---
 
+## Closed, 2026-08-18
+
+The premise was that an external detector could steer a VLA by handing it
+better perception. Four independent measurements say it cannot, at least not as
+an INPUT to a policy that was not trained to read one:
+
+| channel | model / benchmark | result |
+|---|---|---|
+| boxes serialised into the prompt | pi-0.5 / LIBERO | inert in 3 formats, inside the sampler floor |
+| boxes serialised into the prompt | GR00T N1.6 / RoboCasa | reacts to presence, blind to content |
+| pixel overlay, untrained | GR00T N1.6 / RoboCasa | no redirection on any task |
+| pixel overlay, untrained, SUCCESS | GR00T N1.6 / RoboCasa | 14/30 vs 16/30 baseline |
+
+The last row is the one that closes it. Earlier overlay runs could not
+distinguish "the mark did nothing" from "the mark was never painted" -- the
+evidence was a console line printed before the first episode. This run counts
+frames: 14832 and 16409 painted across two runs, 69% and 76% of all frames, a
+mark averaging 0.44% of the image, and an exact accounting identity
+`painted + skipped == 2 x (steps + resets)` in both. The mark provably reached
+the policy, and success moved by -2 episodes out of 30.
+
+Every channel here is a way of TELLING the policy where to look, and a policy
+is free to ignore what it is told. The one architecture that would not be free
+to ignore it -- grounding as the action SELECTOR rather than an input -- was
+tried and its premise did not survive contact: the candidate spread that
+selection needs measured 9.5 degrees, not the 150 the probe's noise floor had
+suggested.
+
+### What this does NOT refute
+
+**Grounding WITH training was never fairly tested.** The Point-VLA-style
+fine-tune reached 0/15 at checkpoint-2000, but the cause is a bug in our own
+emitter, not a property of the method: `examples/emit_lerobot.py` writes
+`timestamp = arange(n) / 20` while the run strided 4 over 20 Hz demos, so every
+training clip claimed to be 4x slower than it was. That checkpoint measured the
+bug. The published claim (32.4% -> 92.5%) rests on training on overlaid frames,
+and this repo never got a clean shot at it.
+
+Restarting is a two-step job, not a new direction: fix the fps/stride
+consistency in the emitter, re-emit, retrain from base. Whether that is worth a
+day of GPU on a method whose training-free premise failed four times is a
+judgement call, and the call taken here was no.
+
+### Read the retractions
+
+This project's value is disproportionately in what it withdrew, and the
+`.damped-plan/` records keep those: a constant 66.7% that was scoring the
+truthiness of a string; a flipped segmentation that put boxes on the wrong
+pixels for two runs; a "150 degree spread" that was a noise artefact; a
+fabricated thermal citation attributed to an evidence record that never said
+it; and a paired statistical test introduced as a repair that turned out to
+have realized alpha of 0.001 and less power than the comparison it replaced.
+
+---
+
 ## What was measured, and what it says
 
 **On LIBERO, pi-0.5 reads instructions and ignores appended boxes.**

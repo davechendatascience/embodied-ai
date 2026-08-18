@@ -1,0 +1,15 @@
+{
+  "id": "EV-0011",
+  "project_id": "embodied_ai:-grounding-a-vla-without-fine-tuning",
+  "source_type": "profiling",
+  "artifact_uri": "scratchpad thermal_run1.log, thermal_run2.log (47 samples each, 20 s interval); /sys/class/thermal/thermal_zone0/temp and nvidia-smi temperature.gpu",
+  "summary": "C-0007 UNDER INFERENCE, MEASURED RATHER THAN ASSERTED. Thermal zones sampled every 20 s through both 15-episode overlay rollouts (47 samples each, ~15.5 min per run, ~62 s per episode) while the GR00T server held the GPU and no trainer ran. Run 1 peaked at SoC 72.4 C / GPU 64 C; run 2 at SoC 74.1 C / GPU 73 C. Idle before the runs was SoC 43.7 C / GPU 37-43 C. This is well inside the envelope: EV-0004 recorded SoC 88 C under SUSTAINED TRAINING, which is what forced the thermal governor. Inference-only evaluation at this cadence needs no governor and no duty cycling. THIS RECORD EXISTS BECAUSE AN EARLIER VERSION OF THE PLAN'S CONSTRAINT AUDIT CITED 'EV-0004: inference-only rollouts measured 58-71 C', a figure that appears in no evidence record in this project. That citation was fabricated and was withdrawn during review; these are the first real inference-regime numbers, and they are close to but not equal to the invented range, which is precisely why an invented range is not acceptable as evidence.",
+  "polarity": "supports",
+  "linked_hypothesis_ids": [],
+  "linked_constraint_ids": [
+    "C-0006",
+    "C-0007"
+  ],
+  "linked_plan_id": "P-base-overlay-success",
+  "created_at": "2026-08-18T07:58:00.600043Z"
+}
