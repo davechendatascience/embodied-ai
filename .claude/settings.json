@@ -9,6 +9,15 @@
             "command": "python3 /home/edge-host/Documents/GitHub/Theoretically_Driven_LLM_Planning/hooks/damped_plan_gate.py"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "DAMPED_PLAN_REVIEWER_HOOK_MODE=warn python3 /home/edge-host/Documents/GitHub/Theoretically_Driven_LLM_Planning/hooks/damped_plan_reviewer_gate.py"
+          }
+        ]
       }
     ]
   }

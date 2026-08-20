@@ -59,7 +59,9 @@ conditions, and the approver string must record the delegation verbatim:
 4. After approval: implement strictly inside `intervention.allowed_files`;
    run validations via `run_validation` where a registered command exists in
    `.damped-plan/commands.json`, otherwise run them within the GPU limits and
-   `record_evidence` with honest polarity, citing artifact paths.
+   record the results: `record_run_metrics` for numbers the contract
+   predicted, `record_evidence` with honest polarity for everything else,
+   both citing artifact paths.
 5. Apply the plan's own `decision_rule`; `record_plan_outcome` (`validated`
    only with evidence ids). On success, loop to step 1.
 6. Keep a one-line ledger log per cycle in your replies: plan id, verdict,
@@ -72,3 +74,38 @@ conditions, and the approver string must record the delegation verbatim:
 - Three consecutive cycles without a validated outcome — the loop is
   ringing; stop and report rather than thrash.
 - David interrupts — any instruction from him overrides this skill instantly.
+
+## Predictive contracts (schema v2 — synced 2026-08-19)
+
+The server now requires a `predictive_contract` on every NEW implementation
+or repair plan (existing plans are grandfathered). Drafting without one
+returns `MISSING_PREDICTIVE_CONTRACT` blockers. The contract is the
+mechanism-level claim, distinct from decision_rule's thresholds:
+
+- `context_fixed`: what is held constant so the comparison is valid (eval
+  protocol, scenes/seeds, budget, API).
+- `predictions`: observables that should move (with `expected_range`) AND
+  ones that must stay invariant (`direction: no_change` — state these; they
+  catch collateral damage).
+- `disconfirming_patterns`: what you would observe if the causal story is
+  wrong, each with a `suggested_model_expansion`.
+
+When recording results: call `record_run_metrics(plan_id, {"metric_id":
+value, ...})` for every number the contract predicted. It puts values where
+the posterior check can actually read them, returns the verdict in the same
+call, and reports which contract metrics are still unobserved. A number
+written into a `record_evidence` summary scores nothing: the check stays
+`inconclusive` and the plan cannot honestly reach `validated`. A plan-linked
+summary stating numerals with empty `observations` now comes back with a
+warning naming the metrics it was waiting for — the record is still saved,
+the warning is the signal.
+
+Use `record_evidence` when the observation is NOT a number: a process record,
+a code reading, a paper, a qualitative failure. That is not weaker evidence,
+it is a different kind of record — never invent a `metric_id` to satisfy a
+field. Declare any observed failure signature via `observed_pattern_ids`
+(available on both calls). If `evaluate_plan` returns
+`predictive_status: mismatch`, that ENDS autonomy like a rejection: stop,
+present the mismatch and the named `model_expansion_target` to David — the
+follow-up plan targets the expansion and sets `parent_plan_id`, it is never
+another local patch.
