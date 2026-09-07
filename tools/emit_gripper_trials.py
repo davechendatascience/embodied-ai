@@ -180,7 +180,24 @@ def case_loop_closure() -> list[dict]:
 
 
 def case_span_derived() -> list[dict]:
-    """Is the separation derived from joint limits an outer bound on the observed?"""
+    """Is the separation derived from joint limits an outer bound on the observed?
+
+    Bounded up to the LIMIT SOFTNESS, propagated through the same forward
+    kinematics under test rather than allowed as a fudge:
+
+        tol = sum_j |d sep / d q_j| * violation_j
+
+    MuJoCo enforces joint limits as soft constraints, so a joint under load sits
+    slightly outside its declared range and the separation follows. Measured on
+    the RethinkGripper at its closed extreme: the bound falls short by 0.673 mm
+    and the two slides are each 0.337 mm past their limits -- 0.337 + 0.337 =
+    0.673, exact to three decimals, because a parallel jaw's sensitivity is 1
+    per finger. The sensitivity is taken by autograd so it is right for a
+    linkage too, where it is not 1.
+
+    Whether the joints SHOULD be outside their range is a different claim, and
+    CTR-declared-limits-respected is the one that asks it.
+    """
     import torch
     torch.set_default_dtype(torch.float64)
     from screwhead.gripper import load, pad_gap, separation_bounds
@@ -194,14 +211,33 @@ def case_span_derived() -> list[dict]:
         env = make_env(name)
         m, d = env.sim.model, env.sim.data
         ia, ib = m.body_name2id(f"gripper0_{a}"), m.body_name2id(f"gripper0_{b}")
+        joints = list(dict.fromkeys(g.fingers[a].joint_names + g.fingers[b].joint_names))
+
+        def softness_tolerance():
+            """Propagate each joint's limit violation through d sep / d q."""
+            from screwhead.gripper import separation
+            qv, viol = {}, {}
+            for j in joints:
+                jid = m.joint_name2id(f"gripper0_{j}")
+                q = float(d.qpos[m.get_joint_qpos_addr(f"gripper0_{j}")])
+                l, h = m.jnt_range[jid]
+                viol[j] = max(l - q, q - h, 0.0)
+                qv[j] = torch.tensor(q, requires_grad=True)
+            sep = separation(g, qv, a, b).sum()
+            grads = torch.autograd.grad(sep, [qv[j] for j in joints], allow_unused=True)
+            return sum(abs(float(gr if gr is not None else 0.0)) * viol[j]
+                       for j, gr in zip(joints, grads))
+
         for _cmd in sweep(env, N, SEED, settle=6):
             sep = float(np.linalg.norm(d.xpos[ia] - d.xpos[ib]))
             gap = pad_gap(m, d, f"gripper0_{a}", f"gripper0_{b}")
+            tol = softness_tolerance() + 1e-9
             trials.append({
-                "metrics": {"bound_violated": bool(sep < lo - 1e-9 or sep > hi + 1e-9)},
+                "metrics": {"bound_violated": bool(sep < lo - tol or sep > hi + tol)},
                 "conditions": {"gripper": name, "linkage": spec["linkage"],
                                "closed_sep": round(lo, 6), "open_span": round(hi, 6),
-                               "observed_sep": round(sep, 6), "pad_gap": round(gap, 6)},
+                               "observed_sep": round(sep, 6), "pad_gap": round(gap, 6),
+                               "softness_tol": round(tol, 8)},
                 "repro": {"gripper": name, "seed": SEED},
             })
         env.env.close()
