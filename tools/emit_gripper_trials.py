@@ -245,31 +245,60 @@ def case_span_derived() -> list[dict]:
 
 
 def case_grasp_infeasible() -> list[dict]:
-    """A feature wider than the jaw can open is refused, not attempted."""
+    """A feature the jaw cannot open around is refused, and nothing else is.
+
+    The refusal must be decided from the DERIVED span -- what our chain says the
+    gripper can do -- while feasibility is judged by the OBSERVED span the
+    simulator actually reaches. Deciding both from the same number is vacuous,
+    which is what the first version of this did.
+
+    The guarantee wanted is one-sided: never refuse a graspable feature. An
+    over-cautious refusal is a lost opportunity; an optimistic acceptance is a
+    failed grasp with no warning, and the decoder has no way to recover from it.
+    So a trial passes unless the derived rule refuses something the gripper can
+    in fact open around.
+    """
     import torch
     torch.set_default_dtype(torch.float64)
     from screwhead.gripper import load, pad_gap
     rng = np.random.default_rng(SEED)
     trials = []
     for name, spec in GRIPPERS.items():
+        g = load(gripper_asset(spec["mjcf"]))
+        a_tip, b_tip = spec["tips"]
+        if a_tip not in g.fingers or b_tip not in g.fingers:
+            continue
         env = make_env(name)
         m, d = env.sim.model, env.sim.data
-        a, b = spec["tips"]
-        gaps = []
-        for _cmd in sweep(env, 9, SEED, settle=40):
-            gaps.append(pad_gap(m, d, f"gripper0_{a}", f"gripper0_{b}"))
-        open_span = float(max(gaps))
+        gaps = [pad_gap(m, d, f"gripper0_{a_tip}", f"gripper0_{b_tip}")
+                for _cmd in sweep(env, 9, SEED, settle=40)]
+        observed_span = float(max(gaps))
+
+        # What OUR model says the jaw can open to: body-separation range from
+        # the chain, less the pad thickness the simulator reports. The pad
+        # geometry is static, so reading it once is a property of the gripper
+        # and not of this episode.
+        from screwhead.gripper import separation_bounds
+        lo_sep, hi_sep = separation_bounds(g, a_tip, b_tip)
+        ia = m.body_name2id(f"gripper0_{a_tip}"); ib = m.body_name2id(f"gripper0_{b_tip}")
+        sep_now = float(np.linalg.norm(d.xpos[ia] - d.xpos[ib]))
+        pad_thickness = sep_now - pad_gap(m, d, f"gripper0_{a_tip}", f"gripper0_{b_tip}")
+        derived_span = hi_sep - pad_thickness
+
         widths = np.concatenate([
-            rng.uniform(0.0, open_span, N),
-            rng.uniform(open_span, open_span * 2.5, N),
+            rng.uniform(0.0, observed_span, N),
+            rng.uniform(observed_span, observed_span * 2.5, N),
         ])
         for w in widths:
-            feasible = bool(w <= open_span)
-            refused = bool(not feasible)          # the decoder's rule, one-sided
+            w = float(w)
+            feasible = w <= observed_span            # what the simulator can do
+            refused = w > derived_span               # what our rule decides
             trials.append({
-                "metrics": {"refused": bool(refused == (not feasible))},
-                "conditions": {"gripper": name, "feature_width": round(float(w), 6),
-                               "open_span": round(open_span, 6), "feasible": feasible},
+                "metrics": {"refused": bool(not (refused and feasible))},
+                "conditions": {"gripper": name, "feature_width": round(w, 6),
+                               "open_span": round(derived_span, 6),
+                               "observed_span": round(observed_span, 6),
+                               "feasible": bool(feasible), "rule_refused": bool(refused)},
                 "repro": {"gripper": name, "seed": SEED},
             })
         env.env.close()
