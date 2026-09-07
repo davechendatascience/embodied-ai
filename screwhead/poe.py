@@ -44,6 +44,30 @@ class Chain:
         """
         return (adjoint(inverse(self.M)) @ self.S.T).T
 
+    def with_tool(self, offset: Tensor, name: str | None = None) -> "Chain":
+        """Move the tool frame by a fixed transform: M' = M @ offset.
+
+        The screw axes are untouched -- they live in the reference frame and do
+        not know where the tool is. Only M moves.
+
+        This matters more than it looks. LIBERO records ee_pos at the gripper's
+        grip_site, which is 97 mm beyond the right_hand body, so FK measured to
+        right_hand disagrees with every recorded pose by that offset while
+        looking entirely plausible (FM-tool-frame-drift).
+
+        Note what is NOT needed here: the arm's base placement. A body twist
+        log(T^-1 T') is invariant to left multiplication, so where the robot
+        stands cancels out of every retargeted twist. Only the tool offset,
+        which multiplies on the right, changes the answer.
+        """
+        return Chain(
+            name=name or f"{self.name}+tool", joint_names=list(self.joint_names),
+            joint_types=list(self.joint_types), S=self.S.clone(),
+            M=self.M @ offset.to(self.M.dtype), limits=self.limits.clone(),
+            base_frame=self.base_frame, tool_frame=f"{self.tool_frame}+offset",
+            source=self.source,
+        )
+
     def sample(self, k: int, generator: torch.Generator | None = None) -> Tensor:
         """Uniform configurations inside the declared limits."""
         lo, hi = self.limits[:, 0], self.limits[:, 1]

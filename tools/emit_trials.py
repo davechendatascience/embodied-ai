@@ -465,6 +465,70 @@ def case_retarget_roundtrip() -> list[dict]:
     return trials
 
 
+
+def case_retarget_libero() -> list[dict]:
+    """The same round-trip, on real LIBERO demonstrations rather than random walks.
+
+    One trial per demonstration window. task_suite is a compatibility key, so
+    these never pool with the synthetic trials -- this is the claim that the
+    conversion survives real data, which the synthetic version cannot make.
+    """
+    from screwhead.interface import ActionSpec
+    from screwhead.libero import demos, panda_chain, task_files
+    from screwhead.retarget import decode, to_twists, usable
+
+    spec = ActionSpec()
+    chain = panda_chain()
+    window = 32
+    files = task_files("libero_spatial")
+    if not files:
+        print("no libero_spatial demonstrations on disk", file=sys.stderr)
+        return []
+
+    per_task = max(1, N_PER_ROBOT // max(len(files), 1))
+    windows, tasks = [], []
+    for f in files:
+        for q, _a, _g in demos(f, limit=per_task):
+            if len(q) <= window:
+                continue
+            g = torch.Generator().manual_seed(len(q) + len(windows))
+            start = int(torch.randint(0, len(q) - window, (1,), generator=g))
+            windows.append(q[start:start + window + 1])
+            tasks.append(f.stem)
+    if not windows:
+        return []
+
+    q_traj = torch.stack(windows, dim=1)                       # (T, B, n)
+    # Retargeting drops near-singular windows rather than emitting an
+    # unconverged target. Measured: windows containing a near-singular frame
+    # fail the round-trip 9.5% of the time against 0.26% without, so keeping
+    # them would silently poison the training set. The drop rate is reported
+    # on stderr because it is a real cost in data yield.
+    keep = usable(chain, q_traj.reshape(-1, chain.n)).reshape(-1, q_traj.shape[1]).all(0)
+    dropped = int((~keep).sum())
+    print(f"retarget_libero: dropped {dropped}/{q_traj.shape[1]} near-singular windows",
+          file=sys.stderr)
+    q_traj = q_traj[:, keep]
+    tasks = [t for t, k in zip(tasks, keep.tolist()) if k]
+    B = q_traj.shape[1]
+    tw = to_twists(chain, q_traj, spec)
+    res = decode(chain, q_traj[0], tw, spec)
+    truth = fk(chain, q_traj.reshape(-1, chain.n))[:, :3, 3].reshape(-1, B, 3)
+    got = fk(chain, res["q"].reshape(-1, chain.n))[:, :3, 3].reshape(-1, B, 3)
+    pose_err = torch.linalg.norm(got - truth, dim=-1).max(dim=0).values
+    joint_rmse = (res["q"] - q_traj).pow(2).mean(-1).sqrt().max(dim=0).values
+    ns = (~usable(chain, q_traj.reshape(-1, chain.n))).reshape(-1, B).sum(0)
+
+    return [{
+        "metrics": {"pose_err": float(pose_err[k]), "joint_rmse": float(joint_rmse[k])},
+        "conditions": {"robot": "libero-panda", "dof": chain.n,
+                       "task_suite": "libero_spatial", "horizon": window,
+                       "near_singular_frames": int(ns[k]), "task": tasks[k],
+                       "dropped_windows": dropped},
+        "repro": {"robot": "libero-panda", "task_suite": "libero_spatial", "seed": BASE_SEED},
+    } for k in range(B)]
+
+
 CASES = {
     "poe_fk": case_poe_fk,
     "jacobian_fd": case_jacobian_fd,
@@ -475,6 +539,7 @@ CASES = {
     "nullspace_drift": case_nullspace_drift,
     "action_interface": case_action_interface,
     "retarget_roundtrip": case_retarget_roundtrip,
+    "retarget_libero": case_retarget_libero,
 }
 
 
