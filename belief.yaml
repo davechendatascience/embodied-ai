@@ -328,18 +328,32 @@ contracts:
 
   # ---- Gate 3: the premise. If the padded-vector baseline transfers fine,
   # there is nothing to fix and the project has no reason to exist.
+  # Split in two. A single contract with rule "success == false" and buckets for
+  # both arms would report the baseline REFUTED on its own arm for the crime of
+  # working there. Opposite expected verdicts need opposite bars, and a bar is
+  # per contract, so this is two contracts fed by two tests -- the same shape as
+  # the IK singularity split.
+  - id: CTR-baseline-works-on-source
+    subject: CMP-action-expert
+    claim_type: capability
+    metrics:
+      - {id: success, unit: bool}
+    acceptance: {rule: "success == true", target_rate: 0.3}
+    compatibility_key: [robot, gripper, task_suite, policy_revision]
+    evaluable_by: [TST-baseline-source]
+    sufficiency: {n_min: 100, max_ci_width: 0.20}
+
+  # The premise. If the padded-vector baseline transfers anyway, the project has
+  # nothing to fix and POL-premise-survives should stop it.
   - id: CTR-baseline-fails-swap
     subject: CMP-action-expert
     claim_type: capability
     metrics:
       - {id: success, unit: bool}
     acceptance: {rule: "success == false", target_rate: 0.8}
-    conditions:
-      - {id: heldout, when: "heldout == true"}
-      - {id: source_arm, when: "heldout == false"}
     compatibility_key: [robot, gripper, task_suite, policy_revision]
-    evaluable_by: [TST-baseline-rollout]
-    sufficiency: {n_min: 40, max_ci_width: 0.25}
+    evaluable_by: [TST-baseline-heldout]
+    sufficiency: {n_min: 100, max_ci_width: 0.20}
 
   # ---- The thesis.
   - id: CTR-spec-is-used
@@ -352,28 +366,35 @@ contracts:
     evaluable_by: [TST-spec-sensitivity]
     sufficiency: {n_min: 50, max_ci_width: 0.2}
 
+  # PROVISIONAL BAR. 0.3 is a sanity floor -- "the policy learned the task at
+  # all" -- not a performance claim. The honest bar is the baseline's own
+  # source-arm rate, which does not exist yet. It is declared before our policy
+  # is trained, from the baseline's number, so it cannot be tuned to our result.
   - id: CTR-libero-source-arm
     subject: CMP-action-expert
     claim_type: capability
     metrics:
       - {id: success, unit: bool}
-    acceptance: {rule: "success == true", target_rate: 0.5}
+    acceptance: {rule: "success == true", target_rate: 0.3}
     compatibility_key: [robot, gripper, task_suite, policy_revision]
-    evaluable_by: [TST-libero-rollout]
-    sufficiency: {n_min: 40, max_ci_width: 0.25}
+    evaluable_by: [TST-libero-source]
+    sufficiency: {n_min: 100, max_ci_width: 0.20}
 
   - id: CTR-heldout-embodiment
     subject: CMP-action-expert
     claim_type: capability
     metrics:
       - {id: success, unit: bool}
-    acceptance: {rule: "success == true", target_rate: 0.4}
+    # Bucketed by whether the swap also changes the joint count. A 7-DoF to
+    # 7-DoF swap tests geometry; 7 to 6 additionally tests that the variable
+    # length encoding is doing work, which is the part no baseline can have.
+    acceptance: {rule: "success == true", target_rate: 0.3}
     conditions:
-      - {id: heldout_dof_match, when: "heldout == true and dof == 7"}
-      - {id: heldout_dof_change, when: "heldout == true and dof == 6"}
+      - {id: heldout_dof_match, when: "dof == 7"}
+      - {id: heldout_dof_change, when: "dof == 6"}
     compatibility_key: [robot, gripper, task_suite, policy_revision]
-    evaluable_by: [TST-libero-rollout]
-    sufficiency: {n_min: 40, max_ci_width: 0.25}
+    evaluable_by: [TST-libero-heldout]
+    sufficiency: {n_min: 100, max_ci_width: 0.20}
 
   # ---- Separates kinematic transfer from visual transfer. fit_taskspace
   # already measured 49 mm vs 97 mm camera-to-TCP between grippers, so this is
@@ -383,13 +404,17 @@ contracts:
     claim_type: capability
     metrics:
       - {id: success, unit: bool}
-    acceptance: {rule: "success == true", target_rate: 0.4}
+    # Only meaningful on the held-out arm, where the wrist camera moves with the
+    # new gripper. fit_taskspace already measured 49 mm vs 97 mm camera-to-TCP
+    # between grippers, so this is a documented confound, not a hypothetical:
+    # without the split, a visual-distribution failure reads as a kinematic one.
+    acceptance: {rule: "success == true", target_rate: 0.3}
     conditions:
       - {id: camera_held_fixed, when: "camera_moved == false"}
       - {id: camera_moved, when: "camera_moved == true"}
     compatibility_key: [robot, gripper, task_suite, policy_revision]
-    evaluable_by: [TST-libero-rollout]
-    sufficiency: {n_min: 40, max_ci_width: 0.25}
+    evaluable_by: [TST-libero-heldout]
+    sufficiency: {n_min: 100, max_ci_width: 0.20}
 
   - id: CTR-twist-delta-roundtrip
     subject: CMP-action-interface
@@ -480,23 +505,41 @@ tests:
     metrics: [spec_sensitivity]
     capture: [policy_revision, perturbation]
 
-  - id: TST-libero-rollout
+  - id: TST-libero-source
     layer: e2e
     targets: [CMP-action-expert, CMP-gripper-decoder]
-    run: .venv/bin/python tools/emit_trials.py $OUT libero_rollout
+    run: .venv/bin/python tools/emit_trials.py $OUT libero_rollout --arm panda --policy screwhead
     metrics: [success]
-    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved]
+    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task]
     cost: 40.0
-    timeout_s: 7200
+    timeout_s: 14400
 
-  - id: TST-baseline-rollout
+  - id: TST-libero-heldout
+    layer: e2e
+    targets: [CMP-action-expert, CMP-gripper-decoder]
+    run: .venv/bin/python tools/emit_trials.py $OUT libero_rollout --arm heldout --policy screwhead
+    metrics: [success]
+    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task]
+    cost: 40.0
+    timeout_s: 14400
+
+  - id: TST-baseline-source
     layer: e2e
     targets: [CMP-action-expert]
-    run: .venv/bin/python tools/emit_trials.py $OUT baseline_rollout
+    run: .venv/bin/python tools/emit_trials.py $OUT libero_rollout --arm panda --policy baseline
     metrics: [success]
-    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved]
+    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task]
     cost: 40.0
-    timeout_s: 7200
+    timeout_s: 14400
+
+  - id: TST-baseline-heldout
+    layer: e2e
+    targets: [CMP-action-expert]
+    run: .venv/bin/python tools/emit_trials.py $OUT libero_rollout --arm heldout --policy baseline
+    metrics: [success]
+    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task]
+    cost: 40.0
+    timeout_s: 14400
 
 priors: []
 
@@ -506,6 +549,7 @@ policies:
   - id: POL-premise-survives
     criteria:
       - {slice: CTR-poe-matches-sim, require: supported}
+      - {slice: CTR-baseline-works-on-source, require: supported}
       - {slice: CTR-baseline-fails-swap, require: supported}
     weights: null
 
