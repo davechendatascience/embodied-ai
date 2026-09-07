@@ -663,7 +663,7 @@ tests:
   - id: TST-force-closure
     layer: component
     targets: [CMP-grasp-map]
-    run: .venv/bin/python tools/emit_trials.py $OUT force_closure --n 400 --seed 0
+    run: .venv/bin/python tools/emit_trials.py $OUT force_closure --n 1200 --seed 0
     metrics: [verdict_correct]
     capture: [contact_model, labelled_closed, n_contacts, friction]
 
