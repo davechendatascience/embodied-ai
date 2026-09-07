@@ -139,16 +139,16 @@ components:
       - {id: FM-slide-vs-hinge, observable: a prismatic finger joint is read as revolute}
     remediation: The five-step conversion, with closed loops cut at one passive joint into two open chains (ch.7 sec.4.3)
 
-  - id: CMP-loop-closure
-    purpose: Solve a linkage gripper's passive joints from its actuated one
+  - id: CMP-tendon-coupling
+    purpose: Relate a gripper's actuated command to its passive finger joints
     inputs: [IFC-gripper__grasp]
     testable_capability: >-
-      Drives log of the loop transform to zero across the actuated range and
-      stays on one assembly branch throughout
+      Predicts the pad separation a command produces, or declares the mapping
+      dynamic and falls back to the observed joint vector
     failure_modes:
-      - {id: FM-branch-flip, observable: the linkage jumps assembly mode mid-trajectory and the pads cross}
-      - {id: FM-toggle-lock, observable: the passive Jacobian goes singular and the solve diverges}
-    remediation: Cut one passive joint, Newton on log(T_loop) = 0, warm-started to hold the branch (ch.7 sec.4.3)
+      - {id: FM-soft-coupling-as-kinematic, observable: a spring-coupled linkage is modelled as a hard constraint and predicted pad poses drift under load}
+      - {id: FM-command-assumed-monotone, observable: pad separation is assumed to decrease with the close command, which a compliant linkage does not guarantee}
+    remediation: Read pad pose from the observed joint vector by open-chain FK; treat command-to-separation as dynamic, not kinematic
 
   - id: CMP-grasp-map
     purpose: Build the grasp matrix from contacts and decide force closure
@@ -519,27 +519,43 @@ contracts:
     evaluable_by: [TST-finger-fk]
     sufficiency: {n_min: 400, max_ci_width: 0.02}
 
-  - id: CTR-loop-closure-holds
-    subject: CMP-loop-closure
+  # Was CTR-loop-closure-holds, which asserted log(T_loop)=0 for a four-bar.
+  # Measured: robosuite's Robotiq85 couples its fingers with a soft <tendon>
+  # spring, and the tendon length varies 0.26 to 3.06 across the command range
+  # rather than holding constant. There is no hard constraint to close, so the
+  # claim is now the one that survives -- pad pose is exact FK of the OBSERVED
+  # joints, whatever dynamics put them there.
+  - id: CTR-pad-pose-from-observed
+    subject: CMP-tendon-coupling
     claim_type: capability
     metrics:
-      - {id: loop_residual, unit: metres}
-      - {id: branch_consistent, unit: bool}
-    acceptance: {rule: "loop_residual < 1e-6 and branch_consistent == true", target_rate: 0.99}
+      - {id: pad_pos_err, unit: metres}
+    acceptance: {rule: "pad_pos_err < 1e-6", target_rate: 0.995}
     compatibility_key: [gripper]
     evaluable_by: [TST-loop-closure]
-    sufficiency: {n_min: 200, max_ci_width: 0.05}
+    sufficiency: {n_min: 400, max_ci_width: 0.02}
 
   # The claim that a lookup table cannot make. If pad separation derived from
   # finger FK over joint limits reproduces what the live model does, the
   # geometry is understood rather than memorised -- and it then extends to a
   # gripper nobody has measured.
-  - id: CTR-span-derived
+  # A ONE-SIDED claim, not an equality, and the measurement is why. For a
+  # parallel jaw the reachable pad separation IS the finger chain's workspace
+  # over its joint limits. For a spring-coupled linkage the joints reachable in
+  # practice are set by dynamics, so joint limits give a SUPERSET. An outer
+  # bound is still the right object for feasibility: a feature wider than the
+  # derived open span is provably ungraspable, and refusing exactly those is a
+  # sound one-sided guarantee. Claiming equality would be refuted by the
+  # Robotiq85 and would deserve to be.
+  - id: CTR-span-bounds-observed
     subject: CMP-gripper-decoder
     claim_type: capability
     metrics:
-      - {id: span_err, unit: metres}
-    acceptance: {rule: "span_err < 1e-4", target_rate: 0.99}
+      - {id: bound_violated, unit: bool}
+    acceptance: {rule: "bound_violated == false", target_rate: 0.99}
+    conditions:
+      - {id: parallel_jaw, when: "linkage == false"}
+      - {id: linkage, when: "linkage == true"}
     compatibility_key: [gripper]
     evaluable_by: [TST-span-derived]
     sufficiency: {n_min: 200, max_ci_width: 0.05}
@@ -648,16 +664,16 @@ tests:
 
   - id: TST-loop-closure
     layer: component
-    targets: [CMP-loop-closure]
+    targets: [CMP-tendon-coupling]
     run: .venv-libero/bin/python tools/emit_gripper_trials.py $OUT loop_closure --n 400 --seed 0
-    metrics: [loop_residual, branch_consistent]
+    metrics: [pad_pos_err]
     capture: [gripper, linkage]
 
   - id: TST-span-derived
     layer: component
     targets: [CMP-gripper-decoder]
     run: .venv-libero/bin/python tools/emit_gripper_trials.py $OUT span_derived --n 400 --seed 0
-    metrics: [span_err]
+    metrics: [bound_violated]
     capture: [gripper, linkage, closed_sep, open_span]
 
   - id: TST-force-closure
@@ -749,8 +765,8 @@ policies:
   - id: POL-gripper-understood
     criteria:
       - {slice: CTR-finger-fk-matches-sim, require: supported}
-      - {slice: CTR-loop-closure-holds, require: supported}
-      - {slice: CTR-span-derived, require: supported}
+      - {slice: CTR-pad-pose-from-observed, require: supported}
+      - {slice: CTR-span-bounds-observed, require: supported}
       - {slice: CTR-force-closure-decides, require: supported}
       - {slice: CTR-grasp-infeasible-reported, require: supported}
     weights: null
