@@ -116,3 +116,78 @@ def separation_bounds(g: Gripper, a: str, b: str, samples: int = 20000,
          for k, j in enumerate(joints)}
     s = separation(g, q, a, b)
     return float(s.min()), float(s.max())
+
+
+# ---- pad surfaces, measured from the live model -------------------------------
+#
+# Body origins are not pad surfaces, and the difference is the whole question
+# when asking whether a feature fits between the jaws. A bounding sphere is far
+# too loose: geom_rbound reads the PandaGripper's ~79 mm usable span as ~32 mm.
+# What is needed is the SUPPORT FUNCTION of each geom along the closing axis --
+# how far the solid actually reaches in that direction.
+
+_BOX, _SPHERE, _CAPSULE, _CYLINDER, _MESH = 6, 2, 3, 5, 7
+
+
+def geom_support(model, data, gid: int, axis) -> float:
+    """Furthest extent of geom `gid` along world unit `axis`: c.a + h(a).
+
+    h is the support half-extent, computed per primitive rather than bounded:
+      box       |R^T a| . size          (size is half-extents)
+      sphere    r
+      capsule   r + |a_z| hz            (spherical caps reach r in every direction)
+      cylinder  ||a_xy|| r + |a_z| hz
+      mesh      exact, from the vertices
+    """
+    import numpy as np
+    c = data.geom_xpos[gid]
+    R = data.geom_xmat[gid].reshape(3, 3)
+    a = R.T @ np.asarray(axis)
+    s = model.geom_size[gid]
+    t = int(model.geom_type[gid])
+    if t == _BOX:
+        h = float(np.abs(a) @ s)
+    elif t == _SPHERE:
+        h = float(s[0])
+    elif t == _CAPSULE:
+        h = float(s[0] + abs(a[2]) * s[1])
+    elif t == _CYLINDER:
+        h = float(np.linalg.norm(a[:2]) * s[0] + abs(a[2]) * s[1])
+    elif t == _MESH:
+        mid = int(model.geom_dataid[gid])
+        start = int(model.mesh_vertadr[mid])
+        num = int(model.mesh_vertnum[mid])
+        v = np.asarray(model.mesh_vert[start:start + num]).reshape(-1, 3)
+        h = float((v @ a).max())
+    else:                                   # unknown primitive: be explicit
+        raise NotImplementedError(f"no support function for geom type {t}")
+    return float(c @ np.asarray(axis)) + h
+
+
+def pad_gap(model, data, body_a: str, body_b: str, collision_group: int = 0) -> float:
+    """Signed gap between the INNER surfaces of two pads, in metres.
+
+    Positive is a clear opening; negative means the pads overlap along the
+    closing axis, which is what a fully-closed jaw reports. Only collision geoms
+    count -- robosuite puts visual meshes in group 1, and a visual shell is
+    usually larger than the solid that actually blocks an object.
+    """
+    import numpy as np
+    ia, ib = model.body_name2id(body_a), model.body_name2id(body_b)
+    d = data.xpos[ib] - data.xpos[ia]
+    n = float(np.linalg.norm(d))
+    if n < 1e-12:
+        raise ValueError(f"{body_a} and {body_b} are coincident; no closing axis")
+    axis = d / n                                    # points from a toward b
+
+    ga = [g for g in range(model.ngeom)
+          if model.geom_bodyid[g] == ia and model.geom_group[g] == collision_group]
+    gb = [g for g in range(model.ngeom)
+          if model.geom_bodyid[g] == ib and model.geom_group[g] == collision_group]
+    if not ga or not gb:
+        raise ValueError(f"no group-{collision_group} geoms on {body_a}/{body_b}")
+
+    # a's furthest reach toward b, and b's furthest reach toward a
+    inner_a = max(geom_support(model, data, g, axis) for g in ga)
+    inner_b = -max(geom_support(model, data, g, -axis) for g in gb)
+    return inner_b - inner_a
