@@ -163,6 +163,10 @@ interfaces:
     producer_guarantees:
       - twist is expressed in the tool frame at the current pose
       - grasp intent is a normalised aperture in zero to one
+      # Now a guarantee rather than an assumption: the policy emits a bounded
+      # action in [-1, 1], scaled by the action space's own constants (0.05 m,
+      # 0.5 rad per step at 20 Hz). A bounded action space bounds the twist.
+      - twist magnitude is reachable within one control period
     consumer_assumptions:
       - twist is expressed in the tool frame at the current pose
       - grasp intent is a normalised aperture in zero to one

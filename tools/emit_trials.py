@@ -24,6 +24,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 torch.set_default_dtype(torch.float64)
 
+from screwhead.interface import ActionSpec, delta_to_twist, denormalize, normalize, twist_to_delta  # noqa: E402
 from screwhead.ik import decode_twist, dls, nullspace_projector, sigma_min, solve_ik  # noqa: E402
 from screwhead.kinematics import body_jacobian, fk, space_jacobian  # noqa: E402
 from screwhead.mjcf import from_mjcf  # noqa: E402
@@ -356,6 +357,67 @@ def case_nullspace_drift() -> list[dict]:
     return trials
 
 
+
+def case_action_interface() -> list[dict]:
+    """Round-trip a trajectory between per-step world deltas and body twists.
+
+    Measured over a whole trajectory, not a single step: a frame or scale error
+    that is small per step accumulates, and single-step agreement would hide it.
+
+    task_suite is 'synthetic' until real demonstrations are on disk. It is a
+    compatibility key, so synthetic and recorded trials can never pool -- this
+    establishes the conversion, not that the conversion matches LIBERO's data.
+    """
+    spec = ActionSpec()
+    trials = []
+    horizon = 32
+    for robot in ROBOTS:
+        try:
+            chain = arm(robot)
+        except Exception as exc:
+            print(f"skip {robot}: {type(exc).__name__}: {exc}", file=sys.stderr)
+            continue
+        g = torch.Generator().manual_seed(robot_seed(robot))
+        lo, hi = chain.limits[:, 0], chain.limits[:, 1]
+        q = chain.sample(N_PER_ROBOT, g)
+        traj = [fk(chain, q)]
+        for _ in range(horizon):
+            q = torch.clamp(q + (torch.rand(*q.shape, generator=g) * 2 - 1) * 0.02, lo, hi)
+            traj.append(fk(chain, q))
+
+        # Forward: pose pair -> world delta -> normalised action -> body twist.
+        # Back: integrate the twist from the first pose and see if the whole
+        # trajectory is recovered.
+        recon = traj[0]
+        err = torch.zeros(N_PER_ROBOT, dtype=traj[0].dtype)
+        for t in range(horizon):
+            T0, T1 = traj[t], traj[t + 1]
+            delta = torch.cat([T1[:, :3, 3] - T0[:, :3, 3],
+                               _rot_axis_angle(T1[:, :3, :3] @ T0[:, :3, :3].transpose(-1, -2))], -1)
+            action = normalize(delta, spec)
+            twist = delta_to_twist(recon, denormalize(action, spec), spec)
+            recon = compose_from_twist(recon, twist, spec)
+            err = torch.maximum(err, torch.linalg.norm(recon[:, :3, 3] - T1[:, :3, 3], dim=-1))
+        for k in range(N_PER_ROBOT):
+            trials.append({
+                "metrics": {"roundtrip_err": float(err[k])},
+                "conditions": {"robot": robot, "task_suite": "synthetic",
+                               "control_hz": spec.control_hz, "horizon": horizon},
+                "repro": {"robot": robot, "seed": robot_seed(robot), "task_suite": "synthetic"},
+            })
+    return trials
+
+
+def _rot_axis_angle(R):
+    from screwhead.interface import _rot_log
+    return _rot_log(R)
+
+
+def compose_from_twist(T, twist, spec):
+    from screwhead.interface import compose_delta, twist_to_delta
+    return compose_delta(T, twist_to_delta(T, twist, spec))
+
+
 CASES = {
     "poe_fk": case_poe_fk,
     "jacobian_fd": case_jacobian_fd,
@@ -364,6 +426,7 @@ CASES = {
     "ik_step_bound": case_ik_step_bound,
     "ik_unreachable": case_ik_unreachable,
     "nullspace_drift": case_nullspace_drift,
+    "action_interface": case_action_interface,
 }
 
 

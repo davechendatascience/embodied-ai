@@ -109,3 +109,22 @@ def log_se3(T: Tensor) -> Tensor:
     v = torch.where(small[..., None], p, v)
     w = torch.where(small[..., None], torch.zeros_like(w), w)
     return torch.cat([w, v], -1)
+
+
+def exp_twist(V: Tensor) -> Tensor:
+    """exp of a twist V = S*theta, recovering (S, theta) correctly.
+
+    The scale factor is the norm of the ANGULAR part, not of the whole
+    6-vector: a screw axis has ||w|| == 1, so theta = ||V[:3]||. Normalising by
+    ||V|| instead yields a non-unit axis and the wrong angle, and the error only
+    shows up once translation and rotation are both non-zero -- which is every
+    real trajectory.
+    """
+    w = V[..., :3]
+    theta = torch.linalg.norm(w, dim=-1)
+    pure_translation = theta < 1e-12
+    # A prismatic-only twist is scaled by its linear norm instead.
+    lin = torch.linalg.norm(V[..., 3:], dim=-1)
+    theta = torch.where(pure_translation, lin, theta)
+    safe = torch.clamp(theta, min=1e-12)
+    return exp_se3(V / safe[..., None], theta)
