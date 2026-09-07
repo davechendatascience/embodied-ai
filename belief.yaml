@@ -114,16 +114,68 @@ components:
       - {id: FM-embodiment-statistics, observable: normalisation constants are fitted per robot, reintroducing the per-robot coupling the design removes}
     remediation: Carry the control period explicitly; normalise translation and rotation separately with embodiment-independent constants
 
-  - id: CMP-gripper-decoder
-    purpose: Decode a normalised aperture and closure intent to gripper joint commands
-    inputs: [IFC-expert__ik]
+  # ---- The gripper, from the same first principles as the arm.
+  #
+  # G maps contact forces to an object wrench exactly as J maps joint rates to a
+  # tool twist, and v_c = G^T V_b is the dual of tau = J^T F (ch.12 sec.4.5).
+  # So the gripper decomposes the same way: an embodiment-free intent -- WHERE
+  # to contact the object and with what normals -- decoded by a layer
+  # parameterised by this gripper's own chain.
+  #
+  # The consequence that matters: pad separation limits are NOT constants to be
+  # measured per gripper and tabulated. They are the finger chain's workspace,
+  # derived from its forward kinematics over its joint limits, exactly as the
+  # arm's reach is. A derived number can be checked against the model; a
+  # tabulated one can only be trusted.
+  - id: CMP-gripper-chain
+    purpose: Parse a gripper into finger chains with screw axes, as for an arm
+    outputs: [IFC-gripper__grasp]
     testable_capability: >-
-      Produces an equivalent physical closure on grippers of differing finger
-      count and geometry from the same policy output
+      Reproduces the simulator's own fingertip kinematics across the actuated
+      range, for parallel-jaw and linkage grippers alike
+    failure_modes:
+      - {id: FM-linkage-as-open-chain, observable: a coupled gripper is parsed as an open chain and its pads move independently}
+      - {id: FM-coupling-ignored, observable: equality-constrained joints are driven separately and the linkage tears}
+      - {id: FM-slide-vs-hinge, observable: a prismatic finger joint is read as revolute}
+    remediation: The five-step conversion, with closed loops cut at one passive joint into two open chains (ch.7 sec.4.3)
+
+  - id: CMP-loop-closure
+    purpose: Solve a linkage gripper's passive joints from its actuated one
+    inputs: [IFC-gripper__grasp]
+    testable_capability: >-
+      Drives log of the loop transform to zero across the actuated range and
+      stays on one assembly branch throughout
+    failure_modes:
+      - {id: FM-branch-flip, observable: the linkage jumps assembly mode mid-trajectory and the pads cross}
+      - {id: FM-toggle-lock, observable: the passive Jacobian goes singular and the solve diverges}
+    remediation: Cut one passive joint, Newton on log(T_loop) = 0, warm-started to hold the branch (ch.7 sec.4.3)
+
+  - id: CMP-grasp-map
+    purpose: Build the grasp matrix from contacts and decide force closure
+    inputs: [IFC-gripper__grasp]
+    testable_capability: >-
+      Decides force closure by exhaustive escape-direction search, and exhibits a
+      strictly positive internal-force certificate for grasps it accepts
+    failure_modes:
+      - {id: FM-stall-read-as-failure, observable: a non-converged certificate search is reported as no closure, which the method cannot show}
+      - {id: FM-moment-dropped, observable: contacts balance forces while the object is free to rotate}
+      - {id: FM-wrench-order, observable: the wrench is built force-first rather than moment-first and every test scrambles}
+      - {id: FM-planar-result-in-space, observable: an antipodal pair is accepted in 3D, where it cannot resist moment about the finger line}
+    remediation: Escape direction decides, alternating projection exhibits, never the reverse (ch.12 sec.4.8)
+
+  - id: CMP-gripper-decoder
+    purpose: Decode a grasp intent to this gripper's actuated command
+    inputs: [IFC-expert__ik, IFC-gripper__grasp]
+    testable_capability: >-
+      Realises the same object-side grasp on grippers of differing finger count
+      and linkage, and reports infeasible rather than attempting a grasp outside
+      the finger workspace
     failure_modes:
       - {id: FM-aperture-mismatch, observable: the same normalised aperture yields different contact on a different gripper}
+      - {id: FM-tabulated-span, observable: reachable pad separation is hardcoded per gripper rather than derived from its chain}
+      - {id: FM-infeasible-attempted, observable: a feature wider than the jaw can straddle is attempted rather than refused}
       - {id: FM-camera-offset, observable: transfer fails on wrist-camera geometry rather than on the gripper itself}
-    remediation: Phase one is a measured aperture map per gripper; phase two emits a closure-satisfying grasp instead
+    remediation: Derive the pad-separation workspace from finger FK over joint limits; refuse what lies outside it
 
 interfaces:
   - id: IFC-poe__kinematics
@@ -199,6 +251,21 @@ interfaces:
     consumer_assumptions:
       - token count equals the arm's joint count
       - tokens are masked rather than zero-padded where an arm has fewer joints
+
+  - id: IFC-gripper__grasp
+    producer: CMP-gripper-chain
+    consumer: CMP-grasp-map
+    semantics: Fingertip pad poses and contact normals as a function of the actuated command
+    units: metres and radians
+    frame: gripper flange frame
+    producer_guarantees:
+      - pad poses satisfy the gripper's own coupling constraints
+      - the reachable pad-separation range is derived from joint limits, not tabulated
+      - contact normals point into the object
+    consumer_assumptions:
+      - pad poses satisfy the gripper's own coupling constraints
+      - the reachable pad-separation range is derived from joint limits, not tabulated
+      - contact normals point into the object
 
   - id: IFC-demo__twist
     producer: CMP-retarget
@@ -345,12 +412,21 @@ contracts:
 
   # The premise. If the padded-vector baseline transfers anyway, the project has
   # nothing to fix and POL-premise-survives should stop it.
+  # Bucketed by WHICH factor was swapped. Panda -> UR5e in LIBERO changes the
+  # arm AND the gripper at once (UR5e gets a Robotiq85), so an unfactored result
+  # cannot say which one broke -- and the prior attempt at this suggested the arm
+  # swap is the easy half. robosuite takes gripper_types independently, and all
+  # four cells build, so the factorial costs only rollout time.
   - id: CTR-baseline-fails-swap
     subject: CMP-action-expert
     claim_type: capability
     metrics:
       - {id: success, unit: bool}
     acceptance: {rule: "success == false", target_rate: 0.8}
+    conditions:
+      - {id: arm_only, when: "arm_swapped == true and gripper_swapped == false"}
+      - {id: gripper_only, when: "arm_swapped == false and gripper_swapped == true"}
+      - {id: both, when: "arm_swapped == true and gripper_swapped == true"}
     compatibility_key: [robot, gripper, task_suite, policy_revision]
     evaluable_by: [TST-baseline-heldout]
     sufficiency: {n_min: 100, max_ci_width: 0.20}
@@ -390,8 +466,9 @@ contracts:
     # length encoding is doing work, which is the part no baseline can have.
     acceptance: {rule: "success == true", target_rate: 0.3}
     conditions:
-      - {id: heldout_dof_match, when: "dof == 7"}
-      - {id: heldout_dof_change, when: "dof == 6"}
+      - {id: arm_only, when: "arm_swapped == true and gripper_swapped == false"}
+      - {id: gripper_only, when: "arm_swapped == false and gripper_swapped == true"}
+      - {id: both, when: "arm_swapped == true and gripper_swapped == true"}
     compatibility_key: [robot, gripper, task_suite, policy_revision]
     evaluable_by: [TST-libero-heldout]
     sufficiency: {n_min: 100, max_ci_width: 0.20}
@@ -425,6 +502,70 @@ contracts:
     compatibility_key: [robot, task_suite]
     evaluable_by: [TST-action-interface]
     sufficiency: {n_min: 800, max_ci_width: 0.01}
+
+  # ---- Gripper contracts. The same shape as the arm's: geometry first, then
+  # the decoder, then feasibility. CTR-span-derived is the one that replaces a
+  # per-gripper lookup table with a claim that can be refuted.
+  - id: CTR-finger-fk-matches-sim
+    subject: CMP-gripper-chain
+    claim_type: capability
+    metrics:
+      - {id: pad_pos_err, unit: metres}
+    acceptance: {rule: "pad_pos_err < 1e-6", target_rate: 0.995}
+    conditions:
+      - {id: parallel_jaw, when: "linkage == false"}
+      - {id: linkage, when: "linkage == true"}
+    compatibility_key: [gripper]
+    evaluable_by: [TST-finger-fk]
+    sufficiency: {n_min: 400, max_ci_width: 0.02}
+
+  - id: CTR-loop-closure-holds
+    subject: CMP-loop-closure
+    claim_type: capability
+    metrics:
+      - {id: loop_residual, unit: metres}
+      - {id: branch_consistent, unit: bool}
+    acceptance: {rule: "loop_residual < 1e-6 and branch_consistent == true", target_rate: 0.99}
+    compatibility_key: [gripper]
+    evaluable_by: [TST-loop-closure]
+    sufficiency: {n_min: 200, max_ci_width: 0.05}
+
+  # The claim that a lookup table cannot make. If pad separation derived from
+  # finger FK over joint limits reproduces what the live model does, the
+  # geometry is understood rather than memorised -- and it then extends to a
+  # gripper nobody has measured.
+  - id: CTR-span-derived
+    subject: CMP-gripper-decoder
+    claim_type: capability
+    metrics:
+      - {id: span_err, unit: metres}
+    acceptance: {rule: "span_err < 1e-4", target_rate: 0.99}
+    compatibility_key: [gripper]
+    evaluable_by: [TST-span-derived]
+    sufficiency: {n_min: 200, max_ci_width: 0.05}
+
+  - id: CTR-force-closure-decides
+    subject: CMP-grasp-map
+    claim_type: capability
+    metrics:
+      - {id: verdict_correct, unit: bool}
+    acceptance: {rule: "verdict_correct == true", target_rate: 0.99}
+    conditions:
+      - {id: closed, when: "labelled_closed == true"}
+      - {id: not_closed, when: "labelled_closed == false"}
+    compatibility_key: [contact_model]
+    evaluable_by: [TST-force-closure]
+    sufficiency: {n_min: 400, max_ci_width: 0.02}
+
+  - id: CTR-grasp-infeasible-reported
+    subject: CMP-gripper-decoder
+    claim_type: capability
+    metrics:
+      - {id: refused, unit: bool}
+    acceptance: {rule: "refused == true", target_rate: 0.99}
+    compatibility_key: [gripper]
+    evaluable_by: [TST-grasp-infeasible]
+    sufficiency: {n_min: 200, max_ci_width: 0.05}
 
 tests:
   - id: TST-poe-fk
@@ -498,6 +639,41 @@ tests:
     metrics: [pose_err, joint_rmse]
     capture: [robot, dof, task_suite, horizon, near_singular_frames, task]
 
+  - id: TST-finger-fk
+    layer: component
+    targets: [CMP-gripper-chain]
+    run: .venv-libero/bin/python tools/emit_gripper_trials.py $OUT finger_fk --n 400 --seed 0
+    metrics: [pad_pos_err]
+    capture: [gripper, linkage, n_finger_joints]
+
+  - id: TST-loop-closure
+    layer: component
+    targets: [CMP-loop-closure]
+    run: .venv-libero/bin/python tools/emit_gripper_trials.py $OUT loop_closure --n 400 --seed 0
+    metrics: [loop_residual, branch_consistent]
+    capture: [gripper, linkage]
+
+  - id: TST-span-derived
+    layer: component
+    targets: [CMP-gripper-decoder]
+    run: .venv-libero/bin/python tools/emit_gripper_trials.py $OUT span_derived --n 400 --seed 0
+    metrics: [span_err]
+    capture: [gripper, linkage, closed_sep, open_span]
+
+  - id: TST-force-closure
+    layer: component
+    targets: [CMP-grasp-map]
+    run: .venv/bin/python tools/emit_trials.py $OUT force_closure --n 400 --seed 0
+    metrics: [verdict_correct]
+    capture: [contact_model, labelled_closed, n_contacts, friction]
+
+  - id: TST-grasp-infeasible
+    layer: component
+    targets: [CMP-gripper-decoder]
+    run: .venv-libero/bin/python tools/emit_gripper_trials.py $OUT grasp_infeasible --n 400 --seed 0
+    metrics: [refused]
+    capture: [gripper, feature_width, open_span]
+
   - id: TST-spec-sensitivity
     layer: component
     targets: [CMP-spec-conditioning]
@@ -510,7 +686,7 @@ tests:
     targets: [CMP-action-expert, CMP-gripper-decoder]
     run: .venv/bin/python tools/emit_trials.py $OUT libero_rollout --arm panda --policy screwhead
     metrics: [success]
-    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task]
+    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task, arm_swapped, gripper_swapped]
     cost: 40.0
     timeout_s: 14400
 
@@ -519,7 +695,7 @@ tests:
     targets: [CMP-action-expert, CMP-gripper-decoder]
     run: .venv/bin/python tools/emit_trials.py $OUT libero_rollout --arm heldout --policy screwhead
     metrics: [success]
-    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task]
+    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task, arm_swapped, gripper_swapped]
     cost: 40.0
     timeout_s: 14400
 
@@ -528,7 +704,7 @@ tests:
     targets: [CMP-action-expert]
     run: .venv/bin/python tools/emit_trials.py $OUT libero_rollout --arm panda --policy baseline
     metrics: [success]
-    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task]
+    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task, arm_swapped, gripper_swapped]
     cost: 40.0
     timeout_s: 14400
 
@@ -537,7 +713,7 @@ tests:
     targets: [CMP-action-expert]
     run: .venv/bin/python tools/emit_trials.py $OUT libero_rollout --arm heldout --policy baseline
     metrics: [success]
-    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task]
+    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task, arm_swapped, gripper_swapped]
     cost: 40.0
     timeout_s: 14400
 
@@ -567,6 +743,18 @@ policies:
   # The thesis. Held-out embodiment is the claim; spec sensitivity rules out
   # the memorisation explanation; the camera split rules out crediting the
   # kinematics for a visual result.
+  # Gripper geometry before gripper transfer, for the same reason the arm's
+  # conversion gated everything downstream: a wrong pad pose presents as a
+  # failed grasp.
+  - id: POL-gripper-understood
+    criteria:
+      - {slice: CTR-finger-fk-matches-sim, require: supported}
+      - {slice: CTR-loop-closure-holds, require: supported}
+      - {slice: CTR-span-derived, require: supported}
+      - {slice: CTR-force-closure-decides, require: supported}
+      - {slice: CTR-grasp-infeasible-reported, require: supported}
+    weights: null
+
   - id: POL-thesis-supported
     criteria:
       - {slice: CTR-spec-is-used, require: supported}
