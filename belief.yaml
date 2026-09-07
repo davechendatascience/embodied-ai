@@ -205,23 +205,26 @@ contracts:
     metrics:
       - {id: fk_pos_err, unit: metres}
       - {id: fk_rot_err, unit: radians}
-    acceptance: {rule: "fk_pos_err < 1e-6 and fk_rot_err < 1e-6", target_rate: 0.999}
+    # 0.995 at n_min 800, not 0.999 at 200: the all-pass posterior lower bound
+    # is 0.9956 at n=800 and only reaches 0.999 near n=5000. A threshold the
+    # declared sample size cannot clear reports `contested` on a perfect run.
+    acceptance: {rule: "fk_pos_err < 1e-6 and fk_rot_err < 1e-6", target_rate: 0.995}
     conditions:
       - {id: six_dof, when: "dof == 6"}
       - {id: seven_dof, when: "dof == 7"}
     compatibility_key: [robot]
     evaluable_by: [TST-poe-fk]
-    sufficiency: {n_min: 200, max_ci_width: 0.05}
+    sufficiency: {n_min: 800, max_ci_width: 0.01}
 
   - id: CTR-jacobian-correct
     subject: CMP-kinematics
     claim_type: capability
     metrics:
       - {id: jac_max_err, unit: relative}
-    acceptance: {rule: "jac_max_err < 1e-5", target_rate: 0.999}
+    acceptance: {rule: "jac_max_err < 1e-5", target_rate: 0.995}
     compatibility_key: [robot]
     evaluable_by: [TST-jacobian-fd]
-    sufficiency: {n_min: 200, max_ci_width: 0.05}
+    sufficiency: {n_min: 800, max_ci_width: 0.01}
 
   # ---- Gate 2: the decoder is safe to put inside a training graph.
   - id: CTR-ik-converges
@@ -347,7 +350,7 @@ tests:
   - id: TST-poe-fk
     layer: component
     targets: [CMP-poe-conversion]
-    run: .venv/bin/python tools/emit_trials.py $OUT poe_fk
+    run: .venv/bin/python tools/emit_trials.py $OUT poe_fk --n 800
     metrics: [fk_pos_err, fk_rot_err]
     capture: [robot, dof, urdf_source]
     mandatory: true
@@ -355,7 +358,7 @@ tests:
   - id: TST-jacobian-fd
     layer: component
     targets: [CMP-kinematics]
-    run: .venv/bin/python tools/emit_trials.py $OUT jacobian_fd
+    run: .venv/bin/python tools/emit_trials.py $OUT jacobian_fd --n 800
     metrics: [jac_max_err]
     capture: [robot, dof]
 

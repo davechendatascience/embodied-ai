@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Emit trials for the component-belief MCP.
 
-Usage: python tools/emit_trials.py $OUT <case>
+Usage: python tools/emit_trials.py $OUT <case> [--n PER_ROBOT]
 
 One JSON object on stdout is not the contract -- the server reads $OUT. Each
 trial is one sampled configuration, not one suite: "the suite passed" throws
@@ -32,7 +32,10 @@ ASSETS = Path(os.environ.get(
     "/home/edge-host/Documents/GitHub/vla_jepa/.venv/lib/python3.12/site-packages/robosuite/models/assets/robots",
 ))
 ROBOTS = ("panda", "ur5e", "iiwa", "kinova3", "jaco")
-N_PER_ROBOT = int(os.environ.get("N_PER_ROBOT", 200))
+# Sample count is a CLI argument, not just an env var, because the declared
+# `run` line is what mints a test version. Changing how much a test measures
+# without changing its version would pool old and new trials silently.
+N_PER_ROBOT = 200
 
 
 def geodesic(Ra: np.ndarray, Rb: np.ndarray) -> float:
@@ -89,6 +92,9 @@ def case_poe_fk() -> list[dict]:
                     "fk_rot_err": geodesic(T[k, :3, :3].numpy(), data.xmat[bid].reshape(3, 3)),
                 },
                 "conditions": {"robot": robot, "dof": chain.n, "urdf_source": "robosuite-mjcf"},
+                # compatibility_key reads from repro, not conditions: a
+                # different arm is a hardware swap, and must never pool.
+                "repro": {"robot": robot},
             })
     return trials
 
@@ -107,7 +113,7 @@ def case_jacobian_fd() -> list[dict]:
         except Exception as exc:
             print(f"skip {robot}: {type(exc).__name__}: {exc}", file=sys.stderr)
             continue
-        q = wide_sample(chain, max(20, N_PER_ROBOT // 10), seed=7)
+        q = wide_sample(chain, N_PER_ROBOT, seed=7)
         Js = space_jacobian(chain, q)
         Jb = body_jacobian(chain, q)
         T = fk(chain, q)
@@ -132,6 +138,7 @@ def case_jacobian_fd() -> list[dict]:
                     )),
                 },
                 "conditions": {"robot": robot, "dof": chain.n},
+                "repro": {"robot": robot},
             })
     return trials
 
@@ -140,10 +147,13 @@ CASES = {"poe_fk": case_poe_fk, "jacobian_fd": case_jacobian_fd}
 
 
 def main() -> int:
+    global N_PER_ROBOT
     if len(sys.argv) < 3:
         print(__doc__, file=sys.stderr)
         return 2
     out, case = sys.argv[1], sys.argv[2]
+    if "--n" in sys.argv:
+        N_PER_ROBOT = int(sys.argv[sys.argv.index("--n") + 1])
     if case not in CASES:
         print(f"unknown case {case!r}; have {sorted(CASES)}", file=sys.stderr)
         return 2
