@@ -529,6 +529,64 @@ def case_retarget_libero() -> list[dict]:
     } for k in range(B)]
 
 
+
+def _lp_closure(G, tol=1e-7):
+    """Independent decision by linear programming.
+
+    Deliberately a different algorithm from the one under test: closure iff
+    rank(G) = d and max t subject to Gk = 0, k_i >= t has a strictly positive
+    optimum. Comparing the escape-direction search against itself would test
+    nothing.
+    """
+    import numpy as np
+    from scipy.optimize import linprog
+    G = G.numpy(); d, k = G.shape
+    if np.linalg.matrix_rank(G, tol=1e-9) < d:
+        return False
+    c = np.zeros(k + 1); c[-1] = -1.0
+    r = linprog(c,
+                A_ub=np.hstack([-np.eye(k), np.ones((k, 1))]), b_ub=np.zeros(k),
+                A_eq=np.hstack([G, np.zeros((d, 1))]), b_eq=np.zeros(d),
+                bounds=[(None, None)] * k + [(0, 1)], method="highs")
+    return bool(r.success and -r.fun > tol)
+
+
+def case_force_closure() -> list[dict]:
+    """Random planar grasps, decided two ways.
+
+    Labels come from the LP, verdicts from the exhaustive escape-direction
+    search. The certificate is computed only for grasps already decided closed,
+    never used to decide -- alternating projection proves success and cannot
+    prove failure, so reading a stall as `no closure` is FM-stall-read-as-failure.
+    """
+    from screwhead.grasp import closure_certificate, grasp_matrix_planar, has_closure
+    g = torch.Generator().manual_seed(BASE_SEED)
+    trials = []
+    for _ in range(N_PER_ROBOT):
+        k = int(torch.randint(2, 8, (1,), generator=g))
+        ang = torch.rand(k, generator=g) * 2 * torch.pi
+        p = torch.stack([torch.cos(ang), torch.sin(ang)], -1)
+        nrm = -p + torch.randn(k, 2, generator=g) * 0.25
+        nrm = nrm / nrm.norm(dim=-1, keepdim=True)
+        mu = float(torch.rand(1, generator=g)) * 0.8
+        G = grasp_matrix_planar(p, nrm, mu)
+        label = _lp_closure(G)
+        verdict = has_closure(G)
+        cert = None
+        if verdict:
+            _, cert = closure_certificate(G)
+        trials.append({
+            "metrics": {"verdict_correct": bool(verdict == label)},
+            "conditions": {"contact_model": "planar_hard_finger" if mu > 0 else "planar_frictionless",
+                           "labelled_closed": bool(label), "n_contacts": k,
+                           "friction": round(mu, 3),
+                           "certificate_found": bool(cert) if cert is not None else False},
+            "repro": {"contact_model": "planar_hard_finger" if mu > 0 else "planar_frictionless",
+                      "seed": BASE_SEED},
+        })
+    return trials
+
+
 CASES = {
     "poe_fk": case_poe_fk,
     "jacobian_fd": case_jacobian_fd,
@@ -540,6 +598,7 @@ CASES = {
     "action_interface": case_action_interface,
     "retarget_roundtrip": case_retarget_roundtrip,
     "retarget_libero": case_retarget_libero,
+    "force_closure": case_force_closure,
 }
 
 
