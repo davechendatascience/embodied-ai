@@ -1,0 +1,451 @@
+# Declarations for the URDF-conditioned VLA action head.
+#
+# Design: docs/design_VLA_action_head.md. Goal: docs/design_VLA_goal.md.
+#
+# This file is the approval gate. The server reads it from git HEAD, not the
+# working tree — editing it changes nothing until a human commits. Uncommitted
+# edits show as PENDING in `status` and score no evidence.
+#
+# The thesis under test: a single BC policy emits an embodiment-free tool twist,
+# and a fixed analytic layer parameterized by the URDF decodes it to joint
+# commands for any 6- or 7-DoF arm. Two things must be true before that is worth
+# building — the conversion must be exact (CTR-poe-matches-sim) and the existing
+# padded-vector approach must actually fail the swap (CTR-baseline-fails-swap).
+# POL-premise-survives encodes that ordering.
+
+components:
+  - id: CMP-poe-conversion
+    purpose: Convert a URDF into a home pose and one screw axis per joint
+    outputs: [IFC-poe__kinematics]
+    testable_capability: >-
+      Reproduces the simulator's own forward kinematics to machine precision on
+      randomly sampled configurations, for every arm it is given
+    failure_modes:
+      - {id: FM-rpy-order, observable: home pose is tilted but plausible; fixed-axis rpy applied in the wrong order}
+      - {id: FM-zero-offset, observable: every joint angle is offset because the file's zero differs from the encoder index}
+      - {id: FM-prismatic-sign, observable: prismatic joints move the tool the wrong way}
+      - {id: FM-tool-frame-drift, observable: axes are right but the tool offset is measured to the wrong link}
+    remediation: The five-step conversion in Modern Robotics ch.4 sec.4.5; check against sim FK before anything downstream
+
+  - id: CMP-kinematics
+    purpose: Batched differentiable forward kinematics and body Jacobian from screw axes
+    inputs: [IFC-poe__kinematics]
+    outputs: [IFC-kinematics__ik]
+    testable_capability: >-
+      Jacobian agrees with finite differences of its own forward kinematics, and
+      the space and body forms agree, across arms of differing joint counts
+    failure_modes:
+      - {id: FM-adjoint-order, observable: Jacobian columns use the wrong upstream product and only agree at the home posture}
+      - {id: FM-gradient-wrong, observable: analytic gradient disagrees with autograd through the exponential map}
+      - {id: FM-batch-leak, observable: results depend on batch composition when joint counts differ}
+    remediation: Column i is joint i's screw axis carried by the Adjoint of everything upstream; ch.5 sec.4.2
+
+  - id: CMP-ik-decoder
+    purpose: Decode a tool twist to joint commands by damped least squares
+    inputs: [IFC-expert__ik, IFC-kinematics__ik]
+    outputs: [IFC-ik__controller]
+    testable_capability: >-
+      Converges on reachable targets, keeps every step inside the damping bound,
+      and reports a non-zero residual instead of a step when a target is
+      unreachable
+    failure_modes:
+      - {id: FM-unbounded-step, observable: joint step exceeds the damping bound near a singularity}
+      - {id: FM-silent-infeasible, observable: an unreachable target returns a confident step and no residual}
+      - {id: FM-chunk-drift, observable: null-space posture wanders across a decoded action chunk}
+    remediation: The damped least-squares derivation and its step bound, ch.6 sec.4.4; warm-start each solve from the previous
+
+  - id: CMP-nullspace
+    purpose: Resolve redundancy for arms with more joints than the task needs
+    inputs: [IFC-kinematics__ik]
+    testable_capability: >-
+      A secondary objective changes the posture without moving the tool on a
+      redundant arm, and is inert rather than harmful on a non-redundant one
+    failure_modes:
+      - {id: FM-tool-disturbed, observable: the tool moves when the secondary objective fires}
+      - {id: FM-masked-as-zero, observable: a 6-DoF arm is trained toward a zero preference instead of no preference}
+    remediation: Project through the null space; prefer the inertia-weighted inverse where dynamics exist, ch.11 sec.4.7
+
+  - id: CMP-retarget
+    purpose: Convert demonstration joint trajectories into embodiment-free tool twists
+    outputs: [IFC-demo__twist]
+    testable_capability: >-
+      Round-trips: retargeting a demonstration to twists and decoding it back on
+      the same arm reproduces the original joint trajectory
+    failure_modes:
+      - {id: FM-lossy-roundtrip, observable: decoded joints diverge from the demonstration on the source arm}
+      - {id: FM-frame-mismatch, observable: twists are produced in the base frame and consumed as body frame}
+    remediation: Retarget through the demonstrating robot's own FK and Jacobian; the conversion is arithmetic, not learned
+
+  - id: CMP-spec-conditioning
+    purpose: Carry the robot specification into the learned policy as tokens
+    outputs: [IFC-spec__expert]
+    testable_capability: >-
+      Policy output changes when the specification changes and the observation
+      does not, by more than it changes under a re-seeded forward pass
+    failure_modes:
+      - {id: FM-tokens-ignored, observable: perturbing the spec leaves the action unchanged; the policy memorised one arm}
+      - {id: FM-spec-shortcut, observable: the policy reads spec tokens as an embodiment id rather than as geometry}
+    remediation: Kinematic domain randomisation over procedurally varied URDFs during training
+
+  - id: CMP-action-expert
+    purpose: Predict a chunk of tool twists and grasp intent from observations, language, and spec
+    inputs: [IFC-spec__expert]
+    outputs: [IFC-expert__ik]
+    testable_capability: >-
+      Completes LIBERO tasks at a rate comparable to a joint-space baseline on
+      the arm it was trained on, and retains that rate on an arm it never saw
+    failure_modes:
+      - {id: FM-no-transfer, observable: success collapses on a held-out embodiment}
+      - {id: FM-controller-credit, observable: transfer is attributable to the operational-space controller rather than the head}
+      - {id: FM-chunk-infeasible, observable: a predicted task-space chunk leaves the workspace mid-chunk}
+    remediation: Kinematic domain randomisation; put the decoder inside the training graph rather than beside it
+
+  - id: CMP-gripper-decoder
+    purpose: Decode a normalised aperture and closure intent to gripper joint commands
+    inputs: [IFC-expert__ik]
+    testable_capability: >-
+      Produces an equivalent physical closure on grippers of differing finger
+      count and geometry from the same policy output
+    failure_modes:
+      - {id: FM-aperture-mismatch, observable: the same normalised aperture yields different contact on a different gripper}
+      - {id: FM-camera-offset, observable: transfer fails on wrist-camera geometry rather than on the gripper itself}
+    remediation: Phase one is a measured aperture map per gripper; phase two emits a closure-satisfying grasp instead
+
+interfaces:
+  - id: IFC-poe__kinematics
+    producer: CMP-poe-conversion
+    consumer: CMP-kinematics
+    semantics: Home pose M and one screw axis per joint, with joint types and limits
+    units: metres and radians
+    frame: screw axes in the tool frame (body form); M maps base to tool at zero
+    producer_guarantees:
+      - axes are ordered base to tool
+      - revolute axes are unit norm
+      - joint limits accompany every axis
+    consumer_assumptions:
+      - axes are ordered base to tool
+      - revolute axes are unit norm
+      - joint limits accompany every axis
+
+  - id: IFC-kinematics__ik
+    producer: CMP-kinematics
+    consumer: CMP-ik-decoder
+    semantics: Body Jacobian at the current configuration
+    units: per-radian for revolute columns, dimensionless for prismatic
+    frame: tool frame
+    producer_guarantees:
+      - Jacobian is evaluated at the configuration supplied, not at home
+      - column count equals the arm's joint count
+    consumer_assumptions:
+      - Jacobian is evaluated at the configuration supplied, not at home
+      - column count equals the arm's joint count
+
+  - id: IFC-expert__ik
+    producer: CMP-action-expert
+    consumer: CMP-ik-decoder
+    semantics: Body twist and grasp intent, one per chunk step
+    units: metres per second and radians per second
+    frame: tool frame at the current pose
+    timing: {chunk_steps: 16}
+    producer_guarantees:
+      - twist is expressed in the tool frame at the current pose
+      - grasp intent is a normalised aperture in zero to one
+    consumer_assumptions:
+      - twist is expressed in the tool frame at the current pose
+      - grasp intent is a normalised aperture in zero to one
+      - twist magnitude is reachable within one control period
+
+  - id: IFC-ik__controller
+    producer: CMP-ik-decoder
+    consumer: CMP-action-expert
+    semantics: Joint commands and the residual left unachieved
+    units: radians for revolute joints, metres for prismatic
+    frame: joint space of the arm named in the spec
+    producer_guarantees:
+      - a non-zero residual accompanies any target that was not reached
+      - commands respect the declared joint limits
+    consumer_assumptions:
+      - a non-zero residual accompanies any target that was not reached
+      - commands respect the declared joint limits
+
+  - id: IFC-spec__expert
+    producer: CMP-spec-conditioning
+    consumer: CMP-action-expert
+    semantics: Per-joint specification tokens, variable length
+    units: metres and radians
+    frame: tool frame
+    producer_guarantees:
+      - token count equals the arm's joint count
+      - tokens are masked rather than zero-padded where an arm has fewer joints
+    consumer_assumptions:
+      - token count equals the arm's joint count
+      - tokens are masked rather than zero-padded where an arm has fewer joints
+
+  - id: IFC-demo__twist
+    producer: CMP-retarget
+    consumer: CMP-action-expert
+    semantics: Demonstration relabelled as tool twists, the training target
+    units: metres per second and radians per second
+    frame: tool frame at each demonstration step
+    producer_guarantees:
+      - twists come from the demonstrating robot's own kinematics
+      - the source embodiment is recorded with every twist
+    consumer_assumptions:
+      - twists come from the demonstrating robot's own kinematics
+      - the source embodiment is recorded with every twist
+
+contracts:
+  # ---- Gate 1: the conversion is exact. Nothing downstream means anything
+  # until this is supported, because a parsing bug presents as a failure to
+  # generalise.
+  - id: CTR-poe-matches-sim
+    subject: CMP-poe-conversion
+    claim_type: capability
+    metrics:
+      - {id: fk_pos_err, unit: metres}
+      - {id: fk_rot_err, unit: radians}
+    acceptance: {rule: "fk_pos_err < 1e-6 and fk_rot_err < 1e-6", target_rate: 0.999}
+    conditions:
+      - {id: six_dof, when: "dof == 6"}
+      - {id: seven_dof, when: "dof == 7"}
+    compatibility_key: [robot]
+    evaluable_by: [TST-poe-fk]
+    sufficiency: {n_min: 200, max_ci_width: 0.05}
+
+  - id: CTR-jacobian-correct
+    subject: CMP-kinematics
+    claim_type: capability
+    metrics:
+      - {id: jac_max_err, unit: relative}
+    acceptance: {rule: "jac_max_err < 1e-5", target_rate: 0.999}
+    compatibility_key: [robot]
+    evaluable_by: [TST-jacobian-fd]
+    sufficiency: {n_min: 200, max_ci_width: 0.05}
+
+  # ---- Gate 2: the decoder is safe to put inside a training graph.
+  - id: CTR-ik-converges
+    subject: CMP-ik-decoder
+    claim_type: capability
+    metrics:
+      - {id: converged, unit: bool}
+      - {id: final_pos_err, unit: metres}
+    acceptance: {rule: "converged == true and final_pos_err < 1e-4", target_rate: 0.95}
+    conditions:
+      - {id: near_singular, when: "near_singular == true"}
+      - {id: interior, when: "near_singular == false"}
+    compatibility_key: [robot, damping]
+    evaluable_by: [TST-ik-convergence]
+    sufficiency: {n_min: 100, max_ci_width: 0.15}
+
+  - id: CTR-ik-step-bounded
+    subject: CMP-ik-decoder
+    claim_type: capability
+    metrics:
+      - {id: bound_ok, unit: bool}
+    acceptance: {rule: "bound_ok == true", target_rate: 1.0}
+    compatibility_key: [robot, damping]
+    evaluable_by: [TST-ik-step-bound]
+    sufficiency: {n_min: 100, max_ci_width: 0.15}
+
+  - id: CTR-infeasible-reported
+    subject: IFC-ik__controller
+    claim_type: interface
+    metrics:
+      - {id: residual_reported, unit: bool}
+    acceptance: {rule: "residual_reported == true", target_rate: 1.0}
+    compatibility_key: [robot]
+    evaluable_by: [TST-ik-unreachable]
+    sufficiency: {n_min: 50, max_ci_width: 0.2}
+
+  - id: CTR-nullspace-tool-invariant
+    subject: CMP-nullspace
+    claim_type: capability
+    metrics:
+      - {id: tool_drift, unit: metres}
+    acceptance: {rule: "tool_drift < 1e-8", target_rate: 0.99}
+    compatibility_key: [robot, inverse_kind]
+    evaluable_by: [TST-nullspace-drift]
+    sufficiency: {n_min: 100, max_ci_width: 0.15}
+
+  - id: CTR-retarget-roundtrips
+    subject: CMP-retarget
+    claim_type: capability
+    metrics:
+      - {id: joint_rmse, unit: radians}
+    acceptance: {rule: "joint_rmse < 1e-4", target_rate: 0.99}
+    compatibility_key: [robot, task_suite]
+    evaluable_by: [TST-retarget-roundtrip]
+    sufficiency: {n_min: 50, max_ci_width: 0.2}
+
+  # ---- Gate 3: the premise. If the padded-vector baseline transfers fine,
+  # there is nothing to fix and the project has no reason to exist.
+  - id: CTR-baseline-fails-swap
+    subject: CMP-action-expert
+    claim_type: capability
+    metrics:
+      - {id: success, unit: bool}
+    acceptance: {rule: "success == false", target_rate: 0.8}
+    conditions:
+      - {id: heldout, when: "heldout == true"}
+      - {id: source_arm, when: "heldout == false"}
+    compatibility_key: [robot, gripper, task_suite, policy_revision]
+    evaluable_by: [TST-baseline-rollout]
+    sufficiency: {n_min: 40, max_ci_width: 0.25}
+
+  # ---- The thesis.
+  - id: CTR-spec-is-used
+    subject: CMP-spec-conditioning
+    claim_type: capability
+    metrics:
+      - {id: spec_sensitivity, unit: ratio}
+    acceptance: {rule: "spec_sensitivity > 5.0", target_rate: 0.9}
+    compatibility_key: [policy_revision]
+    evaluable_by: [TST-spec-sensitivity]
+    sufficiency: {n_min: 50, max_ci_width: 0.2}
+
+  - id: CTR-libero-source-arm
+    subject: CMP-action-expert
+    claim_type: capability
+    metrics:
+      - {id: success, unit: bool}
+    acceptance: {rule: "success == true", target_rate: 0.5}
+    compatibility_key: [robot, gripper, task_suite, policy_revision]
+    evaluable_by: [TST-libero-rollout]
+    sufficiency: {n_min: 40, max_ci_width: 0.25}
+
+  - id: CTR-heldout-embodiment
+    subject: CMP-action-expert
+    claim_type: capability
+    metrics:
+      - {id: success, unit: bool}
+    acceptance: {rule: "success == true", target_rate: 0.4}
+    conditions:
+      - {id: heldout_dof_match, when: "heldout == true and dof == 7"}
+      - {id: heldout_dof_change, when: "heldout == true and dof == 6"}
+    compatibility_key: [robot, gripper, task_suite, policy_revision]
+    evaluable_by: [TST-libero-rollout]
+    sufficiency: {n_min: 40, max_ci_width: 0.25}
+
+  # ---- Separates kinematic transfer from visual transfer. fit_taskspace
+  # already measured 49 mm vs 97 mm camera-to-TCP between grippers, so this is
+  # a known confound, not a hypothetical one.
+  - id: CTR-transfer-is-kinematic
+    subject: CMP-gripper-decoder
+    claim_type: capability
+    metrics:
+      - {id: success, unit: bool}
+    acceptance: {rule: "success == true", target_rate: 0.4}
+    conditions:
+      - {id: camera_held_fixed, when: "camera_moved == false"}
+      - {id: camera_moved, when: "camera_moved == true"}
+    compatibility_key: [robot, gripper, task_suite, policy_revision]
+    evaluable_by: [TST-libero-rollout]
+    sufficiency: {n_min: 40, max_ci_width: 0.25}
+
+tests:
+  - id: TST-poe-fk
+    layer: component
+    targets: [CMP-poe-conversion]
+    run: python tools/emit_trials.py $OUT poe_fk
+    metrics: [fk_pos_err, fk_rot_err]
+    capture: [robot, dof, urdf_source]
+    mandatory: true
+
+  - id: TST-jacobian-fd
+    layer: component
+    targets: [CMP-kinematics]
+    run: python tools/emit_trials.py $OUT jacobian_fd
+    metrics: [jac_max_err]
+    capture: [robot, dof]
+
+  - id: TST-ik-convergence
+    layer: component
+    targets: [CMP-ik-decoder]
+    run: python tools/emit_trials.py $OUT ik_convergence
+    metrics: [converged, final_pos_err]
+    capture: [robot, dof, damping, near_singular]
+
+  - id: TST-ik-step-bound
+    layer: component
+    targets: [CMP-ik-decoder]
+    run: python tools/emit_trials.py $OUT ik_step_bound
+    metrics: [bound_ok]
+    capture: [robot, dof, damping, near_singular]
+
+  - id: TST-ik-unreachable
+    layer: interface
+    targets: [CMP-ik-decoder]
+    run: python tools/emit_trials.py $OUT ik_unreachable
+    metrics: [residual_reported]
+    capture: [robot, dof]
+
+  - id: TST-nullspace-drift
+    layer: component
+    targets: [CMP-nullspace]
+    run: python tools/emit_trials.py $OUT nullspace_drift
+    metrics: [tool_drift]
+    capture: [robot, dof, inverse_kind]
+
+  - id: TST-retarget-roundtrip
+    layer: component
+    targets: [CMP-retarget]
+    run: python tools/emit_trials.py $OUT retarget_roundtrip
+    metrics: [joint_rmse]
+    capture: [robot, dof, task_suite]
+
+  - id: TST-spec-sensitivity
+    layer: component
+    targets: [CMP-spec-conditioning]
+    run: python tools/emit_trials.py $OUT spec_sensitivity
+    metrics: [spec_sensitivity]
+    capture: [policy_revision, perturbation]
+
+  - id: TST-libero-rollout
+    layer: e2e
+    targets: [CMP-action-expert, CMP-gripper-decoder]
+    run: python tools/emit_trials.py $OUT libero_rollout
+    metrics: [success]
+    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved]
+    cost: 40.0
+    timeout_s: 7200
+
+  - id: TST-baseline-rollout
+    layer: e2e
+    targets: [CMP-action-expert]
+    run: python tools/emit_trials.py $OUT baseline_rollout
+    metrics: [success]
+    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved]
+    cost: 40.0
+    timeout_s: 7200
+
+priors: []
+
+policies:
+  # Do not build the full head until the conversion is exact and the premise
+  # has survived. Both are cheap relative to what they gate.
+  - id: POL-premise-survives
+    criteria:
+      - {slice: CTR-poe-matches-sim, require: supported}
+      - {slice: CTR-baseline-fails-swap, require: supported}
+    weights: null
+
+  # Do not put the decoder in a training graph until it is bounded and honest
+  # about infeasibility.
+  - id: POL-decoder-safe
+    criteria:
+      - {slice: CTR-jacobian-correct, require: supported}
+      - {slice: CTR-ik-converges, require: supported}
+      - {slice: CTR-ik-step-bounded, require: supported}
+      - {slice: CTR-infeasible-reported, require: supported}
+    weights: null
+
+  # The thesis. Held-out embodiment is the claim; spec sensitivity rules out
+  # the memorisation explanation; the camera split rules out crediting the
+  # kinematics for a visual result.
+  - id: POL-thesis-supported
+    criteria:
+      - {slice: CTR-spec-is-used, require: supported}
+      - {slice: CTR-libero-source-arm, require: supported}
+      - {slice: CTR-heldout-embodiment, require: supported}
+      - {slice: CTR-transfer-is-kinematic, require: supported}
+    weights: null
