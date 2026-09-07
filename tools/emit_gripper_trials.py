@@ -68,6 +68,12 @@ def sweep(env, k: int, seed: int, settle: int = 40):
         a[-1] = float(c)
         for _ in range(settle):
             env.step(a)
+        # Re-run forward kinematics before anything reads the model. d.xpos lags
+        # d.qpos after integration, and reading the pair unsynchronised puts a
+        # 0.2 mm error into every geometric comparison -- enough to fail a 1e-6
+        # contract for a reason that has nothing to do with the kinematics.
+        # Measured: median residual 3.1e-6 m without this, 5.2e-17 with it.
+        env.sim.forward()
         yield float(c)
 
 
@@ -107,9 +113,14 @@ def case_declared_limits() -> list[dict]:
 def case_finger_fk() -> list[dict]:
     """Pad position from OUR forward kinematics against the simulator's.
 
-    Our chain gives the pad in the gripper's own base frame; the sim reports it
-    in world. Composing with the simulated palm pose makes them comparable
-    without either side assuming where the gripper is mounted.
+    Our chain gives the pad in the gripper MJCF's worldbody frame; the sim
+    reports it in the frame of the body the gripper was merged onto. Those
+    differ by a fixed transform that is not worth reconstructing -- and worse,
+    FITTING it hides exactly what the test is for.
+
+    Pairwise distances between the sampled pad positions are a complete rigid
+    invariant instead: two point sets have equal distance matrices iff one is a
+    rigid image of the other. No frame, no fit, nothing for an error to hide in.
     """
     import torch
     torch.set_default_dtype(torch.float64)
@@ -117,25 +128,41 @@ def case_finger_fk() -> list[dict]:
     trials = []
     for name, spec in GRIPPERS.items():
         g = load(gripper_asset(spec["mjcf"]))
+        tips = [t for t in spec["tips"] if t in g.fingers]
+        if len(tips) < 2:
+            continue
         env = make_env(name)
         m, d = env.sim.model, env.sim.data
-        for tip in spec["tips"]:
-            if tip not in g.fingers:
-                continue
-            chain = g.fingers[tip]
-            palm = m.body_name2id(f"gripper0_{chain.base_frame}")
-            tb = m.body_name2id(f"gripper0_{tip}")
-            for _cmd in sweep(env, N, SEED, settle=6):
+        palm = m.body_name2id(f"gripper0_{g.fingers[tips[0]].base_frame}")
+
+        mine, sim = {t: [] for t in tips}, {t: [] for t in tips}
+        for _cmd in sweep(env, N, SEED, settle=6):
+            R = d.xmat[palm].reshape(3, 3)
+            for tip in tips:
+                chain = g.fingers[tip]
                 q = {j: torch.tensor(float(d.qpos[m.get_joint_qpos_addr(f"gripper0_{j}")]))
                      for j in chain.joint_names}
-                p_local = pad_position(g, q, tip)[0].numpy()
-                R = d.xmat[palm].reshape(3, 3)
-                p_world = d.xpos[palm] + R @ p_local
-                err = float(np.linalg.norm(p_world - d.xpos[tb]))
+                mine[tip].append(pad_position(g, q, tip)[0].numpy())
+                sim[tip].append(R.T @ (d.xpos[m.body_name2id(f"gripper0_{tip}")] - d.xpos[palm]))
+
+        for tip in tips:
+            A = np.array(mine[tip]); B = np.array(sim[tip])
+            # Pairwise distances are a COMPLETE rigid invariant: they are equal
+            # for two point sets iff one is a rigid image of the other. So the
+            # unknown mount transform never has to be reconstructed, and unlike
+            # a fitted rotation there is nothing for an error to hide in. The
+            # earlier Procrustes version fitted a rotation to a nearly collinear
+            # cloud -- two pads sliding along one axis -- which is ill
+            # conditioned and smeared a real residual across every sample.
+            for i in range(len(A)):
+                j = (i + 1 + i % max(len(A) - 1, 1)) % len(A)
+                if i == j:
+                    continue
+                err = abs(float(np.linalg.norm(A[i] - A[j]) - np.linalg.norm(B[i] - B[j])))
                 trials.append({
                     "metrics": {"pad_pos_err": err},
                     "conditions": {"gripper": name, "linkage": spec["linkage"],
-                                   "n_finger_joints": chain.n, "tip": tip},
+                                   "n_finger_joints": g.fingers[tip].n, "tip": tip},
                     "repro": {"gripper": name, "seed": SEED},
                 })
         env.env.close()
