@@ -506,6 +506,26 @@ contracts:
   # ---- Gripper contracts. The same shape as the arm's: geometry first, then
   # the decoder, then feasibility. CTR-span-derived is the one that replaces a
   # per-gripper lookup table with a claim that can be refuted.
+  # A precondition, not a nicety. Every geometric claim downstream assumes the
+  # simulated gripper stays inside the range its own file declares. Measured,
+  # robosuite's Robotiq85 does not: right_inner_knuckle_joint leaves a declared
+  # [0, 0.8757] by 1.358 rad under tendon load, while PandaGripper's slides
+  # violate by exactly 0.00000. A gripper that exceeds its declared range by
+  # more than the range itself cannot be reasoned about kinematically, so this
+  # gates the rest rather than being discovered through their failure.
+  - id: CTR-declared-limits-respected
+    subject: CMP-gripper-chain
+    claim_type: capability
+    metrics:
+      - {id: limit_violation, unit: radians}
+    acceptance: {rule: "limit_violation < 1e-3", target_rate: 0.99}
+    conditions:
+      - {id: parallel_jaw, when: "linkage == false"}
+      - {id: linkage, when: "linkage == true"}
+    compatibility_key: [gripper]
+    evaluable_by: [TST-declared-limits]
+    sufficiency: {n_min: 200, max_ci_width: 0.05}
+
   - id: CTR-finger-fk-matches-sim
     subject: CMP-gripper-chain
     claim_type: capability
@@ -655,6 +675,13 @@ tests:
     metrics: [pose_err, joint_rmse]
     capture: [robot, dof, task_suite, horizon, near_singular_frames, task]
 
+  - id: TST-declared-limits
+    layer: component
+    targets: [CMP-gripper-chain]
+    run: .venv-libero/bin/python tools/emit_gripper_trials.py $OUT declared_limits --n 200 --seed 0
+    metrics: [limit_violation]
+    capture: [gripper, linkage, joint]
+
   - id: TST-finger-fk
     layer: component
     targets: [CMP-gripper-chain]
@@ -764,6 +791,7 @@ policies:
   # failed grasp.
   - id: POL-gripper-understood
     criteria:
+      - {slice: CTR-declared-limits-respected, require: supported}
       - {slice: CTR-finger-fk-matches-sim, require: supported}
       - {slice: CTR-pad-pose-from-observed, require: supported}
       - {slice: CTR-span-bounds-observed, require: supported}

@@ -88,6 +88,22 @@ def _body_pose(body: ET.Element, seq: str, degrees: bool) -> tuple[Tensor, Tenso
     )
 
 
+def leaf_paths(root: ET.Element, prefix: list[ET.Element] | None = None):
+    """Every root-to-leaf body path in a tree.
+
+    A gripper is a tree, not a serial chain: two or more fingers branch from one
+    palm. Each branch is an ordinary open chain the PoE machinery already
+    handles -- what changes is that there are several of them sharing a base.
+    """
+    prefix = (prefix or []) + [root]
+    children = root.findall("body")
+    if not children:
+        yield prefix
+        return
+    for child in children:
+        yield from leaf_paths(child, prefix)
+
+
 def _find_path(root: ET.Element, tool: str) -> list[ET.Element] | None:
     """Depth-first path of bodies from a worldbody child down to the tool body."""
     if root.get("name") == tool:
