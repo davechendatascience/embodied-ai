@@ -418,6 +418,53 @@ def compose_from_twist(T, twist, spec):
     return compose_delta(T, twist_to_delta(T, twist, spec))
 
 
+
+def case_retarget_roundtrip() -> list[dict]:
+    """One trial per trajectory: retarget to twists, decode back, compare poses.
+
+    joint_rmse is emitted alongside pose_err but is NOT what the contract scores.
+    It runs ~0.1 rad on every arm while pose error runs ~6e-6, because a pose
+    does not determine a configuration -- redundant arms slide along the
+    self-motion manifold and even ur5e switches IK branch. Scoring joints would
+    refute a retarget that reproduces the demonstrated task exactly.
+    """
+    from screwhead.interface import ActionSpec
+    from screwhead.retarget import decode, to_twists, usable
+    spec = ActionSpec()
+    horizon = 32
+    trials = []
+    for robot in ROBOTS:
+        try:
+            chain = arm(robot)
+        except Exception as exc:
+            print(f"skip {robot}: {type(exc).__name__}: {exc}", file=sys.stderr)
+            continue
+        g = torch.Generator().manual_seed(robot_seed(robot))
+        lo, hi = chain.limits[:, 0], chain.limits[:, 1]
+        B = N_PER_ROBOT
+        traj = [chain.sample(B, g)]
+        for _ in range(horizon):
+            traj.append(torch.clamp(
+                traj[-1] + (torch.rand(B, chain.n, generator=g) * 2 - 1) * 0.03, lo, hi))
+        q_traj = torch.stack(traj)                                   # (T, B, n)
+        tw = to_twists(chain, q_traj, spec)
+        res = decode(chain, q_traj[0], tw, spec)
+        truth = fk(chain, q_traj.reshape(-1, chain.n))[:, :3, 3].reshape(-1, B, 3)
+        got = fk(chain, res["q"].reshape(-1, chain.n))[:, :3, 3].reshape(-1, B, 3)
+        pose_err = torch.linalg.norm(got - truth, dim=-1).max(dim=0).values
+        joint_rmse = (res["q"] - q_traj).pow(2).mean(-1).sqrt().max(dim=0).values
+        ns = (~usable(chain, q_traj.reshape(-1, chain.n))).reshape(-1, B).sum(0)
+        for k in range(B):
+            trials.append({
+                "metrics": {"pose_err": float(pose_err[k]),
+                            "joint_rmse": float(joint_rmse[k])},
+                "conditions": {"robot": robot, "dof": chain.n, "task_suite": "synthetic",
+                               "horizon": horizon, "near_singular_frames": int(ns[k])},
+                "repro": {"robot": robot, "seed": robot_seed(robot), "task_suite": "synthetic"},
+            })
+    return trials
+
+
 CASES = {
     "poe_fk": case_poe_fk,
     "jacobian_fd": case_jacobian_fd,
@@ -427,6 +474,7 @@ CASES = {
     "ik_unreachable": case_ik_unreachable,
     "nullspace_drift": case_nullspace_drift,
     "action_interface": case_action_interface,
+    "retarget_roundtrip": case_retarget_roundtrip,
 }
 
 

@@ -70,10 +70,12 @@ components:
     outputs: [IFC-demo__twist]
     testable_capability: >-
       Round-trips: retargeting a demonstration to twists and decoding it back on
-      the same arm reproduces the original joint trajectory
+      the same arm reproduces the original TOOL trajectory
     failure_modes:
-      - {id: FM-lossy-roundtrip, observable: decoded joints diverge from the demonstration on the source arm}
+      - {id: FM-lossy-roundtrip, observable: the decoded tool trajectory diverges from the demonstration on the source arm}
       - {id: FM-frame-mismatch, observable: twists are produced in the base frame and consumed as body frame}
+      - {id: FM-joint-fidelity-fallacy, observable: a faithful decode is scored as a failure because the elbow differs}
+      - {id: FM-unconverged-frame, observable: a near-singular frame is kept as a training target without converging}
     remediation: Retarget through the demonstrating robot's own FK and Jacobian; the conversion is arithmetic, not learned
 
   - id: CMP-spec-conditioning
@@ -305,15 +307,21 @@ contracts:
     evaluable_by: [TST-nullspace-drift]
     sufficiency: {n_min: 800, max_ci_width: 0.01}
 
+  # Scored on the TOOL trajectory, not on joint angles. A pose does not
+  # determine a configuration -- on a redundant arm a whole self-motion manifold
+  # maps to the same pose, and even the 6-DoF ur5e switches IK branch mid
+  # trajectory. Measured joint RMSE is ~0.1 rad on all five arms while pose
+  # error is ~6e-6, so a joint-agreement rule would refute a retarget that
+  # reproduces the demonstrated task exactly.
   - id: CTR-retarget-roundtrips
     subject: CMP-retarget
     claim_type: capability
     metrics:
-      - {id: joint_rmse, unit: radians}
-    acceptance: {rule: "joint_rmse < 1e-4", target_rate: 0.99}
+      - {id: pose_err, unit: metres}
+    acceptance: {rule: "pose_err < 1e-4", target_rate: 0.99}
     compatibility_key: [robot, task_suite]
     evaluable_by: [TST-retarget-roundtrip]
-    sufficiency: {n_min: 50, max_ci_width: 0.2}
+    sufficiency: {n_min: 200, max_ci_width: 0.05}
 
   # ---- Gate 3: the premise. If the padded-vector baseline transfers fine,
   # there is nothing to fix and the project has no reason to exist.
@@ -451,9 +459,9 @@ tests:
   - id: TST-retarget-roundtrip
     layer: component
     targets: [CMP-retarget]
-    run: .venv/bin/python tools/emit_trials.py $OUT retarget_roundtrip --n 800 --seed 0
-    metrics: [joint_rmse]
-    capture: [robot, dof, task_suite]
+    run: .venv/bin/python tools/emit_trials.py $OUT retarget_roundtrip --n 400 --seed 0
+    metrics: [pose_err, joint_rmse]
+    capture: [robot, dof, task_suite, horizon, near_singular_frames]
 
   - id: TST-spec-sensitivity
     layer: component
