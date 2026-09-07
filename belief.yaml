@@ -350,7 +350,7 @@ tests:
   - id: TST-poe-fk
     layer: component
     targets: [CMP-poe-conversion]
-    run: .venv/bin/python tools/emit_trials.py $OUT poe_fk --n 800
+    run: .venv/bin/python tools/emit_trials.py $OUT poe_fk --n 800 --seed 0
     metrics: [fk_pos_err, fk_rot_err]
     capture: [robot, dof, urdf_source]
     mandatory: true
@@ -358,7 +358,7 @@ tests:
   - id: TST-jacobian-fd
     layer: component
     targets: [CMP-kinematics]
-    run: .venv/bin/python tools/emit_trials.py $OUT jacobian_fd --n 800
+    run: .venv/bin/python tools/emit_trials.py $OUT jacobian_fd --n 800 --seed 0
     metrics: [jac_max_err]
     capture: [robot, dof]
 

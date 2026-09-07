@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -36,6 +37,10 @@ ROBOTS = ("panda", "ur5e", "iiwa", "kinova3", "jaco")
 # `run` line is what mints a test version. Changing how much a test measures
 # without changing its version would pool old and new trials silently.
 N_PER_ROBOT = 200
+# Declared on the run line and recorded in repro.seed. hash() is salted per
+# process, so deriving a seed from it makes every run sample different
+# configurations and none of them reproducible.
+BASE_SEED = 0
 
 
 def geodesic(Ra: np.ndarray, Rb: np.ndarray) -> float:
@@ -53,6 +58,11 @@ def load(robot: str):
     f = ASSETS / robot / "robot.xml"
     model = mujoco.MjModel.from_xml_path(str(f))
     return model, mujoco.MjData(model), from_mjcf(f, name=robot)
+
+
+def robot_seed(robot: str) -> int:
+    """Stable across processes, unlike hash() on a str."""
+    return (BASE_SEED * 1_000_003 + zlib.crc32(robot.encode())) % 2**31
 
 
 def wide_sample(chain, k: int, seed: int) -> torch.Tensor:
@@ -81,7 +91,7 @@ def case_poe_fk() -> list[dict]:
             print(f"skip {robot}: {type(exc).__name__}: {exc}", file=sys.stderr)
             continue
         bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, chain.tool_frame)
-        q = wide_sample(chain, N_PER_ROBOT, seed=hash(robot) % 2**31)
+        q = wide_sample(chain, N_PER_ROBOT, seed=robot_seed(robot))
         T = fk(chain, q)
         for k in range(len(q)):
             data.qpos[:chain.n] = q[k].numpy()
@@ -94,7 +104,7 @@ def case_poe_fk() -> list[dict]:
                 "conditions": {"robot": robot, "dof": chain.n, "urdf_source": "robosuite-mjcf"},
                 # compatibility_key reads from repro, not conditions: a
                 # different arm is a hardware swap, and must never pool.
-                "repro": {"robot": robot},
+                "repro": {"robot": robot, "seed": robot_seed(robot)},
             })
     return trials
 
@@ -113,7 +123,7 @@ def case_jacobian_fd() -> list[dict]:
         except Exception as exc:
             print(f"skip {robot}: {type(exc).__name__}: {exc}", file=sys.stderr)
             continue
-        q = wide_sample(chain, N_PER_ROBOT, seed=7)
+        q = wide_sample(chain, N_PER_ROBOT, seed=robot_seed(robot))
         Js = space_jacobian(chain, q)
         Jb = body_jacobian(chain, q)
         T = fk(chain, q)
@@ -138,7 +148,7 @@ def case_jacobian_fd() -> list[dict]:
                     )),
                 },
                 "conditions": {"robot": robot, "dof": chain.n},
-                "repro": {"robot": robot},
+                "repro": {"robot": robot, "seed": robot_seed(robot)},
             })
     return trials
 
@@ -147,13 +157,15 @@ CASES = {"poe_fk": case_poe_fk, "jacobian_fd": case_jacobian_fd}
 
 
 def main() -> int:
-    global N_PER_ROBOT
+    global N_PER_ROBOT, BASE_SEED
     if len(sys.argv) < 3:
         print(__doc__, file=sys.stderr)
         return 2
     out, case = sys.argv[1], sys.argv[2]
     if "--n" in sys.argv:
         N_PER_ROBOT = int(sys.argv[sys.argv.index("--n") + 1])
+    if "--seed" in sys.argv:
+        BASE_SEED = int(sys.argv[sys.argv.index("--seed") + 1])
     if case not in CASES:
         print(f"unknown case {case!r}; have {sorted(CASES)}", file=sys.stderr)
         return 2
