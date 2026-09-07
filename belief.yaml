@@ -117,7 +117,8 @@ interfaces:
     consumer: CMP-kinematics
     semantics: Home pose M and one screw axis per joint, with joint types and limits
     units: metres and radians
-    frame: screw axes in the tool frame (body form); M maps base to tool at zero
+    frame: screw axes in the reference frame at zero (space form), with the
+      body form B = Ad(M^-1) S derived; M maps the reference frame to the tool at zero
     producer_guarantees:
       - axes are ordered base to tool
       - revolute axes are unit norm
@@ -346,7 +347,7 @@ tests:
   - id: TST-poe-fk
     layer: component
     targets: [CMP-poe-conversion]
-    run: python tools/emit_trials.py $OUT poe_fk
+    run: .venv/bin/python tools/emit_trials.py $OUT poe_fk
     metrics: [fk_pos_err, fk_rot_err]
     capture: [robot, dof, urdf_source]
     mandatory: true
@@ -354,56 +355,56 @@ tests:
   - id: TST-jacobian-fd
     layer: component
     targets: [CMP-kinematics]
-    run: python tools/emit_trials.py $OUT jacobian_fd
+    run: .venv/bin/python tools/emit_trials.py $OUT jacobian_fd
     metrics: [jac_max_err]
     capture: [robot, dof]
 
   - id: TST-ik-convergence
     layer: component
     targets: [CMP-ik-decoder]
-    run: python tools/emit_trials.py $OUT ik_convergence
+    run: .venv/bin/python tools/emit_trials.py $OUT ik_convergence
     metrics: [converged, final_pos_err]
     capture: [robot, dof, damping, near_singular]
 
   - id: TST-ik-step-bound
     layer: component
     targets: [CMP-ik-decoder]
-    run: python tools/emit_trials.py $OUT ik_step_bound
+    run: .venv/bin/python tools/emit_trials.py $OUT ik_step_bound
     metrics: [bound_ok]
     capture: [robot, dof, damping, near_singular]
 
   - id: TST-ik-unreachable
     layer: interface
     targets: [CMP-ik-decoder]
-    run: python tools/emit_trials.py $OUT ik_unreachable
+    run: .venv/bin/python tools/emit_trials.py $OUT ik_unreachable
     metrics: [residual_reported]
     capture: [robot, dof]
 
   - id: TST-nullspace-drift
     layer: component
     targets: [CMP-nullspace]
-    run: python tools/emit_trials.py $OUT nullspace_drift
+    run: .venv/bin/python tools/emit_trials.py $OUT nullspace_drift
     metrics: [tool_drift]
     capture: [robot, dof, inverse_kind]
 
   - id: TST-retarget-roundtrip
     layer: component
     targets: [CMP-retarget]
-    run: python tools/emit_trials.py $OUT retarget_roundtrip
+    run: .venv/bin/python tools/emit_trials.py $OUT retarget_roundtrip
     metrics: [joint_rmse]
     capture: [robot, dof, task_suite]
 
   - id: TST-spec-sensitivity
     layer: component
     targets: [CMP-spec-conditioning]
-    run: python tools/emit_trials.py $OUT spec_sensitivity
+    run: .venv/bin/python tools/emit_trials.py $OUT spec_sensitivity
     metrics: [spec_sensitivity]
     capture: [policy_revision, perturbation]
 
   - id: TST-libero-rollout
     layer: e2e
     targets: [CMP-action-expert, CMP-gripper-decoder]
-    run: python tools/emit_trials.py $OUT libero_rollout
+    run: .venv/bin/python tools/emit_trials.py $OUT libero_rollout
     metrics: [success]
     capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved]
     cost: 40.0
@@ -412,7 +413,7 @@ tests:
   - id: TST-baseline-rollout
     layer: e2e
     targets: [CMP-action-expert]
-    run: python tools/emit_trials.py $OUT baseline_rollout
+    run: .venv/bin/python tools/emit_trials.py $OUT baseline_rollout
     metrics: [success]
     capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved]
     cost: 40.0
