@@ -31,10 +31,23 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "third_party" / "LIBERO"))
 
 JOINT_ACTION_SCALE = 0.05          # robosuite joint_position.json output_max
-ARMS = {
-    "panda": dict(robot="Panda", mjcf="panda", dof=7, heldout=False),
-    "ur5e": dict(robot="UR5e", mjcf="ur5e", dof=6, heldout=True),
+# The four cells of the swap, all tendon-free. Only PandaGripper and
+# RethinkGripper are: every other robosuite gripper (Robotiq 85/140/S, Jaco
+# three-finger) couples its fingers with a <tendon> spring, and the Robotiq85
+# leaves its declared joint range by 1.358 rad under that spring, which puts it
+# beyond kinematic reasoning entirely. Measured violations here are 0.00000
+# (PandaGripper) and 0.00034 (RethinkGripper).
+CELLS = {
+    "source":       dict(robot="Panda", mjcf="panda", gripper="PandaGripper",
+                         dof=7, arm_swapped=False, gripper_swapped=False),
+    "arm_only":     dict(robot="UR5e", mjcf="ur5e", gripper="PandaGripper",
+                         dof=6, arm_swapped=True, gripper_swapped=False),
+    "gripper_only": dict(robot="Panda", mjcf="panda", gripper="RethinkGripper",
+                         dof=7, arm_swapped=False, gripper_swapped=True),
+    "both":         dict(robot="UR5e", mjcf="ur5e", gripper="RethinkGripper",
+                         dof=6, arm_swapped=True, gripper_swapped=True),
 }
+ARMS = CELLS      # backwards-compatible name for the --arm flag
 
 
 def clip_encoder(device):
@@ -107,7 +120,8 @@ def replay(args) -> int:
             print(f"  [{ti}] no hdf5 for {task.name}", flush=True)
             continue
         env = OffScreenRenderEnv(bddl_file_name=bddl, camera_heights=128, camera_widths=128,
-                                 robots=[arm["robot"]], controller="JOINT_POSITION")
+                                 robots=[arm["robot"]], gripper_types=arm["gripper"],
+                                 controller="JOINT_POSITION")
         with h5py.File(f, "r") as h:
             keys = list(h["data"].keys())[: args.replay]
             for k in keys:
@@ -142,7 +156,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--checkpoint", required=True)
-    ap.add_argument("--arm", default="panda", choices=sorted(ARMS))
+    ap.add_argument("--cell", "--arm", dest="arm", default="source", choices=sorted(CELLS),
+                    help="which cell of the arm x gripper factorial to roll out")
     ap.add_argument("--suite", default="libero_spatial")
     ap.add_argument("--episodes-per-task", type=int, default=10)
     ap.add_argument("--max-steps", type=int, default=400)
@@ -208,7 +223,8 @@ def main() -> int:
         finally:
             torch.load = _torch_load
         env = OffScreenRenderEnv(bddl_file_name=bddl, camera_heights=128, camera_widths=128,
-                                 robots=[arm["robot"]], controller="JOINT_POSITION")
+                                 robots=[arm["robot"]], gripper_types=arm["gripper"],
+                                 controller="JOINT_POSITION")
         if chain is None:
             env.reset()
             flange_to_tcp, _cam = gripper_geom(env)
@@ -261,11 +277,14 @@ def main() -> int:
                     break
             trials.append({
                 "metrics": {"success": bool(success)},
-                "conditions": {"robot": arm["robot"], "gripper": "default", "dof": arm["dof"],
-                               "task_suite": args.suite, "policy_revision": policy_kind,
-                               "heldout": arm["heldout"], "camera_moved": not args.align_camera,
-                               "task": task.name},
-                "repro": {"robot": arm["robot"], "gripper": "default",
+                "conditions": {"robot": arm["robot"], "gripper": arm["gripper"],
+                               "dof": arm["dof"], "task_suite": args.suite,
+                               "policy_revision": policy_kind,
+                               "heldout": arm["arm_swapped"] or arm["gripper_swapped"],
+                               "arm_swapped": arm["arm_swapped"],
+                               "gripper_swapped": arm["gripper_swapped"],
+                               "camera_moved": not args.align_camera, "task": task.name},
+                "repro": {"robot": arm["robot"], "gripper": arm["gripper"],
                           "task_suite": args.suite, "policy_revision": policy_kind},
             })
         env.env.close()
