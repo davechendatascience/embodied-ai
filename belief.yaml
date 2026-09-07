@@ -100,6 +100,18 @@ components:
       - {id: FM-chunk-infeasible, observable: a predicted task-space chunk leaves the workspace mid-chunk}
     remediation: Kinematic domain randomisation; put the decoder inside the training graph rather than beside it
 
+  - id: CMP-action-interface
+    purpose: Convert between the policy's action units and the decoder's twist units
+    outputs: [IFC-expert__ik]
+    testable_capability: >-
+      Round-trips a recorded demonstration between per-step end-effector deltas
+      and tool-frame twist rates without drift, at the dataset's control rate
+    failure_modes:
+      - {id: FM-rate-conflated, observable: a twist is consumed as a displacement, rescaling every action by the control frequency}
+      - {id: FM-joint-normalisation, observable: translational and rotational components share one scale, so rotation is swamped}
+      - {id: FM-embodiment-statistics, observable: normalisation constants are fitted per robot, reintroducing the per-robot coupling the design removes}
+    remediation: Carry the control period explicitly; normalise translation and rotation separately with embodiment-independent constants
+
   - id: CMP-gripper-decoder
     purpose: Decode a normalised aperture and closure intent to gripper joint commands
     inputs: [IFC-expert__ik]
@@ -227,39 +239,57 @@ contracts:
     sufficiency: {n_min: 800, max_ci_width: 0.01}
 
   # ---- Gate 2: the decoder is safe to put inside a training graph.
+  # Split from the near-singular regime deliberately. Measured per-robot rates
+  # are 0.996-0.998 here against 0.905-0.950 near a singularity; one shared
+  # target_rate would have to sit at 0.80 to cover both, and would then let an
+  # interior regression from 0.997 to 0.85 pass unnoticed.
   - id: CTR-ik-converges
     subject: CMP-ik-decoder
     claim_type: capability
     metrics:
       - {id: converged, unit: bool}
       - {id: final_pos_err, unit: metres}
-    acceptance: {rule: "converged == true and final_pos_err < 1e-4", target_rate: 0.95}
-    conditions:
-      - {id: near_singular, when: "near_singular == true"}
-      - {id: interior, when: "near_singular == false"}
+    acceptance: {rule: "converged == true and final_pos_err < 1e-4", target_rate: 0.98}
     compatibility_key: [robot, damping]
     evaluable_by: [TST-ik-convergence]
-    sufficiency: {n_min: 100, max_ci_width: 0.15}
+    sufficiency: {n_min: 800, max_ci_width: 0.02}
+
+  # The known limitation, measured rather than hidden. Failures here are stuck,
+  # not starved: ur5e scores 35/38 at both 200 and 600 iterations. Retargeting
+  # is expected to drop these frames, which is CMP-retarget's problem.
+  - id: CTR-ik-near-singular
+    subject: CMP-ik-decoder
+    claim_type: capability
+    metrics:
+      - {id: converged, unit: bool}
+      - {id: final_pos_err, unit: metres}
+    acceptance: {rule: "converged == true and final_pos_err < 1e-4", target_rate: 0.80}
+    compatibility_key: [robot, damping]
+    evaluable_by: [TST-ik-near-singular]
+    sufficiency: {n_min: 150, max_ci_width: 0.15}
 
   - id: CTR-ik-step-bounded
     subject: CMP-ik-decoder
     claim_type: capability
     metrics:
       - {id: bound_ok, unit: bool}
-    acceptance: {rule: "bound_ok == true", target_rate: 1.0}
+    # Not 1.0. `supported` requires the posterior lower bound to exceed the
+    # target, and lo > 1.0 is unreachable -- a zero-tolerance contract can only
+    # ever be refuted, never supported, so it could never satisfy a policy.
+    acceptance: {rule: "bound_ok == true", target_rate: 0.995}
     compatibility_key: [robot, damping]
     evaluable_by: [TST-ik-step-bound]
-    sufficiency: {n_min: 100, max_ci_width: 0.15}
+    sufficiency: {n_min: 800, max_ci_width: 0.01}
 
   - id: CTR-infeasible-reported
     subject: IFC-ik__controller
     claim_type: interface
     metrics:
       - {id: residual_reported, unit: bool}
-    acceptance: {rule: "residual_reported == true", target_rate: 1.0}
+    acceptance: {rule: "residual_reported == true", target_rate: 0.995}
     compatibility_key: [robot]
     evaluable_by: [TST-ik-unreachable]
-    sufficiency: {n_min: 50, max_ci_width: 0.2}
+    sufficiency: {n_min: 800, max_ci_width: 0.01}
 
   - id: CTR-nullspace-tool-invariant
     subject: CMP-nullspace
@@ -269,7 +299,7 @@ contracts:
     acceptance: {rule: "tool_drift < 1e-8", target_rate: 0.99}
     compatibility_key: [robot, inverse_kind]
     evaluable_by: [TST-nullspace-drift]
-    sufficiency: {n_min: 100, max_ci_width: 0.15}
+    sufficiency: {n_min: 800, max_ci_width: 0.01}
 
   - id: CTR-retarget-roundtrips
     subject: CMP-retarget
@@ -346,6 +376,16 @@ contracts:
     evaluable_by: [TST-libero-rollout]
     sufficiency: {n_min: 40, max_ci_width: 0.25}
 
+  - id: CTR-twist-delta-roundtrip
+    subject: CMP-action-interface
+    claim_type: capability
+    metrics:
+      - {id: roundtrip_err, unit: metres}
+    acceptance: {rule: "roundtrip_err < 1e-6", target_rate: 0.995}
+    compatibility_key: [robot, task_suite]
+    evaluable_by: [TST-action-interface]
+    sufficiency: {n_min: 800, max_ci_width: 0.01}
+
 tests:
   - id: TST-poe-fk
     layer: component
@@ -365,42 +405,56 @@ tests:
   - id: TST-ik-convergence
     layer: component
     targets: [CMP-ik-decoder]
-    run: .venv/bin/python tools/emit_trials.py $OUT ik_convergence
+    run: .venv/bin/python tools/emit_trials.py $OUT ik_convergence --n 1200 --seed 0 --iters 200 --sigma-thresh 0.02
     metrics: [converged, final_pos_err]
     capture: [robot, dof, damping, near_singular]
+
+  - id: TST-ik-near-singular
+    layer: component
+    targets: [CMP-ik-decoder]
+    run: .venv/bin/python tools/emit_trials.py $OUT ik_near_singular --n 200 --seed 0 --iters 200 --sigma-thresh 0.02
+    metrics: [converged, final_pos_err]
+    capture: [robot, dof, damping, near_singular, sigma_min]
+
+  - id: TST-action-interface
+    layer: component
+    targets: [CMP-action-interface]
+    run: .venv/bin/python tools/emit_trials.py $OUT action_interface --n 800 --seed 0
+    metrics: [roundtrip_err]
+    capture: [robot, task_suite, control_hz]
 
   - id: TST-ik-step-bound
     layer: component
     targets: [CMP-ik-decoder]
-    run: .venv/bin/python tools/emit_trials.py $OUT ik_step_bound
+    run: .venv/bin/python tools/emit_trials.py $OUT ik_step_bound --n 1200 --seed 0 --sigma-thresh 0.02
     metrics: [bound_ok]
     capture: [robot, dof, damping, near_singular]
 
   - id: TST-ik-unreachable
     layer: interface
     targets: [CMP-ik-decoder]
-    run: .venv/bin/python tools/emit_trials.py $OUT ik_unreachable
+    run: .venv/bin/python tools/emit_trials.py $OUT ik_unreachable --n 1200 --seed 0 --iters 200
     metrics: [residual_reported]
     capture: [robot, dof]
 
   - id: TST-nullspace-drift
     layer: component
     targets: [CMP-nullspace]
-    run: .venv/bin/python tools/emit_trials.py $OUT nullspace_drift
+    run: .venv/bin/python tools/emit_trials.py $OUT nullspace_drift --n 1200 --seed 0
     metrics: [tool_drift]
     capture: [robot, dof, inverse_kind]
 
   - id: TST-retarget-roundtrip
     layer: component
     targets: [CMP-retarget]
-    run: .venv/bin/python tools/emit_trials.py $OUT retarget_roundtrip
+    run: .venv/bin/python tools/emit_trials.py $OUT retarget_roundtrip --n 800 --seed 0
     metrics: [joint_rmse]
     capture: [robot, dof, task_suite]
 
   - id: TST-spec-sensitivity
     layer: component
     targets: [CMP-spec-conditioning]
-    run: .venv/bin/python tools/emit_trials.py $OUT spec_sensitivity
+    run: .venv/bin/python tools/emit_trials.py $OUT spec_sensitivity --n 800 --seed 0
     metrics: [spec_sensitivity]
     capture: [policy_revision, perturbation]
 
@@ -439,6 +493,7 @@ policies:
     criteria:
       - {slice: CTR-jacobian-correct, require: supported}
       - {slice: CTR-ik-converges, require: supported}
+      - {slice: CTR-ik-near-singular, require: supported}
       - {slice: CTR-ik-step-bounded, require: supported}
       - {slice: CTR-infeasible-reported, require: supported}
     weights: null

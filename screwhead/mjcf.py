@@ -99,7 +99,21 @@ def _find_path(root: ET.Element, tool: str) -> list[ET.Element] | None:
     return None
 
 
-def from_mjcf(path: str | Path, tool_body: str = "right_hand", name: str | None = None) -> Chain:
+def from_mjcf(
+    path: str | Path,
+    tool_body: str = "right_hand",
+    name: str | None = None,
+    angle: str | None = None,
+) -> Chain:
+    """`angle` overrides the file's compiler setting.
+
+    robosuite ships robot.xml as a *fragment*; the angle convention lives in
+    base.xml (`<compiler angle="radian">`). Parsed standalone the file falls
+    back to MuJoCo's default of degrees, which silently rescales every joint
+    limit -- panda joint 1 becomes +/-0.05 rad instead of its real +/-2.8973
+    (166 deg, the documented Franka limit). Geometry is unaffected because
+    these files orient by quaternion, but limits are not.
+    """
     tree = ET.parse(path)
     root = tree.getroot()
 
@@ -111,6 +125,10 @@ def from_mjcf(path: str | Path, tool_body: str = "right_hand", name: str | None 
     if compiler is not None:
         degrees = compiler.get("angle", "degree") == "degree"
         seq = compiler.get("eulerseq", "xyz")
+    if angle is not None:
+        if angle not in ("radian", "degree"):
+            raise ValueError(f"angle must be 'radian' or 'degree', got {angle!r}")
+        degrees = angle == "degree"
 
     world = root.find("worldbody")
     if world is None:
