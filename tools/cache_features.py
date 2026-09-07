@@ -88,7 +88,12 @@ def main() -> int:
         instruction = f.stem.replace("_demo", "").replace("_", " ")
         with torch.no_grad():
             t_ids = tok([instruction], return_tensors="pt", padding=True).to(device)
-            text_feat = model.get_text_features(**t_ids)[0].to(torch.float16).cpu().numpy()
+            # NOT get_text_features(...)[0]: in this transformers version that
+            # returns a BaseModelOutputWithPooling, so [0] selects
+            # last_hidden_state and yields (1, tokens, 512) -- one token's
+            # embedding would then be consumed as the whole instruction.
+            pooled = model.text_model(**t_ids).pooler_output
+            text_feat = model.text_projection(pooled)[0].to(torch.float16).cpu().numpy()
 
         agent, wrist, twists, dq, grip, state, demo_id = [], [], [], [], [], [], []
         with h5py.File(f, "r") as h:
