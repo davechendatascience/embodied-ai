@@ -123,6 +123,10 @@ def main() -> int:
     ap.add_argument("--lora-r", type=int, default=0, help="0 freezes the tower")
     ap.add_argument("--val-demos", type=int, default=5)
     ap.add_argument("--val-cap", type=int, default=600)
+    ap.add_argument("--zero", default="none", choices=["none", "image", "text", "image+text"],
+                    help="ablate an input by zeroing it in train and val alike. The "
+                         "decisive control for a visual backbone is not another "
+                         "backbone, it is the same head with the images removed.")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
     torch.manual_seed(args.seed)
@@ -135,6 +139,10 @@ def main() -> int:
                for ti, t in tasks.items()}
     tr = [x for x in items if x[2] not in val_ids[x[0]]]
     va = [x for x in items if x[2] in val_ids[x[0]]]
+    # val is built in task order, so a head-slice at --val-cap would score tasks
+    # 0-1 only and never see the other eight. Shuffle first, seeded, so the cap
+    # is a sample of the suite instead of a prefix of it.
+    np.random.default_rng(args.seed).shuffle(va)
     print(f"{len(items)} windows: train {len(tr)} val {len(va)}")
 
     out_dim = 7 if args.policy == "screwhead" else MAX_DOF + 1
@@ -172,6 +180,8 @@ def main() -> int:
         wr = np.stack([mm[t][1][i] for t, i, _ in sel])
         st = torch.tensor(np.stack([tasks[t]["state"][i] for t, i, _ in sel])).cuda()
         tx = torch.tensor(np.stack([tasks[t]["text"] for t, _, _ in sel])).cuda()
+        if args.zero in ("text", "image+text"):
+            tx = torch.zeros_like(tx)
         y = torch.tensor(np.stack([tasks[t]["act"][i:i + args.chunk]
                                    for t, i, _ in sel])).cuda() / stdc
         if back is None:
@@ -181,6 +191,8 @@ def main() -> int:
             ctx = torch.enable_grad() if (train and args.lora_r) else torch.no_grad()
             with ctx:
                 fa, fw = back.encode(ag).float(), back.encode(wr).float()
+        if args.zero in ("image", "image+text"):
+            fa = torch.zeros_like(fa); fw = torch.zeros_like(fw)
         n = len(sel)
         p = (head(fa, fw, st, tx, tok.expand(n, -1, -1), mask.expand(n, -1))
              if args.policy == "screwhead" else

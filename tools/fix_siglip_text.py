@@ -34,7 +34,10 @@ def main() -> int:
         ids = tok([str(d["instruction"])], padding="max_length", return_tensors="pt").to("cuda")
         with torch.no_grad():
             d["text"] = m.text_model(**ids).pooler_output[0].to(torch.float16).cpu().numpy()
-        tmp = meta.with_suffix(".npz.tmp")
+        # Must end in .npz: savez_compressed appends the extension when it is
+        # absent, so a ".npz.tmp" name becomes ".npz.tmp.npz" and the rename
+        # then targets a path that was never written.
+        tmp = meta.with_name(meta.stem + ".tmp.npz")
         np.savez_compressed(tmp, **d)
         tmp.replace(meta)                      # atomic swap
         print(f"{meta.name}: {before} -> {d['text'].shape}")

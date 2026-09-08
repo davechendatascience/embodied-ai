@@ -104,6 +104,16 @@ def main() -> int:
     ap.add_argument("--batch", type=int, default=512)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--val-demos", type=int, default=5, help="held-out demos per task")
+    ap.add_argument("--center", action="store_true",
+                    help="standardise the cached visual features per dimension using "
+                         "training-split statistics. Frozen encoder embeddings are "
+                         "anisotropic: >90%% of their energy sits in one shared "
+                         "direction, leaving the frame-to-frame signal as a few "
+                         "percent residual that the first linear layer has to dig out.")
+    ap.add_argument("--zero", default="none",
+                    choices=["none", "image", "state", "text", "image+text"],
+                    help="ablate an input by zeroing it in train and val alike, to "
+                         "measure what the head is actually using")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="cuda")
     args = ap.parse_args()
@@ -115,11 +125,26 @@ def main() -> int:
     print(f"{len(ag)} samples, {len(demo.unique())} demonstrations, {len(task.unique())} tasks")
 
     # split by demonstration id, so validation frames share no trajectory with training
+    if args.zero in ("image", "image+text"):
+        ag.zero_(); wr.zero_()
+    if args.zero in ("text", "image+text"):
+        tx.zero_()
+    if args.zero == "state":
+        st.zero_()
+    if args.zero != "none":
+        print(f"ABLATION: {args.zero} zeroed in train and val")
+
     val_ids = set()
     for t in task.unique().tolist():
         ids = sorted(demo[task == t].unique().tolist())[: args.val_demos]
         val_ids.update(ids)
     is_val = torch.tensor([d.item() in val_ids for d in demo])
+    if args.center:
+        for f in (ag, wr):
+            m = f[~is_val].mean(0, keepdim=True)
+            sd = f[~is_val].std(0, keepdim=True).clamp(min=1e-6)
+            f.sub_(m).div_(sd)
+        print("features standardised per dimension on the training split")
     print(f"  train {int((~is_val).sum())}  val {int(is_val.sum())} "
           f"({len(val_ids)} held-out demonstrations)")
 
