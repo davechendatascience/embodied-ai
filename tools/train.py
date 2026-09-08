@@ -23,6 +23,8 @@ from torch import nn
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from screwhead.interface import ActionSpec          # noqa: E402
+
+JOINT_ACTION_SCALE = 0.05      # robosuite joint_position.json output_max
 from screwhead.libero import panda_chain            # noqa: E402
 from screwhead.policy import MAX_DOF, BaselineHead, ScrewHead  # noqa: E402
 from screwhead.spec import encode                   # noqa: E402
@@ -37,7 +39,15 @@ def load(cache: Path, chunk: int, policy: str):
         dem = d["demo"]
         # Chunk targets, never crossing a demonstration boundary.
         if policy == "baseline":
-            act = np.concatenate([d["dq"], d["gripper"][:, None]], -1)      # (n, 8)
+            # Normalise by the controller's own action scale, exactly as the
+            # twist path divides by pos_scale/rot_scale. Without it the gripper
+            # (+/-1) and the joint deltas (std 0.015) share one loss at a 68x
+            # scale ratio, so the gripper carries 99.8% of the squared error and
+            # the seven joints that matter get almost no gradient. That is
+            # FM-joint-normalisation, and it produces a policy whose action
+            # magnitude is right and whose direction is uncorrelated.
+            act = np.concatenate([d["dq"] / JOINT_ACTION_SCALE,
+                                  d["gripper"][:, None]], -1)               # (n, 8)
             act = np.pad(act, ((0, 0), (0, MAX_DOF + 1 - act.shape[1])))
         else:
             twist = d["twist"] / np.array(
@@ -57,8 +67,22 @@ def load(cache: Path, chunk: int, policy: str):
         demo.append(dem[idx].astype(np.int32) + 1000 * int(d["task_index"]))
         task.append(np.full(len(idx), int(d["task_index"]), np.int32))
     pack = lambda xs, dt=torch.float32: torch.tensor(np.concatenate(xs), dtype=dt)
-    return (pack(ag), pack(wr), pack(tx), pack(st), pack(tgt),
-            pack(demo, torch.long), pack(task, torch.long))
+    tgt = pack(tgt)
+
+    # Standardise every action channel to unit variance before the loss sees it.
+    # Without this the gripper (+/-1) drowns the rest: measured on this data it
+    # carries 99.8% of the squared error for the joint head, and 96.5% for the
+    # twist head where the ANGULAR channels come to 0.05%. A shared loss over
+    # channels spanning 68x in scale trains the largest and ignores the others --
+    # FM-joint-normalisation, whose signature is exactly what we saw: action
+    # magnitude correct, direction uncorrelated.
+    #
+    # Statistics are pooled over the whole dataset and never fitted per robot,
+    # so they stay embodiment-independent (FM-embodiment-statistics).
+    std = tgt.reshape(-1, tgt.shape[-1]).std(0).clamp(min=1e-6)
+    tgt = tgt / std
+    return (pack(ag), pack(wr), pack(tx), pack(st), tgt,
+            pack(demo, torch.long), pack(task, torch.long), std)
 
 
 def main() -> int:
@@ -76,7 +100,9 @@ def main() -> int:
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
-    ag, wr, tx, st, tgt, demo, task = load(Path(args.cache), args.chunk, args.policy)
+    ag, wr, tx, st, tgt, demo, task, act_std = load(Path(args.cache), args.chunk, args.policy)
+    print("action channel std before normalisation:",
+          [round(float(v), 4) for v in act_std])
     print(f"{len(ag)} samples, {len(demo.unique())} demonstrations, {len(task.unique())} tasks")
 
     # split by demonstration id, so validation frames share no trajectory with training
@@ -137,7 +163,7 @@ def main() -> int:
             best = val
             torch.save({"state_dict": model.state_dict(), "policy": args.policy,
                         "chunk": args.chunk, "val": val, "epoch": ep,
-                        "args": vars(args)}, ckpt)
+                        "act_std": act_std, "args": vars(args)}, ckpt)
         if ep % 5 == 0 or ep == args.epochs - 1:
             print(f"  epoch {ep:3d}  train {tot/max(n,1):.5f}  val {val:.6f}"
                   f"{'  *' if val == best else ''}", flush=True)

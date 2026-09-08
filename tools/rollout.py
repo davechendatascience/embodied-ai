@@ -225,6 +225,11 @@ def main() -> int:
     policy_kind, chunk = ck["policy"], ck["chunk"]
     model = (BaselineHead(chunk=chunk) if policy_kind == "baseline" else ScrewHead(chunk=chunk))
     model.load_state_dict(ck["state_dict"]); model.to(args.device).eval()
+    act_std = ck.get("act_std")
+    if act_std is None:
+        raise SystemExit(f"{args.checkpoint} predates action normalisation and carries no "
+                         "act_std. Retrain it: its loss was dominated by the gripper channel.")
+    act_std = torch.as_tensor(act_std, dtype=torch.float32)
 
     arm = ARMS[args.arm]
     aspec = ActionSpec()
@@ -275,13 +280,16 @@ def main() -> int:
                 with torch.no_grad():
                     if policy_kind == "baseline":
                         pred = model(f[:1], f[1:], tfeat, q.to(args.device),
-                                     torch.zeros(1, dtype=torch.long, device=args.device))[0].cpu()
+                                     torch.zeros(1, dtype=torch.long, device=args.device))[0].cpu() * act_std
                     else:
                         pred = model(f[:1], f[1:], tfeat, q.to(args.device),
-                                     spec_tokens, spec_mask)[0].cpu()
+                                     spec_tokens, spec_mask)[0].cpu() * act_std
                 for h in range(chunk):
                     if policy_kind == "baseline":
-                        dq = pred[h, :arm["dof"]]          # pad-and-slice, as pi0/GR00T do
+                        # Already in action units: the head is trained on
+                        # dq / JOINT_ACTION_SCALE so the joints and the gripper
+                        # share one scale in the loss.
+                        dq = pred[h, :arm["dof"]] * JOINT_ACTION_SCALE
                         grip = float(pred[h, MAX_DOF])
                     else:
                         V = (pred[h, :6] * twist_scale)[None].double()
