@@ -169,6 +169,10 @@ def replay(args) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
+    ap.add_argument("--backbone", choices=["clip", "qwen"], default="clip",
+                    help="clip reads the frozen feature checkpoint; qwen loads the LoRA "
+                         "adapter plus head from checkpoints/qwen_<policy>_<suite>/ and "
+                         "runs the 2.2B model per chunk.")
     ap.add_argument("--policy", choices=["baseline", "screwhead"],
                     help="resolve --checkpoint from checkpoints/<policy>_<suite>.pt. The "
                          "declared tests use this so the run line names the policy under "
@@ -207,7 +211,9 @@ def main() -> int:
     if not args.checkpoint:
         if not args.policy:
             ap.error("give --checkpoint or --policy")
-        args.checkpoint = f"checkpoints/{args.policy}_{args.suite}.pt"
+        args.checkpoint = (f"checkpoints/qwen_{args.policy}_{args.suite}/head.pt"
+                           if args.backbone == "qwen"
+                           else f"checkpoints/{args.policy}_{args.suite}.pt")
     if args.policy and not args.replay:
         # The checkpoint records what it is; disagreeing with the flag means the
         # run would silently measure a different policy than the test declares.
@@ -249,8 +255,28 @@ def main() -> int:
         return replay(args)
     ck = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     policy_kind, chunk = ck["policy"], ck["chunk"]
-    model = (BaselineHead(chunk=chunk) if policy_kind == "baseline" else ScrewHead(chunk=chunk))
-    model.load_state_dict(ck["state_dict"]); model.to(args.device).eval()
+    if args.backbone == "qwen":
+        # LoRA adapter plus head; the 2.2B base comes from the hub and is frozen,
+        # which is why the checkpoint is megabytes.
+        import sys as _sys
+        _sys.path.insert(0, str(REPO / "tools"))
+        from peft import PeftModel
+        from train_qwen import QwenHead
+        from screwhead.qwen_backbone import QwenBackbone
+        adapter_dir = Path(args.checkpoint).parent
+        qwen = QwenBackbone(device=args.device)
+        qwen.model = PeftModel.from_pretrained(qwen.model.base_model.model, str(adapter_dir))
+        qwen.model.eval()
+        out_dim = 7 if policy_kind == "screwhead" else MAX_DOF + 1
+        model = QwenHead(out_dim, chunk=chunk,
+                         spec_tokens=(policy_kind == "screwhead")).to(args.device)
+        model.load_state_dict(ck["head"]); model.eval()
+        print(f"  qwen backbone + {policy_kind} head, val {ck['val']:.5f} "
+              f"(epoch {ck['epoch']})", flush=True)
+    else:
+        qwen = None
+        model = (BaselineHead(chunk=chunk) if policy_kind == "baseline" else ScrewHead(chunk=chunk))
+        model.load_state_dict(ck["state_dict"]); model.to(args.device).eval()
     act_std = ck.get("act_std")
     if act_std is None:
         raise SystemExit(f"{args.checkpoint} predates action normalisation and carries no "
@@ -338,7 +364,18 @@ def main() -> int:
                           obs, _, _, _ = env.step(a0)
               q = torch.zeros(1, STATE_DIM)
               for step in range(0, args.max_steps, chunk):
-                  f = enc_img(obs["agentview_image"], obs["robot0_eye_in_hand_image"])
+                  if qwen is not None:
+                      # No vertical flip. Measured: the hdf5 frames the model
+                      # trained on and the live render agree as-is (mean abs
+                      # difference 3.52) and disagree flipped (55.36). The
+                      # [::-1] in write_video is a display convenience only --
+                      # applying it here would feed the policy an input 15x
+                      # further from its training distribution.
+                      f = qwen.encode(obs["agentview_image"][None].copy(),
+                                      obs["robot0_eye_in_hand_image"][None].copy(),
+                                      [task.language]).float()
+                  else:
+                      f = enc_img(obs["agentview_image"], obs["robot0_eye_in_hand_image"])
                   # Tool pose from THIS arm's chain, so the state means the same
                   # thing on every embodiment.
                   gs = obs.get("robot0_gripper_qpos")
@@ -348,7 +385,13 @@ def main() -> int:
                                  None if ap is None else torch.tensor([ap], dtype=torch.float64),
                                  ).float()
                   with torch.no_grad():
-                      if policy_kind == "baseline":
+                      if qwen is not None:
+                          pred = (model(f, q.to(args.device), spec_tokens, spec_mask)[0].cpu()
+                                  if policy_kind == "screwhead" else
+                                  model(f, q.to(args.device),
+                                        eid=torch.zeros(1, dtype=torch.long,
+                                                        device=args.device))[0].cpu()) * act_std
+                      elif policy_kind == "baseline":
                           pred = model(f[:1], f[1:], tfeat, q.to(args.device),
                                        torch.zeros(1, dtype=torch.long, device=args.device))[0].cpu() * act_std
                       else:
