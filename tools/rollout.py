@@ -169,7 +169,11 @@ def replay(args) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
-    ap.add_argument("--checkpoint", required=True)
+    ap.add_argument("--policy", choices=["baseline", "screwhead"],
+                    help="resolve --checkpoint from checkpoints/<policy>_<suite>.pt. The "
+                         "declared tests use this so the run line names the policy under "
+                         "test rather than a path that could point anywhere.")
+    ap.add_argument("--checkpoint")
     ap.add_argument("--cell", "--arm", dest="arm", default="source", choices=sorted(CELLS),
                     help="which cell of the arm x gripper factorial to roll out")
     ap.add_argument("--suite", default="libero_spatial")
@@ -196,6 +200,17 @@ def main() -> int:
                          "demonstration cannot reach `done` here, a policy scoring 0 says "
                          "nothing about the policy.")
     args = ap.parse_args()
+    if not args.checkpoint:
+        if not args.policy:
+            ap.error("give --checkpoint or --policy")
+        args.checkpoint = f"checkpoints/{args.policy}_{args.suite}.pt"
+    if args.policy and not args.replay:
+        # The checkpoint records what it is; disagreeing with the flag means the
+        # run would silently measure a different policy than the test declares.
+        _peek = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
+        if _peek.get("policy") != args.policy:
+            ap.error(f"--policy {args.policy} but {args.checkpoint} holds "
+                     f"{_peek.get('policy')!r}")
 
     os.environ.setdefault("MUJOCO_GL", "egl")
     torch.set_default_dtype(torch.float32)
@@ -311,7 +326,7 @@ def main() -> int:
                 if success:
                     break
             if record and frames:
-                write_video(Path(args.video) / f"{args.cell}_{policy_kind}_t{ti:02d}_e{ep:02d}"
+                write_video(Path(args.video) / f"{args.arm}_{policy_kind}_t{ti:02d}_e{ep:02d}"
                             f"_{'ok' if success else 'fail'}.mp4", frames)
             trials.append({
                 "metrics": {"success": bool(success)},

@@ -727,7 +727,7 @@ tests:
   - id: TST-libero-source
     layer: e2e
     targets: [CMP-action-expert, CMP-gripper-decoder]
-    run: .venv-libero/bin/python tools/rollout.py --out $OUT --cell source --policy screwhead
+    run: .venv-libero/bin/python tools/rollout.py --out $OUT --cell source --policy screwhead --episodes-per-task 10 --max-steps 400
     metrics: [success]
     capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task, arm_swapped, gripper_swapped]
     cost: 40.0
@@ -736,7 +736,7 @@ tests:
   - id: TST-libero-heldout
     layer: e2e
     targets: [CMP-action-expert, CMP-gripper-decoder]
-    run: .venv-libero/bin/python tools/rollout.py --out $OUT --cell both --policy screwhead
+    run: .venv-libero/bin/python tools/rollout.py --out $OUT --cell both --policy screwhead --episodes-per-task 10 --max-steps 400
     metrics: [success]
     capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task, arm_swapped, gripper_swapped]
     cost: 40.0
@@ -745,7 +745,7 @@ tests:
   - id: TST-baseline-source
     layer: e2e
     targets: [CMP-action-expert]
-    run: .venv-libero/bin/python tools/rollout.py --out $OUT --cell source --policy baseline
+    run: .venv-libero/bin/python tools/rollout.py --out $OUT --cell source --policy baseline --episodes-per-task 10 --max-steps 400
     metrics: [success]
     capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task, arm_swapped, gripper_swapped]
     cost: 40.0
@@ -754,7 +754,7 @@ tests:
   - id: TST-baseline-heldout
     layer: e2e
     targets: [CMP-action-expert]
-    run: .venv-libero/bin/python tools/rollout.py --out $OUT --cell both --policy baseline
+    run: .venv-libero/bin/python tools/rollout.py --out $OUT --cell both --policy baseline --episodes-per-task 10 --max-steps 400
     metrics: [success]
     capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task, arm_swapped, gripper_swapped]
     cost: 40.0
