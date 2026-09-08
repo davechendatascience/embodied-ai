@@ -25,6 +25,7 @@ import torch
 from torch import Tensor, nn
 
 from .spec import TOKEN_DIM
+from .state import STATE_DIM
 
 FEAT_DIM = 768          # CLIP ViT-B/32 vision pooler
 TEXT_DIM = 512          # CLIP text projection
@@ -34,7 +35,7 @@ MAX_DOF = 7
 class Trunk(nn.Module):
     """Shared perception-to-latent stack. Identical in both policies."""
 
-    def __init__(self, width: int = 512, state_dim: int = MAX_DOF + 1, depth: int = 2):
+    def __init__(self, width: int = 512, state_dim: int = STATE_DIM, depth: int = 2):
         super().__init__()
         self.img = nn.Linear(2 * FEAT_DIM, width)
         self.txt = nn.Linear(TEXT_DIM, width)

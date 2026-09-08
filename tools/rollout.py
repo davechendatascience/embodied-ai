@@ -243,6 +243,7 @@ def main() -> int:
     from screwhead.interface import ActionSpec
     from screwhead.policy import MAX_DOF, BaselineHead, ScrewHead
     from screwhead.spec import encode
+    from screwhead.state import STATE_DIM, tool_state
 
     if args.replay:
         return replay(args)
@@ -302,11 +303,17 @@ def main() -> int:
               set_joint_gains(env, args.kp)
               for _ in range(3):
                   obs, _, _, _ = env.step(np.zeros(env.env.action_dim))
-              q = torch.zeros(1, MAX_DOF + 1)
+              q = torch.zeros(1, STATE_DIM)
               for step in range(0, args.max_steps, chunk):
                   f = enc_img(obs["agentview_image"], obs["robot0_eye_in_hand_image"])
-                  qpos = torch.tensor(obs["robot0_joint_pos"], dtype=torch.float32)
-                  q[0, :arm["dof"]] = qpos
+                  # Tool pose from THIS arm's chain, so the state means the same
+                  # thing on every embodiment.
+                  gs = obs.get("robot0_gripper_qpos")
+                  ap = None if gs is None else float(gs[0] - gs[1])
+                  q = tool_state(chain,
+                                 torch.tensor(obs["robot0_joint_pos"], dtype=torch.float64)[None],
+                                 None if ap is None else torch.tensor([ap], dtype=torch.float64),
+                                 ).float()
                   with torch.no_grad():
                       if policy_kind == "baseline":
                           pred = model(f[:1], f[1:], tfeat, q.to(args.device),

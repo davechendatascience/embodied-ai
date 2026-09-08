@@ -27,12 +27,14 @@ from screwhead.interface import ActionSpec          # noqa: E402
 JOINT_ACTION_SCALE = 0.05      # robosuite joint_position.json output_max
 from screwhead.libero import panda_chain            # noqa: E402
 from screwhead.policy import MAX_DOF, BaselineHead, ScrewHead  # noqa: E402
+from screwhead.state import STATE_DIM, tool_state  # noqa: E402
 from screwhead.spec import encode                   # noqa: E402
 
 
 def load(cache: Path, chunk: int, policy: str):
     ag, wr, tx, st, tgt, demo, task = [], [], [], [], [], [], []
     spec = ActionSpec()
+    chain = panda_chain()          # the arm the demonstrations were collected on
     for f in sorted(cache.glob("task*.npz")):
         d = np.load(f, allow_pickle=True)
         n = len(d["agent"])
@@ -60,9 +62,16 @@ def load(cache: Path, chunk: int, policy: str):
         idx = idx[keep]
         ag.append(d["agent"][idx]); wr.append(d["wrist"][idx])
         tx.append(np.repeat(d["text"][None], len(idx), 0))
-        q = d["qpos"][idx]
-        q = np.pad(q, ((0, 0), (0, MAX_DOF - q.shape[1])))
-        st.append(np.concatenate([q, np.zeros((len(idx), 1), np.float32)], -1))
+        # Embodiment-free proprioception: tool pose from this arm's own forward
+        # kinematics, not its joint angles. Raw q is arm-specific -- the Panda's
+        # j5 spans [+1.02,+3.44] while a UR5e sits at -1.991 there -- so a policy
+        # fed q fails an arm swap on the STATE before its action representation
+        # is ever tested.
+        gs = d["gripper_state"][idx] if "gripper_state" in d.files else None
+        st.append(tool_state(chain,
+                             torch.tensor(d["qpos"][idx], dtype=torch.float64),
+                             None if gs is None else torch.tensor(gs, dtype=torch.float64),
+                             ).float().numpy())
         tgt.append(np.stack([act[i:i + chunk] for i in idx]))
         demo.append(dem[idx].astype(np.int32) + 1000 * int(d["task_index"]))
         task.append(np.full(len(idx), int(d["task_index"]), np.int32))
