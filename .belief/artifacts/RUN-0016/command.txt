@@ -1,0 +1,4 @@
+.venv-libero/bin/python tools/emit_gripper_trials.py /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0016/result.json declared_limits --n 200 --seed 0
+exit=0
+test=TST-declared-limits@b5ef9269
+at=2026-09-07T06:18:16+00:00

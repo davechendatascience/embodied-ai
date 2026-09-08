@@ -1,0 +1,4 @@
+.venv/bin/python tools/emit_trials.py /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0009/result.json ik_unreachable --n 1200 --seed 0 --iters 200
+exit=0
+test=TST-ik-unreachable@11c7b949
+at=2026-09-07T04:41:11+00:00

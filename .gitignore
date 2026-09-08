@@ -54,3 +54,21 @@ results/
 # above would otherwise swallow. It is the audit trail of every state
 # transition and is the whole point of committing .damped-plan/.
 !.damped-plan/events.jsonl
+
+# textbook-index MCP: the concept graph and hybrid index are derived from the
+# PDFs in docs/ and are rebuilt on first tool call.
+kuzu_concept_db*
+
+# component-belief MCP: the evidence ledger IS committed on purpose; the
+# derived belief cache is regenerable from evidence + declarations.
+.belief/cache/
+
+# Frozen-feature cache: 168 MB derived from the demonstrations by
+# tools/cache_features.py, and regenerable by rerunning it.
+cache/
+runs/
+
+# The textbook is a copyrighted third-party document, not project source. It is
+# read through the textbook-index MCP from a local path; docs/*.md reference it
+# by section rather than reproducing it.
+docs/*.pdf

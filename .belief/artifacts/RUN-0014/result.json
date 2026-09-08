@@ -1,0 +1,6404 @@
+{
+  "trials": [
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.339,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.734,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.261,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 3,
+        "friction": 0.79,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.499,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 3,
+        "friction": 0.49,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.64,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.399,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.554,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.095,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.575,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 6,
+        "friction": 0.066,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 5,
+        "friction": 0.039,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.663,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.022,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.446,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.171,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 3,
+        "friction": 0.654,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.375,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.689,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.12,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.393,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.03,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.454,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.027,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.386,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.015,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.154,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.051,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.57,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.491,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.178,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.412,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.023,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.026,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.567,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.401,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.117,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.387,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.04,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 3,
+        "friction": 0.526,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.283,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.743,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.107,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.335,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.467,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.233,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.652,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.098,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.58,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.003,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.376,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.488,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.253,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 5,
+        "friction": 0.231,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.133,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.593,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.7,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.237,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.121,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.535,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.661,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.663,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.464,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.273,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.514,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.599,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.486,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.553,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.488,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 2,
+        "friction": 0.435,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.757,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.757,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.441,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.47,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.575,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.118,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.171,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.581,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.044,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 5,
+        "friction": 0.708,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.19,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 5,
+        "friction": 0.145,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.486,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.566,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.335,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.533,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 2,
+        "friction": 0.096,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.318,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.7,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.417,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.225,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 2,
+        "friction": 0.627,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.565,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.358,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 5,
+        "friction": 0.115,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.323,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.543,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.157,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.761,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.152,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.327,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.348,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.796,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.053,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.1,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.561,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.121,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.76,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.009,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.542,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.241,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.514,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.204,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.344,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 3,
+        "friction": 0.681,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.392,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.389,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.165,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.059,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.373,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.646,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.58,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.078,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 2,
+        "friction": 0.27,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.167,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.489,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.447,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.223,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.749,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.223,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.156,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.186,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.349,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.723,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.704,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.658,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.408,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.693,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 3,
+        "friction": 0.706,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.732,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 5,
+        "friction": 0.236,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.632,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.638,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.349,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.292,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.028,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.794,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.156,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.696,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.135,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.718,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.302,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.058,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.574,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.432,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.685,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.249,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.025,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.523,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.103,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.266,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.061,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.356,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.137,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 2,
+        "friction": 0.341,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.49,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.181,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.37,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 5,
+        "friction": 0.116,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 3,
+        "friction": 0.724,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.024,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.27,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.622,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.582,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.196,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.638,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.628,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.279,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.171,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.237,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.071,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 2,
+        "friction": 0.347,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.664,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.262,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.756,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.09,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.734,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 3,
+        "friction": 0.313,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.238,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 3,
+        "friction": 0.378,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.244,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.375,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.487,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.412,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.128,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.125,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.678,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.035,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.261,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.594,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.462,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.637,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.757,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.396,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 7,
+        "friction": 0.09,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.443,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.573,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.262,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.604,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.205,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.054,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.66,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.176,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 6,
+        "friction": 0.538,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.098,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.416,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 3,
+        "friction": 0.296,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.538,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.7,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.508,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.29,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.04,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.323,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 2,
+        "friction": 0.693,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.745,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.25,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.374,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.386,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.042,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.16,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.543,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.777,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.613,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.464,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.253,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.19,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 2,
+        "friction": 0.451,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.681,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.552,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.093,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.419,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.46,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.193,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 3,
+        "friction": 0.655,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.533,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.616,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.503,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.039,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.249,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.219,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.719,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.268,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.472,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 3,
+        "friction": 0.519,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.219,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 5,
+        "friction": 0.76,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.654,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.601,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.092,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 2,
+        "friction": 0.227,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.074,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.036,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.393,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.022,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.08,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.25,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.284,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.598,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.184,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.096,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.107,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.405,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 2,
+        "friction": 0.544,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 5,
+        "friction": 0.021,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.706,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.015,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.512,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 5,
+        "friction": 0.097,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 3,
+        "friction": 0.737,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.587,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.787,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 5,
+        "friction": 0.4,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.691,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.011,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.331,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.103,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.005,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.236,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.167,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.473,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.684,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 6,
+        "friction": 0.089,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.184,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 5,
+        "friction": 0.002,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.566,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.494,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.58,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.215,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.015,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.08,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.693,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.668,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.135,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.238,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.558,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 3,
+        "friction": 0.762,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.393,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.658,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.078,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 5,
+        "friction": 0.149,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 5,
+        "friction": 0.187,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.657,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.207,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.145,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.188,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.174,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.497,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.314,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.543,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.572,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.635,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.336,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.762,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.006,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.579,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.091,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.072,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.795,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.131,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.762,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.699,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.519,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.48,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.724,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 3,
+        "friction": 0.466,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.09,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.135,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.087,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.305,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.768,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.372,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.383,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 3,
+        "friction": 0.372,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.518,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.383,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.487,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.239,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.782,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.417,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.642,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.559,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.332,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.403,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.274,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 6,
+        "friction": 0.417,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.29,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.722,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 2,
+        "friction": 0.365,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 3,
+        "friction": 0.66,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.063,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.638,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.203,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.337,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.607,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 5,
+        "friction": 0.21,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.315,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.466,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.619,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.48,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.636,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.296,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.567,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.394,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.711,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.681,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 3,
+        "friction": 0.51,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 5,
+        "friction": 0.455,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.234,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.301,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.409,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.176,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.046,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.429,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 3,
+        "friction": 0.403,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.163,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 5,
+        "friction": 0.564,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.385,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.781,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.657,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 4,
+        "friction": 0.229,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.166,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 7,
+        "friction": 0.672,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.589,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.364,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": false,
+        "n_contacts": 2,
+        "friction": 0.412,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.311,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.587,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 4,
+        "friction": 0.253,
+        "certificate_found": false
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    },
+    {
+      "metrics": {
+        "verdict_correct": true
+      },
+      "conditions": {
+        "contact_model": "planar_hard_finger",
+        "labelled_closed": true,
+        "n_contacts": 6,
+        "friction": 0.256,
+        "certificate_found": true
+      },
+      "repro": {
+        "contact_model": "planar_hard_finger",
+        "seed": 0
+      }
+    }
+  ]
+}

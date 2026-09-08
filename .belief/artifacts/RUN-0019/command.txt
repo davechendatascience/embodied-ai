@@ -1,0 +1,4 @@
+.venv-libero/bin/python tools/emit_gripper_trials.py /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0019/result.json span_derived --n 400 --seed 0
+exit=0
+test=TST-span-derived@78282f61
+at=2026-09-07T06:27:04+00:00

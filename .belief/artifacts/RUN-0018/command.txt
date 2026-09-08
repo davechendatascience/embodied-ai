@@ -1,0 +1,4 @@
+.venv-libero/bin/python tools/emit_gripper_trials.py /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0018/result.json loop_closure --n 400 --seed 0
+exit=0
+test=TST-loop-closure@88614ab1
+at=2026-09-07T06:23:01+00:00

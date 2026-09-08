@@ -1,13 +1,24 @@
 {
   "mcpServers": {
-    "damped-plan": {
+    "component-belief": {
       "command": "uv",
       "args": [
         "--directory", "/home/edge-host/Documents/GitHub/Theoretically_Driven_LLM_Planning",
-        "run", "damped-plan-mcp"
+        "run", "component-belief-mcp"
       ],
       "env": {
-        "DAMPED_PLAN_DATA_DIR": "/home/edge-host/Documents/GitHub/embodied_ai/.damped-plan"
+        "BELIEF_PROJECT_ROOT": "/home/edge-host/Documents/GitHub/embodied_ai",
+        "BELIEF_ACTOR": "agent"
+      }
+    },
+    "textbook-index": {
+      "command": "/home/edge-host/Documents/GitHub/LLM-textbook-highlighter/.venv-mcp/bin/python",
+      "args": [
+        "/home/edge-host/Documents/GitHub/LLM-textbook-highlighter/src/mcp/textbook_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/home/edge-host/Documents/GitHub/LLM-textbook-highlighter",
+        "TEXTBOOK_BASE_DIR": "/home/edge-host/Documents/GitHub/embodied_ai"
       }
     }
   }

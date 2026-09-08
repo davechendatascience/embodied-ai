@@ -1,0 +1,4 @@
+.venv/bin/python tools/emit_trials.py /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0003/result.json jacobian_fd --n 800
+exit=0
+test=TST-jacobian-fd@9dfddebf
+at=2026-09-07T03:44:27+00:00

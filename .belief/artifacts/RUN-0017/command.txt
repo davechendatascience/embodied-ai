@@ -1,0 +1,4 @@
+.venv-libero/bin/python tools/emit_gripper_trials.py /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0017/result.json finger_fk --n 400 --seed 0
+exit=0
+test=TST-finger-fk@624cfdaf
+at=2026-09-07T06:21:55+00:00

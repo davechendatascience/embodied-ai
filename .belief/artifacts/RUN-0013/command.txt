@@ -1,0 +1,4 @@
+.venv/bin/python tools/emit_trials.py /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0013/result.json retarget_libero --n 400 --seed 0
+exit=0
+test=TST-retarget-libero@20a02cb9
+at=2026-09-07T05:03:47+00:00

@@ -1,0 +1,4 @@
+.venv/bin/python tools/emit_trials.py /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0006/result.json ik_convergence --n 1200 --seed 0 --iters 200 --sigma-thresh 0.02
+exit=0
+test=TST-ik-convergence@eba6396d
+at=2026-09-07T04:39:41+00:00

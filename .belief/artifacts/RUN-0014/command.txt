@@ -1,0 +1,4 @@
+.venv/bin/python tools/emit_trials.py /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0014/result.json force_closure --n 400 --seed 0
+exit=0
+test=TST-force-closure@ed332bfb
+at=2026-09-07T05:47:10+00:00

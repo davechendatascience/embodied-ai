@@ -1,0 +1,4 @@
+.venv/bin/python tools/emit_trials.py /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0004/result.json poe_fk --n 800 --seed 0
+exit=0
+test=TST-poe-fk@e033379a
+at=2026-09-07T03:50:04+00:00
