@@ -169,6 +169,10 @@ def replay(args) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
+    ap.add_argument("--zero", default="none", choices=["none", "image", "text", "image+text"],
+                    help="ablate an input at inference. Must match how the checkpoint "
+                         "was trained: a head trained with --zero image has never seen "
+                         "a real image and feeding it one is a distribution shift.")
     ap.add_argument("--backbone", choices=["clip", "qwen"], default="clip",
                     help="clip reads the frozen feature checkpoint; qwen loads the LoRA "
                          "adapter plus head from checkpoints/qwen_<policy>_<suite>/ and "
@@ -332,6 +336,8 @@ def main() -> int:
                   print(f"  reference home tool pose (Panda init_qpos): "
                         f"{_np.round(home_pose[0,:3,3].numpy(),3)}", flush=True)
           tfeat = enc_txt(task.language)[None]
+          if args.zero in ("text", "image+text"):
+              tfeat = torch.zeros_like(tfeat)
           for ep in range(args.episodes_per_task):
               env.reset()
               env.set_init_state(remap_init_state(init_states[ep % len(init_states)], env.sim))
@@ -376,6 +382,8 @@ def main() -> int:
                                       [task.language]).float()
                   else:
                       f = enc_img(obs["agentview_image"], obs["robot0_eye_in_hand_image"])
+                  if args.zero in ("image", "image+text"):
+                      f = torch.zeros_like(f)
                   # Tool pose from THIS arm's chain, so the state means the same
                   # thing on every embodiment.
                   gs = obs.get("robot0_gripper_qpos")

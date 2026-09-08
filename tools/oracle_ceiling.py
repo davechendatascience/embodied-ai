@@ -58,6 +58,11 @@ def main() -> int:
     ap.add_argument("--val-demos", type=int, default=5)
     ap.add_argument("--val-cap", type=int, default=600)
     ap.add_argument("--ks", type=int, nargs="+", default=[1, 4, 16, 64])
+    ap.add_argument("--pool-tasks", action="store_true",
+                    help="search neighbours across all tasks instead of within the "
+                         "task. The difference is what task identity is worth, which "
+                         "is what the language branch supplies -- one fixed "
+                         "instruction per task is a 1-of-N label, not a description.")
     ap.add_argument("--phase", action="store_true",
                     help="add normalised timestep to the observation")
     args = ap.parse_args()
@@ -91,6 +96,12 @@ def main() -> int:
         sel = [(t, i) for t, i in tr if t == ti]
         by_task[ti] = (np.array([i for _, i in sel]),
                        np.stack([(obs(ti, i) - mu) / sd for _, i in sel]))
+    if args.pool_tasks:
+        # one pool over every task; the action still comes from the neighbour's
+        # own task, so the predictor simply cannot tell which task it is in
+        allidx = np.concatenate([np.stack([np.full(len(by_task[t][0]), t),
+                                           by_task[t][0]], 1) for t in sorted(tasks)])
+        allobs = np.concatenate([by_task[t][1] for t in sorted(tasks)])
 
     # va is in task order; sample it so a cap covers the suite, not tasks 0-1
     np.random.default_rng(0).shuffle(va)
@@ -100,11 +111,16 @@ def main() -> int:
     for k in args.ks:
         P = []
         for ti, i in val:
-            tidx, tst = by_task[ti]
             q = (obs(ti, i) - mu) / sd
-            d = np.linalg.norm(tst - q, axis=1)
-            nn = tidx[np.argpartition(d, k)[:k]]
-            P.append(tasks[ti]["act"][nn].mean(0))
+            if args.pool_tasks:
+                d = np.linalg.norm(allobs - q, axis=1)
+                nn = allidx[np.argpartition(d, k)[:k]]
+                P.append(np.stack([tasks[int(t)]["act"][int(j)] for t, j in nn]).mean(0))
+            else:
+                tidx, tst = by_task[ti]
+                d = np.linalg.norm(tst - q, axis=1)
+                nn = tidx[np.argpartition(d, k)[:k]]
+                P.append(tasks[ti]["act"][nn].mean(0))
         P = np.stack(P)
         c = [float(np.corrcoef(P[:, j], Y[:, j])[0, 1]) for j in range(7)]
         out[k] = c
