@@ -25,12 +25,18 @@ def main() -> int:
     tok = AutoTokenizer.from_pretrained(MODEL_ID)
     m = SiglipModel.from_pretrained(MODEL_ID, dtype=torch.float16).cuda().eval()
     for meta in sorted(cache.glob("task*_meta.npz")):
-        d = dict(np.load(meta, allow_pickle=True))
+        # Materialise and CLOSE before writing: savez to a path still open for
+        # reading is asking for a truncated file, and this metadata is the only
+        # copy of the twists and states for that task.
+        with np.load(meta, allow_pickle=True) as z:
+            d = {k: z[k] for k in z.files}
         before = np.asarray(d["text"]).shape
         ids = tok([str(d["instruction"])], padding="max_length", return_tensors="pt").to("cuda")
         with torch.no_grad():
             d["text"] = m.text_model(**ids).pooler_output[0].to(torch.float16).cpu().numpy()
-        np.savez_compressed(meta, **d)
+        tmp = meta.with_suffix(".npz.tmp")
+        np.savez_compressed(tmp, **d)
+        tmp.replace(meta)                      # atomic swap
         print(f"{meta.name}: {before} -> {d['text'].shape}")
     return 0
 
