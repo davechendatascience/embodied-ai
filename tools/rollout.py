@@ -89,6 +89,20 @@ def build_chain(mjcf_name: str, tool_z: float):
     return base.with_tool(off)
 
 
+def write_video(path: Path, frames, fps: int = 20) -> None:
+    """Agentview and wrist side by side, at the control rate.
+
+    Written at 20 fps so the video runs in real time against the control loop --
+    a clip that plays faster than the robot moved makes hesitation look like
+    decisiveness.
+    """
+    import imageio.v2 as imageio
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with imageio.get_writer(path, fps=fps, macro_block_size=1) as w:
+        for f in frames:
+            w.append_data(np.ascontiguousarray(f))
+
+
 def set_joint_gains(env, kp: float) -> None:
     """Stiffen the joint controller. Re-fetched every call on purpose: reset()
     rebuilds the controller object, so a handle captured once goes stale and
@@ -168,6 +182,13 @@ def main() -> int:
                     help="joint-position gain. robosuite's default of 50 cannot close a "
                          "50 ms step: demonstration replay tracks to 0.52 rad and reaches "
                          "done 0/15. At 4000 it tracks to 0.007 rad and reaches done 15/15.")
+    ap.add_argument("--video", metavar="DIR",
+                    help="write one mp4 per episode. The frames are already being "
+                         "rendered for the policy and thrown away, so this costs "
+                         "only the encode -- and a rollout scoring 0 is far easier "
+                         "to diagnose by watching than by reading numbers.")
+    ap.add_argument("--video-every", type=int, default=1,
+                    help="record every Nth episode")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--replay", type=int, default=0, metavar="N",
                     help="ignore the checkpoint and replay N recorded demonstrations per "
@@ -240,6 +261,8 @@ def main() -> int:
             env.set_init_state(remap_init_state(init_states[ep % len(init_states)], env.sim))
             if args.align_camera:
                 align_wrist_camera(env.sim, PANDA_CAM_TO_TCP_VEC)
+            frames = []
+            record = bool(args.video) and (ep % max(args.video_every, 1) == 0)
             obs, success = None, False
             set_joint_gains(env, args.kp)
             for _ in range(3):
@@ -270,11 +293,18 @@ def main() -> int:
                     a[-1] = np.clip(grip, -1, 1)
                     set_joint_gains(env, args.kp)
                     obs, _, done, _ = env.step(a)
+                    if record:
+                        frames.append(np.concatenate(
+                            [obs["agentview_image"][::-1],
+                             obs["robot0_eye_in_hand_image"][::-1]], axis=1))
                     if done:
                         success = True
                         break
                 if success:
                     break
+            if record and frames:
+                write_video(Path(args.video) / f"{args.cell}_{policy_kind}_t{ti:02d}_e{ep:02d}"
+                            f"_{'ok' if success else 'fail'}.mp4", frames)
             trials.append({
                 "metrics": {"success": bool(success)},
                 "conditions": {"robot": arm["robot"], "gripper": arm["gripper"],
