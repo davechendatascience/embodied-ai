@@ -174,8 +174,12 @@ def main() -> int:
                          "declared tests use this so the run line names the policy under "
                          "test rather than a path that could point anywhere.")
     ap.add_argument("--checkpoint")
-    ap.add_argument("--cell", "--arm", dest="arm", default="source", choices=sorted(CELLS),
-                    help="which cell of the arm x gripper factorial to roll out")
+    ap.add_argument("--cell", "--arm", dest="arm", default="source",
+                    help="cell of the arm x gripper factorial, a comma-separated list, or "
+                         "'swaps' for all three swapped cells. CTR-baseline-fails-swap "
+                         "buckets on arm_only / gripper_only / both, so the test feeding it "
+                         "must emit all three or two buckets stay empty forever. "
+                         f"cells: {', '.join(sorted(CELLS))}")
     ap.add_argument("--suite", default="libero_spatial")
     ap.add_argument("--episodes-per-task", type=int, default=10)
     ap.add_argument("--max-steps", type=int, default=400)
@@ -212,6 +216,12 @@ def main() -> int:
             ap.error(f"--policy {args.policy} but {args.checkpoint} holds "
                      f"{_peek.get('policy')!r}")
 
+    cells = (["arm_only", "gripper_only", "both"] if args.arm == "swaps"
+             else [c.strip() for c in args.arm.split(",")])
+    bad = [c for c in cells if c not in CELLS]
+    if bad:
+        ap.error(f"unknown cell(s) {bad}; have {sorted(CELLS)} or 'swaps'")
+
     os.environ.setdefault("MUJOCO_GL", "egl")
     torch.set_default_dtype(torch.float32)
     # LIBERO's get_task_init_states calls torch.load without weights_only=False,
@@ -246,108 +256,116 @@ def main() -> int:
                          "act_std. Retrain it: its loss was dominated by the gripper channel.")
     act_std = torch.as_tensor(act_std, dtype=torch.float32)
 
-    arm = ARMS[args.arm]
     aspec = ActionSpec()
-    chain = spec_tokens = spec_mask = None      # built once the live model is up
-    twist_scale = torch.tensor(
-        [aspec.rot_scale * aspec.control_hz] * 3 + [aspec.pos_scale * aspec.control_hz] * 3)
-
+    # Hoisted out of the cell loop: the encoder is frozen and cell-independent,
+    # so loading it per cell would pay for CLIP three times over a `swaps` run.
     enc_img, enc_txt = clip_encoder(args.device)
     bm = benchmark.get_benchmark_dict()[args.suite]()
-    trials = []
-    for ti in range(bm.n_tasks):
-        task = bm.get_task(ti)
-        bddl = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
-        torch.load = _load_trusted          # LIBERO's own bundled init states
-        try:
-            init_states = bm.get_task_init_states(ti)
-        finally:
-            torch.load = _torch_load
-        env = OffScreenRenderEnv(bddl_file_name=bddl, camera_heights=128, camera_widths=128,
-                                 robots=[arm["robot"]], gripper_types=arm["gripper"],
-                                 controller="JOINT_POSITION")
-        if chain is None:
-            env.reset()
-            flange_to_tcp, _cam = gripper_geom(env)
-            chain = build_chain(arm["mjcf"], flange_to_tcp)
-            tk, mk = encode(chain).padded(MAX_DOF)
-            spec_tokens = tk.float().to(args.device)[None]
-            spec_mask = mk.to(args.device)[None]
-            print(f"  {arm['robot']}: dof={chain.n} flange->TCP {flange_to_tcp:.4f} m "
-                  f"(gripper-dependent, measured)", flush=True)
-        tfeat = enc_txt(task.language)[None]
-        for ep in range(args.episodes_per_task):
-            env.reset()
-            env.set_init_state(remap_init_state(init_states[ep % len(init_states)], env.sim))
-            if args.align_camera:
-                align_wrist_camera(env.sim, PANDA_CAM_TO_TCP_VEC)
-            frames = []
-            record = bool(args.video) and (ep % max(args.video_every, 1) == 0)
-            obs, success = None, False
-            set_joint_gains(env, args.kp)
-            for _ in range(3):
-                obs, _, _, _ = env.step(np.zeros(env.env.action_dim))
-            q = torch.zeros(1, MAX_DOF + 1)
-            for step in range(0, args.max_steps, chunk):
-                f = enc_img(obs["agentview_image"], obs["robot0_eye_in_hand_image"])
-                qpos = torch.tensor(obs["robot0_joint_pos"], dtype=torch.float32)
-                q[0, :arm["dof"]] = qpos
-                with torch.no_grad():
-                    if policy_kind == "baseline":
-                        pred = model(f[:1], f[1:], tfeat, q.to(args.device),
-                                     torch.zeros(1, dtype=torch.long, device=args.device))[0].cpu() * act_std
-                    else:
-                        pred = model(f[:1], f[1:], tfeat, q.to(args.device),
-                                     spec_tokens, spec_mask)[0].cpu() * act_std
-                for h in range(chunk):
-                    if policy_kind == "baseline":
-                        # Already in action units: the head is trained on
-                        # dq / JOINT_ACTION_SCALE so the joints and the gripper
-                        # share one scale in the loss.
-                        dq = pred[h, :arm["dof"]] * JOINT_ACTION_SCALE
-                        grip = float(pred[h, MAX_DOF])
-                    else:
-                        V = (pred[h, :6] * twist_scale)[None].double()
-                        th = torch.tensor(obs["robot0_joint_pos"], dtype=torch.float64)[None]
-                        dq = (decode_twist(chain, th, V, dt=aspec.dt, lam=0.05).delta[0]).float()
-                        grip = float(pred[h, 6])
-                    a = np.zeros(env.env.action_dim)
-                    a[:arm["dof"]] = (dq / JOINT_ACTION_SCALE).numpy().clip(-1, 1)
-                    a[-1] = np.clip(grip, -1, 1)
-                    set_joint_gains(env, args.kp)
-                    obs, _, done, _ = env.step(a)
-                    if record:
-                        frames.append(np.concatenate(
-                            [obs["agentview_image"][::-1],
-                             obs["robot0_eye_in_hand_image"][::-1]], axis=1))
-                    if done:
-                        success = True
-                        break
-                if success:
-                    break
-            if record and frames:
-                write_video(Path(args.video) / f"{args.arm}_{policy_kind}_t{ti:02d}_e{ep:02d}"
-                            f"_{'ok' if success else 'fail'}.mp4", frames)
-            trials.append({
-                "metrics": {"success": bool(success)},
-                "conditions": {"robot": arm["robot"], "gripper": arm["gripper"],
-                               "dof": arm["dof"], "task_suite": args.suite,
-                               "policy_revision": policy_kind,
-                               "heldout": arm["arm_swapped"] or arm["gripper_swapped"],
-                               "arm_swapped": arm["arm_swapped"],
-                               "gripper_swapped": arm["gripper_swapped"],
-                               "camera_moved": not args.align_camera, "task": task.name},
-                "repro": {"robot": arm["robot"], "gripper": arm["gripper"],
-                          "task_suite": args.suite, "policy_revision": policy_kind},
-            })
-        env.env.close()
-        n_ok = sum(t["metrics"]["success"] for t in trials[-args.episodes_per_task:])
-        print(f"  [{ti}] {task.name[:44]:44s} {n_ok}/{args.episodes_per_task}", flush=True)
 
-    Path(args.out).write_text(json.dumps({"trials": trials}, indent=2))
-    total = sum(t["metrics"]["success"] for t in trials)
-    print(f"{policy_kind} on {args.arm}: {total}/{len(trials)} -> {args.out}")
+    all_trials = []
+    for cell_name in cells:
+      arm = ARMS[cell_name]
+      chain = spec_tokens = spec_mask = None    # built once the live model is up
+      twist_scale = torch.tensor(
+          [aspec.rot_scale * aspec.control_hz] * 3 + [aspec.pos_scale * aspec.control_hz] * 3)
+
+      trials = []
+      for ti in range(bm.n_tasks):
+          task = bm.get_task(ti)
+          bddl = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
+          torch.load = _load_trusted          # LIBERO's own bundled init states
+          try:
+              init_states = bm.get_task_init_states(ti)
+          finally:
+              torch.load = _torch_load
+          env = OffScreenRenderEnv(bddl_file_name=bddl, camera_heights=128, camera_widths=128,
+                                   robots=[arm["robot"]], gripper_types=arm["gripper"],
+                                   controller="JOINT_POSITION")
+          if chain is None:
+              env.reset()
+              flange_to_tcp, _cam = gripper_geom(env)
+              chain = build_chain(arm["mjcf"], flange_to_tcp)
+              tk, mk = encode(chain).padded(MAX_DOF)
+              spec_tokens = tk.float().to(args.device)[None]
+              spec_mask = mk.to(args.device)[None]
+              print(f"  {arm['robot']}: dof={chain.n} flange->TCP {flange_to_tcp:.4f} m "
+                    f"(gripper-dependent, measured)", flush=True)
+          tfeat = enc_txt(task.language)[None]
+          for ep in range(args.episodes_per_task):
+              env.reset()
+              env.set_init_state(remap_init_state(init_states[ep % len(init_states)], env.sim))
+              if args.align_camera:
+                  align_wrist_camera(env.sim, PANDA_CAM_TO_TCP_VEC)
+              frames = []
+              record = bool(args.video) and (ep % max(args.video_every, 1) == 0)
+              obs, success = None, False
+              set_joint_gains(env, args.kp)
+              for _ in range(3):
+                  obs, _, _, _ = env.step(np.zeros(env.env.action_dim))
+              q = torch.zeros(1, MAX_DOF + 1)
+              for step in range(0, args.max_steps, chunk):
+                  f = enc_img(obs["agentview_image"], obs["robot0_eye_in_hand_image"])
+                  qpos = torch.tensor(obs["robot0_joint_pos"], dtype=torch.float32)
+                  q[0, :arm["dof"]] = qpos
+                  with torch.no_grad():
+                      if policy_kind == "baseline":
+                          pred = model(f[:1], f[1:], tfeat, q.to(args.device),
+                                       torch.zeros(1, dtype=torch.long, device=args.device))[0].cpu() * act_std
+                      else:
+                          pred = model(f[:1], f[1:], tfeat, q.to(args.device),
+                                       spec_tokens, spec_mask)[0].cpu() * act_std
+                  for h in range(chunk):
+                      if policy_kind == "baseline":
+                          # Already in action units: the head is trained on
+                          # dq / JOINT_ACTION_SCALE so the joints and the gripper
+                          # share one scale in the loss.
+                          dq = pred[h, :arm["dof"]] * JOINT_ACTION_SCALE
+                          grip = float(pred[h, MAX_DOF])
+                      else:
+                          V = (pred[h, :6] * twist_scale)[None].double()
+                          th = torch.tensor(obs["robot0_joint_pos"], dtype=torch.float64)[None]
+                          dq = (decode_twist(chain, th, V, dt=aspec.dt, lam=0.05).delta[0]).float()
+                          grip = float(pred[h, 6])
+                      a = np.zeros(env.env.action_dim)
+                      a[:arm["dof"]] = (dq / JOINT_ACTION_SCALE).numpy().clip(-1, 1)
+                      a[-1] = np.clip(grip, -1, 1)
+                      set_joint_gains(env, args.kp)
+                      obs, _, done, _ = env.step(a)
+                      if record:
+                          frames.append(np.concatenate(
+                              [obs["agentview_image"][::-1],
+                               obs["robot0_eye_in_hand_image"][::-1]], axis=1))
+                      if done:
+                          success = True
+                          break
+                  if success:
+                      break
+              if record and frames:
+                  write_video(Path(args.video) / f"{cell_name}_{policy_kind}_t{ti:02d}_e{ep:02d}"
+                              f"_{'ok' if success else 'fail'}.mp4", frames)
+              trials.append({
+                  "metrics": {"success": bool(success)},
+                  "conditions": {"robot": arm["robot"], "gripper": arm["gripper"],
+                                 "dof": arm["dof"], "task_suite": args.suite,
+                                 "policy_revision": policy_kind,
+                                 "heldout": arm["arm_swapped"] or arm["gripper_swapped"],
+                                 "arm_swapped": arm["arm_swapped"],
+                                 "gripper_swapped": arm["gripper_swapped"],
+                                 "camera_moved": not args.align_camera, "task": task.name},
+                  "repro": {"robot": arm["robot"], "gripper": arm["gripper"],
+                            "task_suite": args.suite, "policy_revision": policy_kind},
+              })
+          env.env.close()
+          n_ok = sum(t["metrics"]["success"] for t in trials[-args.episodes_per_task:])
+          print(f"  [{ti}] {task.name[:44]:44s} {n_ok}/{args.episodes_per_task}", flush=True)
+
+      all_trials += trials
+
+    Path(args.out).write_text(json.dumps({"trials": all_trials}, indent=2))
+    total = sum(t["metrics"]["success"] for t in all_trials)
+    print(f"{policy_kind} on {'+'.join(cells)}: {total}/{len(all_trials)} -> {args.out}")
     return 0
+
 
 
 if __name__ == "__main__":
