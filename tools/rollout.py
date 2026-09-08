@@ -239,7 +239,7 @@ def main() -> int:
     register_ur5e()
     from libero.libero import benchmark, get_libero_path
     from libero.libero.envs import OffScreenRenderEnv
-    from screwhead.ik import decode_twist
+    from screwhead.ik import decode_twist, solve_ik
     from screwhead.interface import ActionSpec
     from screwhead.policy import MAX_DOF, BaselineHead, ScrewHead
     from screwhead.spec import encode
@@ -262,6 +262,10 @@ def main() -> int:
     # so loading it per cell would pay for CLIP three times over a `swaps` run.
     enc_img, enc_txt = clip_encoder(args.device)
     bm = benchmark.get_benchmark_dict()[args.suite]()
+
+    # The pose the demonstrations start from, on the arm that produced them.
+    # Every other cell is driven to it before the policy takes over.
+    home_pose = None
 
     all_trials = []
     for cell_name in cells:
@@ -291,6 +295,16 @@ def main() -> int:
               spec_mask = mk.to(args.device)[None]
               print(f"  {arm['robot']}: dof={chain.n} flange->TCP {flange_to_tcp:.4f} m "
                     f"(gripper-dependent, measured)", flush=True)
+              if cell_name == "source" or home_pose is None:
+                  from screwhead.libero import panda_chain
+                  from screwhead.kinematics import fk as _fk
+                  import numpy as _np
+                  _pc = panda_chain()
+                  _q0 = _np.array([0.0, -1.61037389e-01, 0.0, -2.44459747e00,
+                                   0.0, 2.22675220e00, _np.pi / 4])
+                  home_pose = _fk(_pc, torch.tensor(_q0, dtype=torch.float64)[None])
+                  print(f"  reference home tool pose (Panda init_qpos): "
+                        f"{_np.round(home_pose[0,:3,3].numpy(),3)}", flush=True)
           tfeat = enc_txt(task.language)[None]
           for ep in range(args.episodes_per_task):
               env.reset()
@@ -303,6 +317,25 @@ def main() -> int:
               set_joint_gains(env, args.kp)
               for _ in range(3):
                   obs, _, _, _ = env.step(np.zeros(env.env.action_dim))
+              # Start every arm at the SAME task-space pose. Left alone, each
+              # robot's own init_qpos puts its tool somewhere different -- the
+              # UR5e begins at x=0.336 where the Panda's training data starts at
+              # x=0.34, so the policy opens outside its distribution and servos
+              # away. That confounds "different arm" with "different starting
+              # state", and the swap has to vary only the first.
+              if home_pose is not None and cell_name != "source":
+                  res = solve_ik(chain, home_pose,
+                                 torch.tensor(obs["robot0_joint_pos"],
+                                              dtype=torch.float64)[None],
+                                 lam=0.02, max_iters=200, trust=0.2)
+                  if bool(res["converged"][0]):
+                      qgoal = res["theta"][0].numpy()
+                      for _ in range(40):
+                          a0 = np.zeros(env.env.action_dim)
+                          cur = env.env._get_observations()["robot0_joint_pos"]
+                          a0[:arm["dof"]] = np.clip(
+                              (qgoal[:arm["dof"]] - cur[:arm["dof"]]) / JOINT_ACTION_SCALE, -1, 1)
+                          obs, _, _, _ = env.step(a0)
               q = torch.zeros(1, STATE_DIM)
               for step in range(0, args.max_steps, chunk):
                   f = enc_img(obs["agentview_image"], obs["robot0_eye_in_hand_image"])
