@@ -44,6 +44,10 @@ class PatchHead(nn.Module):
         self.proj = nn.Linear(DIM, width)
         self.cam = nn.Parameter(torch.zeros(2, 1, width))      # which camera a token came from
         self.state = nn.Linear(STATE_DIM, width)
+        # The instruction enters as an extra key/value the queries can attend to,
+        # rather than being added to the query. That lets the model select image
+        # regions BY the instruction, which is the point of keeping patches.
+        self.text = nn.Linear(DIM, width)
         self.q = nn.Parameter(torch.randn(queries, width) * 0.02)
         self.attn = nn.MultiheadAttention(width, heads, batch_first=True)
         self.norm1 = nn.LayerNorm(width)
@@ -60,9 +64,11 @@ class PatchHead(nn.Module):
         self.norm3 = nn.LayerNorm(width)
         self.out = nn.Linear(width * queries, chunk * out_dim)
 
-    def forward(self, agent, wrist, state, tok=None, mask=None, eid=None):
+    def forward(self, agent, wrist, state, text, tok=None, mask=None, eid=None):
         b, n, _ = agent.shape
-        v = torch.cat([self.proj(agent) + self.cam[0], self.proj(wrist) + self.cam[1]], 1)
+        v = torch.cat([self.proj(agent) + self.cam[0],
+                       self.proj(wrist) + self.cam[1],
+                       self.text(text)[:, None]], 1)
         s = self.state(state)[:, None]
         q = self.q[None].expand(b, -1, -1) + s
         h, _ = self.attn(q, v, v, need_weights=False)
@@ -92,6 +98,7 @@ def load_meta(cache: Path, chunk: int, policy: str):
                         torch.tensor(np.asarray(d["gripper_state"]),
                                      dtype=torch.float64)).float().numpy()
         tasks[ti] = dict(act=act.astype(np.float32), state=st, demo=dem,
+                         text=np.asarray(d["text"], dtype=np.float32).reshape(-1),
                          agent=cache / f"task{ti:02d}_agent.npy",
                          wrist=cache / f"task{ti:02d}_wrist.npy")
         for i in range(len(dem) - chunk):
@@ -164,6 +171,7 @@ def main() -> int:
         ag = np.stack([mm[t][0][i] for t, i, _ in sel])
         wr = np.stack([mm[t][1][i] for t, i, _ in sel])
         st = torch.tensor(np.stack([tasks[t]["state"][i] for t, i, _ in sel])).cuda()
+        tx = torch.tensor(np.stack([tasks[t]["text"] for t, _, _ in sel])).cuda()
         y = torch.tensor(np.stack([tasks[t]["act"][i:i + args.chunk]
                                    for t, i, _ in sel])).cuda() / stdc
         if back is None:
@@ -174,9 +182,9 @@ def main() -> int:
             with ctx:
                 fa, fw = back.encode(ag).float(), back.encode(wr).float()
         n = len(sel)
-        p = (head(fa, fw, st, tok.expand(n, -1, -1), mask.expand(n, -1))
+        p = (head(fa, fw, st, tx, tok.expand(n, -1, -1), mask.expand(n, -1))
              if args.policy == "screwhead" else
-             head(fa, fw, st, eid=torch.zeros(n, dtype=torch.long, device="cuda")))
+             head(fa, fw, st, tx, eid=torch.zeros(n, dtype=torch.long, device="cuda")))
         return nn.functional.smooth_l1_loss(p, y), p.detach(), y
 
     outdir = Path(args.out); outdir.mkdir(parents=True, exist_ok=True)

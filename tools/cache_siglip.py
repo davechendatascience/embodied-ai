@@ -54,7 +54,11 @@ def main() -> int:
         with torch.no_grad():
             ids = tok([str(d["instruction"])], padding="max_length",
                       return_tensors="pt").to(args.device)
-            d["text"] = full.get_text_features(**ids)[0].to(torch.float16).cpu().numpy()
+            # NOT get_text_features(...)[0]: that returns BaseModelOutputWithPooling,
+            # so [0] selects last_hidden_state and yields (1, 64, 1152) -- 64 token
+            # vectors where one pooled sentence embedding is wanted. Identical
+            # mistake to the CLIP cache, made twice.
+            d["text"] = full.text_model(**ids).pooler_output[0].to(torch.float16).cpu().numpy()
         d["grid"] = args.grid
         for cam in ("agent", "wrist"):
             frames = np.load(src / f"task{ti:02d}_{cam}.npy", mmap_mode="r")
