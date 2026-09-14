@@ -136,6 +136,90 @@ def to_env_action(mean_std_units, act_sd):
     return np.clip(mean_std_units * act_sd, -1.0, 1.0)
 
 
+
+# ------------------------------------------------------- decentralised collection
+def _collector(remote, task, seed, horizon, cpu, init_ckpt):
+    """Collects a whole rollout segment locally with its own CPU copy of the actor.
+
+    The per-step synchronous vector env paid every worker's tail latency on every
+    step (21 ms per step against a 10 ms isolated worker). Here the barrier is
+    once per iteration, so efficiency cores contribute instead of stalling.
+    """
+    if cpu is not None:
+        os.sched_setaffinity(0, {cpu})
+    os.environ["OMP_NUM_THREADS"] = "1"
+    import torch
+    torch.set_num_threads(1)
+    sys.path.insert(0, str(ROOT))
+    from screwhead.teacher_env import PrivilegedEnv
+    actor, _, st, ck = build(init_ckpt, "cpu")
+    mu_o, sd_o, mask, act_sd = (st["obs_mu"].numpy(), st["obs_sd"].numpy(),
+                                st["obs_mask"].numpy(), st["act_sd"].numpy())
+    env = PrivilegedEnv(task, radius_m=0.0, horizon=horizon, seed=seed)
+    rng = np.random.default_rng(seed)
+    obs = None
+    while True:
+        cmd, arg = remote.recv()
+        if cmd == "close":
+            env.close(); remote.close(); return
+        weights, log_std, radius, T = arg
+        actor.load_state_dict(weights)
+        std = np.exp(np.asarray(log_std, np.float32))
+        if radius != env.radius or obs is None:
+            env.radius = radius
+            obs = env.reset()
+        n_o, n_a = len(obs), len(act_sd)
+        O = np.zeros((T, n_o), np.float32); A = np.zeros((T, n_a), np.float32)
+        LP = np.zeros(T, np.float32); R = np.zeros(T, np.float32)
+        TERM = np.zeros(T, np.float32); TIMEOUT = np.zeros(T, np.float32)
+        FINAL = np.zeros((T, n_o), np.float32); infos = []
+        for t in range(T):
+            x = (obs - mu_o) / sd_o * mask
+            with torch.no_grad():
+                m = actor(torch.from_numpy(x.astype(np.float32))).numpy()
+            a = m + std * rng.standard_normal(n_a).astype(np.float32)
+            LP[t] = float(-0.5 * (((a - m) / std) ** 2).sum() - np.log(std).sum()
+                          - 0.5 * n_a * np.log(2 * np.pi))
+            O[t], A[t] = x, a
+            o2, r, done, info = env.step(np.clip(a * act_sd, -1.0, 1.0))
+            R[t] = r
+            if done:
+                TERM[t] = 1.0 if info["success"] else 0.0
+                if info["truncated"] and not info["success"]:
+                    TIMEOUT[t] = 1.0
+                    FINAL[t] = (o2 - mu_o) / sd_o * mask
+                infos.append(dict(success=info["success"],
+                                  placement_mm=float(np.linalg.norm(env.placement[:2]) * 1000),
+                                  length=env.t))
+                o2 = env.reset()
+            obs = o2
+        last = ((obs - mu_o) / sd_o * mask).astype(np.float32)
+        remote.send((O, A, LP, R, TERM, TIMEOUT, FINAL, last, infos))
+
+
+class Collector:
+    def __init__(self, tasks, seed, horizon, cpus, init_ckpt):
+        ctx = mp.get_context("spawn")
+        self.remotes, self.procs = [], []
+        for i, t in enumerate(tasks):
+            a, b = ctx.Pipe()
+            cpu = None if not cpus else cpus[i % len(cpus)]
+            p = ctx.Process(target=_collector, args=(b, t, seed * 1000 + i, horizon, cpu, init_ckpt),
+                            daemon=True)
+            p.start(); b.close()
+            self.remotes.append(a); self.procs.append(p)
+
+    def collect(self, weights, log_std, radius, T):
+        for r in self.remotes:
+            r.send(("collect", (weights, log_std, radius, T)))
+        return [r.recv() for r in self.remotes]
+
+    def close(self):
+        for r in self.remotes:
+            try: r.send(("close", None))
+            except Exception: pass
+        for p in self.procs: p.join(timeout=10)
+
 # ------------------------------------------------------------------------- train
 def train(args):
     import torch
@@ -151,6 +235,8 @@ def train(args):
     act_sd_np = st["act_sd"].cpu().numpy()
 
     tasks = [t for t in range(10) for _ in range(args.envs_per_task)]
+    if args.decentralised:
+        return train_decentralised(args, actor, critic, bc_actor, log_std, opt_a, opt_c, st, ck, tasks)
     # The GB10 has 10 Cortex-X925 cores (3.9 GHz) and 10 Cortex-A725 (2.8 GHz).
     # A synchronous vector env steps at the pace of its SLOWEST worker, so an
     # unpinned worker landing on an efficiency core sets everyone's rate.
@@ -276,6 +362,110 @@ def train(args):
     return 0
 
 
+
+
+def ppo_update(args, it, actor, critic, bc_actor, log_std, opt_a, opt_c, bO, bA, bLP, bAdv, bRet):
+    import torch
+    from torch import nn
+    bAdv = (bAdv - bAdv.mean()) / (bAdv.std() + 1e-8)
+    warm = it < args.critic_warmup
+    bc_coef = 0.0 if warm else args.bc_coef * max(0.0, 1 - (it - args.critic_warmup) / args.bc_anneal)
+    n = len(bO); kl_sum = clipfrac = vloss_sum = 0.0; nb = 0
+    for _ in range(args.epochs):
+        perm = torch.randperm(n, device=bO.device)
+        for k in range(0, n, args.minibatch):
+            i = perm[k:k + args.minibatch]
+            v = critic(bO[i]).squeeze(-1)
+            vloss = 0.5 * (v - bRet[i]).pow(2).mean()
+            opt_c.zero_grad(set_to_none=True); vloss.backward()
+            nn.utils.clip_grad_norm_(critic.parameters(), 1.0); opt_c.step()
+            vloss_sum += vloss.item(); nb += 1
+            if warm:
+                continue
+            mu = actor(bO[i]); dist = torch.distributions.Normal(mu, log_std.exp())
+            lp = dist.log_prob(bA[i]).sum(-1)
+            ratio = (lp - bLP[i]).exp()
+            pg = -torch.min(ratio * bAdv[i], ratio.clamp(1 - args.clip, 1 + args.clip) * bAdv[i]).mean()
+            with torch.no_grad():
+                bc_target = bc_actor(bO[i])
+            loss = pg + bc_coef * (mu - bc_target).pow(2).mean() - args.ent_coef * dist.entropy().sum(-1).mean()
+            opt_a.zero_grad(set_to_none=True); loss.backward()
+            nn.utils.clip_grad_norm_(list(actor.parameters()) + [log_std], 1.0); opt_a.step()
+            with torch.no_grad():
+                kl_sum += (bLP[i] - lp).mean().item()
+                clipfrac += ((ratio - 1).abs() > args.clip).float().mean().item()
+                log_std.clamp_(args.min_log_std, args.max_log_std)
+    return dict(warmup=warm, bc_coef=round(bc_coef, 4), value_loss=vloss_sum / max(nb, 1),
+                approx_kl=None if warm else kl_sum / max(nb, 1),
+                clipfrac=None if warm else clipfrac / max(nb, 1))
+
+
+def train_decentralised(args, actor, critic, bc_actor, log_std, opt_a, opt_c, st, ck, tasks):
+    import torch
+    dev = args.device
+    cpus = parse_cpus(args.worker_cpus)
+    col = Collector(tasks, args.seed, args.horizon, cpus, args.init)
+    out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
+    log = open(out / "log.jsonl", "a")
+    radius, window, steps, t0 = args.radius_start, [], 0, time.time()
+    T = args.rollout
+    for it in range(args.iters):
+        tc = time.perf_counter()
+        weights = {k: v.detach().cpu() for k, v in actor.state_dict().items()}
+        segs = col.collect(weights, log_std.detach().cpu().numpy(), radius, T)
+        t_collect = time.perf_counter() - tc
+        N = len(segs)
+        O, A, LP, R, TERM, TOUT, FINAL = [torch.as_tensor(np.stack([sg[j] for sg in segs], 1), device=dev)
+                                          for j in range(7)]                 # (T, N, ...)
+        LAST = torch.as_tensor(np.stack([sg[7] for sg in segs], 0), device=dev)   # (N, obs)
+        ep_info = [inf for sg in segs for inf in sg[8]]
+        for inf in ep_info:
+            window.append(inf["success"])
+        steps += T * N
+        with torch.no_grad():
+            VAL = critic(O.reshape(T * N, -1)).reshape(T, N)
+            V_last = critic(LAST).squeeze(-1)
+            R = R + args.gamma * critic(FINAL.reshape(T * N, -1)).reshape(T, N) * TOUT   # bootstrap timeouts
+            V_next = torch.cat([VAL[1:], V_last[None]], 0)
+            ended = ((TERM + TOUT) > 0).float()           # episode boundary inside the segment
+            adv = torch.zeros(T, N, device=dev); last = torch.zeros(N, device=dev)
+            for t in reversed(range(T)):
+                delta = R[t] + args.gamma * V_next[t] * (1 - ended[t]) - VAL[t]
+                last = delta + args.gamma * args.lam * (1 - ended[t]) * last
+                adv[t] = last
+            ret = adv + VAL
+        upd = ppo_update(args, it, actor, critic, bc_actor, log_std, opt_a, opt_c,
+                         O.reshape(T * N, -1), A.reshape(T * N, -1), LP.reshape(-1),
+                         adv.reshape(-1), ret.reshape(-1))
+        succ = float(np.mean([e["success"] for e in ep_info])) if ep_info else float("nan")
+        advanced = False
+        if len(window) >= args.curriculum_window:
+            rate = float(np.mean(window[-args.curriculum_window:]))
+            if rate >= args.curriculum_target and radius < args.radius_max:
+                radius = min(args.radius_max, radius + args.radius_step); window = []; advanced = True
+        rec = dict(it=it, steps=steps, sps=round(steps / (time.time() - t0)), radius_mm=radius * 1000,
+                   episodes=len(ep_info), success=succ, t_collect_s=round(t_collect, 2),
+                   log_std=log_std.detach().cpu().numpy().round(3).tolist(), advanced=advanced, **upd)
+        log.write(json.dumps(rec) + "\n"); log.flush()
+        if it % args.print_every == 0 or advanced:
+            print(f"it {it:4d} steps {steps:8d} ({rec['sps']}/s)  radius {radius*1000:4.0f}mm  "
+                  f"eps {len(ep_info):3d} success {succ:.2f}  vloss {rec['value_loss']:.4f}  "
+                  f"{'WARMUP' if upd['warmup'] else 'kl %.4f clip %.2f' % (upd['approx_kl'], upd['clipfrac'])}"
+                  f"  collect {t_collect:.1f}s{'  -> radius up' if advanced else ''}", flush=True)
+        if (it + 1) % args.save_every == 0 or it == args.iters - 1:
+            torch.save({**{k: ck[k] for k in ("obs_mu", "obs_sd", "act_sd", "obs_dim", "act_dim")},
+                        "obs_mask": st["obs_mask"].cpu().numpy(),
+                        "state_dict": {k: v.cpu() for k, v in actor.state_dict().items()},
+                        "critic": {k: v.cpu() for k, v in critic.state_dict().items()},
+                        "log_std": log_std.detach().cpu(), "radius_m": radius, "it": it,
+                        "steps": steps, "args": vars(args)}, out / "teacher_rl.pt")
+            if args.keep_every and (it + 1) % args.keep_every == 0:
+                import shutil
+                shutil.copy(out / "teacher_rl.pt", out / f"teacher_rl_it{it+1:05d}.pt")
+    col.close(); log.close()
+    return 0
+
+
 # -------------------------------------------------------------------------- eval
 def _eval_task(a):
     ckpt, task, radius, episodes, seed, horizon, env_kw = a
@@ -362,6 +552,9 @@ def main() -> int:
     tr.add_argument("--save-every", type=int, default=25)
     tr.add_argument("--seed", type=int, default=0)
     tr.add_argument("--device", default="cuda")
+    tr.add_argument("--decentralised", action="store_true",
+                    help="workers collect whole segments with a local actor copy")
+    tr.add_argument("--keep-every", type=int, default=0, help="also keep numbered checkpoints")
     ev = sub.add_parser("eval")
     ev.add_argument("--ckpt", required=True)
     ev.add_argument("--radius", type=float, default=0.0)

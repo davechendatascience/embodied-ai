@@ -173,13 +173,18 @@ class PrivilegedEnv:
         self.last_obs = self.obs()
         return self.last_obs
 
-    def obs(self) -> np.ndarray:
-        """PRIVILEGED. The only place simulator object state enters the teacher."""
+    def obs(self, raw: dict | None = None) -> np.ndarray:
+        """PRIVILEGED. The only place simulator object state enters the teacher.
+
+        `raw` is the observation dict the environment just returned. Without it
+        observables are refreshed with force_update -- they are cached on a
+        sampling interval, and a state set without stepping (BC extraction, a
+        reset) would otherwise read the previous frame -- which on a rendering
+        environment renders both cameras a second time.
+        """
         sim = self.env.sim
-        # force_update: observables are cached on a sampling interval, and a
-        # state set without stepping (BC extraction, a reset) would otherwise
-        # read the previous frame's joints.
-        o = self.env.env._get_observations(force_update=True)
+        o = raw if raw is not None else self.env.env._get_observations(force_update=True)
+        self.raw = o
         q = np.asarray(o["robot0_joint_pos"], np.float64)
         gq = o["robot0_gripper_qpos"]
         T = fk(self.chain, torch.tensor(q)[None])[0].numpy()
@@ -212,10 +217,10 @@ class PrivilegedEnv:
         cmd[:7] = self.servo.command(np.asarray(o["robot0_joint_pos"]), a[:6] * self.scale)
         cmd[-1] = a[6]
         self._gains()
-        _, _, done, _ = self.env.step(cmd)
+        raw, _, done, _ = self.env.step(cmd)
         self.t += 1
         success = bool(done)
-        self.last_obs = self.obs()
+        self.last_obs = self.obs(raw)
         truncated = self.t >= self.horizon
         return self.last_obs, float(success), success or truncated, {"success": success,
                                                                      "truncated": truncated}
@@ -234,6 +239,20 @@ class PrivilegedEnv:
         sim.set_state_from_flattened(remap_init_state(flat_state, sim))
         sim.forward()
         return self.obs()
+
+    # -- what the STUDENT is allowed to see ------------------------------------------
+    def images(self) -> tuple[np.ndarray, np.ndarray]:
+        """Agentview and wrist frames of the current state (render=True only)."""
+        return self.raw["agentview_image"], self.raw["robot0_eye_in_hand_image"]
+
+    def student_state(self) -> np.ndarray:
+        """Tool pose + gripper aperture via tool_state, the student's proprioception.
+        No object state, and not the teacher's layout of the same quantities."""
+        from .state import tool_state
+        q = torch.tensor(np.asarray(self.raw["robot0_joint_pos"]), dtype=torch.float64)[None]
+        g = self.raw["robot0_gripper_qpos"]
+        return tool_state(self.chain, q, torch.tensor([float(g[0] - g[1])], dtype=torch.float64)
+                          )[0].float().numpy()
 
     def close(self):
         self.env.env.close()
