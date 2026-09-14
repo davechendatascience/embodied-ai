@@ -72,6 +72,10 @@ class ProgramConfig:
     neighbor_clearance: float = 0.0   # m: outer finger must clear other objects' footprints by this
     check_closed: bool = False        # also collision-check the grasp pose with the jaws closed
     clear_first: bool = True          # below the pre-grasp and far off: rise before traversing
+    funnel: bool = True               # continuous approach/descend (False: the original switched version)
+    funnel_xy: float = 0.02           # lateral error at which the target is back at full approach height
+    funnel_rot: float = 0.15          # rad, same for rotation
+    funnel_aperture: float = 0.012    # m, same for pre-shaping error
     exit_dir_deg: float | None = None  # leave along this base-frame direction before rising
     exit_dist: float = 0.0
     exit_height: float = 0.015
@@ -93,7 +97,11 @@ for _t in (0, 1, 6, 8):
     PROGRAMS[_t] = replace(BASE, neighbor_clearance=0.03, check_closed=True)
 
 PROGRAMS[4] = replace(BASE, preshape_aperture=0.026, sector_rel_robot=(0.0, 40.0),
-                      selection="path", min_sigma=0.05, approaches=(0.08, 0.05))
+                      selection="path", min_sigma=0.05, approaches=(0.08, 0.05),
+                      # switched approach, not the funnel: in a bowl-sized pocket the funnel's
+                      # blended sideways-and-down motion meets the drawer walls. Same seeds and
+                      # layouts, 6 episodes: funnel 0/6, switched 6/6.
+                      funnel=False)
 
 # Task 7 -- bowl on the stove, at the edge of the workspace. Endpoint grasps are
 # well conditioned from the nominal posture (sigma_min 0.10-0.18 on the robot-facing
@@ -350,12 +358,44 @@ class ScriptedTeacher:
         if e_pos < k.at_grasp_pos and e_rot < k.at_grasp_rot:
             self.phase = "close"
             return np.concatenate([self.twist_to(R, p, R_g, p_g), [1.0]])
-        grip_open, settled = -1.0, True
+        grip_open, ap_err = -1.0, 0.0
         if k.preshape_aperture is not None:
             pred = s["aperture"] + s.get("aperture_rate", 0.0) * k.preshape_tau
             grip_open = 1.0 if pred > k.preshape_aperture + k.preshape_band else \
                 (-1.0 if pred < k.preshape_aperture - k.preshape_band else 0.0)
-            settled = abs(s["aperture"] - k.preshape_aperture) < 0.004 and abs(s.get("aperture_rate", 1.0)) < 0.01
+            # position only: the finger-velocity term spikes whenever the arm moves (the
+            # fingers lag), which kept raising the funnel target and bobbed the tool
+            ap_err = abs(s["aperture"] - k.preshape_aperture)
+        if not k.funnel:
+            return self._switched_approach(s, R, p, R_g, p_g, p_pre, off, lateral, above, e_rot, approach_len,
+                                           grip_open, ap_err)
+        # FUNNEL. The target height above the grasp shrinks continuously as the tool
+        # aligns -- laterally, in rotation, and (when pre-shaping) in aperture -- so
+        # nearby states get nearby labels. The switched version descended only inside
+        # 12 mm / 0.12 rad and otherwise returned to the pre-grasp: measured in closed
+        # loop, a student arriving just outside that region got labels it had never
+        # seen, averaged "descend" with "correct sideways", and stalled at 18% of the
+        # teacher's speed (direction agreement 0.98 for 25 steps, then 0.08).
+        misalign = max(lateral / k.funnel_xy, e_rot / k.funnel_rot,
+                       ap_err / k.funnel_aperture if k.preshape_aperture is not None else 0.0)
+        height = approach_len * float(np.clip(misalign, 0.0, 1.0))
+        target = p_g + z_up * height
+        # Rising before crossing, also continuous: well below the pre-grasp the target
+        # stays over the tool (rise in place); at pre-grasp height it is over the grasp.
+        if k.clear_first:
+            lift_w = float(np.clip((p[2] - (p_pre[2] - 0.03)) / 0.03, 0.0, 1.0))
+            far_w = float(np.clip((float(np.linalg.norm((p - target)[:2])) - 0.02) / 0.04, 0.0, 1.0))
+            w = 1.0 - far_w * (1.0 - lift_w)           # 1: head for the target; 0: rise in place
+            target = np.array([p[0] + w * (target[0] - p[0]), p[1] + w * (target[1] - p[1]),
+                               max(target[2], min(p_pre[2] + 0.03, p[2] + 0.05)) if w < 1.0 else target[2]])
+        self.phase = ("descend" if misalign < 0.5 else "approach") if k.preshape_aperture is None or ap_err < 0.004 \
+            else "preshape"
+        return np.concatenate([self.twist_to(R, p, R_g, target), [grip_open]])
+
+    def _switched_approach(self, s, R, p, R_g, p_g, p_pre, off, lateral, above, e_rot, approach_len, grip_open, ap_err):
+        """The original switched approach, kept for comparison (funnel=False)."""
+        k, z_up = self.k, np.array([0, 0, 1.0])
+        settled = k.preshape_aperture is None or (ap_err < 0.004 and abs(s.get("aperture_rate", 1.0)) < 0.01)
         if lateral < k.column_xy and e_rot < k.column_rot and above and float(off @ z_up) <= approach_len + 0.01 and settled:
             self.phase = "descend"
             return np.concatenate([self.twist_to(R, p, R_g, p_g), [grip_open]])
@@ -363,8 +403,6 @@ class ScriptedTeacher:
         target = p_pre
         far = float(np.linalg.norm((p - p_pre)[:2])) > 0.04
         if k.clear_first and far and p[2] < p_pre[2] + 0.01:
-            # below the pre-grasp and far from it: rise in place first, so the hand
-            # does not cut through the table or a neighbour on the way across
             target = np.array([p[0], p[1], p_pre[2] + 0.03])
             self.phase = "rise"
         return np.concatenate([self.twist_to(R, p, R_g, target), [grip_open]])

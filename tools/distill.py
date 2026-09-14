@@ -114,7 +114,11 @@ def _worker(remote, task, seed, cpu, teacher_ckpt, horizon, radius, env_kw):
     def payload(o, done=False, info=None):
         a, w = env.images()
         lab = label(o)                        # computes the program's phase for this state
-        return (a, w, env.student_state(), lab, done, info, phase())
+        try:
+            stage = int(env.progress()[1])
+        except Exception:
+            stage = -1
+        return (a, w, env.student_state(), lab, done, info, phase(), stage)
 
     remote.send(env.language)
     while True:
@@ -137,6 +141,12 @@ def _worker(remote, task, seed, cpu, teacher_ckpt, horizon, radius, env_kw):
 
 
 # ------------------------------------------------------------------------ student
+def decode_gripper(g):
+    """Regressed gripper output -> nearest of {-1 open, 0 hold, +1 close}."""
+    g = np.asarray(g, np.float32)
+    return np.where(g > 0.5, 1.0, np.where(g < -0.5, -1.0, 0.0)).astype(np.float32)
+
+
 def load_student(ckpt, device):
     import torch
     from screwhead.policy import ScrewHead
@@ -192,7 +202,8 @@ def collect(args):
     cur = [None] * len(tasks)
     waiting = set(range(len(tasks)))
 
-    buf = {k: [] for k in ("agent", "wrist", "state", "label", "task", "episode", "step", "exec_teacher")}
+    buf = {k: [] for k in ("agent", "wrist", "state", "label", "task", "episode", "step", "exec_teacher",
+                           "executed", "phase", "stage")}
     ep_id = [t * 10000 + i * 1000 for i, t in enumerate(tasks)]; ep_step = [0] * len(tasks)
     worker_eps = [0] * len(tasks)
     per_task_workers = {t: tasks.count(t) for t in set(tasks)}
@@ -243,6 +254,11 @@ def collect(args):
                 pred = student(sa, sw, st_text, state, tok.expand(len(idx), -1, -1),
                                tmask.expand(len(idx), -1))[:, 0] * act_std
                 s_act = pred.clamp(-1, 1).cpu().numpy()
+                # The gripper command is three-valued -- close, HOLD, open -- and robosuite
+                # reads only its sign, so a regressed 0.03 meant "close". Measured: 0 of 92
+                # hold labels were executed as hold, and the drawer task (which pre-shapes by
+                # holding) scored 0/10. Decode to the nearest of the three.
+                s_act[:, 6] = decode_gripper(s_act[:, 6])
         for j, i in enumerate(idx):
             teacher_exec = student is None or rng.random() < args.beta
             act = cur[i][3] if teacher_exec else s_act[j]
@@ -258,6 +274,8 @@ def collect(args):
                 buf["state"].append(cur[i][2]); buf["label"].append(cur[i][3])
                 buf["task"].append(tasks[i]); buf["episode"].append(ep_id[i])
                 buf["step"].append(ep_step[i]); buf["exec_teacher"].append(teacher_exec)
+                buf["executed"].append(np.asarray(act, np.float32)); buf["phase"].append(cur[i][6])
+                buf["stage"].append(cur[i][7])
             remotes[i].send(("step", act))
             waiting.add(i)
         frames += len(idx)
@@ -282,6 +300,7 @@ def collect(args):
                  state=np.stack(buf["state"]).astype(np.float32), label=np.stack(buf["label"]),
                  task=np.array(buf["task"], np.int8), episode=ep, step=np.array(buf["step"], np.int32),
                  exec_teacher=np.array(buf["exec_teacher"]),
+                 executed=np.stack(buf["executed"]), phase=np.array(buf["phase"]), stage=np.array(buf["stage"], np.int8),
                  episode_success=np.array([succ.get(e, False) for e in ep]),
                  text=text.cpu().numpy(), radius=args.radius, beta=args.beta)
         Path(str(out) + ".json").write_text(json.dumps({
