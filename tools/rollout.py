@@ -30,7 +30,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "third_party" / "LIBERO"))
 
-JOINT_ACTION_SCALE = 0.05          # robosuite joint_position.json output_max
+from screwhead.libero_env import JOINT_ACTION_SCALE, build_chain, set_joint_gains  # noqa: E402
 # The four cells of the swap, all tendon-free. Only PandaGripper and
 # RethinkGripper are: every other robosuite gripper (Robotiq 85/140/S, Jaco
 # three-finger) couples its fingers with a <tendon> spring, and the Robotiq85
@@ -70,25 +70,6 @@ def clip_encoder(device):
     return images, text
 
 
-def build_chain(mjcf_name: str, tool_z: float):
-    """Chain with the tool frame at THIS arm's grip site.
-
-    tool_z is measured from the live model, never assumed. The offset is a
-    property of the GRIPPER, not the arm: PandaGripper puts the grip site
-    0.0970 m beyond the flange, Robotiq85Gripper 0.1450 m. LIBERO gives the
-    Panda the former and the UR5e the latter, so a single hardcoded constant is
-    48 mm wrong on the held-out arm -- and a 48 mm tool-frame error makes every
-    decoded twist reference the wrong point while looking like a kinematic
-    transfer failure, which is the opposite of what it is.
-    """
-    from screwhead.libero import ROBOSUITE_ROBOTS
-    from screwhead.mjcf import from_mjcf
-    base = from_mjcf(ROBOSUITE_ROBOTS / mjcf_name / "robot.xml", angle="radian", name=mjcf_name)
-    off = torch.eye(4, dtype=base.M.dtype)
-    off[2, 3] = float(tool_z)
-    return base.with_tool(off)
-
-
 def write_video(path: Path, frames, fps: int = 20) -> None:
     """Agentview and wrist side by side, at the control rate.
 
@@ -101,16 +82,6 @@ def write_video(path: Path, frames, fps: int = 20) -> None:
     with imageio.get_writer(path, fps=fps, macro_block_size=1) as w:
         for f in frames:
             w.append_data(np.ascontiguousarray(f))
-
-
-def set_joint_gains(env, kp: float) -> None:
-    """Stiffen the joint controller. Re-fetched every call on purpose: reset()
-    rebuilds the controller object, so a handle captured once goes stale and
-    silently leaves the gain at its default."""
-    c = env.env.robots[0].controller
-    n = len(np.atleast_1d(c.kp))
-    c.kp = np.ones(n) * kp
-    c.kd = 2 * np.sqrt(c.kp)
 
 
 def replay(args) -> int:

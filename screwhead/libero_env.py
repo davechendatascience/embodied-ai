@@ -357,3 +357,37 @@ def build(suite_name, task_id, robot="Panda", gripper="default", res=256,
     if fixture_ref:
         pin_fixtures(env.sim, fixture_ref)
     return env, suite, task
+
+
+JOINT_ACTION_SCALE = 0.05          # robosuite joint_position.json output_max
+
+
+def build_chain(mjcf_name: str, tool_z: float):
+    """Chain with the tool frame at THIS arm's grip site.
+
+    tool_z is measured from the live model, never assumed. The offset is a
+    property of the GRIPPER, not the arm: PandaGripper puts the grip site
+    0.0970 m beyond the flange, Robotiq85Gripper 0.1450 m. LIBERO gives the
+    Panda the former and the UR5e the latter, so a single hardcoded constant is
+    48 mm wrong on the held-out arm -- and a 48 mm tool-frame error makes every
+    decoded twist reference the wrong point while looking like a kinematic
+    transfer failure, which is the opposite of what it is.
+    """
+    import torch
+    from .libero import ROBOSUITE_ROBOTS
+    from .mjcf import from_mjcf
+    base = from_mjcf(ROBOSUITE_ROBOTS / mjcf_name / "robot.xml", angle="radian", name=mjcf_name)
+    off = torch.eye(4, dtype=base.M.dtype)
+    off[2, 3] = float(tool_z)
+    return base.with_tool(off)
+
+
+def set_joint_gains(env, kp: float) -> None:
+    """Stiffen the joint controller. Re-fetched every call on purpose: reset()
+    rebuilds the controller object, so a handle captured once goes stale and
+    silently leaves the gain at its default."""
+    import numpy as np
+    c = env.env.robots[0].controller
+    n = len(np.atleast_1d(c.kp))
+    c.kp = np.ones(n) * kp
+    c.kd = 2 * np.sqrt(c.kp)
