@@ -40,6 +40,12 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# DART noise only in free space. Measured: noise in every phase (sigma 0.3 of the
+# speed limits) made the program 0/16 -- a 3.75 mm/step random walk never settles
+# inside the 6 mm grasp tolerance and shakes the squeeze. Drift while travelling
+# is recoverable, and recovering from it is what the student needs to see.
+NOISY_PHASES = {"approach", "rise", "carry", ""}
+
 
 # ------------------------------------------------------------------------ workers
 def load_teacher(ckpt: str):
@@ -83,18 +89,32 @@ def _worker(remote, task, seed, cpu, teacher_ckpt, horizon, radius, env_kw):
     torch.set_num_threads(1)
     sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "tools"))
     from screwhead.teacher_env import PrivilegedEnv
-    label, teacher_kw, kind = load_teacher(teacher_ckpt)
-    kw = dict(horizon=horizon, **env_kw)
-    kw.update(teacher_kw)                 # an RL teacher's own training distribution wins
-    if kind == "rl":
-        # including bowl placement: the RL teacher trained with the bowl where
-        # LIBERO puts it, so a displaced bowl would ask it for labels it never learned
-        radius = float(teacher_kw.get("radius_m", 0.0))
-    env = PrivilegedEnv(task, radius_m=radius, seed=seed, render=True, **{k: v for k, v in kw.items() if k != "radius_m"})
+    if teacher_ckpt == "scripted":
+        # the per-task demonstration program; it reads the simulator, so it is built
+        # around the environment, and it vetoes layouts it cannot solve
+        from screwhead.scripted_teacher import ScriptedTeacher
+        env = PrivilegedEnv(task, radius_m=radius, seed=seed, render=True, horizon=horizon, **env_kw)
+        program = ScriptedTeacher(env)
+        if env.layout_radius > 0:
+            env.layout_check = program.layout_feasible
+        label = lambda o: program.act().astype(np.float32)
+        phase = lambda: program.phase
+    else:
+        label, teacher_kw, kind = load_teacher(teacher_ckpt)
+        kw = dict(horizon=horizon, **env_kw)
+        kw.update(teacher_kw)                 # an RL teacher's own training distribution wins
+        if kind == "rl":
+            # including bowl placement: the RL teacher trained with the bowl where
+            # LIBERO puts it, so a displaced bowl would ask it for labels it never learned
+            radius = float(teacher_kw.get("radius_m", 0.0))
+        env = PrivilegedEnv(task, radius_m=radius, seed=seed, render=True,
+                            **{k: v for k, v in kw.items() if k != "radius_m"})
+        phase = lambda: ""
 
     def payload(o, done=False, info=None):
         a, w = env.images()
-        return (a, w, env.student_state(), label(o), done, info)
+        lab = label(o)                        # computes the program's phase for this state
+        return (a, w, env.student_state(), lab, done, info, phase())
 
     remote.send(env.language)
     while True:
@@ -143,7 +163,7 @@ def collect(args):
     dev = args.device
     rng = np.random.default_rng(args.seed)
     enc_img, enc_txt = clip_encoder(dev)
-    if "norm_mean" in torch.load(args.teacher, map_location="cpu", weights_only=False):
+    if args.teacher != "scripted" and "norm_mean" in torch.load(args.teacher, map_location="cpu", weights_only=False):
         args.radius = 0.0            # the workers take placement from an RL teacher; keep the report honest
     student = act_std = None
     if args.beta < 1.0:
@@ -157,14 +177,20 @@ def collect(args):
     for i, t in enumerate(tasks):
         a, b = ctx.Pipe()
         p = ctx.Process(target=_worker, args=(b, t, args.seed * 100 + t, cpus[i % len(cpus)],
-                                              args.teacher, args.horizon, args.radius, start_kw(args)), daemon=True)
+                                              args.teacher, args.horizon, args.radius,
+                                              dict(start_kw(args), layout_radius=args.layout_radius)), daemon=True)
         p.start(); b.close(); remotes.append(a); procs.append(p)
     langs = [r.recv() for r in remotes]
     # indexed by TASK, not by worker: several workers may run the same task
     text_by_task = {t: enc_txt(s) for t, s in zip(tasks, langs)}
     text = torch.stack([text_by_task.get(t, torch.zeros(512, device=dev)) for t in range(10)])   # (10, 512)
+    # Step whichever workers are READY rather than all of them in lockstep. With object
+    # layouts a reset can take tens of seconds (sampling, settling, reachability), and
+    # in lockstep every other worker waited on it.
+    from multiprocessing.connection import wait as mp_wait
     for r in remotes: r.send(("reset", None))
-    cur = [r.recv() for r in remotes]
+    cur = [None] * len(tasks)
+    waiting = set(range(len(tasks)))
 
     buf = {k: [] for k in ("agent", "wrist", "state", "label", "task", "episode", "step", "exec_teacher")}
     ep_id = [t * 10000 + i * 1000 for i, t in enumerate(tasks)]; ep_step = [0] * len(tasks)
@@ -173,9 +199,37 @@ def collect(args):
     quota = [int(np.ceil(args.episodes / per_task_workers[t])) for t in tasks]
     done_eps = {t: [] for t in set(tasks)}
     active = [True] * len(tasks)
+    first = [True] * len(tasks)
     t0, frames = time.time(), 0
-    while any(active):
-        idx = [i for i in range(len(tasks)) if active[i]]
+    last_report = time.time()
+    while any(active[i] or i in waiting for i in range(len(tasks))):
+        conns = [remotes[i] for i in waiting]
+        if not conns:
+            break
+        ready_conns = mp_wait(conns, timeout=None)
+        ready = []
+        for i in list(waiting):
+            if remotes[i] in ready_conns:
+                cur[i] = remotes[i].recv(); waiting.discard(i)
+                if first[i]:
+                    first[i] = False
+                else:
+                    ep_step[i] += 1
+                    if cur[i][4]:
+                        done_eps[tasks[i]].append(dict(cur[i][5], episode=ep_id[i]))
+                        worker_eps[i] += 1
+                        ep_id[i] += 1; ep_step[i] = 0
+                        if worker_eps[i] >= quota[i]:
+                            active[i] = False
+                if active[i]:
+                    ready.append(i)
+        if time.time() - last_report > 120:
+            done_n = sum(len(v) for v in done_eps.values())
+            print(f"    ... {done_n} episodes done, {frames} frames, {(time.time()-t0)/60:.1f} min", flush=True)
+            last_report = time.time()
+        if not ready:
+            continue
+        idx = ready
         imgs = [x for i in idx for x in (cur[i][0], cur[i][1])]
         with torch.no_grad():
             f = enc_img(*imgs).float()
@@ -192,6 +246,12 @@ def collect(args):
         for j, i in enumerate(idx):
             teacher_exec = student is None or rng.random() < args.beta
             act = cur[i][3] if teacher_exec else s_act[j]
+            if teacher_exec and args.exec_noise > 0 and cur[i][6] in NOISY_PHASES:
+                # DART: perturb what is EXECUTED, keep the teacher's clean action as the
+                # label, so successful episodes contain recoveries from drifted states.
+                # Scaled to the teacher's own speed limits (1.2 rad/s, 0.25 m/s).
+                scale = np.array([0.12] * 3 + [0.25] * 3 + [0.0], np.float32)
+                act = np.clip(act + args.exec_noise * scale * rng.standard_normal(7).astype(np.float32), -1, 1)
             if args.out:
                 buf["agent"].append(agent[j].cpu().numpy().astype(np.float16))
                 buf["wrist"].append(wrist[j].cpu().numpy().astype(np.float16))
@@ -199,16 +259,8 @@ def collect(args):
                 buf["task"].append(tasks[i]); buf["episode"].append(ep_id[i])
                 buf["step"].append(ep_step[i]); buf["exec_teacher"].append(teacher_exec)
             remotes[i].send(("step", act))
+            waiting.add(i)
         frames += len(idx)
-        for i in idx:
-            cur[i] = remotes[i].recv()
-            ep_step[i] += 1
-            if cur[i][4]:
-                done_eps[tasks[i]].append(dict(cur[i][5], episode=ep_id[i]))
-                worker_eps[i] += 1
-                ep_id[i] += 1; ep_step[i] = 0
-                if worker_eps[i] >= quota[i]:
-                    active[i] = False
     for r in remotes: r.send(("close", None))
     for p in procs: p.join(timeout=10)
 
@@ -322,13 +374,17 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("collect")
-    c.add_argument("--teacher", default="checkpoints/teacher_bc_nojoints.pt")
+    c.add_argument("--teacher", default="checkpoints/teacher_bc_nojoints.pt",
+                   help='a teacher checkpoint, or "scripted" for the per-task demonstration programs')
     c.add_argument("--student", default="")
     c.add_argument("--beta", type=float, default=1.0)
     c.add_argument("--zero", default="none", choices=["none", "image", "text"])
-    c.add_argument("--radius", type=float, default=0.06)
+    c.add_argument("--radius", type=float, default=0.0, help="extra bowl displacement disc, m (BC-teacher distillation used 0.06)")
     c.add_argument("--episodes", type=int, default=30, help="per task")
     c.add_argument("--tasks", type=int, nargs="+", default=list(range(10)))
+    c.add_argument("--layout-radius", type=float, default=0.0, help="relation-preserving object layouts, m")
+    c.add_argument("--exec-noise", type=float, default=0.0,
+                   help="DART: noise on executed teacher actions, as a fraction of its speed limits")
     c.add_argument("--horizon", type=int, default=300)
     c.add_argument("--cpus", default="5,6,7,8,9,15,16,17,18,19", help="performance cores")
     c.add_argument("--out", default="", help="omit to evaluate without saving")

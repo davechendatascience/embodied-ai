@@ -57,7 +57,8 @@ class PrivilegedEnv:
                  start_xy_m: float = 0.0, start_z_m: float = 0.0, start_yaw_deg: float = 0.0,
                  start_tilt_deg: float = 0.0, start_null_rad: float = 0.0,
                  shaping: bool = False, gamma: float = 0.99, success_bonus: float = 10.0,
-                 rich_obs: bool = False, shaping_gamma: float = 1.0):
+                 rich_obs: bool = False, shaping_gamma: float = 1.0,
+                 layout_radius: float = 0.0, layout_check=None, layout_tries: int = 20):
         from libero.libero import benchmark, get_libero_path
         from libero.libero.envs import OffScreenRenderEnv
         from .libero_env import build_chain, gripper_geom, register_ur5e
@@ -106,6 +107,9 @@ class PrivilegedEnv:
         self.shaping, self.gamma, self.success_bonus = shaping, gamma, success_bonus
         self.rich_obs = rich_obs
         self.shaping_gamma = shaping_gamma
+        self.layout_radius, self.layout_check, self.layout_tries = layout_radius, layout_check, layout_tries
+        self.layout = None
+        self.layout_rejected = 0
         self.ref = None            # rest_z, d0_reach, d0_carry: fixed at the start of an episode
         self.ever_lifted = False
         self.phi = 0.0
@@ -121,6 +125,16 @@ class PrivilegedEnv:
     def _gains(self):
         from .libero_env import set_joint_gains
         set_joint_gains(self.env, self.kp)
+
+    def _max_object_speed(self) -> float:
+        sim = self.env.sim; m, d = sim.model, sim.data
+        v = 0.0
+        for j in range(m.njnt):
+            if int(m.jnt_type[j]) == 0:
+                name = m.joint_id2name(j) or ""
+                if not name.startswith(("robot", "gripper")):
+                    a = int(m.jnt_dofadr[j]); v = max(v, float(np.linalg.norm(d.qvel[a:a + 3])))
+        return v
 
     def _settle(self, n=3, gripper: float = -1.0):
         """Hold the arm where it is, as an ABSOLUTE joint target.
@@ -215,6 +229,7 @@ class PrivilegedEnv:
         and landed within EJECT_MM of where it was put.
         """
         from .libero_env import remap_init_state
+        self.episode = getattr(self, "episode", 0) + 1     # consumers key per-episode caches on this
         k = int(self.rng.integers(len(self.init_states))) if init_index is None else init_index
         if k not in self._settled:
             # The drop from LIBERO's spawn height is the same every time for a
@@ -222,17 +237,45 @@ class PrivilegedEnv:
             # settling, and a synchronous vector env waits on its slowest reset.
             self.env.reset()
             self.env.set_init_state(remap_init_state(self.init_states[k], self.env.sim))
+            # settle until the objects stop moving, not for a fixed count: in some init
+            # states an object is still sliding off a neighbour after 10 steps (measured,
+            # a bowl at 48.6 deg tilt moving 0.10 m/s), and a cached "settled" state
+            # that is not at rest corrupts everything measured from it
             self._settle(10)
+            for _ in range(10):
+                if self._max_object_speed() < 0.005:
+                    break
+                self._settle(5)
             qadr, *_ = self._ids()
             self._settled[k] = (np.asarray(self.env.sim.get_state().flatten()).copy(),
                                 self.env.sim.data.qpos[qadr:qadr + 3].copy())
         settled, rest = self._settled[k]
+        if self.layout_radius > 0 and init_index is None:
+            from .layouts import LayoutSampler
+            for _ in range(len(self.init_states)):
+                self.env.reset(); self.env.set_init_state(settled)
+                if self.layout is None:
+                    self.layout = LayoutSampler(self, radius=self.layout_radius)
+                if self.layout.compatible():
+                    break
+                k = int(self.rng.integers(len(self.init_states)))
+                if k not in self._settled:
+                    return self.reset(init_index=None, max_tries=max_tries)
+                settled, rest = self._settled[k]
         self.rejected = 0
         for _ in range(max_tries):
             self.env.reset()
             self.env.set_init_state(settled)
             sim = self.env.sim
             qadr, vadr, *_ = self._ids()
+            if self.layout_radius > 0:
+                from .layouts import LayoutSampler
+                if self.layout is None:
+                    self.layout = LayoutSampler(self, radius=self.layout_radius)
+                if not self.layout.sample(self.rng, settle=self._settle):
+                    self.rejected += 1
+                    continue
+                rest = sim.data.qpos[qadr:qadr + 3].copy()      # the bowl rests somewhere new
             want = np.zeros(2)
             if self.radius > 0:
                 r = self.radius * np.sqrt(self.rng.random())
@@ -258,6 +301,13 @@ class PrivilegedEnv:
         self.ever_lifted = False
         self.last_obs = self.obs()            # refreshes self.raw, which snapshot() reads
         self.set_reference()
+        if self.layout_check is not None and not self.layout_check(self):
+            # a layout the demonstration program cannot solve (no verified grasp, or
+            # the plate out of reach) is redrawn rather than kept as an impossible episode
+            self.layout_rejected += 1
+            if self.layout_rejected < self.layout_tries:
+                return self.reset(init_index=init_index, max_tries=max_tries)
+        self.layout_rejected = 0
         if self.rich_obs:
             self.last_obs = np.concatenate([self.last_obs, self._rich(self.snapshot())])
         return self.last_obs

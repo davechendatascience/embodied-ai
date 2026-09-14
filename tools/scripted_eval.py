@@ -31,6 +31,8 @@ def run(a):
     from screwhead.scripted_teacher import ScriptedTeacher
     env = PrivilegedEnv(task, seed=seed, render=bool(video_dir), **env_kw)
     teacher = ScriptedTeacher(env)
+    if env.layout_radius > 0:
+        env.layout_check = teacher.layout_feasible
     rows, videos = [], 0
     for ep in range(episodes):
         env.reset()
@@ -66,6 +68,8 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--horizon", type=int, default=400)
     ap.add_argument("--radius", type=float, default=0.0, help="bowl placement disc, m")
+    ap.add_argument("--layout-radius", type=float, default=0.0,
+                    help="object-layout randomisation (relation-preserving), m")
     ap.add_argument("--start-xy", type=float, default=0.10)
     ap.add_argument("--start-z", type=float, default=0.05)
     ap.add_argument("--start-yaw", type=float, default=30.0)
@@ -75,7 +79,8 @@ def main() -> int:
     ap.add_argument("--max-videos", type=int, default=2)
     ap.add_argument("--out", default="")
     args = ap.parse_args()
-    env_kw = dict(horizon=args.horizon, radius_m=args.radius, start_xy_m=args.start_xy, start_z_m=args.start_z,
+    env_kw = dict(horizon=args.horizon, radius_m=args.radius, layout_radius=args.layout_radius,
+                  start_xy_m=args.start_xy, start_z_m=args.start_z,
                   start_yaw_deg=args.start_yaw, start_tilt_deg=args.start_tilt, start_null_rad=args.start_null)
     cpus = [int(c) for c in args.cpus.split(",")]
     jobs = [(t, cpus[i % len(cpus)], args.episodes, args.seed * 100 + t, env_kw, args.video, args.max_videos)

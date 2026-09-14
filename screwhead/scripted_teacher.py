@@ -69,6 +69,9 @@ class ProgramConfig:
     sector_rel_robot: tuple | None = None    # (offset_deg, half_width_deg) around the robot-facing rim angle
     posture_gain: float = 0.0         # null-space pull toward LIBERO's home posture
     limit_margin: float = 0.0         # rad: reject grasp/path solutions this close to a joint limit
+    neighbor_clearance: float = 0.0   # m: outer finger must clear other objects' footprints by this
+    check_closed: bool = False        # also collision-check the grasp pose with the jaws closed
+    clear_first: bool = True          # below the pre-grasp and far off: rise before traversing
     exit_dir_deg: float | None = None  # leave along this base-frame direction before rising
     exit_dist: float = 0.0
     exit_height: float = 0.015
@@ -82,6 +85,13 @@ PROGRAMS: dict[int, ProgramConfig] = {t: BASE for t in range(10)}
 # placed at the grasp: open jaws (78 mm) collide at every reachable rim angle;
 # jaws pre-shaped to 26 mm are clear across 135-202 deg (the robot-facing side),
 # sigma_min 0.135-0.143 there.
+# Tasks 0, 1, 6, 8 name a neighbour ("between", "next to"), so randomised layouts
+# put an object within finger range. Measured on task 0: the outer finger and the
+# hand closed onto the ramekin (117-124 mm from the bowl), one jaw never reached
+# the bowl, and the squeeze stalled at 13-14 mm.
+for _t in (0, 1, 6, 8):
+    PROGRAMS[_t] = replace(BASE, neighbor_clearance=0.03, check_closed=True)
+
 PROGRAMS[4] = replace(BASE, preshape_aperture=0.026, sector_rel_robot=(0.0, 40.0),
                       selection="path", min_sigma=0.05, approaches=(0.08, 0.05))
 
@@ -100,6 +110,10 @@ PROGRAMS[7] = replace(BASE, posture_gain=0.5, limit_margin=0.25, selection="path
                       sector_rel_robot=(90.0, 45.0))
 
 
+class _NoGrasp(Exception):
+    pass
+
+
 def _pose(R, p):
     T = np.eye(4); T[:3, :3] = R; T[:3, 3] = p
     return T
@@ -111,6 +125,8 @@ class ScriptedTeacher:
         self.k = config or PROGRAMS[env.ti]
         self.angles = np.linspace(0, 2 * np.pi, n_angles, endpoint=False)
         self._grasp_cache: dict = {}
+        self._verified: list = []
+        self._episode = None
         self.phase = ""
         if self.k.posture_gain > 0:
             env.servo.posture = np.array([0.0, -0.161, 0.0, -2.4446, 0.0, 2.2268, np.pi / 4])   # LIBERO Panda home
@@ -140,11 +156,30 @@ class ScriptedTeacher:
         return out
 
     def choose_grasp(self, s: dict):
+        """Memoised on the bowl pose. A verified choice is reused for a bowl that moved
+        less than 15 mm, carried along with it: re-selecting after a nudge let a
+        verified grasp be replaced by an unverified one mid-approach."""
+        # Caches are valid within ONE episode only. A grasp verified against last
+        # episode's neighbours says nothing about this layout's; keyed on the bowl pose
+        # alone it would be reused, collision checks and all skipped.
+        if getattr(self.env, "episode", None) != self._episode:
+            self._grasp_cache.clear(); self._verified.clear()
+            self._episode = getattr(self.env, "episode", None)
         key = (tuple(np.round(s["p_bowl"] / 0.003).astype(int)),
                int(round(np.degrees(np.arctan2(s["R_bowl"][1, 0], s["R_bowl"][0, 0])) / 5)))
-        if key not in self._grasp_cache:
-            self._grasp_cache[key] = self._select(s)
-        return self._grasp_cache[key]
+        if key in self._grasp_cache:
+            return self._grasp_cache[key]
+        for (p_b, choice) in self._verified:
+            if choice[3] and float(np.linalg.norm(s["p_bowl"] - p_b)) < 0.015:
+                shift = s["p_bowl"] - p_b
+                moved = (choice[0], choice[1] + shift, choice[2] + shift, True)
+                self._grasp_cache[key] = moved
+                return moved
+        choice = self._select(s)
+        self._grasp_cache[key] = choice
+        if choice[3]:
+            self._verified.append((s["p_bowl"].copy(), choice))
+        return choice
 
     def _select(self, s):
         from .ik import sigma_min, solve_ik
@@ -158,30 +193,71 @@ class ScriptedTeacher:
 
         lim = env.chain.limits.numpy()
 
+        home = np.array([0.0, -0.161, 0.0, -2.4446, 0.0, 2.2268, np.pi / 4])
+
         def ik(poses):
-            res = solve_ik(env.chain, torch.tensor(np.stack(poses)), torch.tensor(np.tile(q_now, (len(poses), 1))),
-                           lam=0.02, max_iters=150, trust=0.2)
-            th = res["theta"].numpy()
-            sig = sigma_min(env.chain, res["theta"]).numpy()
-            margin = np.minimum(th - lim[:, 0], lim[:, 1] - th).min(axis=1)
-            return th, res["converged"].numpy() & (sig >= k.min_sigma) & (margin >= k.limit_margin), sig
+            # two seeds, the current arm and LIBERO's home posture: from one seed alone the
+            # same scene could verify at one step and fail at the next as the arm moved
+            best = None
+            for seed in (q_now, home):
+                res = solve_ik(env.chain, torch.tensor(np.stack(poses)), torch.tensor(np.tile(seed, (len(poses), 1))),
+                               lam=0.02, max_iters=150, trust=0.2)
+                th = res["theta"].numpy()
+                sig = sigma_min(env.chain, res["theta"]).numpy()
+                margin = np.minimum(th - lim[:, 0], lim[:, 1] - th).min(axis=1)
+                ok = res["converged"].numpy() & (sig >= k.min_sigma) & (margin >= k.limit_margin)
+                if best is None:
+                    best = [th, ok, sig]
+                else:
+                    take = ok & ~best[1]
+                    best[0][take] = th[take]; best[1] = best[1] | ok; best[2][take] = sig[take]
+            return best[0], best[1], best[2]
+
+        others = []
+        mdl, dat = sim.model, sim.data
+        tb = dat.body_xpos[mdl.body_name2id("robot0_base")]
+        for jn in range(mdl.njnt):
+            if int(mdl.jnt_type[jn]) == 0:
+                nm = mdl.joint_id2name(jn) or ""
+                if nm.startswith(("robot", "gripper")) or nm.startswith("akita_black_bowl_1"):
+                    continue
+                b = int(mdl.jnt_bodyid[jn]); c = dat.body_xpos[b][:2] - tb[:2]; r = 0.0
+                for gg in range(mdl.ngeom):
+                    if int(mdl.geom_bodyid[gg]) == b and (mdl.geom_contype[gg] or mdl.geom_conaffinity[gg]):
+                        r = max(r, float(np.linalg.norm(dat.geom_xpos[gg][:2] - tb[:2] - c)) + float(np.max(mdl.geom_size[gg][:2])))
+                others.append((c, r))
+
+        def neighbor_gap(phi):
+            finger = s["p_bowl"][:2] + np.array([np.cos(phi), np.sin(phi)]) * (g.rim_radius + 0.047)
+            return min((float(np.linalg.norm(finger - c)) - r for c, r in others), default=1.0)
 
         gidx = env.env.env.robots[0]._ref_gripper_joint_pos_indexes
 
-        def clear(qs):
+        def clear(qs, closed_too=False):
             for q in qs:
-                sim.data.qpos[idx] = q
-                if k.preshape_aperture is not None:
-                    sim.data.qpos[gidx] = [k.preshape_aperture / 2, -k.preshape_aperture / 2]
-                sim.forward()
-                if env._robot_contact():
-                    return False
+                apertures = [k.preshape_aperture] if k.preshape_aperture is not None else [None]
+                if closed_too:
+                    apertures.append(0.008)
+                for ap in apertures:
+                    sim.data.qpos[idx] = q
+                    if ap is not None:
+                        sim.data.qpos[gidx] = [ap / 2, -ap / 2]
+                    sim.forward()
+                    if env._robot_contact():
+                        return False
             return True
 
         saved = np.asarray(sim.get_state().flatten()).copy()
         choice = None
         try:
             fr = (1.0,) if k.selection == "endpoints" else (1.0, 2 / 3, 1 / 3)
+            if k.neighbor_clearance > 0:
+                # geometry first: on "between"/"next to" layouts most rim angles put the
+                # outer finger on a neighbour, and solving IK for them first was most of
+                # the cost of a reset
+                cands = [c for c in cands if neighbor_gap(c[0]) >= k.neighbor_clearance]
+                if not cands:
+                    raise _NoGrasp
             th_g, ok_g, sig_g = ik([_pose(R, p) for _, R, p in cands])
             alive = [c for c in range(len(cands)) if ok_g[c]]
             for approach in k.approaches:
@@ -192,9 +268,11 @@ class ScriptedTeacher:
                 scored = []
                 for j, c in enumerate(alive):
                     sl = slice(j * len(fr), (j + 1) * len(fr))
-                    if not ok_p[sl].all() or not clear(list(th_p[sl]) + [th_g[c]]):
-                        continue
                     phi = cands[c][0]
+                    if k.neighbor_clearance > 0 and neighbor_gap(phi) < k.neighbor_clearance:
+                        continue
+                    if not ok_p[sl].all() or not clear(list(th_p[sl])) or not clear([th_g[c]], closed_too=k.check_closed):
+                        continue
                     face = float(np.array([np.cos(phi), np.sin(phi)]) @ towards)
                     travel = float(np.linalg.norm(th_p[sl][0] - q_now))
                     if k.selection == "endpoints":
@@ -207,6 +285,8 @@ class ScriptedTeacher:
                     _, R, p = cands[c]
                     choice = (R, p, p + z_b * approach, True)
                     break
+        except _NoGrasp:
+            pass
         finally:
             sim.set_state_from_flattened(saved); sim.forward()
         if choice is None:
@@ -214,6 +294,29 @@ class ScriptedTeacher:
             R, p, pre = grasp_frames(s["p_tool"], s["p_bowl"], s["R_bowl"], g)
             choice = (R, p, pre, False)
         return choice
+
+    def layout_feasible(self, env) -> bool:
+        """Accept a layout only if this program has a verified grasp AND can reach the
+        place pose over the plate holding the bowl that way. Called by the environment
+        after it samples a layout, so impossible scenes are redrawn, not kept."""
+        from .ik import sigma_min, solve_ik
+        s = dict(env.snapshot(), **env.ref)
+        R, p, _, verified = self.choose_grasp(s)
+        if not verified:
+            return False
+        g, k = self.g, self.k
+        z_goal = float(s["p_plate"][2] + g.plate_top - g.bowl_bottom)
+        z_carry = max(s["rest_z"], z_goal) + k.carry_clearance
+        offset = p - s["p_bowl"]
+        poses = [_pose(R, np.array([s["p_plate"][0], s["p_plate"][1], h]) + offset) for h in (z_carry, z_goal)]
+        idx = env.env.env.robots[0]._ref_joint_pos_indexes
+        q_now = env.env.sim.data.qpos[idx].copy()
+        res = solve_ik(env.chain, torch.tensor(np.stack(poses)), torch.tensor(np.tile(q_now, (2, 1))),
+                       lam=0.02, max_iters=150, trust=0.2)
+        lim = env.chain.limits.numpy(); th = res["theta"].numpy()
+        margin = np.minimum(th - lim[:, 0], lim[:, 1] - th).min(axis=1)
+        return bool(res["converged"].all() and (sigma_min(env.chain, res["theta"]) >= 0.03).all()
+                    and (margin >= k.limit_margin).all())
 
     # -------------------------------------------------------------------- skills
     def twist_to(self, R, p, R_goal, p_goal, v_max=None):
@@ -257,7 +360,14 @@ class ScriptedTeacher:
             self.phase = "descend"
             return np.concatenate([self.twist_to(R, p, R_g, p_g), [grip_open]])
         self.phase = "approach" if settled else "preshape"
-        return np.concatenate([self.twist_to(R, p, R_g, p_pre), [grip_open]])
+        target = p_pre
+        far = float(np.linalg.norm((p - p_pre)[:2])) > 0.04
+        if k.clear_first and far and p[2] < p_pre[2] + 0.01:
+            # below the pre-grasp and far from it: rise in place first, so the hand
+            # does not cut through the table or a neighbour on the way across
+            target = np.array([p[0], p[1], p_pre[2] + 0.03])
+            self.phase = "rise"
+        return np.concatenate([self.twist_to(R, p, R_g, target), [grip_open]])
 
     def _transport(self, s, R, p):
         g, k = self.g, self.k
