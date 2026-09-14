@@ -43,10 +43,20 @@ ACT_DIM = 7
 EJECT_MM = 10.0
 
 
+def _rot(axis: np.ndarray, angle: float) -> np.ndarray:
+    """Rodrigues rotation about a unit axis."""
+    a = axis / (np.linalg.norm(axis) + 1e-12)
+    K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
+    return np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * K @ K
+
+
 class PrivilegedEnv:
     def __init__(self, task_index: int, suite: str = "libero_spatial", radius_m: float = 0.0,
                  horizon: int = 300, seed: int = 0, kp: float = 4000.0, render: bool = False,
-                 hard_reset: bool = False, servo_iters: int = 1, settle_steps: int = 5):
+                 hard_reset: bool = False, servo_iters: int = 1, settle_steps: int = 5,
+                 start_xy_m: float = 0.0, start_z_m: float = 0.0, start_yaw_deg: float = 0.0,
+                 start_tilt_deg: float = 0.0, start_null_rad: float = 0.0,
+                 shaping: bool = False, gamma: float = 0.99, success_bonus: float = 10.0):
         from libero.libero import benchmark, get_libero_path
         from libero.libero.envs import OffScreenRenderEnv
         from .libero_env import build_chain, gripper_geom, register_ur5e
@@ -87,6 +97,15 @@ class PrivilegedEnv:
         self.last_obs = None
         self._settled: dict[int, tuple[np.ndarray, np.ndarray]] = {}
         self.settle_steps = settle_steps
+        self.start = dict(xy=start_xy_m, z=start_z_m, yaw=np.deg2rad(start_yaw_deg),
+                          tilt=np.deg2rad(start_tilt_deg), null=start_null_rad)
+        self.start_offset = None
+        from .progress import PickPlaceGeometry
+        self.geom = PickPlaceGeometry()
+        self.shaping, self.gamma, self.success_bonus = shaping, gamma, success_bonus
+        self.ref = None            # rest_z, d0_reach, d0_carry: fixed at the start of an episode
+        self.ever_lifted = False
+        self.phi = 0.0
 
     # -- simulator handles (re-fetched: a reset can rebuild the sim) -----------------
     def _ids(self):
@@ -119,6 +138,67 @@ class PrivilegedEnv:
             cmd[-1] = gripper
             self._gains()
             self.env.step(cmd)
+
+
+    # -- start pose -----------------------------------------------------------------
+    def _robot_contact(self) -> bool:
+        """True if any robot or gripper geom penetrates something that is not the robot."""
+        sim = self.env.sim; m, d = sim.model, sim.data
+        for i in range(d.ncon):
+            c = d.contact[i]
+            if c.dist >= 0:
+                continue
+            n1 = m.body_id2name(m.geom_bodyid[c.geom1]) or ""
+            n2 = m.body_id2name(m.geom_bodyid[c.geom2]) or ""
+            r1 = n1.startswith(("robot0", "gripper0")); r2 = n2.startswith(("robot0", "gripper0"))
+            if r1 != r2:
+                return True
+        return False
+
+    def _randomize_start(self, batch: int = 16, max_rounds: int = 10) -> None:
+        """Move the arm to a random TOOL pose near LIBERO's start, via IK.
+
+        Sampled in task space -- position box, yaw about vertical, tilt about a
+        random horizontal axis -- because that is what the approach depends on;
+        jittering joints directly gives a tool distribution nobody chose. The IK
+        seed is perturbed so the elbow (the null space of a 7-DoF arm) varies too.
+        A candidate is kept only if Newton converged, it is away from
+        singularity, and the arm penetrates nothing when placed there.
+        """
+        from .ik import sigma_min, solve_ik
+        sim = self.env.sim
+        idx = self.env.env.robots[0]._ref_joint_pos_indexes
+        q0 = sim.data.qpos[idx].copy()
+        T0 = fk(self.chain, torch.tensor(q0)[None])[0].numpy()
+        st = self.start
+        for _ in range(max_rounds):
+            targets, seeds, meta = [], [], []
+            for _ in range(batch):
+                dp = np.array([self.rng.uniform(-st["xy"], st["xy"]), self.rng.uniform(-st["xy"], st["xy"]),
+                               self.rng.uniform(-st["z"], st["z"])])
+                yaw = self.rng.uniform(-st["yaw"], st["yaw"])
+                ax = self.rng.normal(size=2); ax = np.array([*ax / (np.linalg.norm(ax) + 1e-12), 0.0])
+                tilt = self.rng.uniform(-st["tilt"], st["tilt"])
+                T = T0.copy()
+                T[:3, :3] = _rot(np.array([0, 0, 1.0]), yaw) @ _rot(ax, tilt) @ T0[:3, :3]
+                T[:3, 3] = T0[:3, 3] + dp
+                T[2, 3] = max(T[2, 3], 0.08)                      # keep the tool clear of the table
+                targets.append(T)
+                seeds.append(q0 + self.rng.normal(0, st["null"], size=len(q0)))
+                meta.append((dp * 1000, np.rad2deg(yaw), np.rad2deg(tilt)))
+            res = solve_ik(self.chain, torch.tensor(np.stack(targets)), torch.tensor(np.stack(seeds)),
+                           lam=0.02, max_iters=200, trust=0.2)
+            ok = res["converged"] & (sigma_min(self.chain, res["theta"]) > 0.02)
+            for k in torch.nonzero(ok).flatten().tolist():
+                sim.data.qpos[idx] = res["theta"][k].numpy()
+                sim.data.qvel[:] = 0.0
+                sim.forward()
+                if not self._robot_contact():
+                    self._settle(self.settle_steps)
+                    self.start_offset = meta[k]
+                    return
+            sim.data.qpos[idx] = q0; sim.forward()
+        raise RuntimeError(f"task {self.ti}: no collision-free reachable start pose found")
 
     # -- episode --------------------------------------------------------------------
     def reset(self, init_index: int | None = None, max_tries: int = 20) -> np.ndarray:
@@ -168,8 +248,12 @@ class PrivilegedEnv:
         else:
             raise RuntimeError(f"task {self.ti}: no valid placement in {max_tries} draws "
                                f"at radius {self.radius} m")
+        if any(v > 0 for v in self.start.values()):
+            self._randomize_start()
         self.begin()
         self.placement = now - rest
+        self.ever_lifted = False
+        self.set_reference()
         self.last_obs = self.obs()
         return self.last_obs
 
@@ -222,8 +306,21 @@ class PrivilegedEnv:
         success = bool(done)
         self.last_obs = self.obs(raw)
         truncated = self.t >= self.horizon
-        return self.last_obs, float(success), success or truncated, {"success": success,
-                                                                     "truncated": truncated}
+        info = {"success": success, "truncated": truncated}
+        reward = float(success)
+        if self.shaping:
+            snap = self.snapshot()
+            phi, stage, _ = self.progress(snap)
+            if stage >= 3 and snap["p_bowl"][2] - self.ref["rest_z"] > self.geom.lifted_dz:
+                self.ever_lifted = True
+            # task reward only for a bowl that was actually picked up: pushing or
+            # flipping it onto the plate satisfies On(bowl, plate) without a grasp
+            task = self.success_bonus * float(success and self.ever_lifted)
+            reward = task + self.gamma * phi - self.phi
+            info.update(phi=phi, stage=stage, ever_lifted=self.ever_lifted,
+                        success_lifted=bool(success and self.ever_lifted))
+            self.phi = phi
+        return self.last_obs, reward, success or truncated, info
 
     def begin(self) -> None:
         """Arm the servo at the current joints. Called by reset(); call it yourself
@@ -239,6 +336,57 @@ class PrivilegedEnv:
         sim.set_state_from_flattened(remap_init_state(flat_state, sim))
         sim.forward()
         return self.obs()
+
+
+    # -- task progress (privileged) ---------------------------------------------------
+    def snapshot(self) -> dict:
+        """Everything progress() needs, read from the simulator, base frame."""
+        from .progress import grasp_frames
+        sim = self.env.sim; m, d = sim.model, sim.data
+        raw = getattr(self, "raw", None) or self.env.env._get_observations(force_update=True)
+        q = torch.tensor(np.asarray(raw["robot0_joint_pos"]), dtype=torch.float64)[None]
+        T = fk(self.chain, q)[0].numpy()
+        tb = d.body_xpos[m.body_name2id("robot0_base")]
+        _, _, bowl, plate, _ = self._ids()
+        bowl_geoms = {g for g in range(m.ngeom) if int(m.geom_bodyid[g]) == bowl}
+        side = {m.geom_name2id("gripper0_finger1_pad_collision"): 1, m.geom_name2id("gripper0_finger1_collision"): 1,
+                m.geom_name2id("gripper0_finger2_pad_collision"): 2, m.geom_name2id("gripper0_finger2_collision"): 2}
+        sides, any_grip, supported = set(), False, False
+        for i in range(d.ncon):
+            c = d.contact[i]
+            if c.dist > 0.0005:
+                continue
+            for a, b in ((c.geom1, c.geom2), (c.geom2, c.geom1)):
+                if b not in bowl_geoms or a in bowl_geoms:
+                    continue
+                name = m.geom_id2name(a) or ""
+                if a in side:
+                    sides.add(side[a])
+                if name.startswith("gripper0") or name.startswith("robot0"):
+                    any_grip = True
+                else:
+                    supported = True
+        gq = raw["robot0_gripper_qpos"]
+        return dict(R_tool=T[:3, :3], p_tool=T[:3, 3], aperture=float(gq[0] - gq[1]),
+                    R_bowl=d.body_xmat[bowl].reshape(3, 3).copy(), p_bowl=(d.body_xpos[bowl] - tb).copy(),
+                    p_plate=(d.body_xpos[plate] - tb).copy(), side1=1 in sides, side2=2 in sides,
+                    any_grip=any_grip, supported=supported, success=bool(self.env.check_success()))
+
+    def set_reference(self, snap: dict | None = None) -> None:
+        """Episode constants: bowl rest height and the two stage normalisers that depend on layout."""
+        from .progress import bowl_distance, reach_distance
+        s = snap or self.snapshot(); g = self.geom
+        d0_reach, _, _ = reach_distance(dict(s, rest_z=float(s["p_bowl"][2])), g)
+        from .progress import transport_remaining
+        ref0 = dict(s, rest_z=float(s["p_bowl"][2]), d0_reach=float(d0_reach), d0_carry=1.0)
+        d0_carry, _ = transport_remaining(ref0, g)       # the whole transport, from grasped at rest
+        self.ref = dict(rest_z=float(s["p_bowl"][2]), d0_reach=float(d0_reach), d0_carry=float(d0_carry))
+        self.phi = self.progress(s)[0]
+
+    def progress(self, snap: dict | None = None):
+        from .progress import progress
+        s = dict(snap or self.snapshot(), **self.ref)
+        return progress(s, self.geom)
 
     # -- what the STUDENT is allowed to see ------------------------------------------
     def images(self) -> tuple[np.ndarray, np.ndarray]:

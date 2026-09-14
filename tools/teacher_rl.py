@@ -45,7 +45,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 # ----------------------------------------------------------------------- workers
-def _worker(remote, task, seed, horizon, cpu):
+def _worker(remote, task, seed, horizon, cpu, env_kw=None):
     if cpu is not None:
         os.sched_setaffinity(0, {cpu})
     os.environ["OMP_NUM_THREADS"] = "1"
@@ -53,7 +53,7 @@ def _worker(remote, task, seed, horizon, cpu):
     torch.set_num_threads(1)
     sys.path.insert(0, str(ROOT))
     from screwhead.teacher_env import PrivilegedEnv
-    env = PrivilegedEnv(task, radius_m=0.0, horizon=horizon, seed=seed)
+    env = PrivilegedEnv(task, radius_m=0.0, horizon=horizon, seed=seed, **(env_kw or {}))
     ep_ret = 0.0
     while True:
         cmd, arg = remote.recv()
@@ -75,13 +75,13 @@ def _worker(remote, task, seed, horizon, cpu):
 
 
 class VecEnv:
-    def __init__(self, tasks, seed, horizon, cpus=None):
+    def __init__(self, tasks, seed, horizon, cpus=None, env_kw=None):
         ctx = mp.get_context("spawn")
         self.remotes, self.procs = [], []
         for i, t in enumerate(tasks):
             a, b = ctx.Pipe()
             cpu = None if not cpus else cpus[i % len(cpus)]
-            p = ctx.Process(target=_worker, args=(b, t, seed * 1000 + i, horizon, cpu), daemon=True)
+            p = ctx.Process(target=_worker, args=(b, t, seed * 1000 + i, horizon, cpu, env_kw), daemon=True)
             p.start(); b.close()
             self.remotes.append(a); self.procs.append(p)
         self.tasks = list(tasks)
@@ -105,6 +105,20 @@ class VecEnv:
             try: r.send(("close", None))
             except Exception: pass
         for p in self.procs: p.join(timeout=10)
+
+
+def start_kw(args) -> dict:
+    """Robot start-pose randomisation, forwarded to PrivilegedEnv."""
+    return dict(start_xy_m=args.start_xy, start_z_m=args.start_z, start_yaw_deg=args.start_yaw,
+                start_tilt_deg=args.start_tilt, start_null_rad=args.start_null)
+
+
+def add_start_args(p) -> None:
+    p.add_argument("--start-xy", type=float, default=0.0, help="tool start offset half-width, m")
+    p.add_argument("--start-z", type=float, default=0.0, help="m")
+    p.add_argument("--start-yaw", type=float, default=0.0, help="deg about vertical")
+    p.add_argument("--start-tilt", type=float, default=0.0, help="deg about a random horizontal axis")
+    p.add_argument("--start-null", type=float, default=0.0, help="rad of IK seed noise (elbow)")
 
 
 def parse_cpus(spec: str) -> list[int]:
@@ -138,7 +152,7 @@ def to_env_action(mean_std_units, act_sd):
 
 
 # ------------------------------------------------------- decentralised collection
-def _collector(remote, task, seed, horizon, cpu, init_ckpt):
+def _collector(remote, task, seed, horizon, cpu, init_ckpt, env_kw=None):
     """Collects a whole rollout segment locally with its own CPU copy of the actor.
 
     The per-step synchronous vector env paid every worker's tail latency on every
@@ -155,7 +169,7 @@ def _collector(remote, task, seed, horizon, cpu, init_ckpt):
     actor, _, st, ck = build(init_ckpt, "cpu")
     mu_o, sd_o, mask, act_sd = (st["obs_mu"].numpy(), st["obs_sd"].numpy(),
                                 st["obs_mask"].numpy(), st["act_sd"].numpy())
-    env = PrivilegedEnv(task, radius_m=0.0, horizon=horizon, seed=seed)
+    env = PrivilegedEnv(task, radius_m=0.0, horizon=horizon, seed=seed, **(env_kw or {}))
     rng = np.random.default_rng(seed)
     obs = None
     while True:
@@ -198,13 +212,13 @@ def _collector(remote, task, seed, horizon, cpu, init_ckpt):
 
 
 class Collector:
-    def __init__(self, tasks, seed, horizon, cpus, init_ckpt):
+    def __init__(self, tasks, seed, horizon, cpus, init_ckpt, env_kw=None):
         ctx = mp.get_context("spawn")
         self.remotes, self.procs = [], []
         for i, t in enumerate(tasks):
             a, b = ctx.Pipe()
             cpu = None if not cpus else cpus[i % len(cpus)]
-            p = ctx.Process(target=_collector, args=(b, t, seed * 1000 + i, horizon, cpu, init_ckpt),
+            p = ctx.Process(target=_collector, args=(b, t, seed * 1000 + i, horizon, cpu, init_ckpt, env_kw),
                             daemon=True)
             p.start(); b.close()
             self.remotes.append(a); self.procs.append(p)
@@ -244,7 +258,7 @@ def train(args):
     cpus = parse_cpus(args.worker_cpus)
     if args.learner_cpus:
         os.sched_setaffinity(0, set(parse_cpus(args.learner_cpus)))
-    venv = VecEnv(tasks, args.seed, args.horizon, cpus)
+    venv = VecEnv(tasks, args.seed, args.horizon, cpus, start_kw(args))
     radius = args.radius_start
     obs = venv.reset(radius)
     norm = lambda o: (torch.as_tensor(o, device=dev) - st["obs_mu"]) / st["obs_sd"] * st["obs_mask"]
@@ -404,7 +418,7 @@ def train_decentralised(args, actor, critic, bc_actor, log_std, opt_a, opt_c, st
     import torch
     dev = args.device
     cpus = parse_cpus(args.worker_cpus)
-    col = Collector(tasks, args.seed, args.horizon, cpus, args.init)
+    col = Collector(tasks, args.seed, args.horizon, cpus, args.init, start_kw(args))
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
     log = open(out / "log.jsonl", "a")
     radius, window, steps, t0 = args.radius_start, [], 0, time.time()
@@ -495,7 +509,8 @@ def _eval_task(a):
 
 def evaluate(args):
     ctx = mp.get_context("spawn")
-    env_kw = dict(hard_reset=args.hard_reset, servo_iters=args.servo_iters, settle_steps=args.settle_steps)
+    env_kw = dict(hard_reset=args.hard_reset, servo_iters=args.servo_iters, settle_steps=args.settle_steps,
+                  **start_kw(args))
     jobs = [(args.ckpt, t, args.radius, args.episodes, args.seed + t, args.horizon, env_kw) for t in range(10)]
     with ctx.Pool(args.procs) as pool:
         res = pool.map(_eval_task, jobs)
@@ -552,6 +567,7 @@ def main() -> int:
     tr.add_argument("--save-every", type=int, default=25)
     tr.add_argument("--seed", type=int, default=0)
     tr.add_argument("--device", default="cuda")
+    add_start_args(tr)
     tr.add_argument("--decentralised", action="store_true",
                     help="workers collect whole segments with a local actor copy")
     tr.add_argument("--keep-every", type=int, default=0, help="also keep numbered checkpoints")
@@ -563,6 +579,7 @@ def main() -> int:
     ev.add_argument("--procs", type=int, default=10)
     ev.add_argument("--seed", type=int, default=0)
     ev.add_argument("--out", default="")
+    add_start_args(ev)
     ev.add_argument("--hard-reset", action="store_true")
     ev.add_argument("--servo-iters", type=int, default=1)
     ev.add_argument("--settle-steps", type=int, default=5)

@@ -42,7 +42,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 # ------------------------------------------------------------------------ workers
-def _worker(remote, task, seed, cpu, teacher_ckpt, horizon, radius):
+def _worker(remote, task, seed, cpu, teacher_ckpt, horizon, radius, env_kw):
     os.sched_setaffinity(0, {cpu})
     os.environ["OMP_NUM_THREADS"] = "1"
     import torch
@@ -53,7 +53,7 @@ def _worker(remote, task, seed, cpu, teacher_ckpt, horizon, radius):
     teacher, _, st, _ = build(teacher_ckpt, "cpu")
     mu, sd, mask, asd = (st["obs_mu"].numpy(), st["obs_sd"].numpy(),
                          st["obs_mask"].numpy(), st["act_sd"].numpy())
-    env = PrivilegedEnv(task, radius_m=radius, horizon=horizon, seed=seed, render=True)
+    env = PrivilegedEnv(task, radius_m=radius, horizon=horizon, seed=seed, render=True, **env_kw)
 
     def label(o):
         with torch.no_grad():
@@ -106,6 +106,7 @@ def collect(args):
     import torch
     sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "tools"))
     from rollout import clip_encoder
+    from teacher_rl import start_kw
     dev = args.device
     rng = np.random.default_rng(args.seed)
     enc_img, enc_txt = clip_encoder(dev)
@@ -121,7 +122,7 @@ def collect(args):
     for i, t in enumerate(tasks):
         a, b = ctx.Pipe()
         p = ctx.Process(target=_worker, args=(b, t, args.seed * 100 + t, cpus[i % len(cpus)],
-                                              args.teacher, args.horizon, args.radius), daemon=True)
+                                              args.teacher, args.horizon, args.radius, start_kw(args)), daemon=True)
         p.start(); b.close(); remotes.append(a); procs.append(p)
     langs = [r.recv() for r in remotes]
     text = torch.stack([enc_txt(s) for s in langs])                     # (10, 512)
@@ -287,6 +288,9 @@ def main() -> int:
     c.add_argument("--cpus", default="5,6,7,8,9,15,16,17,18,19", help="performance cores")
     c.add_argument("--out", default="", help="omit to evaluate without saving")
     c.add_argument("--seed", type=int, default=0)
+    sys.path.insert(0, str(ROOT / "tools"))
+    from teacher_rl import add_start_args
+    add_start_args(c)
     c.add_argument("--device", default="cuda")
     t = sub.add_parser("train")
     t.add_argument("--rounds", nargs="+", required=True)
