@@ -184,3 +184,26 @@ def reach_distance(s: dict, g: PickPlaceGeometry) -> tuple[float, float, bool]:
     lateral = float(np.linalg.norm(off - z_b * (off @ z_b)))
     penalty = g.lateral_weight * max(lateral - g.grasp_ball, 0.0) if below else 0.0
     return d_grasp + penalty, d_grasp, below
+
+
+def rotvec(R: np.ndarray) -> np.ndarray:
+    """Axis-angle of a rotation matrix (the so(3) log)."""
+    ang = rot_angle(R)
+    if ang < 1e-6:
+        return np.zeros(3)
+    w = np.array([R[2, 1] - R[1, 2], R[0, 2] - R[2, 0], R[1, 0] - R[0, 1]])
+    if np.pi - ang < 1e-4:                         # near pi the skew part vanishes
+        k = int(np.argmax(np.diag(R)))
+        axis = R[:, k] + np.eye(3)[:, k]
+        return ang * axis / (np.linalg.norm(axis) + 1e-12)
+    return ang * w / (2 * np.sin(ang))
+
+
+def grasp_error(s: dict, g: PickPlaceGeometry = PickPlaceGeometry()) -> np.ndarray:
+    """Grasp position minus tool position, and the rotation from tool to grasp
+    (the nearer of the two symmetric jaw orientations), both in the base frame."""
+    R_g, p_g, _ = grasp_frames(s["p_tool"], s["p_bowl"], s["R_bowl"], g)
+    flip = np.diag([-1.0, -1.0, 1.0])
+    cands = [R_g, R_g @ flip]
+    Rbest = min(cands, key=lambda C: rot_angle(s["R_tool"].T @ C))
+    return np.concatenate([p_g - s["p_tool"], s["R_tool"] @ rotvec(s["R_tool"].T @ Rbest)])

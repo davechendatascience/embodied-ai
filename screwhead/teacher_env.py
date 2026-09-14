@@ -56,7 +56,8 @@ class PrivilegedEnv:
                  hard_reset: bool = False, servo_iters: int = 1, settle_steps: int = 5,
                  start_xy_m: float = 0.0, start_z_m: float = 0.0, start_yaw_deg: float = 0.0,
                  start_tilt_deg: float = 0.0, start_null_rad: float = 0.0,
-                 shaping: bool = False, gamma: float = 0.99, success_bonus: float = 10.0):
+                 shaping: bool = False, gamma: float = 0.99, success_bonus: float = 10.0,
+                 rich_obs: bool = False, shaping_gamma: float = 1.0):
         from libero.libero import benchmark, get_libero_path
         from libero.libero.envs import OffScreenRenderEnv
         from .libero_env import build_chain, gripper_geom, register_ur5e
@@ -103,6 +104,8 @@ class PrivilegedEnv:
         from .progress import PickPlaceGeometry
         self.geom = PickPlaceGeometry()
         self.shaping, self.gamma, self.success_bonus = shaping, gamma, success_bonus
+        self.rich_obs = rich_obs
+        self.shaping_gamma = shaping_gamma
         self.ref = None            # rest_z, d0_reach, d0_carry: fixed at the start of an episode
         self.ever_lifted = False
         self.phi = 0.0
@@ -253,8 +256,10 @@ class PrivilegedEnv:
         self.begin()
         self.placement = now - rest
         self.ever_lifted = False
+        self.last_obs = self.obs()            # refreshes self.raw, which snapshot() reads
         self.set_reference()
-        self.last_obs = self.obs()
+        if self.rich_obs:
+            self.last_obs = np.concatenate([self.last_obs, self._rich(self.snapshot())])
         return self.last_obs
 
     def obs(self, raw: dict | None = None) -> np.ndarray:
@@ -316,10 +321,19 @@ class PrivilegedEnv:
             # task reward only for a bowl that was actually picked up: pushing or
             # flipping it onto the plate satisfies On(bowl, plate) without a grasp
             task = self.success_bonus * float(success and self.ever_lifted)
-            reward = task + self.gamma * phi - self.phi
+            # Undiscounted difference. gamma*phi' - phi = (phi' - phi) - (1-gamma)*phi':
+            # the second term is a per-step drag proportional to progress already
+            # made. Measured, it collapsed a from-scratch policy's peak progress
+            # from 0.82 (random) to 0.04 in 50 iterations -- random motion's
+            # progress changes average to zero, the drag never does, so the cheapest
+            # state was phi = 0. For an episodic task the undiscounted difference
+            # telescopes to phi(s_T) - phi(s_0) and carries no drag.
+            reward = task + self.shaping_gamma * phi - self.phi
             info.update(phi=phi, stage=stage, ever_lifted=self.ever_lifted,
                         success_lifted=bool(success and self.ever_lifted))
             self.phi = phi
+            if self.rich_obs:
+                self.last_obs = np.concatenate([self.last_obs, self._rich(snap, phi, stage)])
         return self.last_obs, reward, success or truncated, info
 
     def begin(self) -> None:
@@ -371,6 +385,16 @@ class PrivilegedEnv:
                     R_bowl=d.body_xmat[bowl].reshape(3, 3).copy(), p_bowl=(d.body_xpos[bowl] - tb).copy(),
                     p_plate=(d.body_xpos[plate] - tb).copy(), side1=1 in sides, side2=2 in sides,
                     any_grip=any_grip, supported=supported, success=bool(self.env.check_success()))
+
+    RICH_DIM = 1 + 7 + 6
+
+    def _rich(self, snap: dict, phi: float | None = None, stage: int | None = None) -> np.ndarray:
+        """PRIVILEGED progress features: phi/6, stage one-hot, tool->grasp waypoint error."""
+        from .progress import grasp_error
+        if phi is None:
+            phi, stage, _ = self.progress(snap)
+        oh = np.zeros(7); oh[int(stage)] = 1.0
+        return np.concatenate([[phi / 6.0], oh, grasp_error(snap, self.geom)]).astype(np.float32)
 
     def set_reference(self, snap: dict | None = None) -> None:
         """Episode constants: bowl rest height and the two stage normalisers that depend on layout."""

@@ -42,6 +42,40 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 # ------------------------------------------------------------------------ workers
+def load_teacher(ckpt: str):
+    """Return (label_fn, env_kwargs) for either teacher format.
+
+    BC teacher (tools/teacher_bc.py): TeacherMLP on the 45-d observation, fixed
+    normalisation statistics, actions in act_sd units.
+    RL teacher (tools/rl_scratch.py): Tanh MLP on the 59-d observation with
+    progress features, running normalisation, actions already in [-1, 1]. Its
+    environment -- start-pose ranges, progress observations, horizon -- is read
+    from the checkpoint, so the student is distilled on the distribution the
+    teacher actually learned.
+    """
+    import torch
+    ck = torch.load(ckpt, map_location="cpu", weights_only=False)
+    if "norm_mean" in ck:
+        from rl_scratch import env_kwargs, mlp
+        actor = mlp(ck["obs_dim"], ck["act_dim"]); actor.load_state_dict(ck["actor"]); actor.eval()
+        mean, var = np.asarray(ck["norm_mean"]), np.asarray(ck["norm_var"])
+
+        def label(o):
+            x = np.clip((o - mean) / np.sqrt(var + 1e-8), -10, 10).astype(np.float32)
+            with torch.no_grad():
+                return np.clip(actor(torch.from_numpy(x)).numpy(), -1.0, 1.0).astype(np.float32)
+        return label, env_kwargs(argparse.Namespace(**ck["args"])), "rl"
+    from teacher_rl import build
+    teacher, _, st, _ = build(ckpt, "cpu")
+    mu, sd, mask, asd = (st["obs_mu"].numpy(), st["obs_sd"].numpy(), st["obs_mask"].numpy(), st["act_sd"].numpy())
+
+    def label(o):
+        with torch.no_grad():
+            m = teacher(torch.from_numpy(((o - mu) / sd * mask).astype(np.float32))).numpy()
+        return np.clip(m * asd, -1.0, 1.0).astype(np.float32)
+    return label, {}, "bc"
+
+
 def _worker(remote, task, seed, cpu, teacher_ckpt, horizon, radius, env_kw):
     os.sched_setaffinity(0, {cpu})
     os.environ["OMP_NUM_THREADS"] = "1"
@@ -49,16 +83,14 @@ def _worker(remote, task, seed, cpu, teacher_ckpt, horizon, radius, env_kw):
     torch.set_num_threads(1)
     sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "tools"))
     from screwhead.teacher_env import PrivilegedEnv
-    from teacher_rl import build
-    teacher, _, st, _ = build(teacher_ckpt, "cpu")
-    mu, sd, mask, asd = (st["obs_mu"].numpy(), st["obs_sd"].numpy(),
-                         st["obs_mask"].numpy(), st["act_sd"].numpy())
-    env = PrivilegedEnv(task, radius_m=radius, horizon=horizon, seed=seed, render=True, **env_kw)
-
-    def label(o):
-        with torch.no_grad():
-            m = teacher(torch.from_numpy(((o - mu) / sd * mask).astype(np.float32))).numpy()
-        return np.clip(m * asd, -1.0, 1.0).astype(np.float32)
+    label, teacher_kw, kind = load_teacher(teacher_ckpt)
+    kw = dict(horizon=horizon, **env_kw)
+    kw.update(teacher_kw)                 # an RL teacher's own training distribution wins
+    if kind == "rl":
+        # including bowl placement: the RL teacher trained with the bowl where
+        # LIBERO puts it, so a displaced bowl would ask it for labels it never learned
+        radius = float(teacher_kw.get("radius_m", 0.0))
+    env = PrivilegedEnv(task, radius_m=radius, seed=seed, render=True, **{k: v for k, v in kw.items() if k != "radius_m"})
 
     def payload(o, done=False, info=None):
         a, w = env.images()
@@ -74,6 +106,7 @@ def _worker(remote, task, seed, cpu, teacher_ckpt, horizon, radius, env_kw):
             o, _, done, info = env.step(arg)
             if done:
                 end = dict(success=bool(info["success"]), length=env.t,
+                           success_lifted=bool(info.get("success_lifted", info["success"])),
                            placement_mm=float(np.linalg.norm(env.placement[:2]) * 1000))
                 o = env.reset()
                 remote.send(payload(o, True, end))
@@ -110,12 +143,14 @@ def collect(args):
     dev = args.device
     rng = np.random.default_rng(args.seed)
     enc_img, enc_txt = clip_encoder(dev)
+    if "norm_mean" in torch.load(args.teacher, map_location="cpu", weights_only=False):
+        args.radius = 0.0            # the workers take placement from an RL teacher; keep the report honest
     student = act_std = None
     if args.beta < 1.0:
         student, act_std, _ = load_student(args.student, dev)
     tok, tmask = spec_tokens(dev)
 
-    tasks = list(range(10))
+    tasks = list(args.tasks)
     cpus = [int(c) for c in args.cpus.split(",")]
     ctx = mp.get_context("spawn")
     remotes, procs = [], []
@@ -125,13 +160,18 @@ def collect(args):
                                               args.teacher, args.horizon, args.radius, start_kw(args)), daemon=True)
         p.start(); b.close(); remotes.append(a); procs.append(p)
     langs = [r.recv() for r in remotes]
-    text = torch.stack([enc_txt(s) for s in langs])                     # (10, 512)
+    # indexed by TASK, not by worker: several workers may run the same task
+    text_by_task = {t: enc_txt(s) for t, s in zip(tasks, langs)}
+    text = torch.stack([text_by_task.get(t, torch.zeros(512, device=dev)) for t in range(10)])   # (10, 512)
     for r in remotes: r.send(("reset", None))
     cur = [r.recv() for r in remotes]
 
     buf = {k: [] for k in ("agent", "wrist", "state", "label", "task", "episode", "step", "exec_teacher")}
-    ep_id = [t * 10000 for t in tasks]; ep_step = [0] * len(tasks)
-    done_eps = {t: [] for t in tasks}
+    ep_id = [t * 10000 + i * 1000 for i, t in enumerate(tasks)]; ep_step = [0] * len(tasks)
+    worker_eps = [0] * len(tasks)
+    per_task_workers = {t: tasks.count(t) for t in set(tasks)}
+    quota = [int(np.ceil(args.episodes / per_task_workers[t])) for t in tasks]
+    done_eps = {t: [] for t in set(tasks)}
     active = [True] * len(tasks)
     t0, frames = time.time(), 0
     while any(active):
@@ -144,7 +184,8 @@ def collect(args):
             if student is not None:
                 sa, sw = (torch.zeros_like(agent), torch.zeros_like(wrist)) if args.zero in ("image",) \
                     else (agent, wrist)
-                st_text = torch.zeros_like(text[idx]) if args.zero == "text" else text[idx]
+                tix = [tasks[i] for i in idx]
+                st_text = torch.zeros_like(text[tix]) if args.zero == "text" else text[tix]
                 pred = student(sa, sw, st_text, state, tok.expand(len(idx), -1, -1),
                                tmask.expand(len(idx), -1))[:, 0] * act_std
                 s_act = pred.clamp(-1, 1).cpu().numpy()
@@ -164,23 +205,26 @@ def collect(args):
             ep_step[i] += 1
             if cur[i][4]:
                 done_eps[tasks[i]].append(dict(cur[i][5], episode=ep_id[i]))
+                worker_eps[i] += 1
                 ep_id[i] += 1; ep_step[i] = 0
-                if len(done_eps[tasks[i]]) >= args.episodes:
+                if worker_eps[i] >= quota[i]:
                     active[i] = False
     for r in remotes: r.send(("close", None))
     for p in procs: p.join(timeout=10)
 
-    allw = []
-    for t in tasks:
+    allw, alll = [], []
+    for t in sorted(set(tasks)):
         w = [e["success"] for e in done_eps[t]]; allw += w
+        alll += [e.get("success_lifted", e["success"]) for e in done_eps[t]]
         print(f"  task {t}: {sum(w)}/{len(w)}   placement median "
               f"{np.median([e['placement_mm'] for e in done_eps[t]]):5.1f} mm", flush=True)
     driver = "teacher" if student is None else f"beta={args.beta}" + (f" zero={args.zero}" if args.zero != "none" else "")
     print(f"{driver} @ {args.radius*1000:.0f} mm: {sum(allw)}/{len(allw)} = {np.mean(allw):.2f}   "
+          f"success with a lifted bowl {np.mean(alll):.2f}   "
           f"({frames} frames, {frames/(time.time()-t0):.0f} frames/s)")
     if args.out:
         out = Path(args.out); out.parent.mkdir(parents=True, exist_ok=True)
-        succ = {e["episode"]: e["success"] for t in tasks for e in done_eps[t]}
+        succ = {e["episode"]: e.get("success_lifted", e["success"]) for t in set(tasks) for e in done_eps[t]}
         ep = np.array(buf["episode"])
         np.savez(out, agent=np.stack(buf["agent"]), wrist=np.stack(buf["wrist"]),
                  state=np.stack(buf["state"]).astype(np.float32), label=np.stack(buf["label"]),
@@ -191,7 +235,7 @@ def collect(args):
         Path(str(out) + ".json").write_text(json.dumps({
             "driver": driver, "radius_m": args.radius, "episodes_per_task": args.episodes,
             "success": float(np.mean(allw)), "frames": frames,
-            "per_task": {t: [e["success"] for e in done_eps[t]] for t in tasks}}, indent=2))
+            "per_task": {t: [e["success"] for e in done_eps[t]] for t in set(tasks)}}, indent=2))
         print("->", out)
     return 0
 
@@ -284,6 +328,7 @@ def main() -> int:
     c.add_argument("--zero", default="none", choices=["none", "image", "text"])
     c.add_argument("--radius", type=float, default=0.06)
     c.add_argument("--episodes", type=int, default=30, help="per task")
+    c.add_argument("--tasks", type=int, nargs="+", default=list(range(10)))
     c.add_argument("--horizon", type=int, default=300)
     c.add_argument("--cpus", default="5,6,7,8,9,15,16,17,18,19", help="performance cores")
     c.add_argument("--out", default="", help="omit to evaluate without saving")
