@@ -45,7 +45,8 @@ EJECT_MM = 10.0
 
 class PrivilegedEnv:
     def __init__(self, task_index: int, suite: str = "libero_spatial", radius_m: float = 0.0,
-                 horizon: int = 300, seed: int = 0, kp: float = 4000.0, render: bool = False):
+                 horizon: int = 300, seed: int = 0, kp: float = 4000.0, render: bool = False,
+                 hard_reset: bool = False, servo_iters: int = 1, settle_steps: int = 5):
         from libero.libero import benchmark, get_libero_path
         from libero.libero.envs import OffScreenRenderEnv
         from .libero_env import build_chain, gripper_geom, register_ur5e
@@ -62,6 +63,10 @@ class PrivilegedEnv:
         bddl = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
         kw = (dict(camera_heights=128, camera_widths=128) if render else
               dict(use_camera_obs=False, has_offscreen_renderer=False))
+        # A hard reset reloads the MuJoCo model: 911 ms of a 1058 ms reset,
+        # measured. set_init_state overwrites the full state afterwards, so the
+        # reload buys nothing and stalls every synchronous worker.
+        kw["hard_reset"] = hard_reset
         self.env = OffScreenRenderEnv(bddl_file_name=bddl, robots=["Panda"],
                                       gripper_types="PandaGripper",
                                       controller="JOINT_POSITION", **kw)
@@ -76,10 +81,12 @@ class PrivilegedEnv:
         self.chain = build_chain("panda", flange)
         from .libero_env import JOINT_ACTION_SCALE
         from .servo import TwistServo
-        self.servo = TwistServo(self.chain, self.spec, JOINT_ACTION_SCALE)
+        self.servo = TwistServo(self.chain, self.spec, JOINT_ACTION_SCALE, iters=servo_iters)
         self.onehot = np.eye(N_TASKS, dtype=np.float32)[task_index]
         self.t = 0
         self.last_obs = None
+        self._settled: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+        self.settle_steps = settle_steps
 
     # -- simulator handles (re-fetched: a reset can rebuild the sim) -----------------
     def _ids(self):
@@ -126,14 +133,23 @@ class PrivilegedEnv:
         """
         from .libero_env import remap_init_state
         k = int(self.rng.integers(len(self.init_states))) if init_index is None else init_index
-        self.rejected = 0
-        for _ in range(max_tries):
+        if k not in self._settled:
+            # The drop from LIBERO's spawn height is the same every time for a
+            # given init state: pay for it once. Resets were 145 ms, 124 of them
+            # settling, and a synchronous vector env waits on its slowest reset.
             self.env.reset()
             self.env.set_init_state(remap_init_state(self.init_states[k], self.env.sim))
             self._settle(10)
+            qadr, *_ = self._ids()
+            self._settled[k] = (np.asarray(self.env.sim.get_state().flatten()).copy(),
+                                self.env.sim.data.qpos[qadr:qadr + 3].copy())
+        settled, rest = self._settled[k]
+        self.rejected = 0
+        for _ in range(max_tries):
+            self.env.reset()
+            self.env.set_init_state(settled)
             sim = self.env.sim
             qadr, vadr, *_ = self._ids()
-            rest = sim.data.qpos[qadr:qadr + 3].copy()
             want = np.zeros(2)
             if self.radius > 0:
                 r = self.radius * np.sqrt(self.rng.random())
@@ -142,7 +158,7 @@ class PrivilegedEnv:
                 sim.data.qpos[qadr:qadr + 2] = rest[:2] + want
                 sim.data.qvel[vadr:vadr + 6] = 0.0
                 sim.forward()
-                self._settle(10)
+            self._settle(self.settle_steps)
             now = self.env.sim.data.qpos[qadr:qadr + 3]
             dz = abs(now[2] - rest[2]) * 1000
             dxy = np.linalg.norm(now[:2] - rest[:2] - want) * 1000

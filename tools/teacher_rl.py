@@ -45,7 +45,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 # ----------------------------------------------------------------------- workers
-def _worker(remote, task, seed, horizon):
+def _worker(remote, task, seed, horizon, cpu):
+    if cpu is not None:
+        os.sched_setaffinity(0, {cpu})
     os.environ["OMP_NUM_THREADS"] = "1"
     import torch
     torch.set_num_threads(1)
@@ -73,12 +75,13 @@ def _worker(remote, task, seed, horizon):
 
 
 class VecEnv:
-    def __init__(self, tasks, seed, horizon):
+    def __init__(self, tasks, seed, horizon, cpus=None):
         ctx = mp.get_context("spawn")
         self.remotes, self.procs = [], []
         for i, t in enumerate(tasks):
             a, b = ctx.Pipe()
-            p = ctx.Process(target=_worker, args=(b, t, seed * 1000 + i, horizon), daemon=True)
+            cpu = None if not cpus else cpus[i % len(cpus)]
+            p = ctx.Process(target=_worker, args=(b, t, seed * 1000 + i, horizon, cpu), daemon=True)
             p.start(); b.close()
             self.remotes.append(a); self.procs.append(p)
         self.tasks = list(tasks)
@@ -102,6 +105,14 @@ class VecEnv:
             try: r.send(("close", None))
             except Exception: pass
         for p in self.procs: p.join(timeout=10)
+
+
+def parse_cpus(spec: str) -> list[int]:
+    out = []
+    for part in filter(None, spec.split(",")):
+        lo, _, hi = part.partition("-")
+        out += list(range(int(lo), int(hi or lo) + 1))
+    return out
 
 
 # ------------------------------------------------------------------------ policy
@@ -140,7 +151,14 @@ def train(args):
     act_sd_np = st["act_sd"].cpu().numpy()
 
     tasks = [t for t in range(10) for _ in range(args.envs_per_task)]
-    venv = VecEnv(tasks, args.seed, args.horizon)
+    # The GB10 has 10 Cortex-X925 cores (3.9 GHz) and 10 Cortex-A725 (2.8 GHz).
+    # A synchronous vector env steps at the pace of its SLOWEST worker, so an
+    # unpinned worker landing on an efficiency core sets everyone's rate.
+    # Workers get the performance cores, the learner the efficiency cores.
+    cpus = parse_cpus(args.worker_cpus)
+    if args.learner_cpus:
+        os.sched_setaffinity(0, set(parse_cpus(args.learner_cpus)))
+    venv = VecEnv(tasks, args.seed, args.horizon, cpus)
     radius = args.radius_start
     obs = venv.reset(radius)
     norm = lambda o: (torch.as_tensor(o, device=dev) - st["obs_mu"]) / st["obs_sd"] * st["obs_mask"]
@@ -155,14 +173,19 @@ def train(args):
         LP = torch.zeros(T, N, device=dev); R = torch.zeros(T, N, device=dev)
         TERM = torch.zeros(T, N, device=dev); VAL = torch.zeros(T + 1, N, device=dev)
         ep_info = []
+        t_pol = t_env = t_book = 0.0
         for t in range(T):
+            _a = time.perf_counter()
             with torch.no_grad():
                 x = norm(obs)
                 mu = actor(x); std = log_std.exp()
                 a = mu + std * torch.randn_like(mu)
                 lp = torch.distributions.Normal(mu, std).log_prob(a).sum(-1)
                 v = critic(x).squeeze(-1)
-            obs2, rew, done, info, final = venv.step(to_env_action(a.cpu().numpy(), act_sd_np))
+            act_np = to_env_action(a.cpu().numpy(), act_sd_np)
+            _b = time.perf_counter()
+            obs2, rew, done, info, final = venv.step(act_np)
+            _c = time.perf_counter()
             rew_t = torch.as_tensor(rew, device=dev)
             for i, (d, inf) in enumerate(zip(done, info)):
                 if d and inf["truncated"] and not inf["success"]:
@@ -174,6 +197,7 @@ def train(args):
             R[t] = rew_t
             TERM[t] = torch.as_tensor(np.array([bool(d) for d in done]), device=dev).float()
             obs = obs2
+            t_pol += _b - _a; t_env += _c - _b; t_book += time.perf_counter() - _c
         steps += T * N
         with torch.no_grad():
             VAL[T] = critic(norm(obs)).squeeze(-1)
@@ -232,13 +256,15 @@ def train(args):
                    value_loss=vloss_sum / max(nb, 1),
                    approx_kl=kl_sum / max(nb, 1) if not warm else None,
                    clipfrac=clipfrac / max(nb, 1) if not warm else None,
-                   log_std=log_std.detach().cpu().numpy().round(3).tolist(), advanced=advanced)
+                   log_std=log_std.detach().cpu().numpy().round(3).tolist(), advanced=advanced,
+                   t_policy_ms=round(t_pol / T * 1000, 2), t_env_ms=round(t_env / T * 1000, 2),
+                   t_book_ms=round(t_book / T * 1000, 2))
         log.write(json.dumps(rec) + "\n"); log.flush()
         if it % args.print_every == 0 or advanced:
             print(f"it {it:4d} steps {steps:8d} ({rec['sps']}/s)  radius {radius*1000:4.0f}mm  "
                   f"eps {len(ep_info):3d} success {succ:.2f}  vloss {rec['value_loss']:.4f}  "
                   f"{'WARMUP' if warm else 'kl %.4f clip %.2f' % (rec['approx_kl'], rec['clipfrac'])}"
-                  f"{'  -> radius up' if advanced else ''}", flush=True)
+                  f"{'  -> radius up' if advanced else ''}  [per step: policy {rec['t_policy_ms']}ms env {rec['t_env_ms']}ms book {rec['t_book_ms']}ms]", flush=True)
         if (it + 1) % args.save_every == 0 or it == args.iters - 1:
             torch.save({**{k: ck[k] for k in ("obs_mu", "obs_sd", "act_sd", "obs_dim", "act_dim")},
                         "obs_mask": st["obs_mask"].cpu().numpy(),
@@ -252,14 +278,14 @@ def train(args):
 
 # -------------------------------------------------------------------------- eval
 def _eval_task(a):
-    ckpt, task, radius, episodes, seed, horizon = a
+    ckpt, task, radius, episodes, seed, horizon, env_kw = a
     os.environ["OMP_NUM_THREADS"] = "1"
     import torch
     torch.set_num_threads(1)
     sys.path.insert(0, str(ROOT))
     from screwhead.teacher_env import PrivilegedEnv
     actor, _, st, _ = build(ckpt, "cpu")
-    env = PrivilegedEnv(task, radius_m=radius, horizon=horizon, seed=seed)
+    env = PrivilegedEnv(task, radius_m=radius, horizon=horizon, seed=seed, **env_kw)
     wins, places, lifts, closest = [], [], [], []
     for ep in range(episodes):
         o = env.reset(init_index=ep % len(env.init_states))
@@ -279,7 +305,8 @@ def _eval_task(a):
 
 def evaluate(args):
     ctx = mp.get_context("spawn")
-    jobs = [(args.ckpt, t, args.radius, args.episodes, args.seed + t, args.horizon) for t in range(10)]
+    env_kw = dict(hard_reset=args.hard_reset, servo_iters=args.servo_iters, settle_steps=args.settle_steps)
+    jobs = [(args.ckpt, t, args.radius, args.episodes, args.seed + t, args.horizon, env_kw) for t in range(10)]
     with ctx.Pool(args.procs) as pool:
         res = pool.map(_eval_task, jobs)
     allw, alll, allc = [], [], []
@@ -305,7 +332,9 @@ def main() -> int:
     tr = sub.add_parser("train")
     tr.add_argument("--init", default="checkpoints/teacher_bc.pt")
     tr.add_argument("--out", default="checkpoints/teacher_rl")
-    tr.add_argument("--envs-per-task", type=int, default=2)
+    tr.add_argument("--envs-per-task", type=int, default=1)
+    tr.add_argument("--worker-cpus", default="5-9,15-19", help="performance cores on the GB10")
+    tr.add_argument("--learner-cpus", default="0-4,10-14", help="efficiency cores")
     tr.add_argument("--iters", type=int, default=2000)
     tr.add_argument("--rollout", type=int, default=128)
     tr.add_argument("--horizon", type=int, default=300)
@@ -341,6 +370,9 @@ def main() -> int:
     ev.add_argument("--procs", type=int, default=10)
     ev.add_argument("--seed", type=int, default=0)
     ev.add_argument("--out", default="")
+    ev.add_argument("--hard-reset", action="store_true")
+    ev.add_argument("--servo-iters", type=int, default=1)
+    ev.add_argument("--settle-steps", type=int, default=5)
     args = ap.parse_args()
     return train(args) if args.cmd == "train" else evaluate(args)
 
