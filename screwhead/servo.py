@@ -42,6 +42,8 @@ class TwistServo:
         self.ref: np.ndarray | None = None
         self.T_ref: torch.Tensor | None = None
         self.reanchors = 0          # diagnostics: how often the pose reference was abandoned
+        self.posture: np.ndarray | None = None   # null-space target joints, or None
+        self.posture_gain = 0.0
         self.limit_clamps = 0
 
     def reset(self, theta_measured: np.ndarray) -> None:
@@ -65,7 +67,13 @@ class TwistServo:
         th = torch.tensor(self.ref)[None]
         for _ in range(self.iters):
             e = log_se3(inverse(fk(self.chain, th)) @ self.T_ref[None])      # body-frame pose error
-            d = decode_twist(self.chain, th, e, dt=1.0, lam=self.lam)
+            secondary = None
+            if self.posture is not None and self.posture_gain > 0:
+                # the 7th joint is not specified by a 6-D twist: spend it pulling the
+                # elbow toward a well-conditioned posture, projected into the null space
+                # so the tool pose is untouched
+                secondary = self.posture_gain * (torch.as_tensor(self.posture) - th)
+            d = decode_twist(self.chain, th, e, dt=1.0, lam=self.lam, secondary=secondary)
             th = d.theta
             self.limit_clamps += int(bool(d.clamped.any()))
         e = log_se3(inverse(fk(self.chain, th)) @ self.T_ref[None])[0]

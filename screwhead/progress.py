@@ -108,12 +108,7 @@ def progress(s: dict, g: PickPlaceGeometry = PickPlaceGeometry()) -> tuple[float
     # gripper 3.8-15.6 mm open (p1-p99), well apart from open (78 mm) and from
     # closed on nothing (~0). Both pads touch in only ~82% of carried frames, and
     # nothing but the gripper touches a carried bowl in all of them.
-    pinch = g.hold_min <= s["aperture"] <= g.hold_max
-    # Contact flags flicker on the same grasp -- a bowl 99 mm in the air with the
-    # gripper closed at 11.5 mm read zero contacts for a frame -- so geometry
-    # decides: the wall lies between the pads. Contact is kept as a second route.
-    held = pinch and (s["side1"] or s["side2"] or wall_between_pads(s, g)
-                      or (not s["supported"] and dz > g.lifted_dz))
+    held = is_held(s, g)
     if held:
         rem, label = transport_remaining(s, g)
         return 3 + 3 * (1 - min(rem / max(s["d0_carry"], 1e-3), 1.0)), label, dict(d=rem)
@@ -128,6 +123,19 @@ def progress(s: dict, g: PickPlaceGeometry = PickPlaceGeometry()) -> tuple[float
     # above scores better than arriving sideways through the wall.
     v = 2 * (1 - min(max(d_reach - g.grasp_ball, 0.0) / max(s["d0_reach"] - g.grasp_ball, 1e-3), 1.0))
     return v, (1 if below else 0), dict(d=d_reach)
+
+
+def is_held(s: dict, g: PickPlaceGeometry = PickPlaceGeometry()) -> bool:
+    """The bowl is in the gripper. Shared by the progress reward and the scripted teacher.
+
+    Contact flags flicker on the same grasp -- a bowl 99 mm in the air with the
+    gripper closed at 11.5 mm read zero contacts for a frame -- so geometry
+    decides: the wall lies between the pads. Contact is kept as a second route.
+    """
+    dz = s["p_bowl"][2] - s["rest_z"]
+    pinch = g.hold_min <= s["aperture"] <= g.hold_max
+    return bool(pinch and (s["side1"] or s["side2"] or wall_between_pads(s, g)
+                           or (not s["supported"] and dz > g.lifted_dz)))
 
 
 def wall_between_pads(s: dict, g: PickPlaceGeometry) -> bool:

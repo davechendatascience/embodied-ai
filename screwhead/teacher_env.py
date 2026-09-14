@@ -381,7 +381,9 @@ class PrivilegedEnv:
                 else:
                     supported = True
         gq = raw["robot0_gripper_qpos"]
+        gv = raw.get("robot0_gripper_qvel", np.zeros(2))
         return dict(R_tool=T[:3, :3], p_tool=T[:3, 3], aperture=float(gq[0] - gq[1]),
+                    aperture_rate=float(gv[0] - gv[1]),
                     R_bowl=d.body_xmat[bowl].reshape(3, 3).copy(), p_bowl=(d.body_xpos[bowl] - tb).copy(),
                     p_plate=(d.body_xpos[plate] - tb).copy(), side1=1 in sides, side2=2 in sides,
                     any_grip=any_grip, supported=supported, success=bool(self.env.check_success()))
@@ -404,7 +406,8 @@ class PrivilegedEnv:
         from .progress import transport_remaining
         ref0 = dict(s, rest_z=float(s["p_bowl"][2]), d0_reach=float(d0_reach), d0_carry=1.0)
         d0_carry, _ = transport_remaining(ref0, g)       # the whole transport, from grasped at rest
-        self.ref = dict(rest_z=float(s["p_bowl"][2]), d0_reach=float(d0_reach), d0_carry=float(d0_carry))
+        self.ref = dict(rest_z=float(s["p_bowl"][2]), d0_reach=float(d0_reach), d0_carry=float(d0_carry),
+                        rest_xy=s["p_bowl"][:2].copy())
         self.phi = self.progress(s)[0]
 
     def progress(self, snap: dict | None = None):
