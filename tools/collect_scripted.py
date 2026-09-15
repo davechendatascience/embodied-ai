@@ -109,7 +109,7 @@ def encode(args):
     """Raw frames -> frozen CLIP features, in GPU batches, in the format distill.py trains on."""
     import torch
     sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "tools"))
-    from rollout import clip_encoder
+    from screwhead.clip_features import clip_encoder
     enc_img, enc_txt = clip_encoder(args.device)
     shards = sorted(Path(args.shards).glob("task*.npz"))
     A, W, S, L, E, ST, T = [], [], [], [], [], [], []

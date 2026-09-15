@@ -48,38 +48,18 @@ NOISY_PHASES = {"approach", "rise", "carry", ""}
 
 
 # ------------------------------------------------------------------------ workers
-def load_teacher(ckpt: str):
-    """Return (label_fn, env_kwargs) for either teacher format.
+def start_kw(args) -> dict:
+    """Robot start-pose randomisation, forwarded to PrivilegedEnv."""
+    return dict(start_xy_m=args.start_xy, start_z_m=args.start_z, start_yaw_deg=args.start_yaw,
+                start_tilt_deg=args.start_tilt, start_null_rad=args.start_null)
 
-    BC teacher (tools/teacher_bc.py): TeacherMLP on the 45-d observation, fixed
-    normalisation statistics, actions in act_sd units.
-    RL teacher (tools/rl_scratch.py): Tanh MLP on the 59-d observation with
-    progress features, running normalisation, actions already in [-1, 1]. Its
-    environment -- start-pose ranges, progress observations, horizon -- is read
-    from the checkpoint, so the student is distilled on the distribution the
-    teacher actually learned.
-    """
-    import torch
-    ck = torch.load(ckpt, map_location="cpu", weights_only=False)
-    if "norm_mean" in ck:
-        from rl_scratch import env_kwargs, mlp
-        actor = mlp(ck["obs_dim"], ck["act_dim"]); actor.load_state_dict(ck["actor"]); actor.eval()
-        mean, var = np.asarray(ck["norm_mean"]), np.asarray(ck["norm_var"])
 
-        def label(o):
-            x = np.clip((o - mean) / np.sqrt(var + 1e-8), -10, 10).astype(np.float32)
-            with torch.no_grad():
-                return np.clip(actor(torch.from_numpy(x)).numpy(), -1.0, 1.0).astype(np.float32)
-        return label, env_kwargs(argparse.Namespace(**ck["args"])), "rl"
-    from teacher_rl import build
-    teacher, _, st, _ = build(ckpt, "cpu")
-    mu, sd, mask, asd = (st["obs_mu"].numpy(), st["obs_sd"].numpy(), st["obs_mask"].numpy(), st["act_sd"].numpy())
-
-    def label(o):
-        with torch.no_grad():
-            m = teacher(torch.from_numpy(((o - mu) / sd * mask).astype(np.float32))).numpy()
-        return np.clip(m * asd, -1.0, 1.0).astype(np.float32)
-    return label, {}, "bc"
+def add_start_args(p) -> None:
+    p.add_argument("--start-xy", type=float, default=0.0, help="tool start offset half-width, m")
+    p.add_argument("--start-z", type=float, default=0.0, help="m")
+    p.add_argument("--start-yaw", type=float, default=0.0, help="deg about vertical")
+    p.add_argument("--start-tilt", type=float, default=0.0, help="deg about a random horizontal axis")
+    p.add_argument("--start-null", type=float, default=0.0, help="rad of IK seed noise (elbow)")
 
 
 def _worker(remote, task, seed, cpu, teacher_ckpt, horizon, radius, env_kw):
@@ -100,16 +80,7 @@ def _worker(remote, task, seed, cpu, teacher_ckpt, horizon, radius, env_kw):
         label = lambda o: program.act().astype(np.float32)
         phase = lambda: program.phase
     else:
-        label, teacher_kw, kind = load_teacher(teacher_ckpt)
-        kw = dict(horizon=horizon, **env_kw)
-        kw.update(teacher_kw)                 # an RL teacher's own training distribution wins
-        if kind == "rl":
-            # including bowl placement: the RL teacher trained with the bowl where
-            # LIBERO puts it, so a displaced bowl would ask it for labels it never learned
-            radius = float(teacher_kw.get("radius_m", 0.0))
-        env = PrivilegedEnv(task, radius_m=radius, seed=seed, render=True,
-                            **{k: v for k, v in kw.items() if k != "radius_m"})
-        phase = lambda: ""
+        raise ValueError(f"unknown teacher {teacher_ckpt!r}: only the scripted programs remain")
 
     def payload(o, done=False, info=None):
         a, w = env.images()
@@ -168,13 +139,10 @@ def spec_tokens(device):
 def collect(args):
     import torch
     sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "tools"))
-    from rollout import clip_encoder
-    from teacher_rl import start_kw
+    from screwhead.clip_features import clip_encoder
     dev = args.device
     rng = np.random.default_rng(args.seed)
     enc_img, enc_txt = clip_encoder(dev)
-    if args.teacher != "scripted" and "norm_mean" in torch.load(args.teacher, map_location="cpu", weights_only=False):
-        args.radius = 0.0            # the workers take placement from an RL teacher; keep the report honest
     student = act_std = None
     if args.beta < 1.0:
         student, act_std, _ = load_student(args.student, dev)
@@ -393,8 +361,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("collect")
-    c.add_argument("--teacher", default="checkpoints/teacher_bc_nojoints.pt",
-                   help='a teacher checkpoint, or "scripted" for the per-task demonstration programs')
+    c.add_argument("--teacher", default="scripted", choices=["scripted"], help="the per-task demonstration programs")
     c.add_argument("--student", default="")
     c.add_argument("--beta", type=float, default=1.0)
     c.add_argument("--zero", default="none", choices=["none", "image", "text"])
@@ -409,7 +376,6 @@ def main() -> int:
     c.add_argument("--out", default="", help="omit to evaluate without saving")
     c.add_argument("--seed", type=int, default=0)
     sys.path.insert(0, str(ROOT / "tools"))
-    from teacher_rl import add_start_args
     add_start_args(c)
     c.add_argument("--device", default="cuda")
     t = sub.add_parser("train")
