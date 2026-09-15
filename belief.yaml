@@ -1,17 +1,46 @@
 # Declarations for the URDF-conditioned VLA action head.
 #
 # Design: docs/design_VLA_action_head.md. Goal: docs/design_VLA_goal.md.
+# Brief (zh-TW): docs/project_brief_zh-TW.md.
 #
 # This file is the approval gate. The server reads it from git HEAD, not the
 # working tree — editing it changes nothing until a human commits. Uncommitted
 # edits show as PENDING in `status` and score no evidence.
 #
-# The thesis under test: a single BC policy emits an embodiment-free tool twist,
+# The thesis under test: a single policy emits an embodiment-free tool twist,
 # and a fixed analytic layer parameterized by the URDF decodes it to joint
-# commands for any 6- or 7-DoF arm. Two things must be true before that is worth
-# building — the conversion must be exact (CTR-poe-matches-sim) and the existing
-# padded-vector approach must actually fail the swap (CTR-baseline-fails-swap).
-# POL-premise-survives encodes that ordering.
+# commands for any 6- or 7-DoF arm.
+#
+# Revised ordering. A transfer claim is only worth testing on a policy that does
+# the task from what it SEES. Measured: on LIBERO-spatial's bundled init states a
+# demonstration-trained head with its images zeroed matched the sighted head --
+# one mean trajectory solves the suite (12 mm placement spread) -- so a success
+# there, on any arm, is a proprioceptive trajectory prior and says nothing about
+# the head. So the chain is now three gates, in order:
+#
+#   1. geometry     the conversion, decoder and gripper are exact
+#                   (POL-decoder-safe, POL-gripper-understood; supported)
+#   2. grounding    under relation-preserving layout and start-pose
+#                   randomization, a blind policy trained on the same data fails
+#                   and the sighted one succeeds (POL-grounded)
+#   3. transfer     the grounded policy survives an embodiment swap that a
+#                   padded-vector baseline does not (POL-premise-survives,
+#                   POL-thesis-supported)
+#
+# Data for gate 2 comes from per-task demonstration programs with privileged
+# state (screwhead/scripted_teacher.py), executed through TwistServo, filtered to
+# successes, then aggregated with DAgger (tools/distill.py). Teacher and student
+# share one declared evaluation: tools/distill.py collect --trials, seed 555,
+# layouts 0.08 m, start 0.10 m / 0.05 m / 30 deg / 10 deg / 0.3 rad, horizon 400.
+#
+# Ledger facts that shape this file (component-belief source):
+#   - compatibility_key reads repro only; distill.py writes task, randomization,
+#     teacher_revision and policy_revision there.
+#   - a policy criterion keeps ONE compat group per bucket (decide.py keys states
+#     by bucket), so with several policy revisions in the ledger a policy verdict
+#     is not trustworthy -- read `status view=belief` per revision before decide.
+#   - a trial missing a rule metric is excluded, not failed; distill.py therefore
+#     writes grasp_offset_mm = 1e6 rather than null when nothing was measured.
 
 components:
   - id: CMP-poe-conversion
@@ -90,17 +119,80 @@ components:
     remediation: Kinematic domain randomisation over procedurally varied URDFs during training
 
   - id: CMP-action-expert
-    purpose: Predict a chunk of tool twists and grasp intent from observations, language, and spec
-    inputs: [IFC-spec__expert]
+    purpose: >-
+      The student VLA -- predict the tool twist and three-valued gripper command
+      from both cameras, the instruction, proprioception and spec tokens
+    inputs: [IFC-spec__expert, IFC-encoder__expert, IFC-teacher__expert]
     outputs: [IFC-expert__ik]
     testable_capability: >-
-      Completes LIBERO tasks at a rate comparable to a joint-space baseline on
-      the arm it was trained on, and retains that rate on an arm it never saw
+      Completes randomized LIBERO-spatial episodes from pixels at a rate a blind
+      copy trained on the same data cannot reach, and retains that rate on an
+      arm it never saw
     failure_modes:
+      - {id: FM-trajectory-prior, observable: zeroing the images leaves success unchanged; the head replays a mean trajectory}
+      - {id: FM-compounding-drift, observable: agrees with the teacher for the first ~25 steps, then stalls near pre-grasp on states the teacher never visited}
+      - {id: FM-localization-limited, observable: closes the gripper centimetres from the grasp the teacher would choose; the approach is right, the target is not}
+      - {id: FM-hold-unexecuted, observable: a regressed gripper output near zero is read by its sign and hold becomes close}
       - {id: FM-no-transfer, observable: success collapses on a held-out embodiment}
-      - {id: FM-controller-credit, observable: transfer is attributable to the operational-space controller rather than the head}
-      - {id: FM-chunk-infeasible, observable: a predicted task-space chunk leaves the workspace mid-chunk}
-    remediation: Kinematic domain randomisation; put the decoder inside the training graph rather than beside it
+      - {id: FM-controller-credit, observable: transfer is attributable to the controller rather than the head}
+    remediation: >-
+      DAgger on student-visited states labelled by the program; patch tokens
+      rather than pooled features; decode the gripper to the nearest of three
+      values; fine-tune the encoder with a grasp-localization loss only if data
+      scaling plateaus
+
+  # ---- Gate 2 machinery. The teacher reads the simulator; the student never does.
+  - id: CMP-twist-servo
+    purpose: Execute a body twist on the simulator's joint-position controller
+    inputs: [IFC-expert__ik]
+    testable_capability: >-
+      Replaying a successful episode's twist labels open loop reproduces its
+      success, despite controller lag and zero-command drift
+    failure_modes:
+      - {id: FM-controller-lag, observable: the joint controller reaches ~82% of each step and integrated error grows over an episode}
+      - {id: FM-settle-drift, observable: a zero delta command drifts the tool ~22 mm while settling}
+      - {id: FM-world-body-mixup, observable: the twist is integrated in the world frame and rotations swing the tool}
+    remediation: Integrate the twist on SE(3) into an absolute pose reference, solve IK to an absolute joint target, and hold absolutely
+
+  - id: CMP-scene-randomizer
+    purpose: Randomize object layouts and robot start pose while keeping each instruction true
+    outputs: [IFC-randomizer__teacher]
+    testable_capability: >-
+      Every episode starts at rest with the instruction's relation still singling
+      out the target, and a policy denied the images cannot solve the resulting
+      episodes
+    failure_modes:
+      - {id: FM-relation-broken, observable: the target bowl is no longer the one the instruction names}
+      - {id: FM-not-at-rest, observable: an object is still sliding when the episode starts}
+      - {id: FM-leaning-init, observable: an init state leans one object on another and every proposal drops it}
+      - {id: FM-still-blind-solvable, observable: a zeroed-image policy succeeds anyway; the randomization does not demand vision}
+      - {id: FM-teacher-veto-bias, observable: layouts the program cannot solve are redrawn, so the evaluated distribution is the teacher-feasible one}
+    remediation: Move objects in rigid groups, settle, reject slid/ejected/relation-false proposals; redraw incompatible init states
+
+  - id: CMP-scripted-teacher
+    purpose: Per-task demonstration programs that choose a verified grasp from privileged state and drive to it
+    inputs: [IFC-randomizer__teacher]
+    outputs: [IFC-teacher__expert]
+    testable_capability: >-
+      Solves each task under the declared randomization, and labels ANY state
+      the student reaches (a Markov feedback law, not a replayed path)
+    failure_modes:
+      - {id: FM-lift-before-grip, observable: the bowl slips because lift starts before the jaws stop closing}
+      - {id: FM-joint-limit-singularity, observable: the stove task stalls at a wrist limit}
+      - {id: FM-fixture-collision, observable: the drawer task hits the cabinet on approach}
+      - {id: FM-stale-grasp-cache, observable: a grasp chosen in a previous episode is reused after reset}
+    remediation: Per-task ProgramConfig (sector, pre-shape, posture, selection); per-episode grasp cache; clearance, IK, path and sigma-min checks
+
+  - id: CMP-vision-encoder
+    purpose: Frozen DINOv2-base patch tokens (8x8 per camera) as the student's visual input
+    outputs: [IFC-encoder__expert]
+    testable_capability: >-
+      A probe from its tokens locates the grasp the program would choose, in
+      states the STUDENT drives to, within the grasp tolerance
+    failure_modes:
+      - {id: FM-pooled-loses-geometry, observable: a pooled embedding locates the grasp no better than proprioception alone}
+      - {id: FM-teacher-state-only, observable: localizes in teacher-driven states and not in the student's own}
+    remediation: Patch tokens; measure on student-driven states; the learning curve decides between more data and fine-tuning
 
   - id: CMP-action-interface
     purpose: Convert between the policy's action units and the decoder's twist units
@@ -178,6 +270,49 @@ components:
     remediation: Derive the pad-separation workspace from finger FK over joint limits; refuse what lies outside it
 
 interfaces:
+  - id: IFC-randomizer__teacher
+    producer: CMP-scene-randomizer
+    consumer: CMP-scripted-teacher
+    semantics: A settled episode start -- object layout, robot start pose, instruction
+    units: metres and radians
+    frame: robot base frame
+    producer_guarantees:
+      - the instruction's relation holds at the first observed state
+      - objects are at rest when the episode starts
+    consumer_assumptions:
+      - the instruction's relation holds at the first observed state
+      - objects are at rest when the episode starts
+
+  - id: IFC-teacher__expert
+    producer: CMP-scripted-teacher
+    consumer: CMP-action-expert
+    semantics: Action label at the state actually visited, whoever drove there
+    units: >-
+      twist normalised to [-1, 1] with one unit = 10 rad/s and 1 m/s (ActionSpec
+      0.5 rad and 0.05 m per step at 20 Hz; the programs cap at 1.2 rad/s and
+      0.25 m/s), gripper in {-1 open, 0 hold, +1 close}
+    frame: tool frame at the current pose
+    timing: {chunk_steps: 1, control_hz: 20}
+    producer_guarantees:
+      - labels are computed from the visited state, not replayed from a stored path
+      - the gripper label is three-valued and hold is an explicit zero
+    consumer_assumptions:
+      - labels are computed from the visited state, not replayed from a stored path
+      - the gripper label is three-valued and hold is an explicit zero
+
+  - id: IFC-encoder__expert
+    producer: CMP-vision-encoder
+    consumer: CMP-action-expert
+    semantics: Patch tokens for the agent-view and wrist cameras
+    units: dimensionless features, 64 tokens x 768 per camera, float16
+    frame: image grid, 128 px renders resized to 224
+    producer_guarantees:
+      - the encoder is frozen and identical at training and rollout
+      - the same preprocessing runs live and in the cached dataset
+    consumer_assumptions:
+      - the encoder is frozen and identical at training and rollout
+      - the same preprocessing runs live and in the cached dataset
+
   - id: IFC-poe__kinematics
     producer: CMP-poe-conversion
     consumer: CMP-kinematics
@@ -210,20 +345,22 @@ interfaces:
   - id: IFC-expert__ik
     producer: CMP-action-expert
     consumer: CMP-ik-decoder
-    semantics: Body twist and grasp intent, one per chunk step
+    semantics: Body twist and gripper command, one per control step
     units: metres per second and radians per second
     frame: tool frame at the current pose
-    timing: {chunk_steps: 16}
+    # chunk 1, not 16: the student is trained on single-step DAgger labels
+    timing: {chunk_steps: 1}
     producer_guarantees:
       - twist is expressed in the tool frame at the current pose
-      - grasp intent is a normalised aperture in zero to one
-      # Now a guarantee rather than an assumption: the policy emits a bounded
-      # action in [-1, 1], scaled by the action space's own constants (0.05 m,
-      # 0.5 rad per step at 20 Hz). A bounded action space bounds the twist.
+      # Was a normalised aperture. robosuite reads only the SIGN of the gripper
+      # action, so 0 of 92 hold labels executed as hold; decoded to three values.
+      - gripper command is one of -1 open, 0 hold, +1 close
+      # A guarantee rather than an assumption: the policy emits a bounded action
+      # in [-1, 1] scaled by fixed constants, so the twist is bounded.
       - twist magnitude is reachable within one control period
     consumer_assumptions:
       - twist is expressed in the tool frame at the current pose
-      - grasp intent is a normalised aperture in zero to one
+      - gripper command is one of -1 open, 0 hold, +1 close
       - twist magnitude is reachable within one control period
 
   - id: IFC-ik__controller
@@ -393,13 +530,111 @@ contracts:
     evaluable_by: [TST-retarget-roundtrip, TST-retarget-libero]
     sufficiency: {n_min: 200, max_ci_width: 0.05}
 
+  # ---- Gate 2: grounding. Every rollout contract below is scored on the one
+  # declared randomized evaluation (header). Bars were simulated against bb-1
+  # (94% equal-tailed Beta(1,1) posterior) before any token-VLA result existed.
+
+  # Precondition for every rate that follows: the randomization must not change
+  # what the instruction means. Scored on every episode of every driver.
+  # 0.95 at n_min 200: a true 0.99 is supported with p=0.95, a true 0.90 refuted
+  # with p=0.86.
+  - id: CTR-randomization-preserves-instruction
+    subject: CMP-scene-randomizer
+    claim_type: capability
+    metrics:
+      - {id: relation_at_start, unit: bool}
+    acceptance: {rule: "relation_at_start == true", target_rate: 0.95}
+    compatibility_key: [randomization]
+    evaluable_by: [TST-teacher-randomized, TST-student-randomized, TST-student-blind]
+    sufficiency: {n_min: 200, max_ci_width: 0.10}
+
+  # The data source. Per task, because the programs are per task and a pooled
+  # 96% hid a drawer task at 0/10 once. 0.75 at n_min 50: a task at the measured
+  # pooled 0.965 is supported with p=0.998, a task at 0.90 with p=0.77, a task at
+  # 0.70 is never supported. The teacher executes through TwistServo, so this is
+  # also the servo's end-to-end check (CMP-twist-servo has no separate test).
+  - id: CTR-teacher-solves-randomized
+    subject: CMP-scripted-teacher
+    claim_type: capability
+    metrics:
+      - {id: success, unit: bool}
+    acceptance: {rule: "success == true", target_rate: 0.75}
+    conditions:
+      - {id: task0, when: "task == 0"}
+      - {id: task1, when: "task == 1"}
+      - {id: task2, when: "task == 2"}
+      - {id: task3, when: "task == 3"}
+      - {id: task4, when: "task == 4"}
+      - {id: task5, when: "task == 5"}
+      - {id: task6, when: "task == 6"}
+      - {id: task7, when: "task == 7"}
+      - {id: task8, when: "task == 8"}
+      - {id: task9, when: "task == 9"}
+    compatibility_key: [teacher_revision, randomization]
+    evaluable_by: [TST-teacher-randomized]
+    sufficiency: {n_min: 50, max_ci_width: 0.25}
+
+  # The premise of gate 2, and the claim the canonical benchmark failed: denied
+  # its images, a policy trained on the same data does NOT succeed. Scored as
+  # success == false so that support means the benchmark demands vision.
+  # Measured so far: blind CLIP students 4% and 1%. 0.85 at n_min 200: blind at
+  # 4% success is supported with p=1.0, at 20% refuted with p=0.53.
+  - id: CTR-blind-policy-fails
+    subject: CMP-scene-randomizer
+    claim_type: capability
+    metrics:
+      - {id: success, unit: bool}
+    acceptance: {rule: "success == false", target_rate: 0.85}
+    compatibility_key: [policy_revision, randomization]
+    evaluable_by: [TST-student-blind]
+    sufficiency: {n_min: 200, max_ci_width: 0.12}
+
+  # The grounded student. 0.65 is the midpoint of the best measured student
+  # (0.33, CLIP features after one DAgger round) and the teacher (0.965), fixed
+  # before the patch-token student was evaluated. At n_min 200 a true 0.75 is
+  # supported with p=0.89; 0.33 is refuted with certainty.
+  # Replaces CTR-libero-source-arm, whose canonical-init test a blind policy passes.
+  - id: CTR-student-succeeds-randomized
+    subject: CMP-action-expert
+    claim_type: capability
+    metrics:
+      - {id: success, unit: bool}
+    acceptance: {rule: "success == true", target_rate: 0.65}
+    compatibility_key: [policy_revision, randomization]
+    evaluable_by: [TST-student-randomized]
+    sufficiency: {n_min: 200, max_ci_width: 0.12}
+
+  # DIAGNOSTIC, not in any policy. Where the diagnosed failure lives: the student
+  # closes the gripper away from the grasp the program would choose. The 6 mm is
+  # the feature study's estimate of the tolerance, not a measured success basin
+  # -- the same trials carry success, so calibrate the threshold from
+  # success-given-offset before promoting this to a gate. The teacher bucket
+  # calibrates the metric itself: if the program's own episodes are not
+  # supported here, the metric is broken, not the student.
+  - id: CTR-closes-at-the-grasp
+    subject: CMP-action-expert
+    claim_type: capability
+    metrics:
+      - {id: closed, unit: bool}
+      - {id: grasp_offset_mm, unit: millimetres}
+    acceptance: {rule: "closed == true and grasp_offset_mm < 6.0", target_rate: 0.75}
+    conditions:
+      - {id: teacher_driven, when: "driver == 'teacher'"}
+      - {id: student_driven, when: "driver == 'student' and zero == 'none'"}
+      - {id: blind_driven, when: "driver == 'student' and zero == 'image'"}
+    compatibility_key: [policy_revision, randomization]
+    evaluable_by: [TST-teacher-randomized, TST-student-randomized, TST-student-blind]
+    sufficiency: {n_min: 200, max_ci_width: 0.12}
+
   # ---- Gate 3: the premise. If the padded-vector baseline transfers fine,
   # there is nothing to fix and the project has no reason to exist.
-  # Split in two. A single contract with rule "success == false" and buckets for
-  # both arms would report the baseline REFUTED on its own arm for the crime of
-  # working there. Opposite expected verdicts need opposite bars, and a bar is
-  # per contract, so this is two contracts fed by two tests -- the same shape as
-  # the IK singularity split.
+  # Split in two: opposite expected verdicts need opposite bars, and a bar is
+  # per contract.
+  # NOT RUNNABLE YET. Both halves must be measured on the gate-2 evaluation:
+  # at canonical init the source half is passed by a blind trajectory prior and
+  # the swap half fails for the same trivial reason. The tests below exit
+  # non-zero until PrivilegedEnv takes a robot and gripper and a joint-space
+  # student is trained on the same teacher data.
   - id: CTR-baseline-works-on-source
     subject: CMP-action-expert
     claim_type: capability
@@ -410,13 +645,9 @@ contracts:
     evaluable_by: [TST-baseline-source]
     sufficiency: {n_min: 100, max_ci_width: 0.20}
 
-  # The premise. If the padded-vector baseline transfers anyway, the project has
-  # nothing to fix and POL-premise-survives should stop it.
   # Bucketed by WHICH factor was swapped. Panda -> UR5e in LIBERO changes the
-  # arm AND the gripper at once (UR5e gets a Robotiq85), so an unfactored result
-  # cannot say which one broke -- and the prior attempt at this suggested the arm
-  # swap is the easy half. robosuite takes gripper_types independently, and all
-  # four cells build, so the factorial costs only rollout time.
+  # arm AND the gripper at once, so an unfactored result cannot say which one
+  # broke. robosuite takes gripper_types independently.
   - id: CTR-baseline-fails-swap
     subject: CMP-action-expert
     claim_type: capability
@@ -442,56 +673,38 @@ contracts:
     evaluable_by: [TST-spec-sensitivity]
     sufficiency: {n_min: 50, max_ci_width: 0.2}
 
-  # PROVISIONAL BAR. 0.3 is a sanity floor -- "the policy learned the task at
-  # all" -- not a performance claim. The honest bar is the baseline's own
-  # source-arm rate, which does not exist yet. It is declared before our policy
-  # is trained, from the baseline's number, so it cannot be tuned to our result.
-  - id: CTR-libero-source-arm
-    subject: CMP-action-expert
-    claim_type: capability
-    metrics:
-      - {id: success, unit: bool}
-    acceptance: {rule: "success == true", target_rate: 0.3}
-    compatibility_key: [robot, gripper, task_suite, policy_revision]
-    evaluable_by: [TST-libero-source]
-    sufficiency: {n_min: 100, max_ci_width: 0.20}
-
+  # Same bar as the grounded student on its own arm: transfer means keeping the
+  # gate-2 rate, not clearing a sanity floor.
   - id: CTR-heldout-embodiment
     subject: CMP-action-expert
     claim_type: capability
     metrics:
       - {id: success, unit: bool}
-    # Bucketed by whether the swap also changes the joint count. A 7-DoF to
-    # 7-DoF swap tests geometry; 7 to 6 additionally tests that the variable
-    # length encoding is doing work, which is the part no baseline can have.
-    acceptance: {rule: "success == true", target_rate: 0.3}
+    acceptance: {rule: "success == true", target_rate: 0.65}
     conditions:
       - {id: arm_only, when: "arm_swapped == true and gripper_swapped == false"}
       - {id: gripper_only, when: "arm_swapped == false and gripper_swapped == true"}
       - {id: both, when: "arm_swapped == true and gripper_swapped == true"}
     compatibility_key: [robot, gripper, task_suite, policy_revision]
     evaluable_by: [TST-libero-heldout]
-    sufficiency: {n_min: 100, max_ci_width: 0.20}
+    sufficiency: {n_min: 200, max_ci_width: 0.12}
 
-  # ---- Separates kinematic transfer from visual transfer. fit_taskspace
-  # already measured 49 mm vs 97 mm camera-to-TCP between grippers, so this is
-  # a known confound, not a hypothetical one.
+  # Separates kinematic transfer from visual transfer. The wrist camera moves
+  # with the gripper (measured 49 mm vs 97 mm camera-to-TCP), and the student is
+  # now grounded in exactly those pixels -- so this confound got stronger, not
+  # weaker, when gate 2 made the policy use its cameras.
   - id: CTR-transfer-is-kinematic
     subject: CMP-gripper-decoder
     claim_type: capability
     metrics:
       - {id: success, unit: bool}
-    # Only meaningful on the held-out arm, where the wrist camera moves with the
-    # new gripper. fit_taskspace already measured 49 mm vs 97 mm camera-to-TCP
-    # between grippers, so this is a documented confound, not a hypothetical:
-    # without the split, a visual-distribution failure reads as a kinematic one.
-    acceptance: {rule: "success == true", target_rate: 0.3}
+    acceptance: {rule: "success == true", target_rate: 0.65}
     conditions:
       - {id: camera_held_fixed, when: "camera_moved == false"}
       - {id: camera_moved, when: "camera_moved == true"}
     compatibility_key: [robot, gripper, task_suite, policy_revision]
     evaluable_by: [TST-libero-heldout]
-    sufficiency: {n_min: 100, max_ci_width: 0.20}
+    sufficiency: {n_min: 200, max_ci_width: 0.12}
 
   - id: CTR-twist-delta-roundtrip
     subject: CMP-action-interface
@@ -724,58 +937,70 @@ tests:
     metrics: [spec_sensitivity]
     capture: [policy_revision, perturbation]
 
-  - id: TST-libero-source
+  # ---- Gate 2 rollouts: one command, three drivers. The student checkpoints are
+  # symlinks so the run line (and so the test version) stays fixed across DAgger
+  # rounds; distill.py records the resolved file and its hash as policy_revision.
+  - id: TST-teacher-randomized
     layer: e2e
-    targets: [CMP-action-expert, CMP-gripper-decoder]
-    run: .venv-libero/bin/python tools/rollout.py --out $OUT --cell source --policy screwhead --episodes-per-task 10 --max-steps 400
-    metrics: [success]
-    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task, arm_swapped, gripper_swapped]
-    cost: 40.0
-    timeout_s: 14400
+    targets: [CMP-scripted-teacher, CMP-scene-randomizer, CMP-twist-servo]
+    run: env HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/distill.py collect --teacher scripted --beta 1 --episodes 50 --horizon 400 --layout-radius 0.08 --start-xy 0.10 --start-z 0.05 --start-yaw 30 --start-tilt 10 --start-null 0.3 --seed 555 --trials $OUT
+    metrics: [success, relation_at_start, closed, grasp_offset_mm]
+    capture: [task, driver, teacher_revision, randomization]
+    cost: 60.0
+    timeout_s: 21600
 
+  - id: TST-student-randomized
+    layer: e2e
+    targets: [CMP-action-expert, CMP-vision-encoder, CMP-scene-randomizer]
+    run: env HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/distill.py collect --teacher scripted --student checkpoints/vla_student.pt --beta 0 --episodes 20 --horizon 400 --layout-radius 0.08 --start-xy 0.10 --start-z 0.05 --start-yaw 30 --start-tilt 10 --start-null 0.3 --seed 555 --trials $OUT
+    metrics: [success, relation_at_start, closed, grasp_offset_mm]
+    capture: [task, driver, zero, policy_revision, randomization]
+    cost: 30.0
+    timeout_s: 10800
+
+  - id: TST-student-blind
+    layer: e2e
+    targets: [CMP-scene-randomizer, CMP-action-expert]
+    run: env HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/distill.py collect --teacher scripted --student checkpoints/vla_student_blind.pt --zero image --beta 0 --episodes 20 --horizon 400 --layout-radius 0.08 --start-xy 0.10 --start-z 0.05 --start-yaw 30 --start-tilt 10 --start-null 0.3 --seed 555 --trials $OUT
+    metrics: [success, relation_at_start, closed, grasp_offset_mm]
+    capture: [task, driver, zero, policy_revision, randomization]
+    cost: 30.0
+    timeout_s: 10800
+
+  # ---- Gate 3 rollouts. Blocked, deliberately: the canonical-init rollout.py
+  # cells these used to run measure a trajectory prior (see header).
   - id: TST-libero-heldout
     layer: e2e
     targets: [CMP-action-expert, CMP-gripper-decoder]
-    run: .venv-libero/bin/python tools/rollout.py --out $OUT --cell both --policy screwhead --episodes-per-task 10 --max-steps 400
+    run: sh -c "echo blocked - PrivilegedEnv has no robot or gripper swap and no joint-space student exists >&2; exit 2"
     metrics: [success]
-    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task, arm_swapped, gripper_swapped]
+    capture: [robot, gripper, dof, task_suite, policy_revision, camera_moved, task, arm_swapped, gripper_swapped]
     cost: 40.0
-    timeout_s: 14400
 
   - id: TST-baseline-source
     layer: e2e
     targets: [CMP-action-expert]
-    run: .venv-libero/bin/python tools/rollout.py --out $OUT --cell source --policy baseline --episodes-per-task 10 --max-steps 400
+    run: sh -c "echo blocked - PrivilegedEnv has no robot or gripper swap and no joint-space student exists >&2; exit 2"
     metrics: [success]
-    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task, arm_swapped, gripper_swapped]
+    capture: [robot, gripper, dof, task_suite, policy_revision, task, arm_swapped, gripper_swapped]
     cost: 40.0
-    timeout_s: 14400
 
   - id: TST-baseline-heldout
     layer: e2e
     targets: [CMP-action-expert]
-    run: .venv-libero/bin/python tools/rollout.py --out $OUT --cell both --policy baseline --episodes-per-task 10 --max-steps 400
+    run: sh -c "echo blocked - PrivilegedEnv has no robot or gripper swap and no joint-space student exists >&2; exit 2"
     metrics: [success]
-    capture: [robot, gripper, dof, task_suite, policy_revision, heldout, camera_moved, task, arm_swapped, gripper_swapped]
+    capture: [robot, gripper, dof, task_suite, policy_revision, task, arm_swapped, gripper_swapped]
     cost: 40.0
-    timeout_s: 14400
 
 priors: []
 
 policies:
-  # Do not build the full head until the conversion is exact and the premise
-  # has survived. Both are cheap relative to what they gate.
-  - id: POL-premise-survives
-    criteria:
-      - {slice: CTR-poe-matches-sim, require: supported}
-      - {slice: CTR-baseline-works-on-source, require: supported}
-      - {slice: CTR-baseline-fails-swap, require: supported}
-    weights: null
-
-  # Do not put the decoder in a training graph until it is bounded and honest
-  # about infeasibility.
+  # Gate 1a. Do not put the decoder in a training graph until it is bounded and
+  # honest about infeasibility.
   - id: POL-decoder-safe
     criteria:
+      - {slice: CTR-poe-matches-sim, require: supported}
       - {slice: CTR-jacobian-correct, require: supported}
       - {slice: CTR-ik-converges, require: supported}
       - {slice: CTR-ik-near-singular, require: supported}
@@ -783,12 +1008,8 @@ policies:
       - {slice: CTR-infeasible-reported, require: supported}
     weights: null
 
-  # The thesis. Held-out embodiment is the claim; spec sensitivity rules out
-  # the memorisation explanation; the camera split rules out crediting the
-  # kinematics for a visual result.
-  # Gripper geometry before gripper transfer, for the same reason the arm's
-  # conversion gated everything downstream: a wrong pad pose presents as a
-  # failed grasp.
+  # Gate 1b. Gripper geometry before gripper transfer: a wrong pad pose presents
+  # as a failed grasp.
   - id: POL-gripper-understood
     criteria:
       - {slice: CTR-declared-limits-respected, require: supported}
@@ -799,10 +1020,33 @@ policies:
       - {slice: CTR-grasp-infeasible-reported, require: supported}
     weights: null
 
+  # Gate 2. The instruction survives randomization, the teacher solves every
+  # task, the benchmark defeats a blind policy, and the sighted student clears
+  # its bar -- all on the same declared evaluation.
+  - id: POL-grounded
+    criteria:
+      - {slice: CTR-randomization-preserves-instruction, require: supported}
+      - {slice: CTR-teacher-solves-randomized, require: supported}
+      - {slice: CTR-blind-policy-fails, require: supported}
+      - {slice: CTR-student-succeeds-randomized, require: supported}
+    weights: null
+
+  # Gate 3a. Nothing to fix unless a grounded baseline works on its own arm and
+  # breaks on the swap.
+  - id: POL-premise-survives
+    criteria:
+      - {slice: CTR-baseline-works-on-source, require: supported}
+      - {slice: CTR-baseline-fails-swap, require: supported}
+    weights: null
+
+  # Gate 3b, the thesis. Held-out embodiment is the claim; spec sensitivity rules
+  # out memorisation; the camera split rules out crediting the kinematics for a
+  # visual result; blind failure keeps the whole chain on a grounded policy.
   - id: POL-thesis-supported
     criteria:
+      - {slice: CTR-blind-policy-fails, require: supported}
+      - {slice: CTR-student-succeeds-randomized, require: supported}
       - {slice: CTR-spec-is-used, require: supported}
-      - {slice: CTR-libero-source-arm, require: supported}
       - {slice: CTR-heldout-embodiment, require: supported}
       - {slice: CTR-transfer-is-kinematic, require: supported}
     weights: null
