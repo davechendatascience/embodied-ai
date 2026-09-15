@@ -191,7 +191,7 @@ def train(args):
     out = Path(args.out); out.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"state_dict": {k: v.cpu() for k, v in best_state.items()}, "act_std": act_std, "chunk": 1,
                 "kind": "token", "zero": args.zero, "state_dim": state_dim, "aperture_rate": bool(args.aperture_rate),
-                "state_mean": state_mean, "state_std": state_std, "gripper_target": bool(args.gripper_target), "val": best, "data": args.data, "args": vars(args)}, out)
+                "state_mean": state_mean, "state_std": state_std, "gripper_target": bool(args.gripper_target), "spec_mask_fixed": True, "val": best, "data": args.data, "args": vars(args)}, out)
     print(f"best val {best:.4f} -> {out}")
     return 0
 

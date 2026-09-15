@@ -154,7 +154,8 @@ def load_student(ckpt, device):
     ck = torch.load(ckpt, map_location="cpu", weights_only=False)
     if ck.get("kind") == "token":
         from screwhead.token_head import TokenHead
-        m = TokenHead(chunk=ck["chunk"], state_dim=ck.get("state_dim", 10))
+        m = TokenHead(chunk=ck["chunk"], state_dim=ck.get("state_dim", 10),
+                      legacy_spec_mask=not ck.get("spec_mask_fixed", False))
     else:
         from screwhead.policy import ScrewHead
         m = ScrewHead(chunk=ck["chunk"])
