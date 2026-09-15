@@ -71,6 +71,29 @@ def relation_ok(task: int, P: dict) -> bool:
 
 SUPPORT = {3: "cookies", 5: "ramekin"}                 # target must still rest on this after settling
 
+
+def relation_holds(env) -> bool:
+    """Does the instruction still single out the target in the CURRENT state?
+
+    The sampler checks this when it accepts a layout, but the episode starts later:
+    after the robot start is randomised and the teacher's feasibility veto. This
+    re-reads the simulator at the state the policy actually sees.
+    """
+    sim = env.env.sim; m, d = sim.model, sim.data
+    tb = d.body_xpos[m.body_name2id("robot0_base")]
+    P, body = {}, {}
+    for k, n in NAMES.items():
+        j = m.joint_name2id(f"{n}_joint0")
+        a = int(m.jnt_qposadr[j]); body[k] = int(m.jnt_bodyid[j])
+        P[k] = d.qpos[a:a + 3] - tb
+    if not relation_ok(env.ti, P):
+        return False
+    if env.ti in SUPPORT:
+        pair = {body["t"], body[SUPPORT[env.ti]]}
+        return any({int(m.geom_bodyid[d.contact[i].geom1]), int(m.geom_bodyid[d.contact[i].geom2])} == pair
+                   for i in range(d.ncon))
+    return True
+
 GROUPS = {
     0: [Group(("t",), "table"), Group(("o",), "table"), Group(("cookies",), "table"),
         Group(("ramekin",), "table"), Group(("plate",), "table")],

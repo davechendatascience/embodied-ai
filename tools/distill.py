@@ -63,6 +63,8 @@ def add_start_args(p) -> None:
 
 
 def _worker(remote, task, seed, cpu, teacher_ckpt, horizon, radius, env_kw):
+    env_kw = dict(env_kw)
+    hires = int(env_kw.pop("record_hires", 0))
     os.sched_setaffinity(0, {cpu})
     os.environ["OMP_NUM_THREADS"] = "1"
     import torch
@@ -79,6 +81,15 @@ def _worker(remote, task, seed, cpu, teacher_ckpt, horizon, radius, env_kw):
             env.layout_check = program.layout_feasible
         label = lambda o: program.act().astype(np.float32)
         phase = lambda: program.phase
+
+        def priv():
+            # ANALYSIS ONLY, never a training input: the grasp the program chose, as the
+            # tool's position and rotation error to it (base frame), and bowl - tool
+            from screwhead.progress import rotvec
+            sn = dict(env.snapshot(), **env.ref)
+            R_g, p_g, _, _ = program.choose_grasp(sn)
+            return np.concatenate([p_g - sn["p_tool"], sn["R_tool"] @ rotvec(sn["R_tool"].T @ R_g),
+                                   sn["p_bowl"] - sn["p_tool"]]).astype(np.float32)
     else:
         raise ValueError(f"unknown teacher {teacher_ckpt!r}: only the scripted programs remain")
 
@@ -89,21 +100,32 @@ def _worker(remote, task, seed, cpu, teacher_ckpt, horizon, radius, env_kw):
             stage = int(env.progress()[1])
         except Exception:
             stage = -1
-        return (a, w, env.student_state(), lab, done, info, phase(), stage)
+        hi = None
+        if hires:
+            # an extra render at another resolution, for feature studies only -- the
+            # policy still sees the normal observation (a direct render matches it exactly)
+            sim = env.env.sim
+            hi = (sim.render(camera_name="agentview", width=hires, height=hires),
+                  sim.render(camera_name="robot0_eye_in_hand", width=hires, height=hires))
+        return (a, w, env.student_state(), lab, done, info, phase(), stage, priv(), hi)
 
+    from screwhead.layouts import relation_holds
     remote.send(env.language)
     while True:
         cmd, arg = remote.recv()
         if cmd == "reset":
             o = env.reset()
+            start_relation = relation_holds(env)      # at the state the policy first sees
             remote.send(payload(o))
         elif cmd == "step":
             o, _, done, info = env.step(arg)
             if done:
                 end = dict(success=bool(info["success"]), length=env.t,
                            success_lifted=bool(info.get("success_lifted", info["success"])),
-                           placement_mm=float(np.linalg.norm(env.placement[:2]) * 1000))
+                           placement_mm=float(np.linalg.norm(env.placement[:2]) * 1000),
+                           relation_at_start=bool(start_relation))
                 o = env.reset()
+                start_relation = relation_holds(env)
                 remote.send(payload(o, True, end))
             else:
                 remote.send(payload(o))
@@ -119,10 +141,16 @@ def decode_gripper(g):
 
 
 def load_student(ckpt, device):
+    """CLIP ScrewHead (pooled features) or DINOv2 TokenHead (patch tokens), by checkpoint kind."""
     import torch
-    from screwhead.policy import ScrewHead
     ck = torch.load(ckpt, map_location="cpu", weights_only=False)
-    m = ScrewHead(chunk=ck["chunk"]); m.load_state_dict(ck["state_dict"]); m.to(device).eval()
+    if ck.get("kind") == "token":
+        from screwhead.token_head import TokenHead
+        m = TokenHead(chunk=ck["chunk"])
+    else:
+        from screwhead.policy import ScrewHead
+        m = ScrewHead(chunk=ck["chunk"])
+    m.load_state_dict(ck["state_dict"]); m.to(device).eval()
     return m, torch.as_tensor(np.asarray(ck["act_std"]), dtype=torch.float32, device=device), ck
 
 
@@ -135,6 +163,41 @@ def spec_tokens(device):
     return tok.float().to(device)[None], mask.to(device)[None]
 
 
+# ------------------------------------------------------------------------ evidence
+def _revision(path):
+    import hashlib
+    p = Path(path).resolve()
+    return f"{p.name}:{hashlib.sha256(p.read_bytes()).hexdigest()[:8]}"
+
+
+def write_trials(args, tasks, done_eps, has_student):
+    """One component-belief trial per episode (see belief.yaml). compatibility_key
+    fields go in repro -- the ledger splits slices on repro only."""
+    teacher_rev = _revision(ROOT / "screwhead/scripted_teacher.py")
+    randomization = (f"layout{args.layout_radius:g}_xy{args.start_xy:g}_z{args.start_z:g}_yaw{args.start_yaw:g}"
+                     f"_tilt{args.start_tilt:g}_null{args.start_null:g}_h{args.horizon}")
+    trials = []
+    for t in sorted(set(tasks)):
+        for e in done_eps[t]:
+            m = dict(success=bool(e["success"]), relation_at_start=bool(e["relation_at_start"]))
+            if args.teacher == "scripted":        # only the program exposes the grasp it would choose
+                m.update(closed=bool(e["closed"]), grasp_offset_mm=round(float(e["grasp_offset_mm"]), 2)
+                         if np.isfinite(e["grasp_offset_mm"]) else 1e6)
+            trials.append({
+                "metrics": m,
+                "conditions": {"task": int(t), "driver": "student" if has_student and args.beta == 0 else
+                               ("teacher" if not has_student else "mixed"),
+                               "zero": args.zero, "beta": args.beta, "episode": int(e["episode"]),
+                               "length": int(e["length"])},
+                "repro": {"seed": args.seed * 100 + t, "task": int(t), "randomization": randomization,
+                          "teacher_revision": teacher_rev,
+                          "policy_revision": _revision(args.student) if has_student else teacher_rev},
+            })
+    Path(args.trials).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.trials).write_text(json.dumps({"trials": trials}, indent=1))
+    print(f"-> {args.trials}  ({len(trials)} trials)")
+
+
 # ------------------------------------------------------------------------ collect
 def collect(args):
     import torch
@@ -144,8 +207,13 @@ def collect(args):
     rng = np.random.default_rng(args.seed)
     enc_img, enc_txt = clip_encoder(dev)
     student = act_std = None
+    token_student = False
     if args.beta < 1.0:
-        student, act_std, _ = load_student(args.student, dev)
+        student, act_std, ck_s = load_student(args.student, dev)
+        token_student = ck_s.get("kind") == "token"
+        if token_student:
+            from screwhead.dino_features import DinoFeatures
+            dino = DinoFeatures(dev)
     tok, tmask = spec_tokens(dev)
 
     tasks = list(args.tasks)
@@ -156,7 +224,8 @@ def collect(args):
         a, b = ctx.Pipe()
         p = ctx.Process(target=_worker, args=(b, t, args.seed * 100 + t, cpus[i % len(cpus)],
                                               args.teacher, args.horizon, args.radius,
-                                              dict(start_kw(args), layout_radius=args.layout_radius)), daemon=True)
+                                              dict(start_kw(args), layout_radius=args.layout_radius,
+                                                   record_hires=args.record_hires)), daemon=True)
         p.start(); b.close(); remotes.append(a); procs.append(p)
     langs = [r.recv() for r in remotes]
     # indexed by TASK, not by worker: several workers may run the same task
@@ -171,8 +240,11 @@ def collect(args):
     waiting = set(range(len(tasks)))
 
     buf = {k: [] for k in ("agent", "wrist", "state", "label", "task", "episode", "step", "exec_teacher",
-                           "executed", "phase", "stage")}
+                           "executed", "phase", "stage", "priv")}
     ep_id = [t * 10000 + i * 1000 for i, t in enumerate(tasks)]; ep_step = [0] * len(tasks)
+    # grasp evidence per episode: the tool's distance to the program's grasp when the
+    # driver FIRST commands close (or the closest it came, if it never closes)
+    grip = [dict(closed=False, offset=np.inf) for _ in tasks]
     worker_eps = [0] * len(tasks)
     per_task_workers = {t: tasks.count(t) for t in set(tasks)}
     quota = [int(np.ceil(args.episodes / per_task_workers[t])) for t in tasks]
@@ -195,7 +267,9 @@ def collect(args):
                 else:
                     ep_step[i] += 1
                     if cur[i][4]:
-                        done_eps[tasks[i]].append(dict(cur[i][5], episode=ep_id[i]))
+                        done_eps[tasks[i]].append(dict(cur[i][5], episode=ep_id[i], worker=i,
+                                                       closed=grip[i]["closed"], grasp_offset_mm=grip[i]["offset"]))
+                        grip[i] = dict(closed=False, offset=np.inf)
                         worker_eps[i] += 1
                         ep_id[i] += 1; ep_step[i] = 0
                         if worker_eps[i] >= quota[i]:
@@ -211,12 +285,18 @@ def collect(args):
         idx = ready
         imgs = [x for i in idx for x in (cur[i][0], cur[i][1])]
         with torch.no_grad():
-            f = enc_img(*imgs).float()
-            agent, wrist = f[0::2], f[1::2]
+            if token_student:
+                f = dino(imgs)                      # (2n, 64, 768): the token VLA's own features
+                agent = wrist = None
+                sa_full, sw_full = f[0::2], f[1::2]
+            else:
+                f = enc_img(*imgs).float()
+                agent, wrist = f[0::2], f[1::2]
+                sa_full, sw_full = agent, wrist
             state = torch.as_tensor(np.stack([cur[i][2] for i in idx]), device=dev)
             if student is not None:
-                sa, sw = (torch.zeros_like(agent), torch.zeros_like(wrist)) if args.zero in ("image",) \
-                    else (agent, wrist)
+                sa, sw = (torch.zeros_like(sa_full), torch.zeros_like(sw_full)) if args.zero in ("image",) \
+                    else (sa_full, sw_full)
                 tix = [tasks[i] for i in idx]
                 st_text = torch.zeros_like(text[tix]) if args.zero == "text" else text[tix]
                 pred = student(sa, sw, st_text, state, tok.expand(len(idx), -1, -1),
@@ -236,14 +316,27 @@ def collect(args):
                 # Scaled to the teacher's own speed limits (1.2 rad/s, 0.25 m/s).
                 scale = np.array([0.12] * 3 + [0.25] * 3 + [0.0], np.float32)
                 act = np.clip(act + args.exec_noise * scale * rng.standard_normal(7).astype(np.float32), -1, 1)
-            if args.out:
-                buf["agent"].append(agent[j].cpu().numpy().astype(np.float16))
-                buf["wrist"].append(wrist[j].cpu().numpy().astype(np.float16))
+            if args.out and ep_step[i] % args.frame_stride == 0:
+                if args.record_hires:
+                    buf.setdefault("agent_hi", []).append(cur[i][9][0]); buf.setdefault("wrist_hi", []).append(cur[i][9][1])
+                if agent is not None:
+                    buf["agent"].append(agent[j].cpu().numpy().astype(np.float16))
+                    buf["wrist"].append(wrist[j].cpu().numpy().astype(np.float16))
+                else:
+                    buf["agent"].append(np.zeros(1, np.float16)); buf["wrist"].append(np.zeros(1, np.float16))
+                if args.save_frames:
+                    buf.setdefault("agent_img", []).append(cur[i][0]); buf.setdefault("wrist_img", []).append(cur[i][1])
                 buf["state"].append(cur[i][2]); buf["label"].append(cur[i][3])
                 buf["task"].append(tasks[i]); buf["episode"].append(ep_id[i])
                 buf["step"].append(ep_step[i]); buf["exec_teacher"].append(teacher_exec)
                 buf["executed"].append(np.asarray(act, np.float32)); buf["phase"].append(cur[i][6])
-                buf["stage"].append(cur[i][7])
+                buf["stage"].append(cur[i][7]); buf["priv"].append(cur[i][8])
+            if not grip[i]["closed"]:
+                d_mm = float(np.linalg.norm(cur[i][8][:3]) * 1000)
+                if act[6] > 0.5:
+                    grip[i] = dict(closed=True, offset=d_mm)
+                else:
+                    grip[i]["offset"] = min(grip[i]["offset"], d_mm)
             remotes[i].send(("step", act))
             waiting.add(i)
         frames += len(idx)
@@ -260,6 +353,8 @@ def collect(args):
     print(f"{driver} @ {args.radius*1000:.0f} mm: {sum(allw)}/{len(allw)} = {np.mean(allw):.2f}   "
           f"success with a lifted bowl {np.mean(alll):.2f}   "
           f"({frames} frames, {frames/(time.time()-t0):.0f} frames/s)")
+    if args.trials:
+        write_trials(args, tasks, done_eps, student is not None)
     if args.out:
         out = Path(args.out); out.parent.mkdir(parents=True, exist_ok=True)
         succ = {e["episode"]: e.get("success_lifted", e["success"]) for t in set(tasks) for e in done_eps[t]}
@@ -269,8 +364,16 @@ def collect(args):
                  task=np.array(buf["task"], np.int8), episode=ep, step=np.array(buf["step"], np.int32),
                  exec_teacher=np.array(buf["exec_teacher"]),
                  executed=np.stack(buf["executed"]), phase=np.array(buf["phase"]), stage=np.array(buf["stage"], np.int8),
+                 priv=np.stack(buf["priv"]),
                  episode_success=np.array([succ.get(e, False) for e in ep]),
-                 text=text.cpu().numpy(), radius=args.radius, beta=args.beta)
+                 text=text.cpu().numpy(), radius=args.radius, beta=args.beta,
+                 languages=json.dumps({int(t): l for t, l in zip(tasks, langs)}))
+        if args.save_frames:
+            np.save(str(out) + ".agent_img.npy", np.stack(buf["agent_img"]))
+            np.save(str(out) + ".wrist_img.npy", np.stack(buf["wrist_img"]))
+        if args.record_hires:
+            np.save(str(out) + ".agent_hi.npy", np.stack(buf["agent_hi"]))
+            np.save(str(out) + ".wrist_hi.npy", np.stack(buf["wrist_hi"]))
         Path(str(out) + ".json").write_text(json.dumps({
             "driver": driver, "radius_m": args.radius, "episodes_per_task": args.episodes,
             "success": float(np.mean(allw)), "frames": frames,
@@ -369,11 +472,15 @@ def main() -> int:
     c.add_argument("--episodes", type=int, default=30, help="per task")
     c.add_argument("--tasks", type=int, nargs="+", default=list(range(10)))
     c.add_argument("--layout-radius", type=float, default=0.0, help="relation-preserving object layouts, m")
+    c.add_argument("--record-hires", type=int, default=0, help="also record both cameras at this resolution (feature studies)")
+    c.add_argument("--frame-stride", type=int, default=1, help="record every k-th step")
+    c.add_argument("--save-frames", action="store_true", help="also store the raw camera frames (re-encodable)")
     c.add_argument("--exec-noise", type=float, default=0.0,
                    help="DART: noise on executed teacher actions, as a fraction of its speed limits")
     c.add_argument("--horizon", type=int, default=300)
     c.add_argument("--cpus", default="5,6,7,8,9,15,16,17,18,19", help="performance cores")
     c.add_argument("--out", default="", help="omit to evaluate without saving")
+    c.add_argument("--trials", default="", help="also write one component-belief trial per episode here")
     c.add_argument("--seed", type=int, default=0)
     sys.path.insert(0, str(ROOT / "tools"))
     add_start_args(c)
