@@ -33,6 +33,9 @@
 # share one declared evaluation: tools/distill.py collect --trials, seed 555,
 # layouts 0.08 m, start 0.10 m / 0.05 m / 30 deg / 10 deg / 0.3 rad, horizon 400.
 #
+# Every code file under screwhead/ and tools/ belongs to a component; each component
+# lists its files in a `# code:` line. A file no component claims is deleted.
+#
 # Ledger facts that shape this file (component-belief source):
 #   - compatibility_key reads repro only; distill.py writes task, randomization,
 #     teacher_revision and policy_revision there.
@@ -43,6 +46,7 @@
 #     writes grasp_offset_mm = 1e6 rather than null when nothing was measured.
 
 components:
+  # code: screwhead/poe.py, screwhead/mjcf.py, screwhead/se3.py, screwhead/libero.py (Panda chain at LIBERO's grip site)
   - id: CMP-poe-conversion
     purpose: Convert a URDF into a home pose and one screw axis per joint
     outputs: [IFC-poe__kinematics]
@@ -56,6 +60,7 @@ components:
       - {id: FM-tool-frame-drift, observable: axes are right but the tool offset is measured to the wrong link}
     remediation: The five-step conversion in Modern Robotics ch.4 sec.4.5; check against sim FK before anything downstream
 
+  # code: screwhead/kinematics.py, screwhead/batch.py
   - id: CMP-kinematics
     purpose: Batched differentiable forward kinematics and body Jacobian from screw axes
     inputs: [IFC-poe__kinematics]
@@ -69,6 +74,7 @@ components:
       - {id: FM-batch-leak, observable: results depend on batch composition when joint counts differ}
     remediation: Column i is joint i's screw axis carried by the Adjoint of everything upstream; ch.5 sec.4.2
 
+  # code: screwhead/ik.py
   - id: CMP-ik-decoder
     purpose: Decode a tool twist to joint commands by damped least squares
     inputs: [IFC-expert__ik, IFC-kinematics__ik]
@@ -83,6 +89,7 @@ components:
       - {id: FM-chunk-drift, observable: null-space posture wanders across a decoded action chunk}
     remediation: The damped least-squares derivation and its step bound, ch.6 sec.4.4; warm-start each solve from the previous
 
+  # code: screwhead/ik.py (nullspace_projector)
   - id: CMP-nullspace
     purpose: Resolve redundancy for arms with more joints than the task needs
     inputs: [IFC-kinematics__ik]
@@ -94,6 +101,7 @@ components:
       - {id: FM-masked-as-zero, observable: a 6-DoF arm is trained toward a zero preference instead of no preference}
     remediation: Project through the null space; prefer the inertia-weighted inverse where dynamics exist, ch.11 sec.4.7
 
+  # code: screwhead/retarget.py
   - id: CMP-retarget
     purpose: Convert demonstration joint trajectories into embodiment-free tool twists
     outputs: [IFC-demo__twist]
@@ -107,6 +115,7 @@ components:
       - {id: FM-unconverged-frame, observable: a near-singular frame is kept as a training target without converging}
     remediation: Retarget through the demonstrating robot's own FK and Jacobian; the conversion is arithmetic, not learned
 
+  # code: screwhead/spec.py
   - id: CMP-spec-conditioning
     purpose: Carry the robot specification into the learned policy as tokens
     outputs: [IFC-spec__expert]
@@ -118,6 +127,7 @@ components:
       - {id: FM-spec-shortcut, observable: the policy reads spec tokens as an embodiment id rather than as geometry}
     remediation: Kinematic domain randomisation over procedurally varied URDFs during training
 
+  # code: screwhead/token_head.py, screwhead/policy.py, screwhead/state.py, tools/token_data.py, tools/distill.py
   - id: CMP-action-expert
     purpose: >-
       The student VLA -- predict the tool twist and three-valued gripper command
@@ -133,6 +143,7 @@ components:
       - {id: FM-compounding-drift, observable: agrees with the teacher for the first ~25 steps, then stalls near pre-grasp on states the teacher never visited}
       - {id: FM-localization-limited, observable: closes the gripper centimetres from the grasp the teacher would choose; the approach is right, the target is not}
       - {id: FM-hold-unexecuted, observable: a regressed gripper output near zero is read by its sign and hold becomes close}
+      - {id: FM-controller-as-policy, observable: a lag-compensated gripper law learned as a command matches the teacher on a fifth of pre-shape frames}
       - {id: FM-no-transfer, observable: success collapses on a held-out embodiment}
       - {id: FM-controller-credit, observable: transfer is attributable to the controller rather than the head}
     remediation: >-
@@ -142,6 +153,7 @@ components:
       scaling plateaus
 
   # ---- Gate 2 machinery. The teacher reads the simulator; the student never does.
+  # code: screwhead/servo.py
   - id: CMP-twist-servo
     purpose: Execute a body twist on the simulator's joint-position controller
     inputs: [IFC-expert__ik]
@@ -154,6 +166,7 @@ components:
       - {id: FM-world-body-mixup, observable: the twist is integrated in the world frame and rotations swing the tool}
     remediation: Integrate the twist on SE(3) into an absolute pose reference, solve IK to an absolute joint target, and hold absolutely
 
+  # code: screwhead/layouts.py, screwhead/teacher_env.py, screwhead/libero_env.py
   - id: CMP-scene-randomizer
     purpose: Randomize object layouts and robot start pose while keeping each instruction true
     outputs: [IFC-randomizer__teacher]
@@ -169,6 +182,7 @@ components:
       - {id: FM-teacher-veto-bias, observable: layouts the program cannot solve are redrawn, so the evaluated distribution is the teacher-feasible one}
     remediation: Move objects in rigid groups, settle, reject slid/ejected/relation-false proposals; redraw incompatible init states
 
+  # code: screwhead/scripted_teacher.py, screwhead/progress.py, tools/collect_scripted.py, tools/scripted_eval.py
   - id: CMP-scripted-teacher
     purpose: Per-task demonstration programs that choose a verified grasp from privileged state and drive to it
     inputs: [IFC-randomizer__teacher]
@@ -183,6 +197,7 @@ components:
       - {id: FM-stale-grasp-cache, observable: a grasp chosen in a previous episode is reused after reset}
     remediation: Per-task ProgramConfig (sector, pre-shape, posture, selection); per-episode grasp cache; clearance, IK, path and sigma-min checks
 
+  # code: screwhead/dino_features.py, screwhead/clip_features.py (language), tools/feature_bakeoff.py, tools/probe_localization.py
   - id: CMP-vision-encoder
     purpose: Frozen DINOv2-base patch tokens (8x8 per camera) as the student's visual input
     outputs: [IFC-encoder__expert]
@@ -194,6 +209,7 @@ components:
       - {id: FM-teacher-state-only, observable: localizes in teacher-driven states and not in the student's own}
     remediation: Patch tokens; measure on student-driven states; the learning curve decides between more data and fine-tuning
 
+  # code: screwhead/interface.py
   - id: CMP-action-interface
     purpose: Convert between the policy's action units and the decoder's twist units
     outputs: [IFC-expert__ik]
@@ -219,6 +235,7 @@ components:
   # derived from its forward kinematics over its joint limits, exactly as the
   # arm's reach is. A derived number can be checked against the model; a
   # tabulated one can only be trusted.
+  # code: screwhead/gripper.py, tools/emit_gripper_trials.py
   - id: CMP-gripper-chain
     purpose: Parse a gripper into finger chains with screw axes, as for an arm
     outputs: [IFC-gripper__grasp]
@@ -231,6 +248,7 @@ components:
       - {id: FM-slide-vs-hinge, observable: a prismatic finger joint is read as revolute}
     remediation: The five-step conversion, with closed loops cut at one passive joint into two open chains (ch.7 sec.4.3)
 
+  # code: screwhead/gripper.py (pad pose from observed joints)
   - id: CMP-tendon-coupling
     purpose: Relate a gripper's actuated command to its passive finger joints
     inputs: [IFC-gripper__grasp]
@@ -242,6 +260,7 @@ components:
       - {id: FM-command-assumed-monotone, observable: pad separation is assumed to decrease with the close command, which a compliant linkage does not guarantee}
     remediation: Read pad pose from the observed joint vector by open-chain FK; treat command-to-separation as dynamic, not kinematic
 
+  # code: screwhead/grasp.py
   - id: CMP-grasp-map
     purpose: Build the grasp matrix from contacts and decide force closure
     inputs: [IFC-gripper__grasp]
@@ -255,8 +274,14 @@ components:
       - {id: FM-planar-result-in-space, observable: an antipodal pair is accepted in 3D, where it cannot resist moment about the finger line}
     remediation: Escape direction decides, alternating projection exhibits, never the reverse (ch.12 sec.4.8)
 
+  # Implemented as screwhead/gripper_servo.py: the policy names a target aperture in
+  # metres and a fixed servo, reading the gripper's measured aperture and rate, emits
+  # robosuite's close/hold/open. Adopted because the drawer program's lag-compensated
+  # pre-shape, learned as a 3-valued command, matched the teacher on 20-25% of held-out
+  # pre-shape frames and the drawer fell to 0/10 after DAgger.
+  # code: screwhead/gripper_servo.py, tools/relabel_gripper.py
   - id: CMP-gripper-decoder
-    purpose: Decode a grasp intent to this gripper's actuated command
+    purpose: Decode a grasp intent (target aperture) to this gripper's actuated command
     inputs: [IFC-expert__ik, IFC-gripper__grasp]
     testable_capability: >-
       Realises the same object-side grasp on grippers of differing finger count
@@ -290,15 +315,16 @@ interfaces:
     units: >-
       twist normalised to [-1, 1] with one unit = 10 rad/s and 1 m/s (ActionSpec
       0.5 rad and 0.05 m per step at 20 Hz; the programs cap at 1.2 rad/s and
-      0.25 m/s), gripper in {-1 open, 0 hold, +1 close}
+      0.25 m/s); gripper as the program's command {-1 open, 0 hold, +1 close} or, relabelled
+      from its phase, the target-aperture channel 1 - 2 a / 0.08 m
     frame: tool frame at the current pose
     timing: {chunk_steps: 1, control_hz: 20}
     producer_guarantees:
       - labels are computed from the visited state, not replayed from a stored path
-      - the gripper label is three-valued and hold is an explicit zero
+      - the gripper label is either the program's three-valued command or the aperture it regulates toward
     consumer_assumptions:
       - labels are computed from the visited state, not replayed from a stored path
-      - the gripper label is three-valued and hold is an explicit zero
+      - the gripper label is either the program's three-valued command or the aperture it regulates toward
 
   - id: IFC-encoder__expert
     producer: CMP-vision-encoder
@@ -345,22 +371,23 @@ interfaces:
   - id: IFC-expert__ik
     producer: CMP-action-expert
     consumer: CMP-ik-decoder
-    semantics: Body twist and gripper command, one per control step
+    semantics: Body twist and gripper intent, one per control step
     units: metres per second and radians per second
     frame: tool frame at the current pose
     # chunk 1, not 16: the student is trained on single-step DAgger labels
     timing: {chunk_steps: 1}
     producer_guarantees:
       - twist is expressed in the tool frame at the current pose
-      # Was a normalised aperture. robosuite reads only the SIGN of the gripper
-      # action, so 0 of 92 hold labels executed as hold; decoded to three values.
-      - gripper command is one of -1 open, 0 hold, +1 close
+      # Two executions exist. Command mode: robosuite reads only the SIGN, so a
+      # regressed output is decoded to -1/0/+1 (0 of 92 hold labels executed before).
+      # Target mode (--gripper-target): g = 1 - 2 a / 0.08 m, executed by GripperServo.
+      - gripper intent is a command in -1, 0, +1 or a target-aperture channel, as the checkpoint declares
       # A guarantee rather than an assumption: the policy emits a bounded action
       # in [-1, 1] scaled by fixed constants, so the twist is bounded.
       - twist magnitude is reachable within one control period
     consumer_assumptions:
       - twist is expressed in the tool frame at the current pose
-      - gripper command is one of -1 open, 0 hold, +1 close
+      - gripper intent is a command in -1, 0, +1 or a target-aperture channel, as the checkpoint declares
       - twist magnitude is reachable within one control period
 
   - id: IFC-ik__controller
@@ -604,20 +631,20 @@ contracts:
     evaluable_by: [TST-student-randomized]
     sufficiency: {n_min: 200, max_ci_width: 0.12}
 
-  # DIAGNOSTIC, not in any policy. Where the diagnosed failure lives: the student
-  # closes the gripper away from the grasp the program would choose. The 6 mm is
-  # the feature study's estimate of the tolerance, not a measured success basin
-  # -- the same trials carry success, so calibrate the threshold from
-  # success-given-offset before promoting this to a gate. The teacher bucket
-  # calibrates the metric itself: if the program's own episodes are not
-  # supported here, the metric is broken, not the student.
+  # DIAGNOSTIC, not in any policy. Where a localization failure would show: the
+  # student first closes the gripper away from the grasp the program would choose.
+  # Calibrated from the trials themselves, not the feature study's ~6 mm guess:
+  # success given the offset at first close was flat below 40 mm (token r2, 200
+  # episodes: 0.95 / 0.94 / 0.93 / 1.00 for 0-6 / 6-12 / 12-20 / 20-40 mm) and
+  # collapsed above it (0.12). The first close is often corrected, so millimetres
+  # below 40 do not predict failure. The teacher bucket checks the metric itself.
   - id: CTR-closes-at-the-grasp
     subject: CMP-action-expert
     claim_type: capability
     metrics:
       - {id: closed, unit: bool}
       - {id: grasp_offset_mm, unit: millimetres}
-    acceptance: {rule: "closed == true and grasp_offset_mm < 6.0", target_rate: 0.75}
+    acceptance: {rule: "closed == true and grasp_offset_mm < 40.0", target_rate: 0.75}
     conditions:
       - {id: teacher_driven, when: "driver == 'teacher'"}
       - {id: student_driven, when: "driver == 'student' and zero == 'none'"}

@@ -1,6 +1,6 @@
 # 專案簡介：以螺旋理論動作頭實現跨機器人的 VLA
 
-更新日期：2026-09-15
+更新日期：2026-09-15（晚）
 
 ## 目標
 
@@ -34,10 +34,18 @@
 | 程式化教師 | 96.5% | — |
 | CLIP 特徵 VLA，round 0 | 29% | 4% |
 | CLIP 特徵 VLA，DAgger round 1 | 33% | 1% |
+| DINOv2 token VLA，round 0（100 回合） | 80% | — |
+| DINOv2 token VLA，DAgger round 1（100 回合） | 68% | 3% |
+| **DINOv2 token VLA，DAgger round 2（200 回合）** | **82%**（抽屜以外 9 個任務 90.6%） | **4.5%** |
 
-盲控制組降到接近 0，代表隨機化確實迫使模型使用視覺；但學生與教師差距仍大。
+盲控制組維持在接近 0，代表成功來自視覺，而非記住軌跡。
+剩下的主要失敗是任務 4（從打開的抽屜裡拿碗）：round 2 只有 2/20。
 
-**差距診斷**：閉環前 25 步與教師動作一致性 0.97，之後在預夾取位置附近停滯。
+**抽屜任務的原因**：教師在伸進抽屜前先把夾爪預收到 26 mm（避免撞到櫃子），而它的夾爪指令依「開口 + 開口速度 × 0.12 s」在 3 mm 的範圍內切換「關／保持／開」。
+學生把這個控制律當成動作來學，在預收階段只有 20–25% 與教師一致；加入開口速度或標準化狀態都沒有改善。
+因此改成與手臂相同的做法：策略輸出**目標開口（公尺）**，由固定的 `GripperServo` 讀取夾爪實測開口與速度產生指令（`screwhead/gripper_servo.py`）。教師經過 servo 執行仍 8/8 成功，驗證中。
+
+**CLIP 時期的差距診斷**：閉環前 25 步與教師動作一致性 0.97，之後在預夾取位置附近停滯。
 從 VLA 輸入回歸夾取位置誤差，中位數約 18 mm，與無視覺相當，遠大於約 6 mm 的夾取容差，瓶頸在視覺定位。
 
 **視覺特徵比較**（VLA 駕駛狀態下的夾取誤差中位數／p90，mm）：盲 20.1/40.3、CLIP pooled 16.8/45.0、CLIP patch 16.7/35.0、SigLIP 14.0/31.5、DINOv2@224 13.0/29.2、DINOv2@128 10.6/30.8。
@@ -45,16 +53,16 @@ DINOv2 的學習曲線（8→60 個 VLA 駕駛回合：19.3→12.4 mm）仍在�
 
 ## 進行中與下一步
 
-- 以凍結的 DINOv2 patch token（每台相機 64 個）＋ Transformer 動作頭（TokenHead，3.6M 參數）取代 CLIP 特徵；round 0 訓練中。
-- 以 token VLA 進行多輪 DAgger，每輪同時訓練盲控制組，並在 seed 555 評估。
-- 若資料擴充後定位誤差仍高於容差，再微調視覺編碼器並加入夾取定位輔助損失。
+- 驗證目標開口夾爪（round 0+1 與 0–2 資料），通過後以它進行 DAgger round 3。
+- 目標：200 回合評估中整體 ≥ 90%、每個任務 ≥ 約 80%、盲控制組 ≤ 5%，達成後錄製 rollout 影片。
+- 流程腳本：`scripts/token_vla.sh`（round0 / dagger / train / eval）。
 - 視覺落地成立後，才回到原本的論點：換機器人（手臂／夾爪／兩者）後的遷移，以及規格 token 是否真的被使用。
 
 ## 主要檔案
 
-- `screwhead/`：運動學、IK、`servo.py`（TwistServo）、`teacher_env.py`（特權環境與隨機化）、`layouts.py`（語意保留擺放）、`scripted_teacher.py`（各任務示範程式）、`progress.py`（任務進度幾何）、`dino_features.py`、`token_head.py`
-- `tools/`：`distill.py`（線上蒸餾／DAgger 收集與訓練）、`collect_scripted.py`、`token_data.py`、`scripted_eval.py`、`probe_localization.py`、`feature_bakeoff.py`
-- `belief.yaml`：宣告的元件、契約與測試（由人工 commit 後生效）
+- `screwhead/`：運動學、IK、`servo.py`（TwistServo）、`teacher_env.py`（特權環境與隨機化）、`layouts.py`（語意保留擺放）、`scripted_teacher.py`（各任務示範程式）、`progress.py`（任務進度幾何）、`dino_features.py`、`token_head.py`、`gripper_servo.py`、`clip_features.py`
+- `tools/`：`distill.py`（線上蒸餾／DAgger 收集與訓練）、`collect_scripted.py`、`token_data.py`、`scripted_eval.py`、`probe_localization.py`、`feature_bakeoff.py`、`relabel_gripper.py`、`emit_trials.py`／`emit_gripper_trials.py`（幾何測試）
+- `belief.yaml`：宣告的元件、契約與測試（由人工 commit 後生效）；每個元件以 `# code:` 列出所屬檔案，沒有元件認領的程式碼會被刪除
 
 ## 經驗法則
 
