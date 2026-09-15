@@ -58,13 +58,20 @@ class PrivilegedEnv:
                  start_tilt_deg: float = 0.0, start_null_rad: float = 0.0,
                  shaping: bool = False, gamma: float = 0.99, success_bonus: float = 10.0,
                  rich_obs: bool = False, shaping_gamma: float = 1.0,
-                 layout_radius: float = 0.0, layout_check=None, layout_tries: int = 20):
+                 layout_radius: float = 0.0, layout_check=None, layout_tries: int = 20,
+                 gripper_mode: str = "command"):
         from libero.libero import benchmark, get_libero_path
         from libero.libero.envs import OffScreenRenderEnv
         from .libero_env import build_chain, gripper_geom, register_ur5e
         register_ur5e()
 
         self.ti, self.radius, self.horizon, self.kp = task_index, radius_m, horizon, kp
+        # "command": action[6] is robosuite's -1/0/+1. "target": action[6] is a target-aperture
+        # channel executed by GripperServo from the gripper's measured aperture and rate.
+        assert gripper_mode in ("command", "target"), gripper_mode
+        self.gripper_mode = gripper_mode
+        from .gripper_servo import GripperServo
+        self.gripper_servo = GripperServo()
         self.rng = np.random.default_rng(seed)
         self.spec = ActionSpec()
         self.scale = np.array([self.spec.rot_scale * self.spec.control_hz] * 3 +
@@ -354,7 +361,12 @@ class PrivilegedEnv:
         o = self.env.env._get_observations(force_update=True)
         cmd = np.zeros(self.env.env.action_dim)
         cmd[:7] = self.servo.command(np.asarray(o["robot0_joint_pos"]), a[:6] * self.scale)
-        cmd[-1] = a[6]
+        if self.gripper_mode == "target":
+            from .gripper_servo import channel_to_target
+            gq, gv = o["robot0_gripper_qpos"], o.get("robot0_gripper_qvel", np.zeros(2))
+            cmd[-1] = self.gripper_servo.command(float(channel_to_target(a[6])), float(gq[0] - gq[1]), float(gv[0] - gv[1]))
+        else:
+            cmd[-1] = a[6]
         self._gains()
         raw, _, done, _ = self.env.step(cmd)
         self.t += 1

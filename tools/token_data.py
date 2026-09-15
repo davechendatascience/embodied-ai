@@ -67,10 +67,35 @@ def encode(args):
     text = np.zeros((10, 512), np.float32)
     for t, s in langs.items():
         text[t] = enc_txt(s).float().cpu().numpy()
+    extra = {}
+    if not src.is_dir() and "gripper_target" in parts[0].files and bool(parts[0]["gripper_target"]):
+        extra["label_gt"] = np.concatenate(meta_out["label"])       # collected in target mode already
+    if not src.is_dir() and "phase" in parts[0].files:
+        extra["phase"] = np.asarray(parts[0]["phase"])
     np.savez(out / "meta.npz", **{k: np.concatenate(v) for k, v in meta_out.items()},
-             episode_success=np.concatenate(success), text=text, teacher_round=teacher_round)
+             episode_success=np.concatenate(success), text=text, teacher_round=teacher_round, **extra)
     print(f"-> {out}  ({n} frames)")
     return 0
+
+
+APERTURE = 9          # index of the gripper aperture in tool_state
+CONTROL_HZ = 20
+
+
+def aperture_rate(meta) -> np.ndarray:
+    """Finite-difference gripper aperture rate (m/s) per frame, 0 at an episode's first step.
+
+    Frames of a DAgger round are interleaved across workers, so the previous frame is
+    found by (episode, step), not by position. The drawer program's gripper law reads
+    aperture + rate * tau; without the rate its labels contradict each other at equal
+    aperture once student-driven states break the aperture-rate correlation of a demo."""
+    ep, st, ap = meta["episode"], meta["step"], meta["state"][:, APERTURE]
+    where = {(int(e), int(s)): i for i, (e, s) in enumerate(zip(ep, st))}
+    prev = np.array([where.get((int(e), int(s) - 1), -1) for e, s in zip(ep, st)])
+    rate = np.zeros(len(ap), np.float32)
+    ok = prev >= 0
+    rate[ok] = (ap[ok] - ap[prev[ok]]) * CONTROL_HZ
+    return rate
 
 
 def train(args):
@@ -92,17 +117,34 @@ def train(args):
         if bool(meta["teacher_round"]):
             keep = meta["episode_success"].astype(bool)
         state = meta["state"].astype(np.float32)
+        if args.aperture_rate:
+            state = np.concatenate([state, aperture_rate(meta)[:, None]], 1)
         sets.append(dict(A=A, W=W, meta=meta, state=state, idx=np.where(keep)[0], tag=k))
     text = sets[0]["meta"]["text"]
     rows = [(k, i) for k, s in enumerate(sets) for i in s["idx"]]
     ep = np.array([sets[k]["meta"]["episode"][i] + 10_000_000 * k for k, i in rows])
     val = (ep % 10) == 0
-    lab = np.stack([sets[k]["meta"]["label"][i] for k, i in rows]).astype(np.float32)
+    key = "label_gt" if args.gripper_target else "label"
+    for d, s_ in zip(args.data, sets):
+        if key not in s_["meta"]:
+            raise SystemExit(f"{d}: no {key}; run tools/relabel_gripper.py first")
+    lab = np.stack([sets[k]["meta"][key][i] for k, i in rows]).astype(np.float32)
     act_std = lab[~val].std(0).clip(1e-6)
+    st_all = np.stack([sets[k]["state"][i] for k, i in rows])
+    if args.standardize_state:
+        # The drawer's gripper law switches inside a 3 mm band on a 26 mm aperture. Raw, the
+        # aperture enters as ~0.03 +- 0.035 next to rotation columns of +-0.75; standardized,
+        # every state column is O(1) and a millimetre is visible to the first linear layer.
+        state_mean, state_std = st_all[~val].mean(0), st_all[~val].std(0).clip(1e-6)
+    else:
+        state_mean, state_std = np.zeros(st_all.shape[1], np.float32), np.ones(st_all.shape[1], np.float32)
+    for s_ in sets:
+        s_["state"] = ((s_["state"] - state_mean) / state_std).astype(np.float32)
     print(f"{len(rows)} frames from {len(sets)} dataset(s): train {int((~val).sum())} val {int(val.sum())}"
           f"{'  ABLATION: images zeroed' if args.zero == 'image' else ''}", flush=True)
     tok, tmask = spec_tokens(dev)
-    model = TokenHead().to(dev)
+    state_dim = sets[0]["state"].shape[1]
+    model = TokenHead(state_dim=state_dim).to(dev)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.05)
     tri, vai = np.where(~val)[0], np.where(val)[0]
     steps = args.epochs * (len(tri) // args.batch)
@@ -148,7 +190,8 @@ def train(args):
         print(f"  epoch {ep_i:3d}  train {loss.item():.4f}  val {vl:.4f}{'  *' if vl == best else ''}", flush=True)
     out = Path(args.out); out.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"state_dict": {k: v.cpu() for k, v in best_state.items()}, "act_std": act_std, "chunk": 1,
-                "kind": "token", "zero": args.zero,  "val": best, "data": args.data, "args": vars(args)}, out)
+                "kind": "token", "zero": args.zero, "state_dim": state_dim, "aperture_rate": bool(args.aperture_rate),
+                "state_mean": state_mean, "state_std": state_std, "gripper_target": bool(args.gripper_target), "val": best, "data": args.data, "args": vars(args)}, out)
     print(f"best val {best:.4f} -> {out}")
     return 0
 
@@ -165,6 +208,9 @@ def main() -> int:
     t.add_argument("--data", nargs="+", required=True)
     t.add_argument("--out", required=True)
     t.add_argument("--zero", default="none", choices=["none", "image"])
+    t.add_argument("--aperture-rate", action="store_true", help="append the gripper aperture rate to the state")
+    t.add_argument("--standardize-state", action="store_true", help="z-score the state with training statistics")
+    t.add_argument("--gripper-target", action="store_true", help="train on target-aperture gripper labels (label_gt)")
     t.add_argument("--epochs", type=int, default=20)
     t.add_argument("--batch", type=int, default=256)
     t.add_argument("--lr", type=float, default=3e-4)

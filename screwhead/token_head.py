@@ -22,7 +22,8 @@ from .state import STATE_DIM
 
 
 class TokenHead(nn.Module):
-    def __init__(self, d: int = 256, layers: int = 4, heads: int = 4, n_query: int = 4, chunk: int = 1):
+    def __init__(self, d: int = 256, layers: int = 4, heads: int = 4, n_query: int = 4, chunk: int = 1,
+                 state_dim: int = STATE_DIM):
         super().__init__()
         self.chunk = chunk
         n = GRID * GRID
@@ -30,7 +31,7 @@ class TokenHead(nn.Module):
         self.cam = nn.Parameter(torch.zeros(2, 1, d))
         self.pos = nn.Parameter(torch.randn(1, n, d) * 0.02)
         self.txt = nn.Linear(512, d)
-        self.state = nn.Sequential(nn.Linear(STATE_DIM, d), nn.GELU(), nn.Linear(d, d))
+        self.state = nn.Sequential(nn.Linear(state_dim, d), nn.GELU(), nn.Linear(d, d))
         self.spec = nn.Linear(TOKEN_DIM, d)
         self.query = nn.Parameter(torch.randn(1, n_query, d) * 0.02)
         layer = nn.TransformerEncoderLayer(d, heads, dim_feedforward=4 * d, dropout=0.1,
@@ -40,7 +41,7 @@ class TokenHead(nn.Module):
         self.out = nn.Sequential(nn.Linear(d, d), nn.GELU(), nn.Linear(d, chunk * 7))
 
     def forward(self, agent, wrist, text, state, spec_tokens, spec_mask):
-        """agent, wrist: (B, 64, 768); text (B, 512); state (B, 10); spec (B, J, TOKEN_DIM), mask (B, J) True=pad."""
+        """agent, wrist: (B, 64, 768); text (B, 512); state (B, state_dim); spec (B, J, TOKEN_DIM), mask (B, J) True=pad."""
         b = agent.shape[0]
         a = self.img(agent.float()) + self.cam[0] + self.pos
         w = self.img(wrist.float()) + self.cam[1] + self.pos

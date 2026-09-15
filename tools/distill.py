@@ -79,7 +79,15 @@ def _worker(remote, task, seed, cpu, teacher_ckpt, horizon, radius, env_kw):
         program = ScriptedTeacher(env)
         if env.layout_radius > 0:
             env.layout_check = program.layout_feasible
-        label = lambda o: program.act().astype(np.float32)
+        if env.gripper_mode == "target":
+            from screwhead.gripper_servo import program_target, target_to_channel
+            def label(o):
+                # the program's command, re-expressed as the aperture it is regulating toward
+                a = program.act().astype(np.float32)
+                a[6] = target_to_channel(program_target(program.phase, float(a[6]), program.k.preshape_aperture))
+                return a
+        else:
+            label = lambda o: program.act().astype(np.float32)
         phase = lambda: program.phase
 
         def priv():
@@ -146,7 +154,7 @@ def load_student(ckpt, device):
     ck = torch.load(ckpt, map_location="cpu", weights_only=False)
     if ck.get("kind") == "token":
         from screwhead.token_head import TokenHead
-        m = TokenHead(chunk=ck["chunk"])
+        m = TokenHead(chunk=ck["chunk"], state_dim=ck.get("state_dim", 10))
     else:
         from screwhead.policy import ScrewHead
         m = ScrewHead(chunk=ck["chunk"])
@@ -211,6 +219,8 @@ def collect(args):
     if args.beta < 1.0:
         student, act_std, ck_s = load_student(args.student, dev)
         token_student = ck_s.get("kind") == "token"
+        if bool(ck_s.get("gripper_target", False)) != bool(args.gripper_target):
+            raise SystemExit(f"{args.student}: gripper_target={ck_s.get('gripper_target', False)} but --gripper-target={args.gripper_target}")
         if token_student:
             from screwhead.dino_features import DinoFeatures
             dino = DinoFeatures(dev)
@@ -225,7 +235,8 @@ def collect(args):
         p = ctx.Process(target=_worker, args=(b, t, args.seed * 100 + t, cpus[i % len(cpus)],
                                               args.teacher, args.horizon, args.radius,
                                               dict(start_kw(args), layout_radius=args.layout_radius,
-                                                   record_hires=args.record_hires)), daemon=True)
+                                                   record_hires=args.record_hires,
+                                                   gripper_mode="target" if args.gripper_target else "command")), daemon=True)
         p.start(); b.close(); remotes.append(a); procs.append(p)
     langs = [r.recv() for r in remotes]
     # indexed by TASK, not by worker: several workers may run the same task
@@ -245,6 +256,8 @@ def collect(args):
     # grasp evidence per episode: the tool's distance to the program's grasp when the
     # driver FIRST commands close (or the closest it came, if it never closes)
     grip = [dict(closed=False, offset=np.inf) for _ in tasks]
+    use_rate = student is not None and bool(ck_s.get("aperture_rate", False))
+    prev_ap = [None] * len(tasks)
     worker_eps = [0] * len(tasks)
     per_task_workers = {t: tasks.count(t) for t in set(tasks)}
     quota = [int(np.ceil(args.episodes / per_task_workers[t])) for t in tasks]
@@ -293,20 +306,36 @@ def collect(args):
                 f = enc_img(*imgs).float()
                 agent, wrist = f[0::2], f[1::2]
                 sa_full, sw_full = agent, wrist
-            state = torch.as_tensor(np.stack([cur[i][2] for i in idx]), device=dev)
+            st_np = np.stack([cur[i][2] for i in idx])
+            if use_rate:
+                # same definition as tools/token_data.py aperture_rate: finite difference, 0 at step 0
+                rate = np.array([0.0 if ep_step[i] == 0 or prev_ap[i] is None else (cur[i][2][9] - prev_ap[i]) * 20
+                                 for i in idx], np.float32)
+                for i in idx:
+                    prev_ap[i] = float(cur[i][2][9])
+                st_s = torch.as_tensor(np.concatenate([st_np, rate[:, None]], 1), device=dev)
+            state = torch.as_tensor(st_np, device=dev)
+            if student is not None and "state_mean" in ck_s:
+                mu_s = torch.as_tensor(np.asarray(ck_s["state_mean"]), dtype=torch.float32, device=dev)
+                sd_s = torch.as_tensor(np.asarray(ck_s["state_std"]), dtype=torch.float32, device=dev)
+                if use_rate:
+                    st_s = (st_s - mu_s) / sd_s
+                else:
+                    state = (state - mu_s) / sd_s
             if student is not None:
                 sa, sw = (torch.zeros_like(sa_full), torch.zeros_like(sw_full)) if args.zero in ("image",) \
                     else (sa_full, sw_full)
                 tix = [tasks[i] for i in idx]
                 st_text = torch.zeros_like(text[tix]) if args.zero == "text" else text[tix]
-                pred = student(sa, sw, st_text, state, tok.expand(len(idx), -1, -1),
+                pred = student(sa, sw, st_text, st_s if use_rate else state, tok.expand(len(idx), -1, -1),
                                tmask.expand(len(idx), -1))[:, 0] * act_std
                 s_act = pred.clamp(-1, 1).cpu().numpy()
                 # The gripper command is three-valued -- close, HOLD, open -- and robosuite
                 # reads only its sign, so a regressed 0.03 meant "close". Measured: 0 of 92
                 # hold labels were executed as hold, and the drawer task (which pre-shapes by
                 # holding) scored 0/10. Decode to the nearest of the three.
-                s_act[:, 6] = decode_gripper(s_act[:, 6])
+                if not args.gripper_target:
+                    s_act[:, 6] = decode_gripper(s_act[:, 6])     # target mode: the env's GripperServo reads it
         for j, i in enumerate(idx):
             teacher_exec = student is None or rng.random() < args.beta
             act = cur[i][3] if teacher_exec else s_act[j]
@@ -366,7 +395,7 @@ def collect(args):
                  executed=np.stack(buf["executed"]), phase=np.array(buf["phase"]), stage=np.array(buf["stage"], np.int8),
                  priv=np.stack(buf["priv"]),
                  episode_success=np.array([succ.get(e, False) for e in ep]),
-                 text=text.cpu().numpy(), radius=args.radius, beta=args.beta,
+                 text=text.cpu().numpy(), radius=args.radius, beta=args.beta, gripper_target=bool(args.gripper_target),
                  languages=json.dumps({int(t): l for t, l in zip(tasks, langs)}))
         if args.save_frames:
             np.save(str(out) + ".agent_img.npy", np.stack(buf["agent_img"]))
@@ -481,6 +510,7 @@ def main() -> int:
     c.add_argument("--cpus", default="5,6,7,8,9,15,16,17,18,19", help="performance cores")
     c.add_argument("--out", default="", help="omit to evaluate without saving")
     c.add_argument("--trials", default="", help="also write one component-belief trial per episode here")
+    c.add_argument("--gripper-target", action="store_true", help="action[6] is a target aperture executed by GripperServo")
     c.add_argument("--seed", type=int, default=0)
     sys.path.insert(0, str(ROOT / "tools"))
     add_start_args(c)
