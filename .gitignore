@@ -1,42 +1,22 @@
 # Environments. Each is a pinned stack for exactly ONE dependency set, rebuilt
-# by scripts/, never committed. They must not reference each other: openpi pins
-# jax 0.5.3 + torch 2.7.1 + numpy<2, the LIBERO venv pins robosuite 1.4.1 +
-# mujoco 3.1.6, and the only thing installed in both is the pure-python
-# openpi-client.
+# by scripts/, never committed, and they must not reference each other. The
+# LIBERO venv pins robosuite 1.4.1 + mujoco 3.1.6 (scripts/setup_libero_venv.sh);
+# .venv carries the kinematics tests (tools/emit_trials.py).
 .venv/
 .venv-*/
 
-# Upstream checkouts and their checkpoints. Reproduced by:
-#   scripts/setup_libero.sh   robosuite/mujoco/numpy pins + LIBERO checkout
-#   scripts/serve_pi05.sh     openpi (expects `uv sync` in third_party/openpi)
-# Tens of GB of model weights; nothing here belongs in git.
+# Upstream checkouts. Tens of GB; nothing here belongs in git.
 third_party/
 !third_party/LIBERO.commit
 
-# THE SCRIPTS THAT REBUILD THE ABOVE ARE TRACKED, DELIBERATELY.
-# A previous `scripts/` was never committed. When the working tree was cleared,
-# third_party/ and five venvs went with it and the recipe to rebuild them did
-# not exist anywhere. Ignoring the outputs is correct; ignoring the recipe is
-# how a project becomes unreproducible in one command.
+# THE SCRIPTS THAT REBUILD ENVIRONMENTS AND RESULTS ARE TRACKED, DELIBERATELY.
+# A previous `scripts/` was never committed; when the working tree was cleared the
+# recipe to rebuild everything went with it.
 !scripts/
 
-# Generated training datasets (overlay-augmented RoboCasa replays).
-# Rebuilt by examples/emit_lerobot.py; tens of GB of video.
-data/
-
-# Fine-tuning outputs. ~22 GB per checkpoint (weights + optimizer state), and
-# reproducible from scripts/finetune_overlay.sh + examples/emit_lerobot.py.
-# The whole directory, not just the weights: extension globs let the fragments
-# through (config.json, trainer_state.json, training_args.bin, and rng_state
-# is .pth not .pt), and a checkpoint without its weights is not a checkpoint.
+# Trained policies (tools/token_data.py train, tools/distill.py train). Reproducible
+# from scripts/ and the caches below; tens of MB each.
 checkpoints/
-
-# damped-plan records ARE committed -- plans, evidence and the append-only
-# events.jsonl are plain JSON that diffs well, and this project's value is
-# disproportionately in its retracted claims. Only the runtime lock is not.
-.damped-plan/.lock
-
-# Model caches
 .cache/
 *.safetensors
 *.pt
@@ -47,26 +27,22 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
-# Rollout traces and scratch outputs
-results/
-*.jsonl
-# ...but NOT damped-plan's append-only event log, which the *.jsonl rule
-# above would otherwise swallow. It is the audit trail of every state
-# transition and is the whole point of committing .damped-plan/.
-!.damped-plan/events.jsonl
-
-# textbook-index MCP: the concept graph and hybrid index are derived from the
-# PDFs in docs/ and are rebuilt on first tool call.
-kuzu_concept_db*
-
-# component-belief MCP: the evidence ledger IS committed on purpose; the
-# derived belief cache is regenerable from evidence + declarations.
-.belief/cache/
-
-# Frozen-feature cache: 168 MB derived from the demonstrations by
-# tools/cache_features.py, and regenerable by rerunning it.
+# Derived data and run outputs: demonstration shards, DAgger rounds, DINOv2 token
+# caches (tens of GB), logs, per-episode trial files, rollout videos.
 cache/
 runs/
+videos/
+*.jsonl
+
+# component-belief MCP. Tracked: .belief/artifacts/ (run_test outputs). NOT tracked
+# yet: the ledger itself (.belief/*.jsonl, 49 MB of evidence) -- the *.jsonl rule
+# above excludes it. The derived belief cache is regenerable from evidence +
+# declarations.
+.belief/cache/
+
+# textbook-index MCP: the concept graph and index are derived from the PDFs in
+# docs/ and rebuilt on first tool call.
+kuzu_concept_db*
 
 # The textbook is a copyrighted third-party document, not project source. It is
 # read through the textbook-index MCP from a local path; docs/*.md reference it
