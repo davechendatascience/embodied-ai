@@ -33,6 +33,19 @@
 # share one declared evaluation: tools/distill.py collect --trials, seed 555,
 # layouts 0.08 m, start 0.10 m / 0.05 m / 30 deg / 10 deg / 0.3 rad, horizon 400.
 #
+# ONE EXECUTION PATH (scripts/token_vla.sh). Demonstrations, DAgger rollouts and
+# evaluation execute actions identically: the arm through TwistServo, the gripper
+# as a target aperture through GripperServo, and the student's gripper decode
+# (snap levels) stored in its checkpoint. A model trained on data collected under
+# one execution and tested under another is not evidence for either: the first
+# target-aperture model (command-mode rounds relabelled, snap applied only at
+# test) was stopped unscored for that reason.
+#
+# Evidence so far is from the command-gripper token VLA (vla_tok_r2, 200 episodes
+# each, ingested). The student tests below still run command-mode checkpoints
+# through the checkpoints/vla_student*.pt symlinks; they gain --gripper-target when
+# the aligned target model replaces them.
+#
 # Every code file under screwhead/ and tools/ belongs to a component; each component
 # lists its files in a `# code:` line. A file no component claims is deleted.
 #
@@ -292,7 +305,12 @@ components:
       - {id: FM-tabulated-span, observable: reachable pad separation is hardcoded per gripper rather than derived from its chain}
       - {id: FM-infeasible-attempted, observable: a feature wider than the jaw can straddle is attempted rather than refused}
       - {id: FM-camera-offset, observable: transfer fails on wrist-camera geometry rather than on the gripper itself}
-    remediation: Derive the pad-separation workspace from finger FK over joint limits; refuse what lies outside it
+      - {id: FM-regressed-between-modes, observable: a regressed target lands between pre-shape and closed and the servo holds 9 mm instead of squeezing}
+      - {id: FM-decode-mismatch, observable: the target is decoded one way when data is collected and another way when the policy is evaluated}
+    remediation: >-
+      Derive the pad-separation workspace from finger FK over joint limits; refuse
+      what lies outside it. Snap the student's target to the program levels
+      (snap_channel) and store the levels in the checkpoint so every rollout decodes alike
 
 interfaces:
   - id: IFC-randomizer__teacher
@@ -967,10 +985,11 @@ tests:
   # ---- Gate 2 rollouts: one command, three drivers. The student checkpoints are
   # symlinks so the run line (and so the test version) stays fixed across DAgger
   # rounds; distill.py records the resolved file and its hash as policy_revision.
+  # The teacher runs through GripperServo, as it does when it collects data.
   - id: TST-teacher-randomized
     layer: e2e
-    targets: [CMP-scripted-teacher, CMP-scene-randomizer, CMP-twist-servo]
-    run: env HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/distill.py collect --teacher scripted --beta 1 --episodes 50 --horizon 400 --layout-radius 0.08 --start-xy 0.10 --start-z 0.05 --start-yaw 30 --start-tilt 10 --start-null 0.3 --seed 555 --trials $OUT
+    targets: [CMP-scripted-teacher, CMP-scene-randomizer, CMP-twist-servo, CMP-gripper-decoder]
+    run: env HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/distill.py collect --teacher scripted --beta 1 --gripper-target --episodes 50 --horizon 400 --layout-radius 0.08 --start-xy 0.10 --start-z 0.05 --start-yaw 30 --start-tilt 10 --start-null 0.3 --seed 555 --trials $OUT
     metrics: [success, relation_at_start, closed, grasp_offset_mm]
     capture: [task, driver, teacher_revision, randomization]
     cost: 60.0
