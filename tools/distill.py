@@ -273,11 +273,21 @@ def collect(args):
     first = [True] * len(tasks)
     t0, frames = time.time(), 0
     last_report = time.time()
+    # SIGUSR1 (or SIGTERM): stop collecting and save what has finished. The data is only
+    # written at the end, and one slow worker otherwise holds a whole round hostage.
+    import signal
+    stop = {"now": False}
+    def _stop(signum, frame):
+        stop["now"] = True
+        print(f"    signal {signum}: stopping, saving finished episodes", flush=True)
+    signal.signal(signal.SIGUSR1, _stop); signal.signal(signal.SIGTERM, _stop)
     while any(active[i] or i in waiting for i in range(len(tasks))):
+        if stop["now"]:
+            break
         conns = [remotes[i] for i in waiting]
         if not conns:
             break
-        ready_conns = mp_wait(conns, timeout=None)
+        ready_conns = mp_wait(conns, timeout=5)
         ready = []
         for i in list(waiting):
             if remotes[i] in ready_conns:
