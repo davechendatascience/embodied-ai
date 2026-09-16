@@ -4,13 +4,18 @@
 # decode (snap levels) stored in its checkpoint -- so teacher demonstrations, DAgger rollouts
 # and evaluation all execute actions identically.
 #
-#   scripts/token_vla.sh round0                    teacher demos, 2 workers/task x 10 eps, through the servo
+#   scripts/token_vla.sh round0                    teacher demos through the servo, 20 per task
 #   scripts/token_vla.sh dagger N DRIVER.pt        round N driven by DRIVER at beta 0.5
 #   scripts/token_vla.sh train OUT.pt "R0 R1 .."   sighted OUT.pt and OUT_blind.pt (images zeroed)
 #   scripts/token_vla.sh eval CKPT.pt EPS [FLAGS]  seed 555, VLA alone, trials in runs/evidence/
 #   scripts/token_vla.sh all                       round0 -> r0 -> dagger 1 -> r1 -> dagger 2 -> r2 -> eval
 #
+# Every stage skips itself when its output exists, so `all` resumes after an interruption.
 # Data: cache/tokens/gt_roundN. Checkpoints: checkpoints/vla_gt_rN.pt (+ _blind).
+#
+# Simulation workers run on the performance cores only. On this GB10 the efficiency cores
+# measured ~4x slower per worker (70 vs 280 frames/min for the same 9 workers), and a task
+# whose workers land there becomes the straggler every stage waits for.
 # Train one model at a time: the GPU shares host memory.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -19,33 +24,36 @@ PY=.venv-libero/bin/python
 RAND="--horizon 400 --layout-radius 0.08 --start-xy 0.10 --start-z 0.05 --start-yaw 30 --start-tilt 10 --start-null 0.3"
 LEVELS="0 0.026 0.08"          # the apertures the programs use: closed, drawer pre-shape, open
 PERF=5,6,7,8,9,15,16,17,18,19
-EFF=0,1,2,3,4,10,11,12,13,14
-ALL20=$PERF,$EFF
 
+collected() { [[ -f cache/distill_scripted/gt_round$1.npz ]]; }
+encoded()   { [[ -f cache/tokens/gt_round$1/meta.npz ]]; }
+
+encode() {
+  encoded "$1" || $PY tools/token_data.py encode --source cache/distill_scripted/gt_round$1.npz --out cache/tokens/gt_round$1
+}
 round0() {
-  $PY tools/distill.py collect --teacher scripted --beta 1 --gripper-target --exec-noise 0.3 \
-    --tasks 0 0 1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8 9 9 --episodes 20 --cpus $ALL20 $RAND \
-    --seed 400 --save-frames --out cache/distill_scripted/gt_round0.npz
-  $PY tools/token_data.py encode --source cache/distill_scripted/gt_round0.npz --out cache/tokens/gt_round0
+  collected 0 || $PY tools/distill.py collect --teacher scripted --beta 1 --gripper-target --exec-noise 0.3 \
+    --episodes 20 --cpus $PERF $RAND --seed 400 --save-frames --out cache/distill_scripted/gt_round0.npz
+  encode 0
 }
 dagger() {
   local n=$1 driver=$2
-  $PY tools/distill.py collect --teacher scripted --student "$driver" --gripper-target --beta 0.5 --episodes 20 $RAND \
-    --cpus $ALL20 --tasks 0 0 1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8 9 9 \
-    --seed $((400 + n)) --save-frames --out cache/distill_scripted/gt_round$n.npz
-  $PY tools/token_data.py encode --source cache/distill_scripted/gt_round$n.npz --out cache/tokens/gt_round$n
+  collected "$n" || $PY tools/distill.py collect --teacher scripted --student "$driver" --gripper-target --beta 0.5 \
+    --episodes 20 --cpus $PERF $RAND --seed $((400 + n)) --save-frames --out cache/distill_scripted/gt_round$n.npz
+  encode "$n"
 }
 train() {
   local out=$1 rounds=$2 data=""
   for r in $rounds; do data="$data cache/tokens/gt_round$r"; done
-  $PY tools/token_data.py train --data $data --gripper-target --gripper-levels $LEVELS --zero none --out "$out"
-  $PY tools/token_data.py train --data $data --gripper-target --gripper-levels $LEVELS --zero image --out "${out%.pt}_blind.pt"
+  [[ -f "$out" ]] || $PY tools/token_data.py train --data $data --gripper-target --gripper-levels $LEVELS --zero none --out "$out"
+  [[ -f "${out%.pt}_blind.pt" ]] || \
+    $PY tools/token_data.py train --data $data --gripper-target --gripper-levels $LEVELS --zero image --out "${out%.pt}_blind.pt"
 }
 evaluate() {
   local ckpt=$1 eps=$2; shift 2
   local zero=none; [[ "$ckpt" == *_blind.pt ]] && zero=image
   $PY tools/distill.py collect --teacher scripted --student "$ckpt" --gripper-target --zero $zero --beta 0 --episodes "$eps" $RAND \
-    --seed 555 --trials "runs/evidence/$(basename "${ckpt%.pt}")_s555.trials.json" "$@"
+    --cpus $PERF --seed 555 --trials "runs/evidence/$(basename "${ckpt%.pt}")_s555.trials.json" "$@"
 }
 
 case "${1:-}" in
@@ -60,10 +68,8 @@ case "${1:-}" in
     echo "[stage] train r1";  train checkpoints/vla_gt_r1.pt "0 1"
     echo "[stage] dagger 2";  dagger 2 checkpoints/vla_gt_r1.pt
     echo "[stage] train r2";  train checkpoints/vla_gt_r2.pt "0 1 2"
-    echo "[stage] eval r2 + blind"
-    evaluate checkpoints/vla_gt_r2.pt 20 --cpus $PERF & a=$!
-    evaluate checkpoints/vla_gt_r2_blind.pt 20 --cpus $EFF & b=$!
-    wait $a; wait $b
+    echo "[stage] eval r2";       evaluate checkpoints/vla_gt_r2.pt 20
+    echo "[stage] eval r2 blind"; evaluate checkpoints/vla_gt_r2_blind.pt 20
     echo "[stage] PIPELINE DONE" ;;
-  *) sed -n '2,15p' "$0"; exit 2 ;;
+  *) sed -n '2,19p' "$0"; exit 2 ;;
 esac
