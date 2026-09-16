@@ -155,7 +155,7 @@ def load_student(ckpt, device):
     if ck.get("kind") == "token":
         from screwhead.token_head import TokenHead
         m = TokenHead(chunk=ck["chunk"], state_dim=ck.get("state_dim", 10),
-                      legacy_spec_mask=not ck.get("spec_mask_fixed", False))
+                      legacy_spec_mask=not ck.get("spec_mask_fixed", False), out_dim=ck.get("out_dim", 7))
     else:
         from screwhead.policy import ScrewHead
         m = ScrewHead(chunk=ck["chunk"])
@@ -261,8 +261,10 @@ def collect(args):
     # the decode travels with the checkpoint, so DAgger collection and evaluation execute identically
     gripper_levels = args.gripper_levels if args.gripper_levels is not None else \
         (ck_s.get("gripper_levels") if student is not None else None)
+    gripper_classes = ck_s.get("gripper_classes") if student is not None else None
     if student is not None:
         print(f"student {args.student}: gripper {'target' if args.gripper_target else 'command'}"
+              f"{f', classified over {gripper_classes}' if gripper_classes else ''}"
               f"{f', snapped to {gripper_levels}' if gripper_levels else ''}", flush=True)
     prev_ap = [None] * len(tasks)
     worker_eps = [0] * len(tasks)
@@ -348,16 +350,24 @@ def collect(args):
                     else (sa_full, sw_full)
                 tix = [tasks[i] for i in idx]
                 st_text = torch.zeros_like(text[tix]) if args.zero == "text" else text[tix]
-                pred = student(sa, sw, st_text, st_s if use_rate else state, tok.expand(len(idx), -1, -1),
-                               tmask.expand(len(idx), -1))[:, 0] * act_std
-                s_act = pred.clamp(-1, 1).cpu().numpy()
+                out = student(sa, sw, st_text, st_s if use_rate else state, tok.expand(len(idx), -1, -1),
+                              tmask.expand(len(idx), -1))[:, 0]
+                if gripper_classes:
+                    # twist regressed; gripper = the most likely of the program apertures
+                    from screwhead.gripper_servo import target_to_channel
+                    s_act = np.zeros((len(idx), 7), np.float32)
+                    s_act[:, :6] = (out[:, :6] * act_std[:6]).clamp(-1, 1).float().cpu().numpy()
+                    k = out[:, 6:].argmax(-1).cpu().numpy()
+                    s_act[:, 6] = target_to_channel(np.asarray(gripper_classes)[k])
+                else:
+                    s_act = (out * act_std).clamp(-1, 1).float().cpu().numpy()
                 # The gripper command is three-valued -- close, HOLD, open -- and robosuite
                 # reads only its sign, so a regressed 0.03 meant "close". Measured: 0 of 92
                 # hold labels were executed as hold, and the drawer task (which pre-shapes by
                 # holding) scored 0/10. Decode to the nearest of the three.
                 if not args.gripper_target:
                     s_act[:, 6] = decode_gripper(s_act[:, 6])     # target mode: the env's GripperServo reads it
-                elif gripper_levels:
+                elif gripper_levels and not gripper_classes:
                     from screwhead.gripper_servo import snap_channel
                     s_act[:, 6] = snap_channel(s_act[:, 6], gripper_levels)
         for j, i in enumerate(idx):

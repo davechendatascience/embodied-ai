@@ -23,9 +23,11 @@ from .state import STATE_DIM
 
 class TokenHead(nn.Module):
     def __init__(self, d: int = 256, layers: int = 4, heads: int = 4, n_query: int = 4, chunk: int = 1,
-                 state_dim: int = STATE_DIM, legacy_spec_mask: bool = False):
+                 state_dim: int = STATE_DIM, legacy_spec_mask: bool = False, out_dim: int = 7):
         super().__init__()
         self.chunk = chunk
+        # 7 = twist (6) + regressed gripper; 6 + K = twist + logits over K gripper apertures
+        self.out_dim = out_dim
         # Spec.padded() marks REAL joints True; attention's key padding mask ignores True.
         # Checkpoints trained before 2026-09-15 passed the mask through uninverted, so for a
         # 7-joint Panda every spec token was ignored. They load with legacy_spec_mask=True
@@ -43,7 +45,7 @@ class TokenHead(nn.Module):
                                            batch_first=True, norm_first=True, activation="gelu")
         self.encoder = nn.TransformerEncoder(layer, layers)
         self.norm = nn.LayerNorm(d)
-        self.out = nn.Sequential(nn.Linear(d, d), nn.GELU(), nn.Linear(d, chunk * 7))
+        self.out = nn.Sequential(nn.Linear(d, d), nn.GELU(), nn.Linear(d, chunk * out_dim))
 
     def forward(self, agent, wrist, text, state, spec_tokens, spec_mask):
         """agent, wrist: (B, 64, 768); text (B, 512); state (B, state_dim); spec (B, J, TOKEN_DIM), mask (B, J) True=real joint."""
@@ -58,4 +60,4 @@ class TokenHead(nn.Module):
         pad = torch.zeros(b, x.shape[1], dtype=torch.bool, device=x.device)
         pad[:, -sp.shape[1]:] = spec_mask if self.legacy_spec_mask else ~spec_mask
         h = self.encoder(x, src_key_padding_mask=pad)
-        return self.out(self.norm(h[:, : q.shape[1]].mean(1))).view(b, self.chunk, 7)
+        return self.out(self.norm(h[:, : q.shape[1]].mean(1))).view(b, self.chunk, self.out_dim)

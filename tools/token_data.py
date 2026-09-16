@@ -144,7 +144,19 @@ def train(args):
           f"{'  ABLATION: images zeroed' if args.zero == 'image' else ''}", flush=True)
     tok, tmask = spec_tokens(dev)
     state_dim = sets[0]["state"].shape[1]
-    model = TokenHead(state_dim=state_dim).to(dev)
+    classes = None
+    if args.gripper_classes:
+        # the gripper as a classification over the program apertures: a regression averages
+        # 80 mm and 0 at the grasp, and any snap threshold between them becomes a trap
+        # (measured: snapped regression never closed in 22 of 62 failures)
+        if not (args.gripper_target and args.gripper_levels):
+            raise SystemExit("--gripper-classes needs --gripper-target and --gripper-levels")
+        from screwhead.gripper_servo import channel_to_target
+        classes = np.asarray(sorted(args.gripper_levels), np.float32)
+        cls = np.abs(channel_to_target(lab[:, 6])[:, None] - classes[None]).argmin(1)
+        print("gripper classes " + ", ".join(f"{c*1000:.0f} mm: {int((cls == i).sum())}" for i, c in enumerate(classes)), flush=True)
+    out_dim = 6 + len(classes) if classes is not None else 7
+    model = TokenHead(state_dim=state_dim, out_dim=out_dim).to(dev)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.05)
     tri, vai = np.where(~val)[0], np.where(val)[0]
     steps = args.epochs * (len(tri) // args.batch)
@@ -165,7 +177,18 @@ def train(args):
         st = torch.tensor(np.stack([sets[rows[j][0]]["state"][rows[j][1]] for j in order]), device=dev)
         tk = torch.tensor(np.stack([text[int(sets[rows[j][0]]["meta"]["task"][rows[j][1]])] for j in order]), device=dev)
         y = torch.tensor(lab[order] / act_std, device=dev)[:, None]
-        return a, w, tk, st, y, order
+        c = torch.tensor(cls[order], device=dev) if classes is not None else None
+        return a, w, tk, st, (y, c), order
+
+    def loss_fn(out, yc, reduction="mean"):
+        y, c = yc
+        if classes is None:
+            return nn.functional.smooth_l1_loss(out, y, reduction=reduction)
+        tw = nn.functional.smooth_l1_loss(out[:, 0, :6], y[:, 0, :6], reduction=reduction)
+        ce = nn.functional.cross_entropy(out[:, 0, 6:], c, reduction=reduction)
+        # per frame: mean twist loss + gripper cross-entropy (a sum over 6 twist elements
+        # carries the cross-entropy 6 times, so val = sum / (N * 6) keeps the same weighting)
+        return tw + ce if reduction == "mean" else tw + 6.0 * ce
 
     fwd = lambda a, w, tk, st: model(a, w, tk, st, tok.expand(len(a), -1, -1), tmask.expand(len(a), -1))
     best, best_state = float("inf"), None
@@ -175,16 +198,21 @@ def train(args):
         perm = rng.permutation(tri)
         for k in range(0, len(perm) - args.batch + 1, args.batch):
             a, w, tk, st, y, _ = batch(perm[k:k + args.batch])
-            loss = nn.functional.smooth_l1_loss(fwd(a, w, tk, st), y)
+            loss = loss_fn(fwd(a, w, tk, st), y)
             opt.zero_grad(set_to_none=True); loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 1.0); opt.step()
             if sched.last_epoch < sched.total_steps - 1: sched.step()
-        model.eval(); vt = 0.0
+        model.eval(); vt = 0.0; hit = 0
         with torch.no_grad():
             for k in range(0, len(vai), 1024):
                 a, w, tk, st, y, _ = batch(vai[k:k + 1024])
-                vt += nn.functional.smooth_l1_loss(fwd(a, w, tk, st), y, reduction="sum").item()
-        vl = vt / (len(vai) * 7)
+                o = fwd(a, w, tk, st)
+                vt += loss_fn(o, y, reduction="sum").item()
+                if classes is not None:
+                    hit += int((o[:, 0, 6:].argmax(-1) == y[1]).sum())
+        vl = vt / (len(vai) * (6 if classes is not None else 7))
+        if classes is not None:
+            print(f"  gripper class accuracy {hit / len(vai):.3f}", flush=True)
         if vl < best:
             best, best_state = vl, {k: v.detach().clone() for k, v in model.state_dict().items()}
         print(f"  epoch {ep_i:3d}  train {loss.item():.4f}  val {vl:.4f}{'  *' if vl == best else ''}", flush=True)
@@ -192,7 +220,8 @@ def train(args):
     torch.save({"state_dict": {k: v.cpu() for k, v in best_state.items()}, "act_std": act_std, "chunk": 1,
                 "kind": "token", "zero": args.zero, "state_dim": state_dim, "aperture_rate": bool(args.aperture_rate),
                 "state_mean": state_mean, "state_std": state_std, "gripper_target": bool(args.gripper_target), "spec_mask_fixed": True,
-                "gripper_levels": list(args.gripper_levels) if args.gripper_levels else None, "val": best, "data": args.data, "args": vars(args)}, out)
+                "gripper_levels": list(args.gripper_levels) if args.gripper_levels else None,
+                "gripper_classes": classes.tolist() if classes is not None else None, "out_dim": out_dim, "val": best, "data": args.data, "args": vars(args)}, out)
     print(f"best val {best:.4f} -> {out}")
     return 0
 
@@ -212,6 +241,7 @@ def main() -> int:
     t.add_argument("--aperture-rate", action="store_true", help="append the gripper aperture rate to the state")
     t.add_argument("--standardize-state", action="store_true", help="z-score the state with training statistics")
     t.add_argument("--gripper-target", action="store_true", help="train on target-aperture gripper labels (label_gt)")
+    t.add_argument("--gripper-classes", action="store_true", help="classify the gripper over --gripper-levels instead of regressing it")
     t.add_argument("--gripper-levels", type=float, nargs="*", default=None,
                    help="stored in the checkpoint: every rollout of it (DAgger and eval) snaps the target to these (m)")
     t.add_argument("--epochs", type=int, default=20)
