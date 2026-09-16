@@ -1,6 +1,6 @@
 # screwhead 講解
 
-更新日期：2026-09-15。專案全貌見 `docs/project_brief_zh-TW.md`；設計原文見 `docs/design_VLA_action_head.md`。
+更新日期：2026-09-16。專案全貌見 `docs/project_brief_zh-TW.md`；設計原文見 `docs/design_VLA_action_head.md`。
 
 ## 1. 一句話
 
@@ -133,7 +133,8 @@ TwistServo 的做法：
 - `TokenHead`：64 agentview + 64 wrist（加相機與格點位置嵌入）+ 1 語言 + 1 工具狀態 + 規格 token，前面接 4 個可學習 query，4 層 pre-norm Transformer，query 輸出平均 → MLP → 7 維動作。約 3.6M 參數。
 - 夾爪有兩種輸出（由 checkpoint 宣告）：
   - **指令模式**：解碼成 {−1 開, 0 保持, +1 關} 最近值。robosuite 只看正負號，回歸出 0.03 會被當成「關」，實測 92 個保持標籤一個都沒被執行成保持。
-  - **目標開口模式**（`--gripper-target`）：輸出 g = 1 − 2a / 0.08 m（+1 全關、−1 全開、抽屜預收 26 mm = +0.35），由 `gripper_servo.py` 的 `GripperServo` 以實測開口與速度（延遲補償 0.12 s、3 mm 帶寬）產生指令。這是夾爪版的 TwistServo：策略說「要多開」，控制律交給固定元件。
+  - **目標開口模式**（`--gripper-target`，目前採用）：輸出 g = 1 − 2a / 0.08 m（+1 全關、−1 全開、抽屜預收 26 mm = +0.35），由 `gripper_servo.py` 的 `GripperServo` 以實測開口與速度（延遲補償 0.12 s、3 mm 帶寬）產生指令。這是夾爪版的 TwistServo：策略說「要多開」，控制律交給固定元件。
+  - **吸附解碼**（`snap_channel`）：回歸輸出會落在模式之間，因此吸附到程式使用的開口（0、26、80 mm）。吸附層級在訓練時寫入 checkpoint（`gripper_levels`），DAgger 收集與評估都從 checkpoint 讀取，保證解碼一致。
 - 規格 token 的注意力遮罩：`Spec.padded()` 以 True 表示真實關節，而注意力遮罩以 True 表示忽略。2026-09-15 前訓練的 checkpoint 沒有反轉，Panda 的 7 個規格 token 全被忽略；修正後的 checkpoint 帶 `spec_mask_fixed`，舊的以 `legacy_spec_mask=True` 載入以維持原本的計算。
 
 ## 10. 教師與資料（讓策略被迫去「看」）
@@ -152,7 +153,7 @@ TwistServo 的做法：
 flowchart LR
   subgraph 訓練時
     R[layouts + teacher_env<br/>隨機擺放與起點] --> T[scripted_teacher<br/>特權狀態 → 扭量標籤]
-    T --> SV1[TwistServo] --> SIM1[LIBERO 模擬]
+    T --> SV1[TwistServo + GripperServo] --> SIM1[LIBERO 模擬]
     SIM1 -->|128px 影像| D[dino_features]
     D --> H[TokenHead]
     SIM1 -->|工具位姿| H
@@ -162,8 +163,10 @@ flowchart LR
     CAM[相機] --> D2[dino_features] --> H2[TokenHead]
     ST[state.tool_state] --> H2
     SP[spec.encode URDF] --> H2
-    H2 -->|body twist + 夾爪| SV2[TwistServo<br/>kinematics + ik]
+    H2 -->|body twist| SV2[TwistServo<br/>kinematics + ik]
+    H2 -->|目標開口（吸附）| GS[GripperServo]
     SV2 --> ARM[任意 6/7 軸手臂]
+    GS --> ARM
   end
 ```
 
@@ -178,7 +181,8 @@ DAgger 迴圈（`tools/distill.py`）：學生以機率 1−β 駕駛，教師�
 | 程式化教師（隨機擺放＋起點） | 193/200 |
 | 學生 VLA（CLIP，DAgger r1） | 33%，盲控制組 1% |
 | DINOv2 token VLA，DAgger r2 | 82%（200 回合；抽屜以外 90.6%，抽屜 2/20），盲控制組 4.5% |
-| 目標開口夾爪（GripperServo） | 已實作，教師經 servo 8/8 成功；學生驗證中 |
+| 目標開口夾爪（GripperServo＋吸附解碼） | 教師經 servo 8/8 成功；以單一執行流程（`scripts/token_vla.sh all`）重建中 |
+| component-belief 第 2 關 | 成功 0.82、盲控制組失敗 0.95、指令關係 1.00 皆 supported；教師逐任務測試待執行 |
 | 換手臂遷移 | 暫緩；需先通過「視覺落地」關卡（`belief.yaml` 的 POL-grounded） |
 
 ## 13. 常見陷阱（都實際踩過）
@@ -191,3 +195,5 @@ DAgger 迴圈（`tools/distill.py`）：學生以機率 1−β 駕駛，教師�
 6. 夾爪回歸值被當正負號 → 三值解碼。
 7. 補零而非遮罩 → 模型學到不存在的關節。
 8. 在固定初始狀態評估 → 盲策略也能過，成功率不代表有在看。
+9. 資料用一種執行方式收集、測試卻用另一種（例如舊指令模式資料重新標註後以 servo 測試、吸附只在測試時做）→ 分布不一致，結果不算數；示範、DAgger、評估必須走同一套流程。
+10. 回歸輸出落在兩個離散模式之間（夾取時 9 mm）→ 吸附到有效層級，且層級存在 checkpoint。

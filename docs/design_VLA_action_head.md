@@ -4,9 +4,10 @@ Companion to [`design_VLA_goal.md`](design_VLA_goal.md). Two halves, as the goal
 doc asks for: how SOTA VLAs are built and trained today, and what *Modern
 Robotics* offers the action head that they are not using.
 
-Written 2026-09-07. Claims about `third_party/` are cited to file:line and were
-read, not recalled. Claims about the outside literature are from memory and are
-marked; verify before building on any of them.
+Written 2026-09-07; Parts III–V revised 2026-09-16 to the design as built.
+Claims about `third_party/` are cited to file:line and were read, not recalled.
+Claims about the outside literature are from memory and are marked; verify before
+building on any of them.
 
 ---
 
@@ -225,106 +226,109 @@ arm action does: emit a closure-satisfying contact configuration, let the
 embodiment decode it to finger joints. Directly relevant to the `gripper-transfer`
 branch.
 
----
-
-## Part III — The proposed head
-
-```
-  images + language
-         │
-    [ VLM backbone ]                    URDF ──► PoE parse (Ch.4 §4.5)
-         │                                        │
-         │                              (M, {B_1…B_n}, limits, types)
-         │                                        │
-         ▼                                        ▼
-  [ action expert ]  ◄──── cross-attend ──── [ embodiment tokens ]
-         │                                    (n tokens × 6 + type)
-         ▼
-   body twist V_b ∈ se(3)  +  grasp intent      ← LEARNED, embodiment-free
-         │
-         ▼
-  [ DLS-IK layer: Δθ = (JᵀJ + λ²I)⁻¹ Jᵀ e ]     ← FIXED, differentiable,
-         │            + null-space secondary       parameterized by URDF
-         ▼
-    joint commands θ̇ (n-dim, any n)
-```
-
-Four commitments:
-
-1. **Embodiment encoder**: PoE tokens, one per joint, from the URDF. Variable
-   length. Replaces GR00T's `embodiment_id` integer and π0's zero padding.
-2. **Output space**: a body twist in the tool frame, plus a grasp intent. Fixed
-   6+k dimensions regardless of `n`. This is the invariance the whole design buys.
-3. **Decoder**: DLS-IK, differentiable, non-learned. The robot-specific knowledge
-   lives in `J(θ)`, which is computed from the tokens, not learned.
-4. **Secondary objectives** (joint limits, manipulability, local repulsion) in the
-   null space, with the inertia-weighted inverse if dynamics are available.
-
-Practical footing (from memory — check before committing): `pytorch_kinematics`
-already does URDF → differentiable FK and Jacobians in torch; `curobo` (NVIDIA)
-does GPU collision-aware IK and is the natural fit for the Orin/Thor target if
-the null-space term needs real collision distances rather than sphere
-approximations.
+*As built (Part III):* the policy currently emits the simplest grasp intent — a
+target jaw aperture in metres — and a fixed servo realizes it. The grasp-map and
+force-closure predicates are implemented and verified (`screwhead/grasp.py`), but
+not yet in the policy's output.
 
 ---
 
-## Part IV — The proposed test has a confound
+## Part III — The head as built
 
-The goal doc's plan is: "train on libero and then we switch the urdf to another to
-see if it automatically generalize." That test does not currently measure what it
-is meant to measure.
+```
+  agent-view + wrist images (128 px)        instruction
+         │                                       │
+  [ frozen DINOv2-base ]                  [ frozen CLIP text ]
+   8×8 patch tokens / camera                512-d
+         │                                       │
+         └──────────────┬────────────────────────┘
+                        ▼
+  [ TokenHead: 4 learned queries + 4-layer transformer ] ◄── tool pose (10-d)
+                        │                              ◄── spec tokens, one per joint
+                        ▼                                   (PoE body axes, from the URDF)
+   body twist V_b (6)  +  gripper target aperture (1)   ← LEARNED, embodiment-free, one step
+                        │
+          ┌─────────────┴──────────────┐
+          ▼                            ▼
+  [ TwistServo ]                [ GripperServo ]                ← FIXED, per robot
+   SE(3)-integrated pose ref.    measured aperture + rate,
+   → DLS-IK (+ null space)       lag-compensated close/hold/open
+   → absolute joint target
+          │                            │
+          ▼                            ▼
+     joint position controller    gripper action
+```
 
-**In both in-tree stacks, LIBERO's action space is already Cartesian.**
+Commitments, and what changed from the 09-07 proposal:
 
-- π0: LIBERO actions are 7-dim and sliced back as 7
-  (`openpi/src/openpi/policies/libero_policy.py:100`) — 6-DoF end-effector delta
-  plus gripper, executed through robosuite's operational-space controller.
-- GR00T: the `libero_panda` action modality keys are literally
-  `x, y, z, roll, pitch, yaw, gripper`
-  (`Isaac-GR00T/gr00t/configs/data/embodiment_configs.py:91`).
+1. **Embodiment encoder** — as proposed: one token per joint (`screwhead/spec.py`:
+   body-form screw axis with its linear part divided by the arm's reach, joint type,
+   limits, index), masked rather than zero-padded. (A mask-polarity bug made the first
+   token heads ignore these tokens; fixed, and older checkpoints load in legacy mode.)
+2. **Output space** — a body twist plus a gripper **target aperture** in metres,
+   `g = 1 − 2a / 0.08 m`. One control step, not a chunk: the teacher labels every
+   visited state and closed-loop visual feedback is what the policy needs.
+3. **Decoder** — DLS-IK as proposed, but at *execution*, not inside the training graph.
+   Measured: LIBERO's joint-position controller achieves 82% of each commanded step, so
+   per-step deltas compound (a demonstration's own labels replayed 0/50). `TwistServo`
+   (`screwhead/servo.py`) integrates the twist on SE(3) into a pose reference, solves IK
+   from a joint reference rather than the lagging measurement, and commands an absolute
+   target (replay 48/50).
+4. **Gripper decoder** — `GripperServo` (`screwhead/gripper_servo.py`). A lag-compensated
+   close/hold/open law is a controller, not an intent; learned as a command it matched
+   the teacher on 20–25% of pre-shape frames. The policy names the aperture, the servo
+   reaches it, and the student's output is snapped to the apertures the programs use
+   (closed, 26 mm pre-shape, open), with the snap levels stored in the checkpoint.
+5. **Perception** — frozen DINOv2 patch tokens, chosen by a probe of grasp localization
+   in the states the VLA itself drives into: CLIP pooled 16.8 mm → DINOv2 10.6–13.0 mm
+   median (`tools/feature_bakeoff.py`).
+6. **Secondary objectives** — null-space posture in `TwistServo` (used by the stove
+   task's program); collision-aware terms remain future work.
 
-So the existing baseline **already** abstracts the embodiment away — via the
-controller, which runs its own IK. Swap the URDF under that setup and a large part
-of "it generalized" is attributable to the OSC controller, not to anything the
-action head learned. The result would be real but would not be evidence for the
-thesis.
+## Part IV — Making the policy look before testing transfer
 
-To make the swap informative, one of these has to hold:
+The 09-07 plan flagged one confound (LIBERO's Cartesian controller absorbs the arm).
+Measurement found a deeper one: **LIBERO-spatial does not require vision.** A
+demonstration-trained head with its images zeroed matched the sighted head; the
+bundled init states vary the target by ~12 mm, inside the basin of one mean
+trajectory. A transfer test on such a policy would test a trajectory prior. So the
+thesis is now gated on grounding:
 
-- **Train a joint-space baseline.** Have the LIBERO policy emit joint positions or
-  velocities directly, so the embodiment is genuinely inside the learned mapping.
-  Then the URDF-conditioned head has something to beat, and the padded-vector
-  baseline should fail the swap.
-- **Or swap to an embodiment the controller cannot absorb**: different DoF count,
-  different topology, a redundant 7-DoF arm where null-space choice matters. A
-  Panda→Panda-variant swap tests nothing; a Panda→7-DoF-redundant or
-  Panda→different-wrist swap does.
-
-Two more things that will silently break a URDF swap, both from p. 101's reality
-check — failures that "produce a correct-looking wrong robot":
-
-- `rpy` in URDF is **fixed-axis** roll-pitch-yaw, i.e. `Rot(ẑ,γ)·Rot(ŷ,β)·Rot(x̂,α)`.
-  Reverse the order and `M` comes out tilted but plausible.
-- A continuous joint's zero is wherever the file says, not where the encoder index
-  sits. If they differ, every `θ_i` is offset and `M` is wrong.
-
-Either one presents downstream as "the policy failed to generalize" rather than
-"the conversion was wrong."
-
-**Therefore, before any policy conclusion: a conversion test.** Assert PoE forward
-kinematics against the simulator's own FK over randomly sampled configurations, per
-URDF, to machine precision. It is cheap, it is a declared test with a scalar metric,
-and it is the gate that stops a parsing bug from being read as a scientific result.
-
-### What to measure, in order
-
-| # | Question | Test |
+| Piece | What it does | Where |
 |---|---|---|
-| 1 | Does the URDF→PoE conversion reproduce the sim's kinematics? | max ‖FK_PoE(θ) − FK_sim(θ)‖ over random θ, per URDF |
-| 2 | Does the DLS-IK layer converge on reachable targets? | success rate + iteration count vs. λ, incl. near-singular starts |
-| 3 | Does a joint-space padded-vector baseline actually fail the swap? | LIBERO joint-space policy, source → target URDF |
-| 4 | Does the URDF-conditioned head beat it? | same swap, same seeds, paired |
-| 5 | Does it hold on an unseen DoF count/topology? | held-out embodiment, never trained on |
+| Randomization | object layouts (8 cm) that keep each instruction's spatial relation true; robot start pose ±10 cm / ±5 cm / ±30° / ±10° / null space | `screwhead/layouts.py`, `teacher_env.py` |
+| Teacher | per-task demonstration programs on privileged state; Markov feedback laws, so they label any visited state | `screwhead/scripted_teacher.py` |
+| Distillation | success-filtered teacher data, then DAgger (student drives with β = 0.5, teacher labels) | `tools/distill.py`, `tools/token_data.py` |
+| One execution path | demonstrations, DAgger and evaluation execute through the same servos and the same stored decode | `scripts/token_vla.sh` |
+| Controls | an image-zeroed copy trained on the same data must fail; per-episode trials go to the ledger | `belief.yaml` gate 2 |
 
-Question 3 is the one that decides whether the project has a premise. If the padded
-baseline transfers fine, there is nothing to fix.
+Results so far (seed 555, randomized, VLA driving alone):
+
+| Policy | Success | Blind copy |
+|---|---|---|
+| Scripted teacher | 96.5% | — |
+| CLIP-feature VLA after DAgger | 33% | 1% |
+| DINOv2 token VLA, 2 DAgger rounds (200 episodes) | **82%** (90.6% outside the drawer task) | **4.5%** |
+
+## Part V — What to measure, in order
+
+`belief.yaml` holds the declared form of this table; it is the source of truth.
+
+| Gate | Question | Status |
+|---|---|---|
+| 1 | Do URDF→PoE, the Jacobian, DLS-IK and the null space reproduce the simulator exactly? | supported on panda, ur5e, iiwa, kinova3, jaco |
+| 1 | Is the gripper geometry right? | supported for Panda and Rethink; Robotiq85 leaves its declared limits (excluded from transfer cells) |
+| 2 | Does the randomization keep instructions true? | supported (200/200) |
+| 2 | Does a blind policy fail and the sighted one succeed? | supported (4.5% / 82%) |
+| 2 | Does the teacher solve every task under randomization? | pending (per-task test) |
+| 3 | Does a joint-space padded-vector baseline, trained the same way, fail an arm swap? | blocked: needs arm swapping in `PrivilegedEnv` |
+| 3 | Does the twist head keep its rate on an unseen arm, and do spec tokens matter? | blocked, same |
+
+The teacher programs emit twists, so they should drive any arm through that arm's own
+`TwistServo`; the gripper servo's aperture range should come from each gripper's finger
+kinematics (`screwhead/gripper.py`) rather than the Panda's 0.08 m. Those two are the
+remaining engineering between gate 2 and gate 3.
+
+The two silent URDF failures noted on 09-07 still apply to any new arm: `rpy` is
+fixed-axis `Rot(ẑ,γ)·Rot(ŷ,β)·Rot(x̂,α)`, and a joint's zero is wherever the file says.
+The conversion test (gate 1) runs on every arm before any policy result is read.
