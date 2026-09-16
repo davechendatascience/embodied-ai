@@ -191,7 +191,8 @@ def train(args):
     out = Path(args.out); out.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"state_dict": {k: v.cpu() for k, v in best_state.items()}, "act_std": act_std, "chunk": 1,
                 "kind": "token", "zero": args.zero, "state_dim": state_dim, "aperture_rate": bool(args.aperture_rate),
-                "state_mean": state_mean, "state_std": state_std, "gripper_target": bool(args.gripper_target), "spec_mask_fixed": True, "val": best, "data": args.data, "args": vars(args)}, out)
+                "state_mean": state_mean, "state_std": state_std, "gripper_target": bool(args.gripper_target), "spec_mask_fixed": True,
+                "gripper_levels": list(args.gripper_levels) if args.gripper_levels else None, "val": best, "data": args.data, "args": vars(args)}, out)
     print(f"best val {best:.4f} -> {out}")
     return 0
 
@@ -211,6 +212,8 @@ def main() -> int:
     t.add_argument("--aperture-rate", action="store_true", help="append the gripper aperture rate to the state")
     t.add_argument("--standardize-state", action="store_true", help="z-score the state with training statistics")
     t.add_argument("--gripper-target", action="store_true", help="train on target-aperture gripper labels (label_gt)")
+    t.add_argument("--gripper-levels", type=float, nargs="*", default=None,
+                   help="stored in the checkpoint: every rollout of it (DAgger and eval) snaps the target to these (m)")
     t.add_argument("--epochs", type=int, default=20)
     t.add_argument("--batch", type=int, default=256)
     t.add_argument("--lr", type=float, default=3e-4)

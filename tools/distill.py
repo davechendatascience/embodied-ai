@@ -258,6 +258,12 @@ def collect(args):
     # driver FIRST commands close (or the closest it came, if it never closes)
     grip = [dict(closed=False, offset=np.inf) for _ in tasks]
     use_rate = student is not None and bool(ck_s.get("aperture_rate", False))
+    # the decode travels with the checkpoint, so DAgger collection and evaluation execute identically
+    gripper_levels = args.gripper_levels if args.gripper_levels is not None else \
+        (ck_s.get("gripper_levels") if student is not None else None)
+    if student is not None:
+        print(f"student {args.student}: gripper {'target' if args.gripper_target else 'command'}"
+              f"{f', snapped to {gripper_levels}' if gripper_levels else ''}", flush=True)
     prev_ap = [None] * len(tasks)
     worker_eps = [0] * len(tasks)
     per_task_workers = {t: tasks.count(t) for t in set(tasks)}
@@ -284,6 +290,10 @@ def collect(args):
                         done_eps[tasks[i]].append(dict(cur[i][5], episode=ep_id[i], worker=i,
                                                        closed=grip[i]["closed"], grasp_offset_mm=grip[i]["offset"]))
                         grip[i] = dict(closed=False, offset=np.inf)
+                        e = done_eps[tasks[i]][-1]
+                        # one line per episode: a run that dies before the summary still has its results
+                        print(f"    episode task {tasks[i]} #{ep_id[i]}: {'ok' if e['success'] else 'fail'} "
+                              f"steps {e['length']}", flush=True)
                         worker_eps[i] += 1
                         ep_id[i] += 1; ep_step[i] = 0
                         if worker_eps[i] >= quota[i]:
@@ -337,6 +347,9 @@ def collect(args):
                 # holding) scored 0/10. Decode to the nearest of the three.
                 if not args.gripper_target:
                     s_act[:, 6] = decode_gripper(s_act[:, 6])     # target mode: the env's GripperServo reads it
+                elif gripper_levels:
+                    from screwhead.gripper_servo import snap_channel
+                    s_act[:, 6] = snap_channel(s_act[:, 6], gripper_levels)
         for j, i in enumerate(idx):
             teacher_exec = student is None or rng.random() < args.beta
             act = cur[i][3] if teacher_exec else s_act[j]
@@ -512,6 +525,8 @@ def main() -> int:
     c.add_argument("--out", default="", help="omit to evaluate without saving")
     c.add_argument("--trials", default="", help="also write one component-belief trial per episode here")
     c.add_argument("--gripper-target", action="store_true", help="action[6] is a target aperture executed by GripperServo")
+    c.add_argument("--gripper-levels", type=float, nargs="*", default=None,
+                   help="snap the student's target aperture to the nearest of these (m), e.g. 0 0.026 0.08")
     c.add_argument("--seed", type=int, default=0)
     sys.path.insert(0, str(ROOT / "tools"))
     add_start_args(c)

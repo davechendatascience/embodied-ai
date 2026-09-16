@@ -52,6 +52,19 @@ class GripperServo:
         return 1.0 if pred > target + self.band else (-1.0 if pred < target - self.band else 0.0)
 
 
+def snap_channel(g, levels):
+    """Nearest of the target apertures (m) the programs actually use, as a channel value.
+
+    The regressed target averages the modes it was trained on: at the drawer's grasp
+    the labels step from 26 mm to 0 and the student said ~9 mm, which the servo then
+    HELD instead of squeezing (measured, round-2 target model: 12% of drawer close
+    frames within 3 mm raw, 88% exact after snapping). The same reason the command
+    channel is decoded to -1/0/+1."""
+    t = channel_to_target(g)
+    lv = np.asarray(sorted(levels), np.float64)
+    return target_to_channel(lv[np.abs(np.asarray(t)[..., None] - lv).argmin(-1)])
+
+
 def program_target(phase: str, command: float, preshape_aperture: float | None) -> float:
     """The aperture a demonstration program is regulating toward, from its phase.
 
