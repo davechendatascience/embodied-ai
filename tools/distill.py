@@ -148,6 +148,28 @@ def decode_gripper(g):
     return np.where(g > 0.5, 1.0, np.where(g < -0.5, -1.0, 0.0)).astype(np.float32)
 
 
+def decode_student(out, act_std, gripper_target, gripper_levels=None, gripper_classes=None):
+    """Raw student output (N, out_dim) -> executable actions (N, 7). The ONE decode used by
+    DAgger collection, evaluation and recording, so they execute the same actions."""
+    if gripper_classes:
+        # twist regressed; gripper = the most likely of the program apertures
+        from screwhead.gripper_servo import target_to_channel
+        a = np.zeros((len(out), 7), np.float32)
+        a[:, :6] = (out[:, :6] * act_std[:6]).clamp(-1, 1).float().cpu().numpy()
+        a[:, 6] = target_to_channel(np.asarray(gripper_classes)[out[:, 6:].argmax(-1).cpu().numpy()])
+        return a
+    a = (out * act_std).clamp(-1, 1).float().cpu().numpy()
+    if not gripper_target:
+        # The gripper command is three-valued -- close, HOLD, open -- and robosuite reads only
+        # its sign, so a regressed 0.03 meant "close". Measured: 0 of 92 hold labels were
+        # executed as hold, and the drawer task (which pre-shapes by holding) scored 0/10.
+        a[:, 6] = decode_gripper(a[:, 6])
+    elif gripper_levels:
+        from screwhead.gripper_servo import snap_channel
+        a[:, 6] = snap_channel(a[:, 6], gripper_levels)
+    return a
+
+
 def load_student(ckpt, device):
     """CLIP ScrewHead (pooled features) or DINOv2 TokenHead (patch tokens), by checkpoint kind."""
     import torch
@@ -352,24 +374,7 @@ def collect(args):
                 st_text = torch.zeros_like(text[tix]) if args.zero == "text" else text[tix]
                 out = student(sa, sw, st_text, st_s if use_rate else state, tok.expand(len(idx), -1, -1),
                               tmask.expand(len(idx), -1))[:, 0]
-                if gripper_classes:
-                    # twist regressed; gripper = the most likely of the program apertures
-                    from screwhead.gripper_servo import target_to_channel
-                    s_act = np.zeros((len(idx), 7), np.float32)
-                    s_act[:, :6] = (out[:, :6] * act_std[:6]).clamp(-1, 1).float().cpu().numpy()
-                    k = out[:, 6:].argmax(-1).cpu().numpy()
-                    s_act[:, 6] = target_to_channel(np.asarray(gripper_classes)[k])
-                else:
-                    s_act = (out * act_std).clamp(-1, 1).float().cpu().numpy()
-                # The gripper command is three-valued -- close, HOLD, open -- and robosuite
-                # reads only its sign, so a regressed 0.03 meant "close". Measured: 0 of 92
-                # hold labels were executed as hold, and the drawer task (which pre-shapes by
-                # holding) scored 0/10. Decode to the nearest of the three.
-                if not args.gripper_target:
-                    s_act[:, 6] = decode_gripper(s_act[:, 6])     # target mode: the env's GripperServo reads it
-                elif gripper_levels and not gripper_classes:
-                    from screwhead.gripper_servo import snap_channel
-                    s_act[:, 6] = snap_channel(s_act[:, 6], gripper_levels)
+                s_act = decode_student(out, act_std, args.gripper_target, gripper_levels, gripper_classes)
         for j, i in enumerate(idx):
             teacher_exec = student is None or rng.random() < args.beta
             act = cur[i][3] if teacher_exec else s_act[j]

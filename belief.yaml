@@ -140,7 +140,7 @@ components:
       - {id: FM-spec-shortcut, observable: the policy reads spec tokens as an embodiment id rather than as geometry}
     remediation: Kinematic domain randomisation over procedurally varied URDFs during training
 
-  # code: screwhead/token_head.py, screwhead/policy.py, screwhead/state.py, tools/token_data.py, tools/distill.py
+  # code: screwhead/token_head.py, screwhead/policy.py, screwhead/state.py, tools/token_data.py, tools/distill.py, tools/record_rollout.py
   - id: CMP-action-expert
     purpose: >-
       The student VLA -- predict the tool twist and three-valued gripper command

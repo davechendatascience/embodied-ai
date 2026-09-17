@@ -198,7 +198,8 @@ def train(args):
         ce = nn.functional.cross_entropy(out[:, 0, 6:], c, reduction=reduction)
         # per frame: mean twist loss + gripper cross-entropy (a sum over 6 twist elements
         # carries the cross-entropy 6 times, so val = sum / (N * 6) keeps the same weighting)
-        return tw + ce if reduction == "mean" else tw + 6.0 * ce
+        g = args.gripper_weight
+        return tw + g * ce if reduction == "mean" else tw + 6.0 * g * ce
 
     fwd = lambda a, w, tk, st: model(a, w, tk, st, tok.expand(len(a), -1, -1), tmask.expand(len(a), -1))
     best, best_state = float("inf"), None
@@ -228,9 +229,14 @@ def train(args):
             n_ch = int(change[vai].sum())
             print(f"  val twist {tw_s / (len(vai) * 6):.4f}  gripper CE {ce_s / len(vai):.4f}  "
                   f"gripper accuracy {hit / len(vai):.3f} (change points {ch_hit}/{n_ch} = {ch_hit / max(n_ch, 1):.3f})", flush=True)
-        if vl < best:
+        score = vl
+        if classes is not None and args.select == "twist":
+            # choose on the motion, as long as the gripper class holds up: the cross-entropy
+            # grows overconfident late while the twist keeps improving
+            score = tw_s / (len(vai) * 6) if hit / len(vai) >= args.min_gripper_acc else float("inf")
+        if score < best:
             best, best_state = vl, {k: v.detach().clone() for k, v in model.state_dict().items()}
-        print(f"  epoch {ep_i:3d}  train {loss.item():.4f}  val {vl:.4f}{'  *' if vl == best else ''}", flush=True)
+        print(f"  epoch {ep_i:3d}  train {loss.item():.4f}  val {vl:.4f}{'  *' if score == best else ''}", flush=True)
     out = Path(args.out); out.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"state_dict": {k: v.cpu() for k, v in best_state.items()}, "act_std": act_std, "chunk": 1,
                 "kind": "token", "zero": args.zero, "state_dim": state_dim, "aperture_rate": bool(args.aperture_rate),
@@ -256,6 +262,10 @@ def main() -> int:
     t.add_argument("--aperture-rate", action="store_true", help="append the gripper aperture rate to the state")
     t.add_argument("--standardize-state", action="store_true", help="z-score the state with training statistics")
     t.add_argument("--gripper-target", action="store_true", help="train on target-aperture gripper labels (label_gt)")
+    t.add_argument("--gripper-weight", type=float, default=1.0, help="weight of the gripper cross-entropy against the twist loss")
+    t.add_argument("--select", default="total", choices=["total", "twist"],
+                   help="checkpoint by total val loss, or by val twist loss with --min-gripper-acc")
+    t.add_argument("--min-gripper-acc", type=float, default=0.95)
     t.add_argument("--gripper-classes", action="store_true", help="classify the gripper over --gripper-levels instead of regressing it")
     t.add_argument("--gripper-levels", type=float, nargs="*", default=None,
                    help="stored in the checkpoint: every rollout of it (DAgger and eval) snaps the target to these (m)")
