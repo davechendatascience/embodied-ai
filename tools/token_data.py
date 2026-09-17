@@ -155,6 +155,16 @@ def train(args):
         classes = np.asarray(sorted(args.gripper_levels), np.float32)
         cls = np.abs(channel_to_target(lab[:, 6])[:, None] - classes[None]).argmin(1)
         print("gripper classes " + ", ".join(f"{c*1000:.0f} mm: {int((cls == i).sum())}" for i, c in enumerate(classes)), flush=True)
+        # change points: the class differs from the same episode's previous step (~1.5% of
+        # frames). "Keep the current aperture" is right on ~91% of all frames and 0-9% of these,
+        # so overall accuracy says little. These do NOT isolate vision either: on teacher-driven
+        # frames the round-1 blind model got 60% of change points vs 40% sighted -- once the tool
+        # is at the grasp, proprioception says "close". Vision shows in the twist near the grasp.
+        key = {(k, int(sets[k]["meta"]["episode"][i]), int(sets[k]["meta"]["step"][i])): n for n, (k, i) in enumerate(rows)}
+        change = np.zeros(len(rows), bool)
+        for n, (k, i) in enumerate(rows):
+            prev = key.get((k, int(sets[k]["meta"]["episode"][i]), int(sets[k]["meta"]["step"][i]) - 1))
+            change[n] = prev is not None and cls[prev] != cls[n]
     out_dim = 6 + len(classes) if classes is not None else 7
     model = TokenHead(state_dim=state_dim, out_dim=out_dim).to(dev)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.05)
@@ -202,17 +212,22 @@ def train(args):
             opt.zero_grad(set_to_none=True); loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 1.0); opt.step()
             if sched.last_epoch < sched.total_steps - 1: sched.step()
-        model.eval(); vt = 0.0; hit = 0
+        model.eval(); vt = 0.0; hit = 0; tw_s = 0.0; ce_s = 0.0; ch_hit = 0
         with torch.no_grad():
             for k in range(0, len(vai), 1024):
-                a, w, tk, st, y, _ = batch(vai[k:k + 1024])
+                a, w, tk, st, y, order = batch(vai[k:k + 1024])
                 o = fwd(a, w, tk, st)
                 vt += loss_fn(o, y, reduction="sum").item()
                 if classes is not None:
-                    hit += int((o[:, 0, 6:].argmax(-1) == y[1]).sum())
+                    ok = (o[:, 0, 6:].argmax(-1) == y[1]).cpu().numpy()
+                    hit += int(ok.sum()); ch_hit += int(ok[change[order]].sum())
+                    tw_s += nn.functional.smooth_l1_loss(o[:, 0, :6], y[0][:, 0, :6], reduction="sum").item()
+                    ce_s += nn.functional.cross_entropy(o[:, 0, 6:], y[1], reduction="sum").item()
         vl = vt / (len(vai) * (6 if classes is not None else 7))
         if classes is not None:
-            print(f"  gripper class accuracy {hit / len(vai):.3f}", flush=True)
+            n_ch = int(change[vai].sum())
+            print(f"  val twist {tw_s / (len(vai) * 6):.4f}  gripper CE {ce_s / len(vai):.4f}  "
+                  f"gripper accuracy {hit / len(vai):.3f} (change points {ch_hit}/{n_ch} = {ch_hit / max(n_ch, 1):.3f})", flush=True)
         if vl < best:
             best, best_state = vl, {k: v.detach().clone() for k, v in model.state_dict().items()}
         print(f"  epoch {ep_i:3d}  train {loss.item():.4f}  val {vl:.4f}{'  *' if vl == best else ''}", flush=True)
