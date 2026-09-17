@@ -234,16 +234,17 @@ def train(args):
             # choose on the motion, as long as the gripper class holds up: the cross-entropy
             # grows overconfident late while the twist keeps improving
             score = tw_s / (len(vai) * 6) if hit / len(vai) >= args.min_gripper_acc else float("inf")
-        if score < best:
-            best, best_state = vl, {k: v.detach().clone() for k, v in model.state_dict().items()}
-        print(f"  epoch {ep_i:3d}  train {loss.item():.4f}  val {vl:.4f}{'  *' if score == best else ''}", flush=True)
+        saved = score < best
+        if saved:
+            best, best_state = score, {k: v.detach().clone() for k, v in model.state_dict().items()}
+        print(f"  epoch {ep_i:3d}  train {loss.item():.4f}  val {vl:.4f}{'  *' if saved else ''}", flush=True)
     out = Path(args.out); out.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"state_dict": {k: v.cpu() for k, v in best_state.items()}, "act_std": act_std, "chunk": 1,
                 "kind": "token", "zero": args.zero, "state_dim": state_dim, "aperture_rate": bool(args.aperture_rate),
                 "state_mean": state_mean, "state_std": state_std, "gripper_target": bool(args.gripper_target), "spec_mask_fixed": True,
                 "gripper_levels": list(args.gripper_levels) if args.gripper_levels else None,
                 "gripper_classes": classes.tolist() if classes is not None else None, "out_dim": out_dim, "val": best, "data": args.data, "args": vars(args)}, out)
-    print(f"best val {best:.4f} -> {out}")
+    print(f"best val {best:.4f}{' (twist)' if classes is not None and args.select == 'twist' else ''} -> {out}")
     return 0
 
 
