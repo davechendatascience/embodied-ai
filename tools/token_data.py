@@ -218,6 +218,7 @@ def train(args):
 
     fwd = lambda a, w, tk, st: model(a, w, tk, st, tok.expand(len(a), -1, -1), tmask.expand(len(a), -1))
     best, best_state = float("inf"), None
+    best_total, best_total_state = float("inf"), None      # fallback when --select twist never qualifies
     rng = np.random.default_rng(args.seed)
     for ep_i in range(args.epochs):
         model.train()
@@ -249,10 +250,17 @@ def train(args):
             # choose on the motion, as long as the gripper class holds up: the cross-entropy
             # grows overconfident late while the twist keeps improving
             score = tw_s / (len(vai) * 6) if hit / len(vai) >= args.min_gripper_acc else float("inf")
+        if vl < best_total:
+            best_total, best_total_state = vl, {k: v.detach().clone() for k, v in model.state_dict().items()}
         saved = score < best
         if saved:
             best, best_state = score, {k: v.detach().clone() for k, v in model.state_dict().items()}
         print(f"  epoch {ep_i:3d}  train {loss.item():.4f}  val {vl:.4f}{'  *' if saved else ''}", flush=True)
+    if best_state is None:
+        # no epoch cleared --min-gripper-acc (the blind ablation does not: it cannot see when to
+        # close). Fall back to the total-loss checkpoint rather than saving nothing.
+        print(f"  no epoch reached gripper accuracy {args.min_gripper_acc}; selecting by total val loss", flush=True)
+        best, best_state = best_total, best_total_state
     out = Path(args.out); out.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"state_dict": {k: v.cpu() for k, v in best_state.items()}, "act_std": act_std, "chunk": 1,
                 "kind": "token", "zero": args.zero, "state_dim": state_dim, "aperture_rate": bool(args.aperture_rate),
