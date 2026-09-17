@@ -18,6 +18,11 @@
 # Round 0 is teacher-only, so both share cache/tokens/gt_round0; DAgger rounds are collected
 # by each variant's own student.
 #
+# BETA (default 0.5): probability the teacher executes a DAgger step. Lower it once the student
+# stalls in states the teacher never visits (round 3 used 0.2).
+# TRAIN_FLAGS: extra training flags, e.g. "--gripper-weight 0.1 --select twist" (the classifier
+# at equal weight scored 91/200; reweighted and twist-selected, 151/200).
+#
 # Simulation workers run on the performance cores only. On this GB10 the efficiency cores
 # measured ~4x slower per worker (70 vs 280 frames/min for the same 9 workers), and a task
 # whose workers land there becomes the straggler every stage waits for.
@@ -51,16 +56,16 @@ round0() {
 }
 dagger() {
   local n=$1 driver=$2
-  collected "$n" || $PY tools/distill.py collect --teacher scripted --student "$driver" --gripper-target --beta 0.5 \
+  collected "$n" || $PY tools/distill.py collect --teacher scripted --student "$driver" --gripper-target --beta ${BETA:-0.5} \
     --episodes 20 --cpus $PERF $RAND --seed $((400 + n)) --save-frames --out cache/distill_scripted/${TAG}_round$n.npz
   encode "$n"
 }
 train() {
   local out=$1 rounds=$2 data=""
   for r in $rounds; do data="$data cache/tokens/$(rtag $r)_round$r"; done
-  [[ -f "$out" ]] || $PY tools/token_data.py train --data $data --gripper-target $HEAD --gripper-levels $LEVELS --zero none --out "$out"
+  [[ -f "$out" ]] || $PY tools/token_data.py train --data $data --gripper-target $HEAD --gripper-levels $LEVELS ${TRAIN_FLAGS:-} --zero none --out "$out"
   [[ -f "${out%.pt}_blind.pt" ]] || \
-    $PY tools/token_data.py train --data $data --gripper-target $HEAD --gripper-levels $LEVELS --zero image --out "${out%.pt}_blind.pt"
+    $PY tools/token_data.py train --data $data --gripper-target $HEAD --gripper-levels $LEVELS ${TRAIN_FLAGS:-} --zero image --out "${out%.pt}_blind.pt"
 }
 evaluate() {
   local ckpt=$1 eps=$2; shift 2
