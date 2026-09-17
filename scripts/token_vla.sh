@@ -20,6 +20,8 @@
 #
 # BETA (default 0.5): probability the teacher executes a DAgger step. Lower it once the student
 # stalls in states the teacher never visits (round 3 used 0.2).
+# TEACHER_V_MIN (default 0): the programs' minimum approach speed in m/s; changes the teacher,
+# so it needs its own data -- set SUFFIX too (e.g. SUFFIX=_v05 TEACHER_V_MIN=0.05).
 # TRAIN_FLAGS: extra training flags, e.g. "--gripper-weight 0.1 --select twist" (the classifier
 # at equal weight scored 91/200; reweighted and twist-selected, 151/200).
 #
@@ -41,7 +43,9 @@ case "$GRIPPER" in
   *) echo "GRIPPER must be classes or regress" >&2; exit 2 ;;
 esac
 
-rtag() { [[ $1 == 0 ]] && echo gt || echo $TAG; }           # round 0 is shared
+SUFFIX=${SUFFIX:-}
+TV="--teacher-v-min ${TEACHER_V_MIN:-0}"
+rtag() { [[ $1 == 0 ]] && echo gt$SUFFIX || echo $TAG$SUFFIX; }   # round 0 is shared across gripper variants
 collected() { [[ -f cache/distill_scripted/$(rtag $1)_round$1.npz ]]; }
 encoded()   { [[ -f cache/tokens/$(rtag $1)_round$1/meta.npz ]]; }
 
@@ -51,13 +55,13 @@ encode() {
 }
 round0() {
   collected 0 || $PY tools/distill.py collect --teacher scripted --beta 1 --gripper-target --exec-noise 0.3 \
-    --episodes 20 --cpus $PERF $RAND --seed 400 --save-frames --out cache/distill_scripted/gt_round0.npz
+    --episodes 20 --cpus $PERF $RAND --seed 400 $TV --save-frames --out cache/distill_scripted/$(rtag 0)_round0.npz
   encode 0
 }
 dagger() {
   local n=$1 driver=$2
   collected "$n" || $PY tools/distill.py collect --teacher scripted --student "$driver" --gripper-target --beta ${BETA:-0.5} \
-    --episodes 20 --cpus $PERF $RAND --seed $((400 + n)) --save-frames --out cache/distill_scripted/${TAG}_round$n.npz
+    --episodes 20 --cpus $PERF $RAND --seed $((400 + n)) $TV --save-frames --out cache/distill_scripted/$(rtag $n)_round$n.npz
   encode "$n"
 }
 train() {
@@ -71,7 +75,7 @@ evaluate() {
   local ckpt=$1 eps=$2; shift 2
   local zero=none; [[ "$ckpt" == *_blind.pt ]] && zero=image
   $PY tools/distill.py collect --teacher scripted --student "$ckpt" --gripper-target --zero $zero --beta 0 --episodes "$eps" $RAND \
-    --cpus $PERF --seed 555 --trials "runs/evidence/$(basename "${ckpt%.pt}")_s555.trials.json" "$@"
+    --cpus $PERF --seed 555 $TV --trials "runs/evidence/$(basename "${ckpt%.pt}")_s555.trials.json" "$@"
 }
 
 case "${1:-}" in
@@ -81,13 +85,13 @@ case "${1:-}" in
   eval)   evaluate "${@:2}" ;;
   all)
     echo "[stage] round 0";   round0
-    echo "[stage] train r0";  train checkpoints/vla_${TAG}_r0.pt "0"
-    echo "[stage] dagger 1";  dagger 1 checkpoints/vla_${TAG}_r0.pt
-    echo "[stage] train r1";  train checkpoints/vla_${TAG}_r1.pt "0 1"
-    echo "[stage] dagger 2";  dagger 2 checkpoints/vla_${TAG}_r1.pt
-    echo "[stage] train r2";  train checkpoints/vla_${TAG}_r2.pt "0 1 2"
-    echo "[stage] eval r2";       evaluate checkpoints/vla_${TAG}_r2.pt 20
-    echo "[stage] eval r2 blind"; evaluate checkpoints/vla_${TAG}_r2_blind.pt 20
+    echo "[stage] train r0";  train checkpoints/vla_${TAG}${SUFFIX}_r0.pt "0"
+    echo "[stage] dagger 1";  dagger 1 checkpoints/vla_${TAG}${SUFFIX}_r0.pt
+    echo "[stage] train r1";  train checkpoints/vla_${TAG}${SUFFIX}_r1.pt "0 1"
+    echo "[stage] dagger 2";  dagger 2 checkpoints/vla_${TAG}${SUFFIX}_r1.pt
+    echo "[stage] train r2";  train checkpoints/vla_${TAG}${SUFFIX}_r2.pt "0 1 2"
+    echo "[stage] eval r2";       evaluate checkpoints/vla_${TAG}${SUFFIX}_r2.pt 20
+    echo "[stage] eval r2 blind"; evaluate checkpoints/vla_${TAG}${SUFFIX}_r2_blind.pt 20
     echo "[stage] PIPELINE DONE" ;;
   *) sed -n '2,19p' "$0"; exit 2 ;;
 esac
