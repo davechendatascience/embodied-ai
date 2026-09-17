@@ -119,7 +119,22 @@ def train(args):
         state = meta["state"].astype(np.float32)
         if args.aperture_rate:
             state = np.concatenate([state, aperture_rate(meta)[:, None]], 1)
-        sets.append(dict(A=A, W=W, meta=meta, state=state, idx=np.where(keep)[0], tag=k))
+        idx = np.where(keep)[0]
+        if args.max_frames_per_episode:
+            # A DAgger episode that stalls contributes hundreds of near-identical frames: 48% of
+            # round 3 came from episodes at the 400-step limit, and training on it dropped the
+            # student from 151/200 to 73/200. Keep at most B evenly spaced frames per episode,
+            # so the stuck states stay covered without outweighing everything else.
+            B = args.max_frames_per_episode
+            ep_k = meta["episode"][idx]
+            kept = []
+            for e in np.unique(ep_k):
+                ii = idx[ep_k == e]
+                ii = ii[np.argsort(meta["step"][ii])]
+                kept.append(ii if len(ii) <= B else ii[np.linspace(0, len(ii) - 1, B).round().astype(int)])
+            print(f"  {d}: {len(idx)} -> {sum(len(x) for x in kept)} frames (<= {B} per episode)", flush=True)
+            idx = np.sort(np.concatenate(kept))
+        sets.append(dict(A=A, W=W, meta=meta, state=state, idx=idx, tag=k))
     text = sets[0]["meta"]["text"]
     rows = [(k, i) for k, s in enumerate(sets) for i in s["idx"]]
     ep = np.array([sets[k]["meta"]["episode"][i] + 10_000_000 * k for k, i in rows])
@@ -263,6 +278,7 @@ def main() -> int:
     t.add_argument("--aperture-rate", action="store_true", help="append the gripper aperture rate to the state")
     t.add_argument("--standardize-state", action="store_true", help="z-score the state with training statistics")
     t.add_argument("--gripper-target", action="store_true", help="train on target-aperture gripper labels (label_gt)")
+    t.add_argument("--max-frames-per-episode", type=int, default=0, help="subsample longer episodes to this many frames")
     t.add_argument("--gripper-weight", type=float, default=1.0, help="weight of the gripper cross-entropy against the twist loss")
     t.add_argument("--select", default="total", choices=["total", "twist"],
                    help="checkpoint by total val loss, or by val twist loss with --min-gripper-acc")
