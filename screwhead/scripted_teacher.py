@@ -42,6 +42,10 @@ class ProgramConfig:
     k_rot: float = 3.0
     v_max: float = 0.25
     w_max: float = 1.2
+    # Minimum approach speed toward the grasp (0 = proportional all the way in). Proportional
+    # homing ends at 1-3 cm/s, where a student's predicted direction agreed with the teacher
+    # only to cosine 0.68 and closed-loop rollouts crept or froze a few mm short.
+    v_min_approach: float = 0.0
     # grasp selection: "endpoints" checks pre-grasp and grasp only; "path" also the descent
     selection: str = "endpoints"
     min_sigma: float = 0.02
@@ -327,13 +331,18 @@ class ScriptedTeacher:
                     and (margin >= k.limit_margin).all())
 
     # -------------------------------------------------------------------- skills
-    def twist_to(self, R, p, R_goal, p_goal, v_max=None):
+    def twist_to(self, R, p, R_goal, p_goal, v_max=None, v_min=0.0):
         k, spec = self.k, self.env.spec
         v_max = k.v_max if v_max is None else v_max
         w = rotvec(R.T @ R_goal) * k.k_rot
         v = R.T @ (p_goal - p) * k.k_lin
         if np.linalg.norm(w) > k.w_max: w *= k.w_max / np.linalg.norm(w)
         if np.linalg.norm(v) > v_max: v *= v_max / np.linalg.norm(v)
+        dist = float(np.linalg.norm(p_goal - p))
+        # floor the speed, but not inside the last millimetre, where a floor would chatter
+        # (one control step at 5 cm/s is 2.5 mm, under the 4 mm grasp tolerance)
+        if v_min > 0 and dist > 0.001 and np.linalg.norm(v) < v_min:
+            v *= v_min / max(np.linalg.norm(v), 1e-9)
         return np.concatenate([w / (spec.rot_scale * spec.control_hz), v / (spec.pos_scale * spec.control_hz)])
 
     def act(self, s: dict | None = None) -> np.ndarray:
@@ -354,10 +363,10 @@ class ScriptedTeacher:
         approach_len = float((p_pre - p_g) @ z_up)
         if s["aperture"] < g.hold_min and k.preshape_aperture is None:
             self.phase = "reopen"
-            return np.concatenate([self.twist_to(R, p, R_g, p_pre), [-1.0]])
+            return np.concatenate([self.twist_to(R, p, R_g, p_pre, v_min=k.v_min_approach), [-1.0]])
         if e_pos < k.at_grasp_pos and e_rot < k.at_grasp_rot:
             self.phase = "close"
-            return np.concatenate([self.twist_to(R, p, R_g, p_g), [1.0]])
+            return np.concatenate([self.twist_to(R, p, R_g, p_g), [1.0]])     # closing: no floor
         grip_open, ap_err = -1.0, 0.0
         if k.preshape_aperture is not None:
             pred = s["aperture"] + s.get("aperture_rate", 0.0) * k.preshape_tau
@@ -390,7 +399,7 @@ class ScriptedTeacher:
                                max(target[2], min(p_pre[2] + 0.03, p[2] + 0.05)) if w < 1.0 else target[2]])
         self.phase = ("descend" if misalign < 0.5 else "approach") if k.preshape_aperture is None or ap_err < 0.004 \
             else "preshape"
-        return np.concatenate([self.twist_to(R, p, R_g, target), [grip_open]])
+        return np.concatenate([self.twist_to(R, p, R_g, target, v_min=k.v_min_approach), [grip_open]])
 
     def _switched_approach(self, s, R, p, R_g, p_g, p_pre, off, lateral, above, e_rot, approach_len, grip_open, ap_err):
         """The original switched approach, kept for comparison (funnel=False)."""
@@ -398,14 +407,14 @@ class ScriptedTeacher:
         settled = k.preshape_aperture is None or (ap_err < 0.004 and abs(s.get("aperture_rate", 1.0)) < 0.01)
         if lateral < k.column_xy and e_rot < k.column_rot and above and float(off @ z_up) <= approach_len + 0.01 and settled:
             self.phase = "descend"
-            return np.concatenate([self.twist_to(R, p, R_g, p_g), [grip_open]])
+            return np.concatenate([self.twist_to(R, p, R_g, p_g, v_min=k.v_min_approach), [grip_open]])
         self.phase = "approach" if settled else "preshape"
         target = p_pre
         far = float(np.linalg.norm((p - p_pre)[:2])) > 0.04
         if k.clear_first and far and p[2] < p_pre[2] + 0.01:
             target = np.array([p[0], p[1], p_pre[2] + 0.03])
             self.phase = "rise"
-        return np.concatenate([self.twist_to(R, p, R_g, target), [grip_open]])
+        return np.concatenate([self.twist_to(R, p, R_g, target, v_min=k.v_min_approach), [grip_open]])
 
     def _transport(self, s, R, p):
         g, k = self.g, self.k

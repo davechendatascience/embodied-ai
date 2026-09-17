@@ -65,6 +65,7 @@ def add_start_args(p) -> None:
 def _worker(remote, task, seed, cpu, teacher_ckpt, horizon, radius, env_kw):
     env_kw = dict(env_kw)
     hires = int(env_kw.pop("record_hires", 0))
+    teacher_v_min = float(env_kw.pop("teacher_v_min", 0.0))
     os.sched_setaffinity(0, {cpu})
     os.environ["OMP_NUM_THREADS"] = "1"
     import torch
@@ -76,7 +77,12 @@ def _worker(remote, task, seed, cpu, teacher_ckpt, horizon, radius, env_kw):
         # around the environment, and it vetoes layouts it cannot solve
         from screwhead.scripted_teacher import ScriptedTeacher
         env = PrivilegedEnv(task, radius_m=radius, seed=seed, render=True, horizon=horizon, **env_kw)
-        program = ScriptedTeacher(env)
+        if teacher_v_min > 0:
+            from dataclasses import replace
+            from screwhead.scripted_teacher import PROGRAMS
+            program = ScriptedTeacher(env, replace(PROGRAMS[task], v_min_approach=teacher_v_min))
+        else:
+            program = ScriptedTeacher(env)
         if env.layout_radius > 0:
             env.layout_check = program.layout_feasible
         if env.gripper_mode == "target":
@@ -205,6 +211,8 @@ def write_trials(args, tasks, done_eps, has_student):
     """One component-belief trial per episode (see belief.yaml). compatibility_key
     fields go in repro -- the ledger splits slices on repro only."""
     teacher_rev = _revision(ROOT / "screwhead/scripted_teacher.py")
+    if args.teacher_v_min > 0:
+        teacher_rev += f"+vmin{args.teacher_v_min:g}"
     randomization = (f"layout{args.layout_radius:g}_xy{args.start_xy:g}_z{args.start_z:g}_yaw{args.start_yaw:g}"
                      f"_tilt{args.start_tilt:g}_null{args.start_null:g}_h{args.horizon}")
     trials = []
@@ -258,7 +266,7 @@ def collect(args):
         p = ctx.Process(target=_worker, args=(b, t, args.seed * 100 + t, cpus[i % len(cpus)],
                                               args.teacher, args.horizon, args.radius,
                                               dict(start_kw(args), layout_radius=args.layout_radius,
-                                                   record_hires=args.record_hires,
+                                                   record_hires=args.record_hires, teacher_v_min=args.teacher_v_min,
                                                    gripper_mode="target" if args.gripper_target else "command")), daemon=True)
         p.start(); b.close(); remotes.append(a); procs.append(p)
     langs = [r.recv() for r in remotes]
@@ -549,6 +557,7 @@ def main() -> int:
     c.add_argument("--cpus", default="5,6,7,8,9,15,16,17,18,19", help="performance cores")
     c.add_argument("--out", default="", help="omit to evaluate without saving")
     c.add_argument("--trials", default="", help="also write one component-belief trial per episode here")
+    c.add_argument("--teacher-v-min", type=float, default=0.0, help="the programs' minimum approach speed, m/s (0 = proportional)")
     c.add_argument("--gripper-target", action="store_true", help="action[6] is a target aperture executed by GripperServo")
     c.add_argument("--gripper-levels", type=float, nargs="*", default=None,
                    help="snap the student's target aperture to the nearest of these (m), e.g. 0 0.026 0.08")
