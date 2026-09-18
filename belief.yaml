@@ -1054,11 +1054,12 @@ tests:
   # ---- Gate 2 rollouts: one command, three drivers. The student checkpoints are
   # symlinks so the run line (and so the test version) stays fixed across DAgger
   # rounds; distill.py records the resolved file and its hash as policy_revision.
-  # The teacher runs through GripperServo, as it does when it collects data.
+  # The teacher runs through GripperServo with the 5 cm/s approach floor, as it does when it
+  # collects data. Proportional homing (v_min 0) is what the students stalled against.
   - id: TST-teacher-randomized
     layer: e2e
     targets: [CMP-scripted-teacher, CMP-scene-randomizer, CMP-twist-servo, CMP-gripper-decoder]
-    run: env HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/distill.py collect --teacher scripted --beta 1 --gripper-target --episodes 50 --horizon 400 --layout-radius 0.08 --start-xy 0.10 --start-z 0.05 --start-yaw 30 --start-tilt 10 --start-null 0.3 --seed 555 --trials $OUT
+    run: env HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/distill.py collect --teacher scripted --beta 1 --gripper-target --teacher-v-min 0.05 --episodes 50 --horizon 400 --layout-radius 0.08 --start-xy 0.10 --start-z 0.05 --start-yaw 30 --start-tilt 10 --start-null 0.3 --seed 555 --trials $OUT
     metrics: [success, relation_at_start, closed, grasp_offset_mm]
     capture: [task, driver, teacher_revision, randomization]
     cost: 60.0
