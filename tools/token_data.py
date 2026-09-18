@@ -116,6 +116,10 @@ def train(args):
         keep = np.ones(len(meta["label"]), bool)
         if bool(meta["teacher_round"]):
             keep = meta["episode_success"].astype(bool)
+        if args.exclude_tasks:
+            # held-out tasks: never trained on, so evaluating them measures what carries
+            # across tasks rather than what was memorised per task
+            keep &= ~np.isin(meta["task"], args.exclude_tasks)
         state = meta["state"].astype(np.float32)
         if args.aperture_rate:
             state = np.concatenate([state, aperture_rate(meta)[:, None]], 1)
@@ -286,6 +290,7 @@ def main() -> int:
     t.add_argument("--aperture-rate", action="store_true", help="append the gripper aperture rate to the state")
     t.add_argument("--standardize-state", action="store_true", help="z-score the state with training statistics")
     t.add_argument("--gripper-target", action="store_true", help="train on target-aperture gripper labels (label_gt)")
+    t.add_argument("--exclude-tasks", type=int, nargs="*", default=None, help="drop these task ids from training")
     t.add_argument("--max-frames-per-episode", type=int, default=0, help="subsample longer episodes to this many frames")
     t.add_argument("--gripper-weight", type=float, default=1.0, help="weight of the gripper cross-entropy against the twist loss")
     t.add_argument("--select", default="total", choices=["total", "twist"],

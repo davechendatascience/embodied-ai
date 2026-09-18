@@ -713,8 +713,11 @@ contracts:
   # ---- Gate 2b: generalization, the guard against tuning these ten tasks.
   # Declared before either is built, so neither bar can be fitted to a result.
 
-  # Train on eight tasks, evaluate on the two never trained on, same suite, same
-  # randomization. 0.3 at n_min 60 (three held-out tasks x 20 episodes, or two x 30):
+  # Train on the other tasks, evaluate on the held-out ones, same suite, same
+  # randomization. Tasks 2, 5 and 9 are held out first: their teacher slices are supported
+  # (0.98, 0.92, 0.87), so a failure is the student's. The drawer stays in training because
+  # its pre-shape skill appears in no other task.
+  # 0.3 at n_min 60 (three held-out tasks x 20 episodes):
   # a true 0.5 is supported with p=0.92, a blind-level 0.05 is refuted with certainty,
   # and 0.3 itself stays contested. The bar is "it transfers something", not a
   # performance claim -- the trained-task rate is 0.83-0.88.
@@ -1088,7 +1091,7 @@ tests:
   - id: TST-heldout-task
     layer: e2e
     targets: [CMP-action-expert]
-    run: sh -c "echo blocked - scripts/heldout_task.sh not written - train on 8 tasks, evaluate the 2 held out >&2; exit 2"
+    run: env HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl scripts/heldout_task.sh "2 5 9"
     metrics: [success]
     capture: [task, heldout_tasks, policy_revision, randomization]
     cost: 40.0

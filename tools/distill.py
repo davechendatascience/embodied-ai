@@ -229,7 +229,7 @@ def write_trials(args, tasks, done_eps, has_student):
                                "zero": args.zero, "beta": args.beta, "episode": int(e["episode"]),
                                "length": int(e["length"])},
                 "repro": {"seed": args.seed * 100 + t, "task": int(t), "randomization": randomization,
-                          "teacher_revision": teacher_rev,
+                          "teacher_revision": teacher_rev, "heldout_tasks": args.heldout_tasks or "none",
                           "policy_revision": _revision(args.student) if has_student else teacher_rev},
             })
     Path(args.trials).parent.mkdir(parents=True, exist_ok=True)
@@ -557,6 +557,7 @@ def main() -> int:
     c.add_argument("--cpus", default="5,6,7,8,9,15,16,17,18,19", help="performance cores")
     c.add_argument("--out", default="", help="omit to evaluate without saving")
     c.add_argument("--trials", default="", help="also write one component-belief trial per episode here")
+    c.add_argument("--heldout-tasks", default="", help="recorded in repro: the tasks the student was NOT trained on")
     c.add_argument("--teacher-v-min", type=float, default=0.0, help="the programs' minimum approach speed, m/s (0 = proportional)")
     c.add_argument("--gripper-target", action="store_true", help="action[6] is a target aperture executed by GripperServo")
     c.add_argument("--gripper-levels", type=float, nargs="*", default=None,
