@@ -332,3 +332,33 @@ remaining engineering between gate 2 and gate 3.
 The two silent URDF failures noted on 09-07 still apply to any new arm: `rpy` is
 fixed-axis `Rot(ẑ,γ)·Rot(ŷ,β)·Rot(x̂,α)`, and a joint's zero is wherever the file says.
 The conversion test (gate 1) runs on every arm before any policy result is read.
+
+## Part VI — Scaling past these ten tasks
+
+Gate 2 is scored on ten libero_spatial tasks driven by ten hand-written demonstration
+programs. Tuning further fits those ten. What is task-specific today, and what replaces it:
+
+| Hand-written today | Replaced by |
+|---|---|
+| One `ProgramConfig` per task (rim sector, pre-shape, posture, approach heights) | A skill library parameterized by measured geometry, sequenced from the task's BDDL goal predicates (`CMP-skill-library`) |
+| Gripper apertures 0 / 26 / 80 mm in the decode | Closed and open from the gripper's own finger FK (`screwhead/gripper.py`); an intermediate hold from the scene's measured clearance |
+| `layouts.py` relations switched on task index | Relations read from the instruction's goal predicates, which name the same objects |
+| 5 cm/s approach floor, 4 mm grasp tolerance | Kept as servo constants, but checked per gripper and object rather than assumed |
+
+Two contracts, declared before either is built (`belief.yaml`, gate 2b):
+
+- **CTR-held-out-task** — train on eight tasks, evaluate on the two never trained on, same
+  suite and randomization. Bar 0.3 over at least 60 episodes: a blind-level 0.05 is refuted,
+  a true 0.5 is supported. The trained-task rate is 0.83-0.88, so this is "it transfers
+  something", not a performance claim. It fails loudly if the head has memorized ten tasks.
+- **CTR-skill-teacher-solves-unseen** — a program generated from a task's goal specification
+  solves that task at the bar the hand-written programs meet (0.75 per task, 50 episodes).
+
+Order of work: hold out tasks first (cheap, and it tells us whether the current head
+generalizes at all) -> skill library -> the other LIBERO suites (object, then goal and long,
+which need new skills) -> arms, where `PrivilegedEnv` must take a robot and gripper and the
+three transfer contracts stop being blocked.
+
+Evaluation budget, which drives these choices: 200 episodes x 10 tasks is about an hour.
+Forty tasks on three arms is a day per iteration, so iterate at 20 episodes per task and
+spend 200 only on milestones. The ledger slices per task and per policy revision either way.

@@ -49,6 +49,13 @@
 # Every code file under screwhead/ and tools/ belongs to a component; each component
 # lists its files in a `# code:` line. A file no component claims is deleted.
 #
+# WHAT THESE GATES DO NOT TEST. Every contract above is scored on the same ten
+# libero_spatial tasks, driven by ten hand-written demonstration programs whose
+# constants (the drawer's 26 mm pre-shape, per-task rim sectors, the relations in
+# layouts.py) were tuned on those tasks. A policy can satisfy all of them by being
+# good at exactly these ten. Gate 2b below is the guard: a task nobody trained on,
+# and a teacher nobody hand-wrote for it.
+#
 # Ledger facts that shape this file (component-belief source):
 #   - compatibility_key reads repro only; distill.py writes task, randomization,
 #     teacher_revision and policy_revision there.
@@ -210,6 +217,25 @@ components:
       - {id: FM-stale-grasp-cache, observable: a grasp chosen in a previous episode is reused after reset}
     remediation: Per-task ProgramConfig (sector, pre-shape, posture, selection); per-episode grasp cache; clearance, IK, path and sigma-min checks
 
+  # code: (planned) screwhead/skills.py, tools/skill_teacher.py -- not written yet
+  - id: CMP-skill-library
+    purpose: >-
+      Build a task's demonstration program from its goal specification and the scene's
+      geometry, instead of hand-writing one program per task
+    outputs: [IFC-program__teacher]
+    testable_capability: >-
+      Solves a task it was never tuned for, from that task's goal predicates and the
+      objects' measured geometry, at the rate hand-written programs reach
+    failure_modes:
+      - {id: FM-constants-hardcoded, observable: a new scene needs a new literal (pre-shape aperture, rim sector, approach height)}
+      - {id: FM-goal-unparsed, observable: the goal predicates are read as a task id rather than as conditions to achieve}
+      - {id: FM-skill-missing, observable: a suite needs a skill the library has no parameterisation for (open a drawer, turn a knob)}
+      - {id: FM-sequence-brittle, observable: a multi-step task fails because a skill's exit state is not the next skill's entry state}
+    remediation: >-
+      Parameterise each skill by measured geometry (gripper span from finger FK, clearance
+      from the scene, grasp frames from the object); sequence from the BDDL goal predicates;
+      keep every skill a Markov feedback law so DAgger still applies
+
   # code: screwhead/dino_features.py, screwhead/clip_features.py (language), tools/feature_bakeoff.py, tools/probe_localization.py
   - id: CMP-vision-encoder
     purpose: Frozen DINOv2-base patch tokens (8x8 per camera) as the student's visual input
@@ -325,6 +351,19 @@ interfaces:
     consumer_assumptions:
       - the instruction's relation holds at the first observed state
       - objects are at rest when the episode starts
+
+  - id: IFC-program__teacher
+    producer: CMP-skill-library
+    consumer: CMP-scripted-teacher
+    semantics: A demonstration program for one task -- a Markov feedback law plus its parameters
+    units: metres, radians, and the apertures the gripper is asked to hold
+    frame: robot base frame for targets, tool frame for the twists it emits
+    producer_guarantees:
+      - every parameter is derived from the task's goal predicates or the scene's measured geometry
+      - the program's action is a function of the current state, so any visited state can be labelled
+    consumer_assumptions:
+      - every parameter is derived from the task's goal predicates or the scene's measured geometry
+      - the program's action is a function of the current state, so any visited state can be labelled
 
   - id: IFC-teacher__expert
     producer: CMP-scripted-teacher
@@ -671,6 +710,36 @@ contracts:
     evaluable_by: [TST-teacher-randomized, TST-student-randomized, TST-student-blind]
     sufficiency: {n_min: 200, max_ci_width: 0.12}
 
+  # ---- Gate 2b: generalization, the guard against tuning these ten tasks.
+  # Declared before either is built, so neither bar can be fitted to a result.
+
+  # Train on eight tasks, evaluate on the two never trained on, same suite, same
+  # randomization. 0.3 at n_min 60 (three held-out tasks x 20 episodes, or two x 30):
+  # a true 0.5 is supported with p=0.92, a blind-level 0.05 is refuted with certainty,
+  # and 0.3 itself stays contested. The bar is "it transfers something", not a
+  # performance claim -- the trained-task rate is 0.83-0.88.
+  - id: CTR-held-out-task
+    subject: CMP-action-expert
+    claim_type: capability
+    metrics:
+      - {id: success, unit: bool}
+    acceptance: {rule: "success == true", target_rate: 0.3}
+    compatibility_key: [policy_revision, randomization, heldout_tasks]
+    evaluable_by: [TST-heldout-task]
+    sufficiency: {n_min: 60, max_ci_width: 0.30}
+
+  # The teacher for a task nobody hand-wrote: same bar and sample size as the
+  # hand-written programs (CTR-teacher-solves-randomized), per task.
+  - id: CTR-skill-teacher-solves-unseen
+    subject: CMP-skill-library
+    claim_type: capability
+    metrics:
+      - {id: success, unit: bool}
+    acceptance: {rule: "success == true", target_rate: 0.75}
+    compatibility_key: [task_suite, task, teacher_revision]
+    evaluable_by: [TST-skill-teacher-unseen]
+    sufficiency: {n_min: 50, max_ci_width: 0.25}
+
   # ---- Gate 3: the premise. If the padded-vector baseline transfers fine,
   # there is nothing to fix and the project has no reason to exist.
   # Split in two: opposite expected verdicts need opposite bars, and a bar is
@@ -1013,6 +1082,24 @@ tests:
     cost: 30.0
     timeout_s: 10800
 
+  # ---- Gate 2b. Blocked until the scripts exist: the held-out split needs a training run
+  # that excludes tasks, and the skill teacher is not written.
+  - id: TST-heldout-task
+    layer: e2e
+    targets: [CMP-action-expert]
+    run: sh -c "echo blocked - scripts/heldout_task.sh not written - train on 8 tasks, evaluate the 2 held out >&2; exit 2"
+    metrics: [success]
+    capture: [task, heldout_tasks, policy_revision, randomization]
+    cost: 40.0
+
+  - id: TST-skill-teacher-unseen
+    layer: e2e
+    targets: [CMP-skill-library, CMP-scripted-teacher]
+    run: sh -c "echo blocked - tools/skill_teacher.py not written - generate a program from the task goal and run it >&2; exit 2"
+    metrics: [success]
+    capture: [task, task_suite, teacher_revision]
+    cost: 60.0
+
   # ---- Gate 3 rollouts. Blocked, deliberately: the canonical-init rollout.py
   # cells these used to run measure a trajectory prior (see header).
   - id: TST-libero-heldout
@@ -1075,6 +1162,14 @@ policies:
       - {slice: CTR-teacher-solves-randomized, require: supported}
       - {slice: CTR-blind-policy-fails, require: supported}
       - {slice: CTR-student-succeeds-randomized, require: supported}
+    weights: null
+
+  # Gate 2b. Before spending on more suites or more arms: the head does something on a
+  # task it never trained on, and the teacher for a new task is generated, not written.
+  - id: POL-generalizes
+    criteria:
+      - {slice: CTR-held-out-task, require: supported}
+      - {slice: CTR-skill-teacher-solves-unseen, require: supported}
     weights: null
 
   # Gate 3a. Nothing to fix unless a grounded baseline works on its own arm and
