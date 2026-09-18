@@ -1,6 +1,6 @@
 # screwhead 講解
 
-更新日期：2026-09-16。專案全貌見 `docs/project_brief_zh-TW.md`；設計原文見 `docs/design_VLA_action_head.md`。
+更新日期：2026-09-18。專案全貌見 `docs/project_brief_zh-TW.md`；設計原文見 `docs/design_VLA_action_head.md`。
 
 ## 1. 一句話
 
@@ -180,9 +180,10 @@ DAgger 迴圈（`tools/distill.py`）：學生以機率 1−β 駕駛，教師�
 | 夾爪幾何（Panda、Rethink） | 已驗證；Robotiq85 超出宣告關節範圍（refuted，已改用觀測關節） |
 | 程式化教師（隨機擺放＋起點） | 193/200 |
 | 學生 VLA（CLIP，DAgger r1） | 33%，盲控制組 1% |
-| DINOv2 token VLA，DAgger r2 | 82%（200 回合；抽屜以外 90.6%，抽屜 2/20），盲控制組 4.5% |
-| 目標開口夾爪（GripperServo＋吸附解碼） | 教師經 servo 8/8 成功；以單一執行流程（`scripts/token_vla.sh all`）重建中 |
-| component-belief 第 2 關 | 成功 0.82、盲控制組失敗 0.95、指令關係 1.00 皆 supported；教師逐任務測試待執行 |
+| DINOv2 token VLA，DAgger r2（三值夾爪） | 82%（200 回合；抽屜 2/20），盲控制組 4.5% |
+| **目前最佳：夾爪分類＋教師速度下限，DAgger r3** | **87.5%**（抽屜 19/20，8/10 任務 ≥ 80%），盲控制組 7.5% |
+| component-belief 第 2 關 | 學生 0.87、盲控制組失敗 0.92、指令關係 1.00 皆 supported；教師逐任務 7/10 supported（任務 1 為 0.71） |
+| 第 2b 關：抽出任務 | 抽 0/3/7 → 53%（supported）；抽 2/5/9 → 32%（contested）；兩個爐台任務抽出後皆 0/20 |
 | 換手臂遷移 | 暫緩；需先通過「視覺落地」關卡（`belief.yaml` 的 POL-grounded） |
 
 ## 13. 常見陷阱（都實際踩過）
