@@ -103,6 +103,7 @@ class Skills:
         self._grasp_cache: dict[str, tuple] = {}
         self._palm: float | None = None
         self._episode = None
+        self.grasp_log: dict = {}
         self._drop_cache: dict = {}
         self._carry_cache: dict = {}
         self._handle_cache: dict[str, tuple[np.ndarray, float, np.ndarray]] = {}
@@ -147,6 +148,7 @@ class Skills:
             self._episode = ep
             self._grasp_cache.clear()
             self._handle_cache.clear()
+            self.grasp_log.clear()
             self._drop_cache.clear()
             self._carry_cache.clear()
 
@@ -166,17 +168,27 @@ class Skills:
         if cached is not None and np.linalg.norm(cached[3] - centre) < 0.01:
             return cached[0], cached[1], cached[2]
         bid = self.scene.body_id(obj)
-        chosen = None
-        for tier in self._tiers(obj, box):
+        chosen, used = None, "forced"
+        tiers = self._tiers(obj, box)
+        for name, tier in tiers:
             chosen = self._choose(tier, via, allow=bid, strict=True)
             if chosen is not None:
+                used = name
                 break
         if chosen is None:                      # nothing feasible anywhere: take the best try
-            tiers = self._tiers(obj, box)
-            chosen = self._choose(sum(tiers, []), via, allow=bid)
+            chosen = self._choose(sum((t for _, t in tiers), []), via, allow=bid)
         R_grasp, p_grasp, width, app = chosen
         h = self._reachable_transit(R_grasp, p_grasp - app * self.k.approach, bid)
         self._grasp_cache[obj] = (R_grasp, p_grasp, width, centre, h, app)
+        # what was decided and why, for the assessment (tools/skill_eval.py) to report
+        prev = self.grasp_log.get(obj, {})
+        self.grasp_log[obj] = dict(
+            tier=used, offered={n: len(t) for n, t in tiers}, via=via is not None,
+            feasible=self.last_choice.get("feasible"), score=self.last_choice.get("score"),
+            approach=[round(float(v), 2) for v in app], jaw=[round(float(v), 2) for v in R_grasp[:, 1]],
+            width_mm=round(1000 * float(width), 1), open_mm=round(1000 * min(self.k.max_grip, width + self.k.grip_margin), 1),
+            grasp_above_centre_mm=round(1000 * float(p_grasp[2] - centre[2]), 1),
+            transit=round(float(h), 3), choices=prev.get("choices", 0) + 1)
         return R_grasp, p_grasp, width
 
     def transit_for(self, obj: str) -> float:
@@ -251,7 +263,7 @@ class Skills:
         if not (faces or parts or sides):
             d0 = box.width_axes()[0][1] if box.width_axes() else np.array([1.0, 0.0, 0.0])
             faces = self._at(box.world_centre, half_h, d0, self.k.max_grip - self.k.grip_margin)
-        return [t for t in (faces, parts, sides) if t]
+        return [(n, t) for n, t in (("faces", faces), ("parts", parts), ("sides", sides)) if t]
 
     def _at(self, centre: np.ndarray, half_h: float, d: np.ndarray, w: float,
             body: int = -1) -> list[tuple[np.ndarray, np.ndarray, float, np.ndarray]]:
@@ -293,8 +305,11 @@ class Skills:
             if not (c[2] - hw[2] - 0.005 <= p[2] <= c[2] + hw[2] + 0.005):
                 continue                       # this geom is not at the jaws' height
             across = np.cross(Z, jaw)          # along the jaws' line of sight
-            if abs(float((c - p) @ across)) > 0.03 + float(np.abs(across @ (Rg @ np.diag(hl))).sum()):
-                continue                       # off to one side: the jaws never meet it
+            # the pads are ~20 mm wide: material more than 10 mm off the jaw line is never
+            # between them. A 30 mm allowance let a rim grasp count neighbouring wall
+            # segments and measured a 2.6 mm wall as 29 mm, opening the jaws to 41.
+            if abs(float((c - p) @ across)) > 0.01 + float(np.abs(across @ (Rg @ np.diag(hl))).sum()):
+                continue
             extent = float(np.abs(jaw @ (Rg @ np.diag(hl))).sum())
             m_c = float(c @ jaw)
             spans.append((m_c - extent, m_c + extent))
@@ -341,7 +356,7 @@ class Skills:
                     (out if self._clear_geom(c, app, g) else blocked).extend(cands)
         return out or blocked
 
-    def _collides(self, theta: np.ndarray, allow: int = -1) -> int:
+    def _collides(self, theta: np.ndarray, allow: int = -1, aperture: float | None = None) -> int:
         """Would the ARM be in something at this joint configuration?
 
         IK converging says nothing about the rest of the arm: reaching a bowl beside the
@@ -351,9 +366,15 @@ class Skills:
         put the configuration in, look, and put the state back.
         """
         sim = self.env.env.sim
-        idx = self.env.env.env.robots[0]._ref_joint_pos_indexes
+        robot = self.env.env.env.robots[0]
+        idx = robot._ref_joint_pos_indexes
         qpos, qvel = sim.data.qpos.copy(), sim.data.qvel.copy()
         sim.data.qpos[idx] = np.asarray(theta, float)
+        if aperture is not None:
+            # the fingers where the grasp will have them, not where they happen to be:
+            # screened fully open (77 mm), every rim grasp on the bowl in the drawer hit
+            # the drawer walls, none was feasible, and a forced grasp stalled 43 mm short
+            sim.data.qpos[robot._ref_gripper_joint_pos_indexes] = [aperture / 2, -aperture / 2]
         sim.forward()
         hit = self._touching_other(allow)
         sim.data.qpos[:] = qpos
@@ -499,7 +520,11 @@ class Skills:
         lim = c.limits
         Ts, meta = [], []
         for i, (R, p_g, _w, app) in enumerate(cands):
-            for pt in [p_g, p_g - app * self.k.approach] + ([via] if via is not None else []):
+            pre = p_g - app * self.k.approach
+            # the column the tool comes down, not only its ends: an endpoint-only check
+            # passed grasps whose descent clamped on a joint limit halfway down
+            column = [pre + Z * 0.05, pre + Z * 0.10]
+            for pt in [p_g, pre] + column + ([via] if via is not None else []):
                 T = np.eye(4); T[:3, :3] = R; T[:3, 3] = pt
                 Ts.append(T); meta.append(i)
         res = solve_ik(c, np.stack(Ts), q0[None], lam=0.02, max_iters=200, trust=0.2)
@@ -511,7 +536,8 @@ class Skills:
             sel = [j for j, mi in enumerate(meta) if mi == i]
             if not all(conv[j] for j in sel):
                 continue
-            touch = max(self._collides(th[j], allow) for j in sel)
+            ap = min(self.k.max_grip, cands[i][2] + self.k.grip_margin)
+            touch = max(self._collides(th[j], allow, ap) for j in sel)
             if touch == 2:                   # reachable on paper, the arm in the cabinet
                 continue
             scores[i] = min(min(margin[j] for j in sel), 8 * min(sig[j] for j in sel)) - 0.3 * touch
@@ -652,7 +678,10 @@ class Skills:
         open_to = min(k.max_grip, width + k.grip_margin)
         if self.held(obj):
             self.phase = "lift"
-            return self.action(self.twist_to(R, p, R_g, p + Z * 0.05, v_max=0.12), 0.0)
+            # the first 2 cm slowly, so friction takes the load before the jaws accelerate
+            # it -- a rim pinch lost the bowl mid-carry at 29 cm and it left the table
+            slow = float(self.scene.object_box(obj).world_centre[2] - self._grasp_cache[obj][3][2]) < 0.02
+            return self.action(self.twist_to(R, p, R_g, p + Z * 0.05, v_max=0.06 if slow else 0.12), 0.0)
         e_rot = rot_angle(R.T @ R_g)
         if self.at_grasp(p, p_g, app) and e_rot < k.at_rot:
             self.phase = "squeeze"
@@ -696,7 +725,10 @@ class Skills:
         R_carry = R                                 # the grasp yaw was chosen to reach here too
         if over > 0.02 and q[2] < carry_z - 0.02:
             self.phase = "lift"
-            return self.action(self.twist_to(R, p, R_carry, p + Z * (carry_z - q[2]), v_max=0.15), 0.0)
+            c = self._grasp_cache.get(obj)
+            slow = c is not None and float(self.scene.object_box(obj).world_centre[2] - c[3][2]) < 0.02
+            return self.action(self.twist_to(R, p, R_carry, p + Z * (carry_z - q[2]),
+                                             v_max=0.06 if slow else 0.15), 0.0)
         if over > 0.02:
             self.phase = "carry"
             goal = p + np.array([delta[0], delta[1], max(0.0, carry_z - q[2])])
@@ -756,6 +788,11 @@ class Skills:
                 raise NotImplementedError(f"{region}: no graspable handle geom")
             R_h, _p, w, app = self._choose(cands, None, allow=a["body"])
             self._handle_cache[region] = (R_h, w, app)
+            self.grasp_log[region] = dict(
+                tier="handle", offered={"handle": len(cands)}, feasible=self.last_choice.get("feasible"),
+                score=self.last_choice.get("score"), forced=self.last_choice.get("forced"),
+                approach=[round(float(v), 2) for v in app], jaw=[round(float(v), 2) for v in R_h[:, 1]],
+                width_mm=round(1000 * float(w), 1), handle_geom=self.scene.m.geom_id2name(a["handle_geom"]))
         else:
             R_h, w, app = held_frame
         p_h = self.scene.d.geom_xpos[a["handle_geom"]] - self.scene.base
@@ -821,7 +858,12 @@ class Skills:
         is chosen from the current state, so any state still gets a label.
         """
         k = self.k
-        if float(np.linalg.norm((p - start)[:2])) <= k.funnel_xy:
+        lat = float(np.linalg.norm((p - start)[:2]))
+        # entering the column needs 2 cm; once below the crossing plane, keep going down
+        # and correct sideways unless 5 cm off. One threshold for both sent the tool back
+        # up whenever it drifted 2 cm on the way down -- up/over/down/up dozens of times
+        # in one episode on the bowl on the cabinet.
+        if lat <= k.funnel_xy or (p[2] < safe_h - 0.02 and lat <= 0.05):
             return None
         if p[2] < safe_h - 0.02:
             return "up", R, np.array([p[0], p[1], safe_h])

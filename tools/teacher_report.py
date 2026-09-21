@@ -123,6 +123,61 @@ def report(trials: list[dict]) -> list[dict]:
     return rows
 
 
+def _kind(ev: str) -> str:
+    """An event with its numbers taken out, so the same thing in different episodes counts once."""
+    import re
+    text = ev.split(" ", 1)[1] if ev.startswith("t") else ev
+    text = re.sub(r"[-+]?\d+(\.\d+)?", "#", text)
+    for cut in (":", ",", " by "):
+        if cut in text and not text.startswith("PUSHED"):
+            text = text.split(cut)[0]
+    return text.strip()
+
+
+def diagnose(rows: list[dict], trials: list[dict], examples: int, out_md: Path | None) -> None:
+    """Per task that is not perfect: what the failed episodes have in common, and two of
+    them in full -- timeline, events, the grasp that was chosen, and the false predicate."""
+    by = collections.defaultdict(list)
+    for t in trials:
+        by[(t["conditions"]["suite"], t["conditions"]["task"])].append(t)
+    md = []
+    for r in sorted(rows, key=lambda r: r["lo"]):
+        if r["k"] == r["n"]:
+            continue
+        fails = [t for t in by[(r["suite"], r["task"])] if not t["metrics"]["success"]]
+        det = [t.get("detail", {}) for t in fails]
+        lang = det[0].get("language", "") if det else ""
+        kinds = collections.Counter(k for d in det for k in {_kind(e) for e in d.get("events", [])})
+        tiers = collections.Counter(g.get("tier") for d in det for g in d.get("grasp", {}).values())
+        head = f"\n### {r['suite']}[{r['task']}] {r['k']}/{r['n']}  {lang}"
+        lines = [head,
+                 "  mechanisms: " + ", ".join(f"{m} x{c}" for m, c in
+                                              sorted(r["mechanisms"].items(), key=lambda x: -x[1])),
+                 "  events in failed episodes: " + (", ".join(f"{k} x{c}" for k, c in kinds.most_common(8)) or "-"),
+                 "  grasp tiers chosen: " + (", ".join(f"{k} x{c}" for k, c in tiers.most_common()) or "-")]
+        for t, d in list(zip(fails, det))[:examples]:
+            lines.append(f"  -- ep{d.get('episode')} ({d.get('steps')} steps) [{t['conditions'].get('mechanism')}]")
+            tl = d.get("timeline", "")
+            lines.append("     timeline: " + (tl if len(tl) < 700 else tl[:340] + " ... " + tl[-340:]))
+            for e in d.get("events", [])[:10]:
+                lines.append("     " + e)
+            for obj, g in d.get("grasp", {}).items():
+                lines.append(f"     grasp {obj}: " + ", ".join(f"{k}={v}" for k, v in g.items()))
+            for f in d.get("final", []):
+                lines.append("     final: " + f)
+        print("\n".join(lines))
+        md += lines
+        if out_md is not None:          # the full record: every failed episode
+            for t, d in list(zip(fails, det))[examples:]:
+                md.append(f"  -- ep{d.get('episode')} [{t['conditions'].get('mechanism')}] "
+                          f"{d.get('timeline', '')}")
+                md += ["     " + e for e in d.get("events", [])]
+                md += ["     final: " + f for f in d.get("final", [])]
+    if out_md is not None:
+        out_md.write_text("\n".join(md) + "\n")
+        print(f"\nfull record of every failed episode -> {out_md}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--suites", nargs="*", default=["libero_object", "libero_spatial", "libero_goal"])
@@ -131,6 +186,7 @@ def main() -> int:
     ap.add_argument("--evidence", default="runs/evidence/reliability")
     ap.add_argument("--from", dest="reuse", default="", help="read existing trials, do not run")
     ap.add_argument("--ingest", action="store_true")
+    ap.add_argument("--examples", type=int, default=2, help="failed episodes shown in full per task")
     args = ap.parse_args()
 
     trials: list[dict] = []
@@ -170,6 +226,8 @@ def main() -> int:
         agg.update(r["mechanisms"])
     if agg:
         print("\nfailures by mechanism: " + ", ".join(f"{m} {c}" for m, c in agg.most_common()))
+    print("\n==== diagnosis, worst task first ====")
+    diagnose(rows, trials, args.examples, ROOT / (args.reuse or args.evidence) / "diagnosis.md")
 
     if args.ingest:
         revs = sorted({t["repro"].get("teacher_revision", "?") for t in trials})
