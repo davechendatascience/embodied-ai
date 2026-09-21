@@ -527,11 +527,18 @@ class Skills:
             R, p = cand[0], cand[1]
             return [pose(*self._joint_motion(a, f * dq, R, p)) for f in (0.5, 1.0)]
 
-        R_h, _p, w, app = self.reach.choose(cands, None, allow=a["body"], extra=along_the_motion)
+        # reachable along the drive is a filter, not a ranking: only when no candidate is
+        # does the choice fall back to the start of the drive alone, and says so in the log
+        chosen = self.reach.choose(cands, None, allow=a["body"], extra=along_the_motion, strict=True)
+        drive_checked = chosen is not None
+        if chosen is None:
+            chosen = self.reach.choose(cands, None, allow=a["body"])
+        R_h, _p, w, app = chosen
         self._handle_cache[region] = (R_h, w, app, float(a["qpos"]))
-        choice = self.reach.last_choice
+        choice = dict(self.reach.last_choice, drive_checked=drive_checked)
         self.grasp_log[region] = dict(
             tier="handle", offered={"handle": len(cands)}, feasible=choice.get("feasible"),
+            drive_checked=choice["drive_checked"],
             score=choice.get("score"), forced=choice.get("forced"),
             approach=[round(float(v), 2) for v in app], jaw=[round(float(v), 2) for v in R_h[:, 1]],
             width_mm=round(1000 * float(w), 1), handle_geom=self.scene.m.geom_id2name(a["handle_geom"]))
