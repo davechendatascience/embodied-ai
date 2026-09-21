@@ -34,7 +34,8 @@ import numpy as np
 import torch
 
 from . import contacts
-from .progress import is_held, rot_angle, rotvec
+from .frames import rot_angle, rotvec
+from .progress import is_held
 from .teacher_env import TARGET
 
 HOME_Q = np.array([0.0, -0.161, 0.0, -2.4446, 0.0, 2.2268, np.pi / 4])   # LIBERO Panda home posture

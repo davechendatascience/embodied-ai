@@ -37,6 +37,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .frames import rot_angle, rotvec
+
 
 @dataclass(frozen=True)
 class PickPlaceGeometry:
@@ -60,12 +62,6 @@ class PickPlaceGeometry:
 
 DEFAULT_GEOMETRY = PickPlaceGeometry()
 MIN_RADIAL = 1e-6        # m: a tool this close to the bowl axis has no radial direction
-MIN_ANGLE = 1e-6         # rad: below this a rotation has no axis
-NEAR_PI = 1e-4           # rad from pi: the skew part of R vanishes, read the axis off the diagonal
-
-
-def rot_angle(R: np.ndarray) -> float:
-    return float(np.arccos(np.clip((np.trace(R) - 1) / 2, -1.0, 1.0)))
 
 
 def grasp_frames(p_tool: np.ndarray, p_bowl: np.ndarray, R_bowl: np.ndarray, g: PickPlaceGeometry):
@@ -191,19 +187,6 @@ def reach_distance(s: dict, g: PickPlaceGeometry) -> tuple[float, float, bool]:
     lateral = float(np.linalg.norm(off - z_b * (off @ z_b)))
     penalty = g.lateral_weight * max(lateral - g.grasp_ball, 0.0) if below else 0.0
     return d_grasp + penalty, d_grasp, below
-
-
-def rotvec(R: np.ndarray) -> np.ndarray:
-    """Axis-angle of a rotation matrix (the so(3) log)."""
-    ang = rot_angle(R)
-    if ang < MIN_ANGLE:
-        return np.zeros(3)
-    w = np.array([R[2, 1] - R[1, 2], R[0, 2] - R[2, 0], R[1, 0] - R[0, 1]])
-    if np.pi - ang < NEAR_PI:
-        k = int(np.argmax(np.diag(R)))
-        axis = R[:, k] + np.eye(3)[:, k]
-        return ang * axis / (np.linalg.norm(axis) + 1e-12)
-    return ang * w / (2 * np.sin(ang))
 
 
 def grasp_error(s: dict, g: PickPlaceGeometry = DEFAULT_GEOMETRY) -> np.ndarray:

@@ -7,16 +7,27 @@ Z = np.array([0.0, 0.0, 1.0])
 EPS_NORM = 1e-12        # guard for normalising a vector that may be zero
 EPS_DIR = 1e-6          # a direction shorter than this has no direction
 EPS_ANGLE = 1e-8        # a rotation smaller than this is the identity
+NEAR_PI = 1e-4          # rad from pi: the skew part of R vanishes, read the axis off the diagonal
 MOSTLY_VERTICAL = 0.9   # |cos| to Z above which Z is a poor reference axis
 
 
 def rotvec(R: np.ndarray) -> np.ndarray:
-    """Rotation vector (axis * angle) of a rotation matrix."""
-    c = (np.trace(R) - 1) / 2
-    th = float(np.arccos(np.clip(c, -1.0, 1.0)))
+    """Rotation vector (axis * angle) of a rotation matrix -- the so(3) log. The one
+    implementation for both stacks: the teacher's copy divided by 2 sin(angle) all the way
+    to pi, where the skew part vanishes and the axis is lost; the scripted teacher's read
+    it off the diagonal there."""
+    th = rot_angle(R)
     if th < EPS_ANGLE:
         return np.zeros(3)
-    return th / (2 * np.sin(th)) * np.array([R[2, 1] - R[1, 2], R[0, 2] - R[2, 0], R[1, 0] - R[0, 1]])
+    skew = np.array([R[2, 1] - R[1, 2], R[0, 2] - R[2, 0], R[1, 0] - R[0, 1]])     # 2 sin(th) axis
+    if np.pi - th < NEAR_PI:
+        # the symmetric part is (1 - cos th) axis axis^T + cos th I at any angle: magnitude
+        # from its largest column, sign from the (small but signed) skew part
+        B = (R + R.T) / 2 - np.cos(th) * np.eye(3)
+        k = int(np.argmax(np.diag(B)))
+        axis = B[:, k] / np.sqrt(max(float(B[k, k]) * (1 - np.cos(th)), EPS_NORM))
+        return th * (axis if axis @ skew >= 0 else -axis)
+    return th / (2 * np.sin(th)) * skew
 
 
 def rot_angle(R: np.ndarray) -> float:

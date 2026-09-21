@@ -1,10 +1,13 @@
-"""What both LIBERO environments do the same way: hold the arm, find a start, reach in.
+"""What both LIBERO environments do the same way: open a task, execute an action, reset a
+scene, hold the arm, find a start.
 
 PrivilegedEnv (teacher_env.py, the libero_spatial pipeline) and TaskEnv (task_env.py,
-any task) grew the same settling hold, the same object-speed check, the same contact
-test and the same start-pose sampler by copying; they live here once. A subclass
-provides `env` (the OffScreenRenderEnv), `chain`, `kp`, `rng`, `start`, `settle_steps`
-and a `label` for error messages.
+any task) grew the same settling hold, object-speed check, contact test and start-pose
+sampler by copying -- and then the same action decode, LIBERO loading and snapshot, which
+drifted: the student's env reset LIBERO's fixtures unseeded, computed the tool pose with
+a different forward-kinematics implementation, and kept its own contact loop. The
+execution path lives here once (AXM-one-execution-path). A subclass provides `rng`,
+`start`, `_scene_seed`, `horizon` and a `label` for error messages, and calls `_open`.
 
 It is also the one place that reaches into robosuite's private attributes
 (`_ref_joint_pos_indexes`, `_get_observations`), so that when robosuite changes, one
@@ -12,25 +15,142 @@ file does.
 """
 from __future__ import annotations
 
+import os
+from dataclasses import dataclass
+
 import numpy as np
 import torch
 
 from . import contacts
+from .frames import axis_rot
 from .kinematics import fk
 
 START_MIN_TOOL_Z = 0.08       # m above the base: keep a randomised start clear of the table
 START_MIN_SIGMA = 0.02        # a start this close to singular is rejected
+CAMERA_PX = 128
+SEED_MOD = 2**32 - 1          # numpy's legacy seed range
+REST_SPEED = 0.005            # m/s: the scene is at rest when no free object moves faster
+INITIAL_SETTLE = 10           # control steps held after loading an initial state
+SETTLE_CHUNK = 5              # then in chunks of this many, until at rest
+SETTLE_ROUNDS = 10            # at most this many chunks
 
 
-def rot(axis: np.ndarray, angle: float) -> np.ndarray:
-    """Rodrigues rotation about `axis` by `angle`."""
-    axis = axis / (np.linalg.norm(axis) + 1e-12)
-    K = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
-    return np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * K @ K
+@dataclass(frozen=True)
+class Execution:
+    """How actions are executed -- the part that must be identical for teacher and student."""
+    kp: float = 4000.0
+    servo_iters: int = 1
+    settle_steps: int = 5
+    gripper_mode: str = "target"      # "target": a target aperture; "command": robosuite's -1/0/+1
+    hard_reset: bool = False
 
 
 class SimArm:
     label = "env"
+
+    # -- opening a task -------------------------------------------------------------------
+    def _open(self, suite: str, task_index: int, render: bool, ex: Execution) -> str:
+        """Load a LIBERO task and set up the execution path; returns its bddl path."""
+        from libero.libero import benchmark, get_libero_path
+        from libero.libero.envs import OffScreenRenderEnv
+
+        from .gripper_servo import GripperServo
+        from .interface import ActionSpec
+        from .libero_env import JOINT_ACTION_SCALE, build_chain, gripper_geom, register_ur5e
+        from .servo import TwistServo
+        register_ur5e()
+        assert ex.gripper_mode in ("command", "target"), ex.gripper_mode
+        self.kp, self.gripper_mode, self.settle_steps = ex.kp, ex.gripper_mode, ex.settle_steps
+        self.gripper_servo = GripperServo()
+        self.spec = ActionSpec()
+        self.scale = np.array([self.spec.max_angular_speed] * 3 + [self.spec.max_linear_speed] * 3)
+        bm = benchmark.get_benchmark_dict()[suite]()
+        task = bm.get_task(task_index)
+        self.language = task.language
+        bddl = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
+        kw = (dict(camera_heights=CAMERA_PX, camera_widths=CAMERA_PX) if render else
+              dict(use_camera_obs=False, has_offscreen_renderer=False))
+        # a hard reset reloads the MuJoCo model (911 ms of a 1058 ms reset, measured), and
+        # set_init_state overwrites the full state afterwards anyway
+        self.env = OffScreenRenderEnv(bddl_file_name=bddl, robots=["Panda"], gripper_types="PandaGripper",
+                                      controller="JOINT_POSITION", hard_reset=ex.hard_reset, **kw)
+        _load = torch.load        # LIBERO pickles its init states; torch>=2.6 refuses unless told
+        torch.load = lambda *a, **k: _load(*a, **{**k, "weights_only": False})
+        try:
+            self.init_states = bm.get_task_init_states(task_index)
+        finally:
+            torch.load = _load
+        self.env.reset()
+        flange, _ = gripper_geom(self.env)
+        self.chain = build_chain("panda", flange)
+        self.servo = TwistServo(self.chain, self.spec, JOINT_ACTION_SCALE, iters=ex.servo_iters)
+        self.t = 0
+        return bddl
+
+    # -- scenes -------------------------------------------------------------------------
+    def _reset_scene(self, k: int) -> None:
+        """env.reset(), with LIBERO's fixture placement for init state k made repeatable.
+
+        Every reset re-samples fixture poses (a cabinet within +-1 cm of its region) from
+        numpy's global RNG, and writes them to model.body_pos -- which set_init_state does
+        not restore. Unseeded, two resets moved the cabinet 12 mm apart, so identical runs
+        diverged, and a state settled with the fixture in one place was replayed with it in
+        another: an object resting ON the fixture started embedded in it or floating.
+        """
+        np.random.seed((self._scene_seed * 1009 + k) % SEED_MOD)
+        self.env.reset()
+
+    def _settled_init_state(self, k: int) -> np.ndarray:
+        """LIBERO's initial state k, held until the objects in it are at rest -- not for a
+        fixed count: in some init states an object is still sliding off a neighbour after
+        10 steps (a bowl at 48.6 deg tilt moving 0.10 m/s, measured)."""
+        from .libero_env import remap_init_state
+        self._reset_scene(k)
+        self.env.set_init_state(remap_init_state(self.init_states[k], self.env.sim))
+        self._settle(INITIAL_SETTLE)
+        for _ in range(SETTLE_ROUNDS):
+            if self._max_object_speed() < REST_SPEED:
+                break
+            self._settle(SETTLE_CHUNK)
+        return np.asarray(self.env.sim.get_state().flatten()).copy()
+
+    # -- acting -------------------------------------------------------------------------
+    def execute(self, action: np.ndarray) -> tuple[dict, bool]:
+        """action: 6 normalised body-twist + 1 gripper channel, each in [-1, 1].
+
+        The twist is executed through TwistServo onto an absolute joint reference (per-step
+        deltas lose 18% of every step to controller lag, and it compounds -- servo.py); the
+        gripper channel is robosuite's command, or a target aperture run by GripperServo."""
+        a = np.clip(np.asarray(action, np.float64), -1, 1)
+        o = self.observe()
+        cmd = np.zeros(self.env.env.action_dim)
+        cmd[:7] = self.servo.command(np.asarray(o["robot0_joint_pos"]), a[:6] * self.scale)
+        if self.gripper_mode == "target":
+            from .gripper_servo import channel_to_target
+            gq, gv = o["robot0_gripper_qpos"], o.get("robot0_gripper_qvel", np.zeros(2))
+            cmd[-1] = self.gripper_servo.command(float(channel_to_target(a[6])),
+                                                 float(gq[0] - gq[1]), float(gv[0] - gv[1]))
+        else:
+            cmd[-1] = a[6]
+        self._gains()
+        raw, _, done, _ = self.env.step(cmd)
+        self.t += 1
+        self.raw = raw
+        return raw, bool(done)
+
+    def tool_state(self, raw: dict | None = None) -> dict:
+        """Tool pose (base frame) and jaw aperture and its rate, from the joint readings."""
+        from .kin_np import NpChain
+        from .kin_np import fk as fk_np
+        raw = raw or getattr(self, "raw", None) or self.observe()
+        T = fk_np(NpChain.of(self.chain), np.asarray(raw["robot0_joint_pos"], float))[0]
+        gq, gv = raw["robot0_gripper_qpos"], raw.get("robot0_gripper_qvel", np.zeros(2))
+        return dict(R_tool=T[:3, :3], p_tool=T[:3, 3], aperture=float(gq[0] - gq[1]),
+                    aperture_rate=float(gv[0] - gv[1]))
+
+    def success(self) -> bool:
+        """LIBERO's own goal check."""
+        return bool(self.env.env._check_success())
 
     # -- robosuite internals, touched only here ---------------------------------------
     @property
@@ -127,7 +247,7 @@ class SimArm:
             ax = np.array([*ax / (np.linalg.norm(ax) + 1e-12), 0.0])
             tilt = self.rng.uniform(-st["tilt"], st["tilt"])
             T = T0.copy()
-            T[:3, :3] = rot(np.array([0, 0, 1.0]), yaw) @ rot(ax, tilt) @ T0[:3, :3]
+            T[:3, :3] = axis_rot(np.array([0, 0, 1.0]), yaw) @ axis_rot(ax, tilt) @ T0[:3, :3]
             T[:3, 3] = T0[:3, 3] + dp
             T[2, 3] = max(T[2, 3], START_MIN_TOOL_Z)
             targets.append(T)

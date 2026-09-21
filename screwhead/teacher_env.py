@@ -26,21 +26,18 @@ site: 0.00 mm).
 """
 from __future__ import annotations
 
-import os
 
 import numpy as np
 import torch
 
-from .interface import ActionSpec
+from . import contacts
 from .kinematics import fk
-from .sim_arm import SimArm
+from .sim_arm import Execution, SimArm
 
 TARGET = "akita_black_bowl_1"
 RECEPTACLE = "plate_1"
 N_TASKS = 10
 EJECT_MM = 10.0
-AT_REST_SPEED = 0.005       # m/s: a settled init state has no free object moving faster
-CONTACT_SLACK = 0.0005      # m: snapshot() counts contacts up to this far apart as touching
 
 
 class PrivilegedEnv(SimArm):
@@ -55,51 +52,17 @@ class PrivilegedEnv(SimArm):
                  rich_obs: bool = False, shaping_gamma: float = 1.0,
                  layout_radius: float = 0.0, layout_check=None, layout_tries: int = 20,
                  gripper_mode: str = "command"):
-        from libero.libero import benchmark, get_libero_path
-        from libero.libero.envs import OffScreenRenderEnv
-        from .libero_env import build_chain, gripper_geom, register_ur5e
-        register_ur5e()
-
-        self.ti, self.radius, self.horizon, self.kp = task_index, radius_m, horizon, kp
-        # "command": action[6] is robosuite's -1/0/+1. "target": action[6] is a target-aperture
-        # channel executed by GripperServo from the gripper's measured aperture and rate.
-        assert gripper_mode in ("command", "target"), gripper_mode
-        self.gripper_mode = gripper_mode
-        from .gripper_servo import GripperServo
-        self.gripper_servo = GripperServo()
+        self.ti, self.radius, self.horizon = task_index, radius_m, horizon
         self.rng = np.random.default_rng(seed)
-        self.spec = ActionSpec()
-        self.scale = np.array([self.spec.max_angular_speed] * 3 + [self.spec.max_linear_speed] * 3)
-        bm = benchmark.get_benchmark_dict()[suite]()
-        task = bm.get_task(task_index)
-        self.language = task.language
-        bddl = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
-        kw = (dict(camera_heights=128, camera_widths=128) if render else
-              dict(use_camera_obs=False, has_offscreen_renderer=False))
-        # A hard reset reloads the MuJoCo model: 911 ms of a 1058 ms reset,
-        # measured. set_init_state overwrites the full state afterwards, so the
-        # reload buys nothing and stalls every synchronous worker.
-        kw["hard_reset"] = hard_reset
-        self.env = OffScreenRenderEnv(bddl_file_name=bddl, robots=["Panda"],
-                                      gripper_types="PandaGripper",
-                                      controller="JOINT_POSITION", **kw)
-        _load = torch.load
-        torch.load = lambda *a, **k: _load(*a, **{**k, "weights_only": False})
-        try:
-            self.init_states = bm.get_task_init_states(task_index)
-        finally:
-            torch.load = _load
-        self.env.reset()
-        flange, _ = gripper_geom(self.env)
-        self.chain = build_chain("panda", flange)
-        from .libero_env import JOINT_ACTION_SCALE
-        from .servo import TwistServo
-        self.servo = TwistServo(self.chain, self.spec, JOINT_ACTION_SCALE, iters=servo_iters)
+        self._scene_seed = seed
+        # the scripted teacher emits robosuite's -1/0/+1, hence the "command" default here;
+        # everything else about execution is SimArm's, shared with TaskEnv
+        self._open(suite, task_index, render, Execution(kp=kp, servo_iters=servo_iters, settle_steps=settle_steps,
+                                                         gripper_mode=gripper_mode, hard_reset=hard_reset))
         self.onehot = np.eye(N_TASKS, dtype=np.float32)[task_index]
         self.t = 0
         self.last_obs = None
         self._settled: dict[int, tuple[np.ndarray, np.ndarray]] = {}
-        self.settle_steps = settle_steps
         self.start = dict(xy=start_xy_m, z=start_z_m, yaw=np.deg2rad(start_yaw_deg),
                           tilt=np.deg2rad(start_tilt_deg), null=start_null_rad)
         self.start_offset = None
@@ -143,11 +106,11 @@ class PrivilegedEnv(SimArm):
         self._settle_init_state(k)
         settled, rest = self._settled[k]
         if self.layout_radius > 0 and init_index is None:
-            found = self._compatible_init_state(settled, rest)
+            found = self._compatible_init_state(k, settled, rest)
             if found is None:
                 return self.reset(init_index=None, max_tries=max_tries)
-            settled, rest = found
-        now, rest = self._place(settled, rest, max_tries)
+            k, settled, rest = found
+        now, rest = self._place(k, settled, rest, max_tries)
         if any(v > 0 for v in self.start.values()):
             self._randomize_start()
         self.begin()
@@ -170,24 +133,12 @@ class PrivilegedEnv(SimArm):
         """Cache init state k settled to rest, with the goal object's resting position."""
         if k in self._settled:
             return
-        from .libero_env import remap_init_state
         # The drop from LIBERO's spawn height is the same every time for a
         # given init state: pay for it once. Resets were 145 ms, 124 of them
         # settling, and a synchronous vector env waits on its slowest reset.
-        self.env.reset()
-        self.env.set_init_state(remap_init_state(self.init_states[k], self.env.sim))
-        # settle until the objects stop moving, not for a fixed count: in some init
-        # states an object is still sliding off a neighbour after 10 steps (measured,
-        # a bowl at 48.6 deg tilt moving 0.10 m/s), and a cached "settled" state
-        # that is not at rest corrupts everything measured from it
-        self._settle(10)
-        for _ in range(10):
-            if self._max_object_speed() < AT_REST_SPEED:
-                break
-            self._settle(5)
+        state = self._settled_init_state(k)
         qadr, *_ = self._ids()
-        self._settled[k] = (np.asarray(self.env.sim.get_state().flatten()).copy(),
-                            self.env.sim.data.qpos[qadr:qadr + 3].copy())
+        self._settled[k] = (state, self.env.sim.data.qpos[qadr:qadr + 3].copy())
 
     def _layout_sampler(self):
         if self.layout is None:
@@ -195,26 +146,27 @@ class PrivilegedEnv(SimArm):
             self.layout = LayoutSampler(self, radius=self.layout_radius)
         return self.layout
 
-    def _compatible_init_state(self, settled, rest):
+    def _compatible_init_state(self, k: int, settled, rest):
         """Redraw settled init states until one the layout grouping can move. Returns
-        (settled, rest), or None when the draw lands on an init state not settled yet
+        (k, settled, rest), or None when the draw lands on an init state not settled yet
         (the caller then starts the reset over)."""
         for _ in range(len(self.init_states)):
-            self.env.reset(); self.env.set_init_state(settled)
+            self._reset_scene(k)
+            self.env.set_init_state(settled)
             if self._layout_sampler().compatible():
                 break
             k = int(self.rng.integers(len(self.init_states)))
             if k not in self._settled:
                 return None
             settled, rest = self._settled[k]
-        return settled, rest
+        return k, settled, rest
 
-    def _place(self, settled, rest, max_tries: int):
+    def _place(self, k: int, settled, rest, max_tries: int):
         """Lay out the objects and displace the goal object, redrawing a placement that
         was ejected on settling. Returns the goal object's position (a live view of qpos)
         and the rest position it was displaced from."""
         for _ in range(max_tries):
-            self.env.reset()
+            self._reset_scene(k)                  # the fixtures init state k was settled with
             self.env.set_init_state(settled)
             sim = self.env.sim
             qadr, vadr, *_ = self._ids()
@@ -277,21 +229,7 @@ class PrivilegedEnv(SimArm):
         Executed through TwistServo: integrated onto an absolute joint reference,
         because per-step deltas lose 18% of every step to controller lag and the
         loss compounds (see servo.py)."""
-        a = np.clip(np.asarray(action, np.float64), -1, 1)
-        o = self.observe()
-        cmd = np.zeros(self.env.env.action_dim)
-        cmd[:7] = self.servo.command(np.asarray(o["robot0_joint_pos"]), a[:6] * self.scale)
-        if self.gripper_mode == "target":
-            from .gripper_servo import channel_to_target
-            gq, gv = o["robot0_gripper_qpos"], o.get("robot0_gripper_qvel", np.zeros(2))
-            cmd[-1] = self.gripper_servo.command(float(channel_to_target(a[6])), float(gq[0] - gq[1]),
-                                                 float(gv[0] - gv[1]))
-        else:
-            cmd[-1] = a[6]
-        self._gains()
-        raw, _, done, _ = self.env.step(cmd)
-        self.t += 1
-        success = bool(done)
+        raw, success = self.execute(action)
         self.last_obs = self.obs(raw)
         truncated = self.t >= self.horizon
         info = {"success": success, "truncated": truncated}
@@ -331,35 +269,16 @@ class PrivilegedEnv(SimArm):
         """Everything progress() needs, read from the simulator, base frame."""
         sim = self.env.sim; m, d = sim.model, sim.data
         raw = getattr(self, "raw", None) or self.observe()
-        q = torch.tensor(np.asarray(raw["robot0_joint_pos"]), dtype=torch.float64)[None]
-        T = fk(self.chain, q)[0].numpy()
+        tool = self.tool_state(raw)
         tb = d.body_xpos[m.body_name2id("robot0_base")]
         _, _, bowl, plate, _ = self._ids()
-        bowl_geoms = {g for g in range(m.ngeom) if int(m.geom_bodyid[g]) == bowl}
-        side = {m.geom_name2id("gripper0_finger1_pad_collision"): 1, m.geom_name2id("gripper0_finger1_collision"): 1,
-                m.geom_name2id("gripper0_finger2_pad_collision"): 2, m.geom_name2id("gripper0_finger2_collision"): 2}
-        sides, any_grip, supported = set(), False, False
-        for i in range(d.ncon):
-            c = d.contact[i]
-            if c.dist > CONTACT_SLACK:
-                continue
-            for a, b in ((c.geom1, c.geom2), (c.geom2, c.geom1)):
-                if b not in bowl_geoms or a in bowl_geoms:
-                    continue
-                name = m.geom_id2name(a) or ""
-                if a in side:
-                    sides.add(side[a])
-                if name.startswith("gripper0") or name.startswith("robot0"):
-                    any_grip = True
-                else:
-                    supported = True
-        gq = raw["robot0_gripper_qpos"]
-        gv = raw.get("robot0_gripper_qvel", np.zeros(2))
-        return dict(R_tool=T[:3, :3], p_tool=T[:3, 3], aperture=float(gq[0] - gq[1]),
-                    aperture_rate=float(gv[0] - gv[1]),
+        # contacts.py is the one definition of "touching" (the finger bodies' only colliding
+        # geoms are the four this loop used to name, and every margin in the scene is 0)
+        sides, any_grip, supported = contacts.touch_summary(m, d, bowl)
+        return dict(tool,
                     R_bowl=d.body_xmat[bowl].reshape(3, 3).copy(), p_bowl=(d.body_xpos[bowl] - tb).copy(),
-                    p_plate=(d.body_xpos[plate] - tb).copy(), side1=1 in sides, side2=2 in sides,
-                    any_grip=any_grip, supported=supported, success=bool(self.env.check_success()))
+                    p_plate=(d.body_xpos[plate] - tb).copy(), side1=0 in sides, side2=1 in sides,
+                    any_grip=any_grip, supported=supported, success=self.success())
 
     def _rich(self, snap: dict, phi: float | None = None, stage: int | None = None) -> np.ndarray:
         """PRIVILEGED progress features: phi/6, stage one-hot, tool->grasp waypoint error."""

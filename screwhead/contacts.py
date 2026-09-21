@@ -90,6 +90,12 @@ def finger_sides_on_geom(m, d, geom: int) -> set[int]:
     return sides
 
 
+def touch_summary(m, d, body: int) -> tuple[set[int], bool, bool]:
+    """(finger sides touching `body`, the robot touches it, something else touches it)."""
+    others = [body_name(m, b) for b in touching(m, d, body)]
+    return finger_sides(m, d, body), any(is_robot(n) for n in others), any(not is_robot(n) for n in others)
+
+
 def only_gripper(m, d, body: int) -> bool:
     """`body` touches the gripper and nothing else -- it is being carried."""
     seen = False
