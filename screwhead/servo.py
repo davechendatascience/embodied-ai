@@ -24,13 +24,10 @@ stiffness and this load. The reference is correct by construction.
 from __future__ import annotations
 
 import numpy as np
-import torch
 
-from .ik import decode_twist
+from . import kin_np
 from .interface import ActionSpec
-from .kinematics import fk
 from .poe import Chain
-from .se3 import exp_twist, inverse, log_se3
 
 
 class TwistServo:
@@ -40,19 +37,22 @@ class TwistServo:
         self.chain, self.spec, self.jas = chain, spec, joint_action_scale
         self.lam, self.iters, self.max_lag, self.max_pose_err = lam, iters, max_lag, max_pose_err
         self.ref: np.ndarray | None = None
-        self.T_ref: torch.Tensor | None = None
+        self.T_ref: np.ndarray | None = None
+        # the arithmetic runs in NumPy (screwhead/kin_np.py, held to the torch reference
+        # by tests/test_kin_np.py): 17x faster per step, the same numbers
+        self._np = kin_np.NpChain.of(chain)
         self.reanchors = 0          # diagnostics: how often the pose reference was abandoned
         self.posture: np.ndarray | None = None   # null-space target joints, or None
         self.posture_gain = 0.0
         self.limit_gain = limit_gain             # null-space push away from the joint limits
-        mid = chain.limits.mean(1)
-        self._mid = mid
-        self._span = (chain.limits[:, 1] - chain.limits[:, 0]).clamp(min=1e-6)
+        lim = chain.limits.detach().cpu().numpy().astype(float)
+        self._mid = lim.mean(1)
+        self._span = np.maximum(lim[:, 1] - lim[:, 0], 1e-6)
         self.limit_clamps = 0
 
     def reset(self, theta_measured: np.ndarray) -> None:
         self.ref = np.asarray(theta_measured, np.float64).copy()
-        self.T_ref = fk(self.chain, torch.tensor(self.ref)[None])[0]
+        self.T_ref = kin_np.fk(self._np, self.ref)[0]
 
     def command(self, theta_measured: np.ndarray, twist: np.ndarray) -> np.ndarray:
         """twist: body twist RATE (rad/s, m/s), moment first. Returns normalised joint action.
@@ -66,11 +66,12 @@ class TwistServo:
         meas = np.asarray(theta_measured, np.float64)
         if self.ref is None:
             self.reset(meas)
-        V = torch.as_tensor(np.asarray(twist, np.float64))
-        self.T_ref = self.T_ref @ exp_twist(V * self.spec.dt)
-        th = torch.tensor(self.ref)[None]
+        V = np.asarray(twist, np.float64)
+        self.T_ref = self.T_ref @ kin_np.exp_twist(V * self.spec.dt)
+        th = self.ref[None].copy()
         for _ in range(self.iters):
-            e = log_se3(inverse(fk(self.chain, th)) @ self.T_ref[None])      # body-frame pose error
+            T, J = kin_np.fk_jac(self._np, th)
+            e = kin_np.log_se3(kin_np.inverse(T) @ self.T_ref[None])         # body-frame pose error
             secondary = None
             if self.limit_gain > 0:
                 # The 7th joint is not specified by a 6-D twist. Spend it staying off the
@@ -81,16 +82,17 @@ class TwistServo:
                 secondary = self.limit_gain * (self._mid - th) / self._span
             if self.posture is not None and self.posture_gain > 0:
                 # an explicit posture target overrides it (used to compare branches)
-                secondary = self.posture_gain * (torch.as_tensor(self.posture) - th)
-            d = decode_twist(self.chain, th, e, dt=1.0, lam=self.lam, secondary=secondary)
-            th = d.theta
-            self.limit_clamps += int(bool(d.clamped.any()))
-        e = log_se3(inverse(fk(self.chain, th)) @ self.T_ref[None])[0]
-        if float(torch.linalg.norm(e)) > self.max_pose_err:
+                secondary = self.posture_gain * (np.asarray(self.posture, float) - th)
+            th, _, clamped = kin_np.decode_twist(self._np, th, e, dt=1.0, lam=self.lam,
+                                                 secondary=secondary, J=J)
+            self.limit_clamps += int(bool(clamped.any()))
+        T = kin_np.fk(self._np, th)
+        e = kin_np.log_se3(kin_np.inverse(T) @ self.T_ref[None])[0]
+        if float(np.linalg.norm(e)) > self.max_pose_err:
             # the pose reference has left what the arm can reach (a limit, a
             # singularity, a collision): re-anchor it rather than let it run away
-            self.T_ref = fk(self.chain, th)[0]
+            self.T_ref = T[0]
             self.reanchors += 1
-        self.ref = th[0].numpy()
+        self.ref = th[0].copy()
         self.ref = meas + np.clip(self.ref - meas, -self.max_lag, self.max_lag)
         return np.clip((self.ref - meas) / self.jas, -1.0, 1.0)

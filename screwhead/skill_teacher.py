@@ -11,6 +11,7 @@ import numpy as np
 
 from .gripper_servo import A_OPEN
 from .skills import Skills, SkillConfig
+from .task_spec import Step
 
 
 class SkillTeacher:
@@ -21,6 +22,7 @@ class SkillTeacher:
         self.plan = self.spec.plan
         self.phase = ""
         self.step_index = 0
+        self.step = None
 
     # -- goal predicates, scored by LIBERO itself ------------------------------------
     def satisfied(self, goal: tuple) -> bool:
@@ -39,6 +41,10 @@ class SkillTeacher:
         for i, step in enumerate(self.plan):
             if step.skill == "pick":
                 nxt = self.plan[i + 1] if i + 1 < len(self.plan) else None
+                closed = self._closed_container(nxt)
+                if closed is not None and not self.skills.held(step.obj):
+                    return i, Step("articulate", region=closed, mode="open",
+                                   goal=("open", closed))
                 goal = self._goal_for(nxt) if nxt is not None else None
                 if goal is not None and self.satisfied(goal):
                     continue
@@ -55,6 +61,24 @@ class SkillTeacher:
                 return i, step
         return len(self.plan), None
 
+    def _closed_container(self, step) -> str | None:
+        """The region a place step fills, if it is behind a door or in a drawer that is
+        shut.
+
+        "Open the top drawer and put the bowl inside" is scored as In(bowl, top_region)
+        alone -- no Open conjunct -- and the drawer starts closed, so a plan read off the
+        goal set the bowl down on the drawer's lid, 0/20. Ten LIBERO tasks have this
+        shape. Opening is a precondition of filling, and whether it holds is read from
+        the scene each step, like everything else.
+        """
+        if step is None or step.skill != "place_in":
+            return None
+        try:
+            self.env.scene.articulation(step.region)
+        except ValueError:
+            return None                       # not an articulated region
+        return None if self.satisfied(("open", step.region)) else step.region
+
     def _goal_for(self, step):
         return None if step is None else step.goal
 
@@ -66,6 +90,7 @@ class SkillTeacher:
             return self.skills.action(np.zeros(6), A_OPEN)
         i, step = self.current_step()
         self.step_index = i
+        self.step = step                       # what is being executed (may be a precondition)
         if step is None:
             held = [st.obj for st in self.plan
                     if st.skill in ("place_in", "place_on") and self.skills.held(st.obj)]

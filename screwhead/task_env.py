@@ -83,6 +83,7 @@ class TaskEnv:
         self.episode = 0
         self.t = 0
         self.raw = None
+        self._snap = None
         self._settled: dict[int, np.ndarray] = {}
 
     # -- plumbing -------------------------------------------------------------------
@@ -205,13 +206,22 @@ class TaskEnv:
 
     # -- what the teacher and the student read --------------------------------------
     def snapshot(self) -> dict:
-        """Tool pose and gripper state. Object poses come from Scene, by name."""
+        """Tool pose and gripper state. Object poses come from Scene, by name.
+
+        Computed once per control step: the teacher and its tests asked for it three
+        times a step, and at 3.9 ms of torch FK each that was a sixth of the episode.
+        """
+        key = (self.episode, self.t)
+        if self._snap is not None and self._snap[0] == key:
+            return self._snap[1]
+        from .kin_np import NpChain, fk as fk_np
         raw = self.raw or self.env.env._get_observations(force_update=True)
-        q = torch.tensor(np.asarray(raw["robot0_joint_pos"]), dtype=torch.float64)[None]
-        T = fk(self.chain, q)[0].numpy()
+        T = fk_np(NpChain.of(self.chain), np.asarray(raw["robot0_joint_pos"], float))[0]
         gq = raw["robot0_gripper_qpos"]; gv = raw.get("robot0_gripper_qvel", np.zeros(2))
-        return dict(R_tool=T[:3, :3], p_tool=T[:3, 3], aperture=float(gq[0] - gq[1]),
+        snap = dict(R_tool=T[:3, :3], p_tool=T[:3, 3], aperture=float(gq[0] - gq[1]),
                     aperture_rate=float(gv[0] - gv[1]), success=bool(self.env.env._check_success()))
+        self._snap = (key, snap)
+        return snap
 
     def student_state(self) -> np.ndarray:
         from .state import tool_state

@@ -15,6 +15,9 @@ enough that the data is not mostly failures.
   marginal   lo >= 0.50     collect, but the yield is poor and the successes may be biased
   broken     otherwise      fix before collecting
 
+A perfect record needs ~32 episodes before its lower bound clears 0.90 (20/20 is only
+[0.85, 1.00]), so use --episodes 20 to find what is broken and 40 to certify.
+
 Mechanisms come from tools/skill_eval.py: never-reached-grasp, blocked-reaching,
 reached-but-no-grip, held-but-not-delivered, delivered-but-unscored, unimplemented.
 """
@@ -46,13 +49,13 @@ def teacher_revision() -> str:
     return f"skill_teacher:{h.hexdigest()[:10]}"
 
 
-def ingest(trials: list[dict], revision: str, artifact: str) -> str:
+def ingest(trials: list[dict], artifact: str) -> str:
     """Hand the trials to component-belief, run from ITS environment, not this one."""
     import tempfile
     recs = [{"contract_id": "CTR-teacher-reliable", "test_id": "TST-teacher-reliability",
              "outcome": "pass", "metrics": {"success": bool(t["metrics"]["success"])},
              "conditions": t["conditions"],
-             "repro": {**t["repro"], "teacher_revision": revision}} for t in trials]
+             "repro": t["repro"]} for t in trials]
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
         json.dump(recs, f)
     code = ("import json,sys; sys.path.insert(0,'src'); from component_belief import server; "
@@ -93,8 +96,14 @@ def collect(suite: str, episodes: int, horizon: int, out: Path) -> Path:
     env = {"HF_HUB_OFFLINE": "1", "PYTHONPATH": "third_party/LIBERO:.", "MUJOCO_GL": "egl",
            "PATH": "/usr/bin:/bin", "HOME": str(Path.home())}
     log = out.with_suffix(".log")
+    rev = teacher_revision()                   # the code that RAN, stamped before it runs
     with log.open("w") as f:
         subprocess.run(cmd, cwd=ROOT, env=env, stdout=f, stderr=subprocess.STDOUT, check=False)
+    if out.exists():
+        data = json.loads(out.read_text())
+        for t in data["trials"]:
+            t["repro"]["teacher_revision"] = rev
+        out.write_text(json.dumps(data, indent=1))
     return out
 
 
@@ -163,9 +172,9 @@ def main() -> int:
         print("\nfailures by mechanism: " + ", ".join(f"{m} {c}" for m, c in agg.most_common()))
 
     if args.ingest:
-        rev = teacher_revision()
-        print(f"\ningest as {rev}:")
-        print(ingest(trials, rev, str(ROOT / (args.reuse or args.evidence))))
+        revs = sorted({t["repro"].get("teacher_revision", "?") for t in trials})
+        print(f"\ningest ({', '.join(revs)}):")
+        print(ingest(trials, str(ROOT / (args.reuse or args.evidence))))
     return 0
 
 

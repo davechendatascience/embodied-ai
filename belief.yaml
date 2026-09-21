@@ -80,7 +80,7 @@ components:
       - {id: FM-tool-frame-drift, observable: axes are right but the tool offset is measured to the wrong link}
     remediation: The five-step conversion in Modern Robotics ch.4 sec.4.5; check against sim FK before anything downstream
 
-  # code: screwhead/kinematics.py, screwhead/batch.py
+  # code: screwhead/kinematics.py, screwhead/batch.py, screwhead/kin_np.py (NumPy fast path for the control loop), tests/test_kin_np.py (holds it to the torch reference)
   - id: CMP-kinematics
     purpose: Batched differentiable forward kinematics and body Jacobian from screw axes
     inputs: [IFC-poe__kinematics]

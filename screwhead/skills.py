@@ -102,6 +102,9 @@ class Skills:
         self.phase = ""
         self._grasp_cache: dict[str, tuple] = {}
         self._palm: float | None = None
+        self._episode = None
+        self._drop_cache: dict = {}
+        self._carry_cache: dict = {}
         self._handle_cache: dict[str, tuple[np.ndarray, float, np.ndarray]] = {}
         self.last_choice: dict = {}
         self._geom_mask = None
@@ -128,6 +131,25 @@ class Skills:
         return np.concatenate([twist, [target_to_channel(np.clip(target_aperture, 0.0, A_OPEN))]])
 
     # -- geometry -------------------------------------------------------------------
+    def new_episode_check(self) -> None:
+        """Forget every decision made in a previous episode.
+
+        The grasp cache is invalidated when the object moves more than a centimetre, and
+        LIBERO often starts the next episode with the object within a centimetre of where
+        the last one started -- so a new episode silently inherited the previous one's
+        grasp, crossing height and handle frame, chosen from a different arm pose. On the
+        cream cheese one bad choice in episode 0 then failed 17 more episodes in a row.
+        A teacher whose labels depend on an earlier episode is not the Markov teacher
+        DAgger needs.
+        """
+        ep = getattr(self.env, "episode", None)
+        if ep != self._episode:
+            self._episode = ep
+            self._grasp_cache.clear()
+            self._handle_cache.clear()
+            self._drop_cache.clear()
+            self._carry_cache.clear()
+
     def grasp_for(self, obj: str, via: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray, float]:
         """Top-down grasp on an object, from its measured box.
 
@@ -137,6 +159,7 @@ class Skills:
         converging), while other yaws had 1.1-1.4 rad of margin -- so the teacher scores
         candidate yaws by IK at the grasp, above it, and at the place pose.
         """
+        self.new_episode_check()
         box = self.scene.object_box(obj)
         centre = box.world_centre
         cached = self._grasp_cache.get(obj)
@@ -177,9 +200,7 @@ class Skills:
         where it cannot track a twist at all. So walk the height down until the arm has
         room to move in every direction.
         """
-        import torch
-
-        from .ik import sigma_min, solve_ik
+        from .kin_np import NpChain, sigma_min, solve_ik
         s = self.env.snapshot()
         top = self.transit_height(s["p_tool"], p_g, body)
         floor = float(p_g[2] + self.k.approach)
@@ -190,12 +211,12 @@ class Skills:
         for h in hs:
             T = np.eye(4); T[:3, :3] = R; T[:3, 3] = np.array([p_g[0], p_g[1], h])
             Ts.append(T)
-        q0 = torch.tensor(np.asarray(self.env.raw["robot0_joint_pos"]), dtype=torch.float64)
-        res = solve_ik(self.env.chain, torch.tensor(np.stack(Ts)), q0[None].expand(len(Ts), -1),
-                       lam=0.02, max_iters=200, trust=0.2)
-        conv = res["converged"].numpy(); th = res["theta"].numpy()
-        sig = sigma_min(self.env.chain, res["theta"]).numpy()
-        lim = self.env.chain.limits.numpy()
+        c = NpChain.of(self.env.chain)
+        q0 = np.asarray(self.env.raw["robot0_joint_pos"], float)
+        res = solve_ik(c, np.stack(Ts), q0[None], lam=0.02, max_iters=200, trust=0.2)
+        conv, th = res["converged"], res["theta"]
+        sig = sigma_min(c, th)
+        lim = c.limits
         margin = np.minimum(th - lim[:, 0], lim[:, 1] - th).min(1)
         for i, h in enumerate(hs):
             if (conv[i] and sig[i] > 0.05 and margin[i] > 0.15
@@ -472,20 +493,18 @@ class Skills:
         alone closed across the cream cheese's diagonal, and one chosen on shape alone sat
         on a joint limit over the basket (margin 0.000 at every height).
         """
-        import torch
-
-        from .ik import sigma_min, solve_ik
-        q0 = torch.tensor(np.asarray(self.env.raw["robot0_joint_pos"]), dtype=torch.float64)
-        lim = self.env.chain.limits.numpy()
+        from .kin_np import NpChain, sigma_min, solve_ik
+        c = NpChain.of(self.env.chain)
+        q0 = np.asarray(self.env.raw["robot0_joint_pos"], float)
+        lim = c.limits
         Ts, meta = [], []
         for i, (R, p_g, _w, app) in enumerate(cands):
             for pt in [p_g, p_g - app * self.k.approach] + ([via] if via is not None else []):
                 T = np.eye(4); T[:3, :3] = R; T[:3, 3] = pt
                 Ts.append(T); meta.append(i)
-        res = solve_ik(self.env.chain, torch.tensor(np.stack(Ts)), q0[None].expand(len(Ts), -1),
-                       lam=0.02, max_iters=200, trust=0.2)
-        th = res["theta"].numpy(); conv = res["converged"].numpy()
-        sig = sigma_min(self.env.chain, res["theta"]).numpy()
+        res = solve_ik(c, np.stack(Ts), q0[None], lam=0.02, max_iters=200, trust=0.2)
+        th, conv = res["theta"], res["converged"]
+        sig = sigma_min(c, th)
         margin = np.minimum(th - lim[:, 0], lim[:, 1] - th).min(1)
         scores = {}
         for i in range(len(cands)):
@@ -584,8 +603,30 @@ class Skills:
                 sides.add(0)
             elif "rightfinger" in name or "finger_joint2" in name:
                 sides.add(1)
-        s = self.env.snapshot()
-        return len(sides) == 2 and abs(s["aperture_rate"]) < self.k.squeeze_rate
+        if len(sides) < 2:
+            return False
+        # jaws that have stopped closing mean the squeeze has settled -- the test that
+        # decides when to LIFT. Once the object is off its support that test flickers
+        # with every acceleration (held True/False on alternate steps through a carry,
+        # and the teacher switching between squeeze and lift), so an object touching
+        # nothing but the fingers counts as held, whatever the jaws are doing.
+        return (abs(self.env.snapshot()["aperture_rate"]) < self.k.squeeze_rate
+                or self._airborne(bid))
+
+    def _airborne(self, body: int) -> bool:
+        """Touching the gripper and nothing else."""
+        m, d = self.scene.m, self.scene.d
+        touching = False
+        for i in range(d.ncon):
+            c = d.contact[i]
+            b1, b2 = int(m.geom_bodyid[c.geom1]), int(m.geom_bodyid[c.geom2])
+            if body not in (b1, b2):
+                continue
+            other = m.body_id2name(b2 if b1 == body else b1) or ""
+            if not other.startswith("gripper"):
+                return False
+            touching = True
+        return touching
 
     # -- skills ---------------------------------------------------------------------
     def region_pose(self, region: str):
@@ -618,21 +659,19 @@ class Skills:
             return self.action(self.twist_to(R, p, R_g, p_g, v_min=0.0), 0.0)
         off = p - p_g
         lateral = float(np.linalg.norm(off - app * (off @ app)))
+        along = float(-(off @ app))                    # still to advance toward the grasp
         misalign = max(lateral / k.funnel_xy, e_rot / k.funnel_rot)
         pre = p_g - app * k.approach                   # where the advance starts
-        if lateral > k.funnel_xy:
-            # cross ABOVE what is on the table, then come down on to the start of the
-            # advance. Aiming straight at the pre-grasp drags the tool diagonally through
-            # whatever stands in between, and left `approach` the commonest failure.
-            self.phase = "approach"
-            if float(np.linalg.norm((p - pre)[:2])) > k.funnel_xy:
-                target = np.array([pre[0], pre[1], max(self.transit_for(obj), pre[2])])
-            else:
-                target = pre
-        else:
-            self.phase = "descend"
+        if lateral <= k.funnel_xy and along <= k.approach + 0.02:
+            self.phase = "descend"                     # on the approach axis: advance
             target = p_g - app * (k.approach * float(np.clip(misalign, 0.0, 1.0)))
-        return self.action(self.twist_to(R, p, R_g, target), open_to)
+            return self.action(self.twist_to(R, p, R_g, target), open_to)
+        leg = self.path_to(R, p, R_g, pre, max(self.transit_for(obj), pre[2]))
+        if leg is not None:
+            self.phase, R_t, target = leg
+            return self.action(self.twist_to(R, p, R_t, target), open_to)
+        self.phase = "down"                            # above the start: straight down to it
+        return self.action(self.twist_to(R, p, R_g, pre), open_to)
 
     def place(self, obj: str, region: str, s: dict, inside: bool) -> np.ndarray:
         """Carry a held object over the region and release it there.
@@ -653,8 +692,7 @@ class Skills:
             return self.pick(obj, s, via=self.via_for(region))
         delta = target_q - q
         over = float(np.linalg.norm(delta[:2]))
-        # a fixed height from the scene: deriving it from the object's own z chases upward
-        carry_z = float(p_reg[2]) + float(half[2]) + k.lift
+        carry_z = self._carry_height(obj, region, q, target_q, R, p)
         R_carry = R                                 # the grasp yaw was chosen to reach here too
         if over > 0.02 and q[2] < carry_z - 0.02:
             self.phase = "lift"
@@ -662,7 +700,9 @@ class Skills:
         if over > 0.02:
             self.phase = "carry"
             goal = p + np.array([delta[0], delta[1], max(0.0, carry_z - q[2])])
-            return self.action(self.twist_to(R, p, R_carry, goal), 0.0)
+            # 0.15 m/s, not the 0.25 of an empty hand: a bowl held by a 2.6 mm rim pinch
+            # left the jaws at 30 cm during a full-speed carry
+            return self.action(self.twist_to(R, p, R_carry, goal, v_max=0.15), 0.0)
         if delta[2] < -0.004:
             self.phase = "lower"
             return self.action(self.twist_to(R, p, R_carry, p + Z * delta[2], v_max=0.10, v_min=0.03), 0.0)
@@ -708,6 +748,7 @@ class Skills:
         # candidates, the wrist target jumped, and the jaws cycled 15-35 mm without ever
         # closing on the bar. The handle itself moves as the fixture opens, so the POINT
         # is re-read each step and only the frame is held.
+        self.new_episode_check()
         held_frame = self._handle_cache.get(region)
         if held_frame is None:
             cands = self._handle_grasps(a["handle_geom"])
@@ -769,20 +810,114 @@ class Skills:
             return floor
         return float(min(max(np.max(tops[keep]) + 0.05, floor), p_to[2] + 0.30))
 
+    def path_to(self, R: np.ndarray, p: np.ndarray, R_goal: np.ndarray, start: np.ndarray,
+                safe_h: float) -> tuple[str, np.ndarray, np.ndarray] | None:
+        """Up, over, down on to `start`; None once the tool is in the column above it.
+
+        Aiming straight at a target cuts a diagonal through whatever stands between, and
+        rotates the wrist while the fingers are next to things. The path a person would
+        draw instead: rise vertically to a plane measured to clear the scene, cross it,
+        turn the wrist up there where nothing is near, and come straight down. Each leg
+        is chosen from the current state, so any state still gets a label.
+        """
+        k = self.k
+        if float(np.linalg.norm((p - start)[:2])) <= k.funnel_xy:
+            return None
+        if p[2] < safe_h - 0.02:
+            return "up", R, np.array([p[0], p[1], safe_h])
+        return "over", R_goal, np.array([start[0], start[1], safe_h])
+
     def place_target(self, obj: str, region: str, inside: bool) -> tuple[np.ndarray, np.ndarray]:
         """(object origin now, where that origin has to end up)."""
+        self.new_episode_check()
         R_reg, p_reg, half = self.region_pose(region)
         box = self.scene.object_box(obj)
         q = self.scene.body_pose(obj)[1]                      # the origin LIBERO tests
         half_h = float(np.abs(box.R @ np.diag(box.half)).sum(1)[2])
         centre_off = float((box.world_centre - q)[2])         # origin to box centre, world z
+        xy = self._drop_xy(obj, region, R_reg, p_reg, half, box)
         if inside:
             target_q = p_reg.copy()
+            target_q[:2] = xy
             target_q[2] = p_reg[2] + max(0.0, float(half[2]) - half_h) + self.k.place_clearance
         else:
             target_q = p_reg + R_reg @ np.array([0.0, 0.0, float(half[2])])
+            target_q[:2] = xy
             target_q[2] += half_h - centre_off + self.k.place_clearance
         return q, target_q
+
+    def _drop_xy(self, obj: str, region: str, R_reg, p_reg, half, box) -> np.ndarray:
+        """The point of the region nearest its centre that is open from above.
+
+        A drawer opened 14 cm keeps the back of its interior under the cabinet top, and
+        its region's centre can be under there too: the teacher held the bowl over a spot
+        it could not come down on and stalled, 0/20 on "open the top drawer and put the
+        bowl inside". A vertical ray says which parts of the region are reachable.
+        """
+        key = (obj, region)
+        if key in self._drop_cache:
+            return self._drop_cache[key]
+        import mujoco
+        m, d = self.scene.m, self.scene.d
+        mm = m._model if hasattr(m, "_model") else m
+        dd = d._data if hasattr(d, "_data") else d
+        top = float(p_reg[2] + abs(float(half[2])))
+        ohw = np.abs(box.R @ np.diag(box.half)).sum(1)[:2]      # object half-footprint
+        span = np.maximum(np.abs(np.asarray(half[:2], float)) - ohw, 0.0)
+        best, best_d = np.asarray(p_reg[:2], float), np.inf
+        exclude = self.scene.body_id(obj)
+        gid = np.zeros(1, np.int32)
+        for fx in np.linspace(-1, 1, 5):
+            for fy in np.linspace(-1, 1, 5):
+                local = np.array([fx * span[0], fy * span[1], 0.0])
+                pt = p_reg + R_reg @ local
+                start = np.array([pt[0], pt[1], top + 0.30]) + self.scene.base
+                dist = float(mujoco.mj_ray(mm, dd, start, np.array([0.0, 0.0, -1.0]), None, 1,
+                                           exclude, gid))
+                hit_z = start[2] - dist - self.scene.base[2] if dist >= 0 else -np.inf
+                if hit_z > top + 0.01:
+                    continue                    # something over this spot
+                dc = float(np.linalg.norm(local[:2]))
+                if dc < best_d:
+                    best, best_d = pt[:2].copy(), dc
+        self._drop_cache[key] = best
+        return best
+
+    def _carry_height(self, obj: str, region: str, q, target_q, R, p) -> float:
+        """Object-origin height for the carry: its bottom clears what is between here and
+        the drop, and the arm can hold the tool there with room to move.
+
+        A fixed "region top + 12 cm" put the carry for a top drawer where the arm is
+        nearly straight -- stuck in `lift` 200-400 mm short on most of 20 episodes.
+        """
+        key = (obj, region)
+        if key in self._carry_cache:
+            return self._carry_cache[key]
+        from .kin_np import NpChain, sigma_min, solve_ik
+        box = self.scene.object_box(obj)
+        hang = float(q[2] - (box.world_centre[2] - np.abs(box.R @ np.diag(box.half)).sum(1)[2]))
+        tool_off = p - q
+        clear = self.transit_height(q, target_q, self.scene.body_id(obj)) - 0.05 + hang + 0.03
+        lo = float(target_q[2] + 0.05)
+        hi = float(min(max(clear, lo), target_q[2] + 0.30))
+        hs = list(np.arange(hi, lo - 1e-9, -0.03)) or [lo]
+        Ts = []
+        for h in hs:
+            T = np.eye(4); T[:3, :3] = R
+            T[:3, 3] = np.array([target_q[0], target_q[1], h]) + tool_off
+            Ts.append(T)
+        c = NpChain.of(self.env.chain)
+        res = solve_ik(c, np.stack(Ts), np.asarray(self.env.raw["robot0_joint_pos"], float)[None],
+                       lam=0.02, max_iters=200, trust=0.2)
+        sig = sigma_min(c, res["theta"])
+        margin = np.minimum(res["theta"] - c.limits[:, 0], c.limits[:, 1] - res["theta"]).min(1)
+        out = lo
+        for i, h in enumerate(hs):
+            if res["converged"][i] and sig[i] > 0.05 and margin[i] > 0.15:
+                out = float(h)
+                break
+        self._carry_cache[key] = out
+        return out
 
     def at_place(self, q: np.ndarray, target_q: np.ndarray) -> bool:
         """The object is where it was carried to, whether or not it is still in the jaws.

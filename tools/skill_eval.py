@@ -30,7 +30,16 @@ def _track(env, teacher, s, track) -> None:
     it was ever pressed against something bolted down, how close it came to the grasp,
     and how close the object came to its target say what stopped it.
     """
-    step = teacher.plan[min(teacher.step_index, len(teacher.plan) - 1)]
+    step = teacher.step or teacher.plan[min(teacher.step_index, len(teacher.plan) - 1)]
+    if 0 <= teacher.step_index < track["step"]:
+        # went BACK a step: the object was lost after it had been taken (dropped in the
+        # carry, knocked out at release). Remember it -- the reset below would hide it.
+        track["regressed"] = track.get("skill", "?")
+    if track["step"] != teacher.step_index or track.get("skill") != step.skill:
+        # per plan step: holding the drawer handle in step 1 is not holding the bowl in
+        # step 2, and carrying these over labelled a failed pick "delivered-but-unscored"
+        track.update(held=False, fixture=0, to_grasp=9.9, to_place=9.9, step=teacher.step_index,
+                     skill=step.skill)
     try:
         if step.obj:
             _R, p_g, _w = teacher.skills.grasp_for(step.obj)
@@ -61,16 +70,24 @@ def _track(env, teacher, s, track) -> None:
 
 
 def _mechanism(track, missing: str) -> str:
-    """One of five ways an episode fails, from those numbers."""
+    """One of five ways an episode fails, from those numbers, prefixed by the plan step
+    it failed in (pick, place_in, articulate, ...)."""
     if missing:
         return "unimplemented"
+    skill = track.get("skill", "?")
+    if skill in ("articulate", "turn"):
+        return f"{skill}/" + ("never-held-handle" if not track["held"] else "held-but-not-moved")
     if not track["held"]:
         if track["to_grasp"] > 0.03:
-            return "blocked-reaching" if track["fixture"] else "never-reached-grasp"
-        return "reached-but-no-grip"
-    if track["to_place"] > 0.05:
-        return "held-but-not-delivered"
-    return "delivered-but-unscored"
+            m = "blocked-reaching" if track["fixture"] else "never-reached-grasp"
+        else:
+            m = "reached-but-no-grip"
+    elif track["to_place"] > 0.05:
+        m = "held-but-not-delivered"
+    else:
+        m = "delivered-but-unscored"
+    lost = track.get("regressed")
+    return f"{skill}/{m}" + (f" (after losing it in {lost})" if lost else "")
 
 
 def _diagnose(env, teacher, missing: str) -> str:
@@ -124,7 +141,7 @@ def _worker(remote, suite, task, episodes, seed, cpu, kw, video_dir, max_videos)
         env.reset()
         frames, done, info = [], False, {}
         phases = collections.Counter()
-        missing, track = "", dict(held=False, fixture=0, to_grasp=9.9, to_place=9.9)
+        missing, track = "", dict(held=False, fixture=0, to_grasp=9.9, to_place=9.9, step=-1)
         while not done:
             s = env.snapshot()
             try:
@@ -146,7 +163,7 @@ def _worker(remote, suite, task, episodes, seed, cpu, kw, video_dir, max_videos)
                          diag="" if info["success"] else _diagnose(env, teacher, missing),
                          mechanism="" if info["success"] else _mechanism(track, missing),
                          **{k: round(float(v), 4) if isinstance(v, float) else v
-                            for k, v in track.items()}))
+                            for k, v in track.items() if k not in ("skill", "regressed")}))
         if video_dir and frames and videos < max_videos and not info["success"]:
             import imageio.v2 as imageio
             Path(video_dir).mkdir(parents=True, exist_ok=True)
