@@ -217,7 +217,7 @@ components:
       - {id: FM-stale-grasp-cache, observable: a grasp chosen in a previous episode is reused after reset}
     remediation: Per-task ProgramConfig (sector, pre-shape, posture, selection); per-episode grasp cache; clearance, IK, path and sigma-min checks
 
-  # code: screwhead/skills.py (feedback laws), screwhead/grasp_planner.py (candidates from geometry), screwhead/reach.py (IK, conditioning, collision), screwhead/frames.py, screwhead/skill_teacher.py, screwhead/scene.py, screwhead/task_spec.py, screwhead/task_env.py, screwhead/episode_log.py (per-episode diagnosis), tools/skill_eval.py, tools/skill_trace.py, tools/teacher_report.py, scripts/skill_sweep.sh
+  # code: screwhead/skills.py (feedback laws), screwhead/grasp_planner.py (candidates from geometry), screwhead/reach.py (IK, conditioning, collision), screwhead/frames.py, screwhead/skill_teacher.py, screwhead/scene.py, screwhead/task_spec.py, screwhead/task_env.py, screwhead/episode_log.py (per-episode diagnosis), tools/skill_eval.py, tools/skill_trace.py, tools/teacher_report.py, tools/teacher_determinism.py, scripts/skill_sweep.sh
   - id: CMP-skill-library
     purpose: >-
       Build a task's demonstration program from its goal specification and the scene's
@@ -782,6 +782,19 @@ contracts:
     evaluable_by: [TST-smell-check]
     sufficiency: {n_min: 1, max_ci_width: 1.0}
 
+  # A teacher-reliability number is only evidence if the same seed reproduces the same
+  # episode (consistency.yaml: BRN-reliability-evidence-valid). Before LIBERO's fixture
+  # re-sampling was seeded, identical runs diverged.
+  - id: CTR-teacher-deterministic
+    subject: CMP-skill-library
+    claim_type: capability
+    metrics:
+      - {id: reproducible, unit: bool}
+    acceptance: {rule: "reproducible == true", target_rate: 0.8}
+    compatibility_key: [teacher_revision]
+    evaluable_by: [TST-teacher-deterministic]
+    sufficiency: {n_min: 16, max_ci_width: 0.3}
+
   - id: CTR-teacher-reliable
     subject: CMP-skill-library
     claim_type: capability
@@ -1153,8 +1166,8 @@ tests:
     capture: [task, task_suite, teacher_revision]
     cost: 60.0
 
-  # The assessment: every task, 20 episodes, with the mechanism of each failure. Ingest
-  # with `tools/teacher_report.py --from runs/evidence/reliability --ingest`.
+  # The assessment: every task, 20 episodes, with the mechanism of each failure. Run it
+  # through run_test; the per-episode diagnosis lands in runs/evidence/reliability/.
   - id: TST-smell-check
     layer: component
     targets: [CMP-code-standard]
@@ -1164,10 +1177,19 @@ tests:
     cost: 2.0
     timeout_s: 600
 
+  - id: TST-teacher-deterministic
+    layer: component
+    targets: [CMP-skill-library]
+    run: python3 tools/teacher_determinism.py --out $OUT
+    metrics: [reproducible]
+    capture: [teacher_revision, task_suite, task]
+    cost: 5.0
+    timeout_s: 1800
+
   - id: TST-teacher-reliability
     layer: e2e
     targets: [CMP-skill-library]
-    run: python3 tools/teacher_report.py --suites libero_object libero_spatial libero_goal --episodes 20
+    run: python3 tools/teacher_report.py --suites libero_object libero_spatial libero_goal --episodes 20 --out $OUT
     metrics: [success]
     capture: [task, task_suite, teacher_revision, mechanism]
     cost: 80.0

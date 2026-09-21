@@ -1,0 +1,198 @@
+# Declarations for the consistency-belief MCP: the design reasoning behind the teacher,
+# as a proof DAG rooted in what this project has measured or requires.
+#
+# Like belief.yaml this file is the approval gate: the server reads it from git HEAD, so
+# nothing here counts until a human commits it.
+#
+# The two ledgers are paired. belief.yaml (component-belief) records whether the teacher
+# WORKS: tests run through its run_test and land as measured trials. This file records
+# whether the reasons we give for the design FOLLOW from their premises. Every branch's
+# derivation_rule ends with `evidence:`, the component-belief contract that measures it; a branch is
+# proven only by adversarial probes (verify_step) that fail to find a counterexample, run
+# by a reviewer other than the one who wrote it, and it is only worth anything while its
+# contract's evidence holds.
+
+axioms:
+  - id: AXM-libero-scores-final-state
+    domain: environment
+    statement: >-
+      Success is LIBERO's own predicate evaluated on the simulator state: In(obj, region)
+      is contact AND containment of the object's origin; On(obj, site) is the origin
+      within the site's footprint and height band, plus contact with the site's parent
+      object when it has one; Open/Close/TurnOn/TurnOff compare one joint to a threshold.
+    rationale: >-
+      A reimplemented predicate drifted from the scorer: a box test called In true with
+      the can 8 mm above the basket rim while LIBERO scored the episode a failure.
+
+  - id: AXM-dagger-needs-markov-labels
+    domain: requirement
+    statement: >-
+      The teacher must be able to label any state the student reaches, so its action is a
+      function of the current state (and of decisions re-derivable from it), never of the
+      history of the episode or of previous episodes.
+    rationale: DAgger relabels student-visited states; a history-dependent label is undefined there.
+
+  - id: AXM-one-execution-path
+    domain: requirement
+    statement: >-
+      Demonstrations, DAgger rollouts and evaluation execute actions through the same
+      servos and the same action decode.
+    rationale: >-
+      Relabelling command-mode data and testing through the servo was a train/test mismatch
+      that invalidated a round of results.
+
+  - id: AXM-servo-tracks-reachable-poses
+    domain: physics
+    statement: >-
+      The twist servo tracks a commanded pose only where the arm has a converged IK
+      solution with room to move (smallest singular value and joint margin bounded away
+      from zero) and is not inside a fixture; elsewhere it clamps on joint limits and
+      re-anchors its reference, and the tool does not follow the command.
+    rationale: Measured repeatedly as re-anchor and clamp counts rising while the tool stalls.
+
+  - id: AXM-panda-gripper-geometry
+    domain: physics
+    statement: >-
+      The Panda's gripping surfaces are its fingertips, reaching from 5 mm beyond to about
+      12 mm behind the tool point; the palm begins 40 mm behind it. Each finger is a
+      position servo (1000 N/m toward closed, capped at 20 N), so the squeeze on an object
+      scales with how far each finger is held from closed.
+    rationale: Read from the MJCF actuators and measured from the gripper geoms.
+
+  - id: AXM-libero-resamples-fixtures
+    domain: environment
+    statement: >-
+      Every env.reset() re-samples fixture poses from numpy's global RNG and writes them to
+      model.body_pos, which set_init_state does not restore.
+    rationale: Two unseeded resets moved the wooden cabinet 12 mm apart.
+
+  - id: AXM-reproducible-measurement
+    domain: epistemic
+    statement: >-
+      A measurement is evidence only if the same seed reproduces the same episode, and an
+      observer does not change the behaviour it records.
+    rationale: Without it, paired comparisons of two teacher versions measure noise.
+
+definitions:
+  - id: DEF-reachable-pose
+    term: Reachable pose
+    meaning: >-
+      A tool pose with a converged IK solution whose smallest singular value exceeds 0.05
+      and whose every joint is at least 0.15 rad from its limit, with the arm not
+      penetrating a fixture.
+
+  - id: DEF-holding
+    term: Holding
+    meaning: >-
+      Both finger groups touch the target and the jaw aperture is stopped by it: neither
+      near zero (closed on nothing) nor near fully open.
+
+lemmas:
+  - id: LMA-whole-path-reachable
+    statement: >-
+      A motion segment is executable by the servo only if every pose along it is a
+      reachable pose -- checking its endpoints is not sufficient.
+    premises: [AXM-servo-tracks-reachable-poses, DEF-reachable-pose]
+    derivation_rule: >-
+      The servo tracks each intermediate pose in turn; one unreachable intermediate pose
+      triggers clamping and re-anchoring whatever the endpoints are.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: LMA-holding-is-geometric
+    statement: >-
+      Whether the gripper holds a target must be decided from finger contact on the target
+      and an aperture stopped by it, not from jaw speed and not from contact with any part
+      of the target's body.
+    premises: [AXM-panda-gripper-geometry, DEF-holding]
+    derivation_rule: >-
+      Pulling or carrying a held target moves the jaws, so a speed test goes false while
+      holding; fingertips pressed on a drawer face touch the drawer's body without
+      holding its handle.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: LMA-caches-reset-per-episode
+    statement: >-
+      Every decision the teacher caches (grasp, handle frame, drop point, carry height) is
+      cleared at each episode boundary and is re-derivable from the state.
+    premises: [AXM-dagger-needs-markov-labels]
+    derivation_rule: A cache that survives an episode makes the label depend on a previous episode.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: LMA-seed-fixtures-per-init-state
+    statement: >-
+      Seeding numpy's global RNG before every reset, per initial-state index, makes
+      episodes reproducible and keeps each cached settled state consistent with the
+      fixture poses it was settled on.
+    premises: [AXM-libero-resamples-fixtures, AXM-reproducible-measurement]
+    derivation_rule: The fixture pose becomes a function of (seed, init index), identical at settle and replay.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: LMA-observers-read-only
+    statement: >-
+      The assessment's diagnostics only read the teacher's cached decisions and never
+      cause one to be made.
+    premises: [AXM-reproducible-measurement, AXM-dagger-needs-markov-labels]
+    derivation_rule: >-
+      A diagnostic that chooses and caches a grasp changes the decision the teacher then
+      acts on, so the recorded episode is not the episode the teacher alone would produce.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+branches:
+  - id: BRN-carry-reachable-along-carry
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Reach.carry_height returns a height that is a reachable pose over the pick point, the
+      midpoint and the drop point, for the grasp the object is held by.
+    premises: [LMA-whole-path-reachable]
+    derivation_rule: >-
+      screwhead/reach.py carry_height solves IK at all three stops for every height tried.
+      evidence: CTR-teacher-reliable (spatial 6, 14 -> 19/20 paired, 0 broken elsewhere).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-handle-grasp-reachable-along-drive
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      A handle grasp is chosen only if its pose halfway through and at the end of the
+      joint's motion is also reachable.
+    premises: [LMA-whole-path-reachable]
+    derivation_rule: >-
+      screwhead/skills.py _handle_frame passes the joint-motion poses to Reach.choose(extra=...).
+      evidence: CTR-teacher-reliable (goal 0, goal 7).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-handle-holding-by-aperture
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Skills.holding is true iff both finger groups touch the handle's body and the
+      aperture lies between half the handle's width and its width plus 12 mm.
+    premises: [LMA-holding-is-geometric]
+    derivation_rule: >-
+      screwhead/skills.py holding(body, width).
+      evidence: CTR-teacher-reliable (goal 0, 14 -> 20/20 paired).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-reliability-evidence-valid
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      The per-task success rates tools/teacher_report.py produces are valid evidence for
+      CTR-teacher-reliable: reproducible per seed, unaffected by the diagnostics, and
+      scored by LIBERO's own predicates.
+    premises: [LMA-seed-fixtures-per-init-state, LMA-observers-read-only, LMA-caches-reset-per-episode,
+               AXM-libero-scores-final-state]
+    derivation_rule: >-
+      TaskEnv seeds each reset; EpisodeLog reads cached_grasp only; Skills clears its
+      caches on a new episode; SkillTeacher.satisfied delegates to _eval_predicate.
+      evidence: CTR-teacher-deterministic (same seed, same timeline, run twice).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+policies:
+  - id: POL-teacher-design-consistent
+    criteria:
+      - {target: BRN-carry-reachable-along-carry, require: proven}
+      - {target: BRN-handle-grasp-reachable-along-drive, require: proven}
+      - {target: BRN-handle-holding-by-aperture, require: proven}
+      - {target: BRN-reliability-evidence-valid, require: proven}

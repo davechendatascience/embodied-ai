@@ -3,7 +3,7 @@
 
   teacher_report.py --suites libero_object libero_spatial libero_goal --episodes 20
   teacher_report.py --from runs/evidence            # re-read trials already collected
-  teacher_report.py --episodes 20 --ingest          # and record them in component-belief
+  teacher_report.py --episodes 20 --out $OUT        # as component-belief's TST-teacher-reliability
 
 A sweep prints successes per task, which at five episodes is a coin-flip away from
 anything. This prints, per task, the success rate with a 94% interval and the MECHANISM
@@ -205,7 +205,15 @@ def _parse() -> argparse.Namespace:
     ap.add_argument("--from", dest="reuse", default="", help="read existing trials, do not run")
     ap.add_argument("--ingest", action="store_true")
     ap.add_argument("--examples", type=int, default=2, help="failed episodes shown in full per task")
+    ap.add_argument("--out", default="", help="write the trials for component-belief's run_test ($OUT)")
     return ap.parse_args()
+
+
+def write_out(trials: list[dict], path: str) -> None:
+    """The trials as component-belief's run_test reads them: metrics, conditions, repro.
+    The per-episode diagnosis stays in the evidence directory, not in the ledger."""
+    Path(path).write_text(json.dumps({"trials": [
+        {"metrics": t["metrics"], "conditions": t["conditions"], "repro": t["repro"]} for t in trials]}))
 
 
 def _gather(args) -> list[dict]:
@@ -253,6 +261,9 @@ def main() -> int:
     _print_table(rows)
     print("\n==== diagnosis, worst task first ====")
     diagnose(rows, trials, args.examples, ROOT / (args.reuse or args.evidence) / "diagnosis.md")
+    if args.out:
+        write_out(trials, args.out)
+        print(f"\n{len(trials)} trials -> {args.out}")
     if args.ingest:
         revs = sorted({t["repro"].get("teacher_revision", "?") for t in trials})
         print(f"\ningest ({', '.join(revs)}):")

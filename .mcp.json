@@ -3,8 +3,10 @@
     "component-belief": {
       "command": "uv",
       "args": [
-        "--directory", "/home/edge-host/Documents/GitHub/Theoretically_Driven_LLM_Planning",
-        "run", "component-belief-mcp"
+        "--directory",
+        "/home/edge-host/Documents/GitHub/Theoretically_Driven_LLM_Planning",
+        "run",
+        "component-belief-mcp"
       ],
       "env": {
         "BELIEF_PROJECT_ROOT": "/home/edge-host/Documents/GitHub/embodied_ai",
@@ -19,6 +21,19 @@
       "env": {
         "PYTHONPATH": "/home/edge-host/Documents/GitHub/LLM-textbook-highlighter",
         "TEXTBOOK_BASE_DIR": "/home/edge-host/Documents/GitHub/embodied_ai"
+      }
+    },
+    "consistency-belief": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/home/edge-host/Documents/GitHub/Theoretically_Driven_LLM_Planning",
+        "run",
+        "consistency-belief-mcp"
+      ],
+      "env": {
+        "CONSISTENCY_PROJECT_ROOT": "/home/edge-host/Documents/GitHub/embodied_ai",
+        "CONSISTENCY_ACTOR": "agent"
       }
     }
   }
