@@ -117,6 +117,60 @@ axioms:
     rationale: >-
       Measured at 4edb9d0 -- acceleration p95 3.5-5 m/s^2, jerk p95 100-170 m/s^3, at phase switches.
 
+  - id: AXM-stepped-joint-goal-lunges
+    domain: physics
+    statement: >-
+      LIBERO's JOINT_POSITION controller steps its joint goal once per 50 ms period, and the
+      stiff critically damped PD behind it (kp 4000) moves the arm in a lunge and coast inside
+      every period, whatever the commanded velocity.
+    rationale: >-
+      Measured at the 2 ms physics substep -- within one steady carry step the tool speed went
+      0.08 -> 0.20 -> 0.09 m/s; substep acceleration p95 12.1 m/s^2 where 20 Hz differencing read 3.9.
+
+  - id: AXM-robosuite-interpolator-hyperbolic
+    domain: environment
+    statement: >-
+      robosuite 1.4.0's LinearInterpolator returns start + (goal - start) / (N - k) without
+      advancing start, so half of each move lands in the last two of its N = 25 substeps.
+    rationale: >-
+      Read from linear_interpolator.py and measured -- the joint torque sagged mid-period and
+      spiked to -178 N m at its end; enabling it made substep acceleration worse (max 94.5 m/s^2).
+
+  - id: AXM-rim-pinch-drops-under-smooth-motion
+    domain: physics
+    statement: >-
+      Rim pinches of the akita bowl lose it during lifts and carries even with tool
+      acceleration bounded near 2 m/s^2 -- the drops are not caused by execution jerk.
+    rationale: >-
+      TST-teacher-motion before and after execution smoothing -- 24 then 27 drops in 20 episodes,
+      with substep acceleration p95 going from ~12 to a median 2.2 m/s^2.
+
+  - id: AXM-object-geometry-known
+    domain: environment
+    statement: >-
+      Every object's collision geometry, in its current pose, is in the simulator state (a
+      privileged input, like object poses).
+    rationale: Scene.object_box and the grasp planner already read MuJoCo geoms.
+
+  - id: AXM-bddl-states-goals-not-methods
+    domain: environment
+    statement: >-
+      A LIBERO bddl states the goal conjuncts (In, On, Open, Close, TurnOn, TurnOff), the
+      objects and fixtures with their categories, and the regions -- and nothing about how
+      any of it is to be achieved.
+    rationale: Read from all 130 bddl files (task_spec.py docstring counts the predicates).
+
+  - id: AXM-category-affordances-declared
+    domain: requirement
+    statement: >-
+      What the bddl leaves out about a category -- how it is moved (pick, push, or not at
+      all), where it is held, how it rests on each kind of support, what a fixture's joints
+      are -- is declared once per bddl category in screwhead/teacher/affordances.yaml, each
+      value tagged measured, declared or open; an open value is not relied on.
+    rationale: >-
+      The user's decision (2026-09-21) -- per-category facts, not per-task scripts, so the
+      teacher stays generic across suites; tests/test_affordances.py keeps the table complete.
+
   - id: AXM-reproducible-measurement
     domain: epistemic
     statement: >-
@@ -148,8 +202,15 @@ definitions:
   - id: DEF-smooth-motion
     term: Smooth motion
     meaning: >-
-      Consecutive commanded tool velocities differ by at most a_max / 20 Hz, with
-      a_max = 2 m/s^2 (0.1 m/s per step) -- across phase boundaries as well as within them.
+      The tool's acceleration, measured at the 2 ms physics substep, has a 95th percentile of
+      at most 2 m/s^2 over an episode, and the servo never abandons its pose reference.
+
+  - id: DEF-plan
+    term: Plan
+    meaning: >-
+      The ordered steps (skill, object, region, mode, and the predicate that ends the step)
+      that achieve a task's goal conjuncts, re-derived from the goal set, the affordance table
+      and the current state at every control step.
 
 lemmas:
   - id: LMA-whole-path-reachable
@@ -207,61 +268,99 @@ lemmas:
       which return None rather than choose, so this holds by construction, not by call order.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
-  - id: LMA-touchdown-from-scan-and-hand
+  - id: LMA-touchdown-from-paired-rays
     statement: >-
-      The tool pose at which an object touches down is fixed by two measurements: the support
-      height under its footprint at the target, and the object's current bottom-below-tool
-      offset read from its in-hand pose. A release height taken from the region site or the
-      grasp-time box is off by however much the site, or the actual grip, differs from them.
-    premises: [AXM-grip-fixes-object-in-hand, AXM-support-scannable]
+      Where an object first touches its support is where, over its footprint, the gap
+      between its underside and the support below is smallest -- the touchdown tool pose is
+      the current tool pose lowered by the minimum, over paired downward rays, of (underside
+      height - support height), with the underside read from the object's geometry in its
+      current in-hand pose. One support height minus one box bottom is that only when the
+      support or the underside is flat across the footprint.
+    premises: [AXM-grip-fixes-object-in-hand, AXM-support-scannable, AXM-object-geometry-known]
     derivation_rule: >-
-      Object bottom = tool pose composed with the in-hand transform, lowered to the scanned
-      support; both terms are in the state, so the touchdown pose is too.
+      Rigid descent of a held object -- contact begins at the ray whose gap closes first; both
+      heights per ray are in the state. Re-read while descending, since the grip holds only
+      while it does not slip.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
-  - id: LMA-release-on-contact
+  - id: LMA-contact-release-is-robust
     statement: >-
-      A placement is gentle only if the object is lowered at a touch speed below 0.05 m/s over
-      its last centimetres and let go when it rests on the support, not at a precomputed
-      height: the scan and the grip estimate carry error, and any residual gap is free fall.
-    premises: [DEF-gentle-placement, AXM-release-is-free-fall, LMA-touchdown-from-scan-and-hand]
+      If the touchdown estimate can err by more than DEF-gentle-placement's 5 mm, then
+      releasing once the object rests on its support -- stopped by it, touching the intended
+      support rather than a rim, a wall or another object, with nothing holding it touching
+      first -- is gentle regardless of that error, and a release at a precomputed height is
+      not. (A height release with an estimate good to ~3 mm is gentle too; which regime holds
+      is a measurement of predicted vs actual first-contact tool heights.)
+    premises: [DEF-gentle-placement, AXM-release-is-free-fall, LMA-touchdown-from-paired-rays]
     derivation_rule: >-
-      From a gap h the object lands at sqrt(2 g h); DEF-gentle-placement bounds h by 5 mm and
-      the speed by 0.05 m/s, which a height-triggered release cannot guarantee under estimate
-      error, and a contact-triggered release after a slow approach does.
+      A resting object has zero gap and about zero speed at release; a height trigger leaves
+      the estimate error as a gap, i.e. free fall from it.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
-  - id: LMA-pinch-holds-along-the-path
+  - id: LMA-pinch-clears-the-descent
     statement: >-
-      The pinch point must hold the object under gravity plus the peak acceleration of the
-      path that carries it; so the choice of pinch and the bound on acceleration are one
-      decision -- the larger the friction margin at the pinch, the faster the path may be.
-    premises: [AXM-acceleration-loads-the-grip, AXM-panda-gripper-geometry, DEF-smooth-motion]
+      A pinch lets its object reach the support only if the fingers and hand stay clear of
+      the support, container walls and other objects along the descent to touchdown and at
+      it -- checked with the ACTUAL in-hand pose after the grasp, since the object shifts when
+      the pads close and a predicted pose can be off by that shift.
+    premises: [LMA-touchdown-from-paired-rays, LMA-whole-path-reachable, DEF-reachable-pose]
     derivation_rule: >-
-      Load = m (g + a); holding needs friction capacity above it; DEF-smooth-motion bounds a.
+      Endpoint clearance is not path clearance (LMA-whole-path-reachable); the in-hand pose is
+      known only once held.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
-  - id: LMA-pinch-admits-touchdown
+  - id: LMA-plan-from-goals-and-affordances
     statement: >-
-      The pinch point must leave the fingers and hand clear of the support and of any
-      container walls at the touchdown pose: the object reaches its support only if nothing
-      holding it reaches something first.
-    premises: [LMA-touchdown-from-scan-and-hand, DEF-reachable-pose]
+      The skill for each goal conjunct is fixed by the conjunct and the affordances of the
+      categories it names, with no per-task code: In/On of an object moved by pick is a pick
+      then a place that rests it as its entry says for that support; of an object moved by
+      push, a push to the region; Open/Close/TurnOn/TurnOff drive the joint the fixture's
+      entry declares; filling a container fixture that has a joint is preceded by opening it.
+    premises: [AXM-bddl-states-goals-not-methods, AXM-category-affordances-declared, AXM-libero-scores-final-state]
     derivation_rule: >-
-      The touchdown pose is known before the grasp is chosen (LMA-touchdown-from-scan-and-hand),
-      so the gripper's collision at that pose can be screened per candidate pinch.
+      The bddl gives the conjunct and the categories; the table gives, per category, the
+      method; LIBERO scores only the final state, so any order consistent with the declared
+      preconditions is admissible.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
-  - id: LMA-smooth-from-a-profile
+  - id: LMA-config-holds-no-geometry
     statement: >-
-      Motion is smooth when each commanded velocity is limited to change by at most
-      a_max / 20 Hz from the tool's measured velocity and decelerates to arrive at rest,
-      rather than jumping between feedback laws at phase boundaries; limited this way the
-      command is a function of the current state (pose and velocity), so it stays a label.
-    premises: [AXM-velocity-steps-are-jerks, DEF-smooth-motion, AXM-dagger-needs-markov-labels]
+      Nothing in the affordance table is a pose, a height, a distance or a threshold: grasp
+      poses, reachability, clearance, crowding and touchdown depend on the scene of each
+      episode, and the skills compute them from the state. The table chooses the skill and
+      its mode; the skill does the geometry.
+    premises: [AXM-category-affordances-declared, AXM-support-scannable, AXM-servo-tracks-reachable-poses]
     derivation_rule: >-
-      With the step change bounded by a_max / 20, AXM-velocity-steps-are-jerks bounds the
-      executed acceleration by a_max; the measured velocity is state, so the law stays Markov.
+      A value fixed per category cannot follow a scene that changes per episode; anything the
+      state determines is read from the state (AXM-support-scannable, AXM-servo-tracks-reachable-poses).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: LMA-plan-stays-a-label
+    statement: >-
+      A plan re-derived each step from the goal set, the table and the state makes the
+      current step a function of the state: an object dropped mid-carry makes its move the
+      current step again, and a precondition step ends by its own predicate (a joint past its
+      open threshold), never by having been issued.
+    premises: [AXM-dagger-needs-markov-labels, DEF-plan]
+    derivation_rule: >-
+      Each step carries the predicate that ends it and is current while that predicate is
+      false and every earlier one holds, so the label depends on the state alone.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: LMA-smooth-in-execution
+    statement: >-
+      Tool motion is smooth (DEF-smooth-motion) when the execution layer ramps each period's
+      joint goal linearly across the period, bounds how fast the commanded twist changes, and
+      sizes its per-period joint clips for the lag a ramped arm has; and because every
+      policy's action goes through that one layer unchanged, the teacher's label stays a
+      function of the state and the student is executed the same way.
+    premises: [AXM-stepped-joint-goal-lunges, AXM-robosuite-interpolator-hyperbolic, AXM-one-execution-path,
+               DEF-smooth-motion]
+    derivation_rule: >-
+      A linear ramp removes the in-period step (AXM-stepped-joint-goal-lunges) where robosuite's
+      interpolator does not (AXM-robosuite-interpolator-hyperbolic); a bound on the commanded
+      twist's change removes the steps between periods; clips sized for a period of extra lag
+      keep the reference from being dragged back and re-anchored.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 branches:
@@ -367,10 +466,10 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      Skills.place scans the support under the object's footprint at the target, computes the
-      touchdown tool pose from the object's in-hand pose, lowers at touch speed over the last
-      centimetres, and releases when the object rests on the support.
-    premises: [LMA-touchdown-from-scan-and-hand, LMA-release-on-contact]
+      Skills.place pairs downward rays over the held object's footprint with its underside to
+      find the touchdown tool pose, lowers to it slowing over the last centimetres, and
+      releases once the object rests on the intended support.
+    premises: [LMA-touchdown-from-paired-rays, LMA-contact-release-is-robust]
     derivation_rule: >-
       (to be implemented) evidence: CTR-teacher-gentle (release_gap_mm <= 5).
     sufficiency: {n_min: 3, min_consensus: 0.8}
@@ -379,24 +478,45 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      Grasp selection screens each pinch candidate at the touchdown pose (fingers and hand
-      clear of the support and any container walls) and ranks the survivors by friction
-      margin under the carry's acceleration bound.
-    premises: [LMA-pinch-admits-touchdown, LMA-pinch-holds-along-the-path]
+      After the grasp, the teacher checks the actual pinch against the descent to touchdown
+      (fingers and hand clear of support, walls and other objects) and regrasps if it fails;
+      the choice among rim pinches is driven by why they drop
+      (AXM-rim-pinch-drops-under-smooth-motion), which is still to be measured.
+    premises: [LMA-pinch-clears-the-descent]
     derivation_rule: >-
       (to be implemented) evidence: CTR-teacher-gentle (drop_count == 0), CTR-teacher-reliable.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
-  - id: BRN-profiled-twists
+  - id: BRN-execution-bounds-acceleration
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      Every twist the teacher commands changes by at most a_max / 20 Hz from the tool's
-      measured velocity and approaches its target on a deceleration profile, at phase
-      boundaries too.
-    premises: [LMA-smooth-from-a-profile]
+      SimArm executes every policy's action with its joint goal ramped linearly over the whole
+      control period (sim/joint_ramp.py), the commanded twist changing by at most 2 m/s^2 and
+      5 rad/s^2 (sim/servo.py), and a 0.1 rad per-period joint clip shared by the controller,
+      the servo's lead limit and the settling hold (Execution.joint_step).
+    premises: [LMA-smooth-in-execution]
     derivation_rule: >-
-      (to be implemented) evidence: CTR-teacher-smooth (acc_p95 <= 2 m/s^2, no re-anchors).
+      screwhead/sim/sim_arm.py _open and _gains, screwhead/sim/servo.py _limit,
+      screwhead/sim/joint_ramp.py. evidence: CTR-teacher-smooth (substep acceleration p95
+      median 2.18 m/s^2 against ~12 before; 16 of 20 episodes without re-anchors, RUN-0047),
+      CTR-teacher-reliable (libero_spatial 188/200 against 186).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-task-spec-plans-from-affordances
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      task_spec builds every plan from the bddl goals and affordances.yaml alone -- no
+      per-task or per-category branches in code: the skill of each step from moved_by and
+      joints, the place's resting pose from rests, open-before-fill and move-out-of-the-way as
+      declared preconditions, and every step, preconditions included, carrying the predicate
+      that ends it. SkillTeacher only executes the current step and holds no planning logic.
+    premises: [LMA-plan-from-goals-and-affordances, LMA-config-holds-no-geometry, LMA-plan-stays-a-label]
+    derivation_rule: >-
+      (to be implemented) evidence: CTR-teacher-reliable -- first unchanged on the 600
+      episodes of libero_object/spatial/goal (a refactor), then the push and lay-down skills
+      the table selects for libero_goal 5 and 9.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 policies:
@@ -409,8 +529,12 @@ policies:
       - {target: BRN-drive-tracks-the-handle, require: proven}
       - {target: BRN-leave-handle-along-approach, require: proven}
 
+  - id: POL-planning-data-driven
+    criteria:
+      - {target: BRN-task-spec-plans-from-affordances, require: proven}
+
   - id: POL-teacher-motion-sound
     criteria:
       - {target: BRN-scan-then-place, require: proven}
       - {target: BRN-pinch-for-the-whole-place, require: proven}
-      - {target: BRN-profiled-twists, require: proven}
+      - {target: BRN-execution-bounds-acceleration, require: proven}

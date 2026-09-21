@@ -1,0 +1,3 @@
+[run] libero_object: 20 episodes x 10 tasks
+[run] libero_spatial: 20 episodes x 10 tasks
+[run] libero_goal: 20 episodes x 10 tasks

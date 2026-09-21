@@ -1,0 +1,73 @@
+[run] libero_object: 20 episodes x 10 tasks
+[run] libero_spatial: 20 episodes x 10 tasks
+[run] libero_goal: 20 episodes x 10 tasks
+
+task                              rate    94% interval  grade     mechanisms
+    goal[ 0]                20/20    [0.85, 1.00]  marginal  
+    goal[ 1]                20/20    [0.85, 1.00]  marginal  
+    goal[ 2]                20/20    [0.85, 1.00]  marginal  
+    goal[ 3]                 0/20    [0.00, 0.15]  broken    pick/never-reached-grasp (after losing it in place_in) x4, pick/never-reached-grasp x4, articulate/held-but-not-moved x4, relocate/held-but-not-delivered x3, place_in/held-but-not-delivered x2, relocate/reached-but-no-grip x1, place_in/held-but-not-delivered (after losing it in place_in) x1, pick/blocked-reaching x1
+    goal[ 4]                19/20    [0.77, 0.99]  marginal  place_on/held-but-not-delivered (after losing it in place_on) x1
+    goal[ 5]                 2/20    [0.03, 0.29]  broken    pick/reached-but-no-grip (after losing it in place_on) x9, pick/blocked-reaching (after losing it in place_on) x4, pick/never-reached-grasp (after losing it in place_on) x3, place_on/held-but-not-delivered (after losing it in place_on) x2
+    goal[ 6]                20/20    [0.85, 1.00]  marginal  
+    goal[ 7]                20/20    [0.85, 1.00]  marginal  
+    goal[ 8]                20/20    [0.85, 1.00]  marginal  
+    goal[ 9]                 0/20    [0.00, 0.15]  broken    pick/reached-but-no-grip (after losing it in place_on) x10, place_on/held-but-not-delivered (after losing it in place_on) x4, pick/never-reached-grasp (after losing it in place_on) x3, pick/blocked-reaching (after losing it in place_on) x2, place_on/delivered-but-unscored (after losing it in place_on) x1
+  object[ 0]                20/20    [0.85, 1.00]  marginal  
+  object[ 1]                19/20    [0.77, 0.99]  marginal  pick/reached-but-no-grip (after losing it in place_in) x1
+  object[ 2]                20/20    [0.85, 1.00]  marginal  
+  object[ 3]                20/20    [0.85, 1.00]  marginal  
+  object[ 4]                20/20    [0.85, 1.00]  marginal  
+  object[ 5]                20/20    [0.85, 1.00]  marginal  
+  object[ 6]                15/20    [0.54, 0.88]  marginal  place_in/held-but-not-delivered (after losing it in place_in) x2, place_in/delivered-but-unscored (after losing it in place_in) x1, pick/blocked-reaching (after losing it in place_in) x1, pick/reached-but-no-grip (after losing it in place_in) x1
+  object[ 7]                20/20    [0.85, 1.00]  marginal  
+  object[ 8]                20/20    [0.85, 1.00]  marginal  
+  object[ 9]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 0]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 1]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 2]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 3]                18/20    [0.71, 0.97]  marginal  place_on/delivered-but-unscored (after losing it in place_on) x1, pick/blocked-reaching x1
+ spatial[ 4]                17/20    [0.65, 0.95]  marginal  pick/blocked-reaching (after losing it in place_on) x2, pick/never-reached-grasp (after losing it in place_on) x1
+ spatial[ 5]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 6]                17/20    [0.65, 0.95]  marginal  pick/never-reached-grasp (after losing it in place_on) x1, place_on/held-but-not-delivered (after losing it in place_on) x1, pick/reached-but-no-grip (after losing it in place_on) x1
+ spatial[ 7]                17/20    [0.65, 0.95]  marginal  pick/never-reached-grasp (after losing it in place_on) x2, pick/reached-but-no-grip (after losing it in place_on) x1
+ spatial[ 8]                19/20    [0.77, 0.99]  marginal  pick/never-reached-grasp (after losing it in place_on) x1
+ spatial[ 9]                20/20    [0.85, 1.00]  marginal  
+
+overall 523/600 = 0.872  [0.84, 0.90]   reliable 0  marginal 27  broken 3
+
+not reliable, worst first:
+  libero_goal[3] 0/20 lo 0.00: pick/never-reached-grasp (after losing it in place_in) x4, pick/never-reached-grasp x4, articulate/held-but-not-moved x4, relocate/held-but-not-delivered x3, place_in/held-but-not-delivered x2, relocate/reached-but-no-grip x1, place_in/held-but-not-delivered (after losing it in place_in) x1, pick/blocked-reaching x1
+  libero_goal[9] 0/20 lo 0.00: pick/reached-but-no-grip (after losing it in place_on) x10, place_on/held-but-not-delivered (after losing it in place_on) x4, pick/never-reached-grasp (after losing it in place_on) x3, pick/blocked-reaching (after losing it in place_on) x2, place_on/delivered-but-unscored (after losing it in place_on) x1
+  libero_goal[5] 2/20 lo 0.03: pick/reached-but-no-grip (after losing it in place_on) x9, pick/blocked-reaching (after losing it in place_on) x4, pick/never-reached-grasp (after losing it in place_on) x3, place_on/held-but-not-delivered (after losing it in place_on) x2
+  libero_object[6] 15/20 lo 0.54: place_in/held-but-not-delivered (after losing it in place_in) x2, place_in/delivered-but-unscored (after losing it in place_in) x1, pick/blocked-reaching (after losing it in place_in) x1, pick/reached-but-no-grip (after losing it in place_in) x1
+  libero_spatial[4] 17/20 lo 0.65: pick/blocked-reaching (after losing it in place_on) x2, pick/never-reached-grasp (after losing it in place_on) x1
+  libero_spatial[6] 17/20 lo 0.65: pick/never-reached-grasp (after losing it in place_on) x1, place_on/held-but-not-delivered (after losing it in place_on) x1, pick/reached-but-no-grip (after losing it in place_on) x1
+  libero_spatial[7] 17/20 lo 0.65: pick/never-reached-grasp (after losing it in place_on) x2, pick/reached-but-no-grip (after losing it in place_on) x1
+  libero_spatial[3] 18/20 lo 0.71: place_on/delivered-but-unscored (after losing it in place_on) x1, pick/blocked-reaching x1
+  libero_goal[4] 19/20 lo 0.77: place_on/held-but-not-delivered (after losing it in place_on) x1
+  libero_object[1] 19/20 lo 0.77: pick/reached-but-no-grip (after losing it in place_in) x1
+  libero_spatial[8] 19/20 lo 0.77: pick/never-reached-grasp (after losing it in place_on) x1
+  libero_goal[0] 20/20 lo 0.85: -
+  libero_goal[1] 20/20 lo 0.85: -
+  libero_goal[2] 20/20 lo 0.85: -
+  libero_goal[6] 20/20 lo 0.85: -
+  libero_goal[7] 20/20 lo 0.85: -
+  libero_goal[8] 20/20 lo 0.85: -
+  libero_object[0] 20/20 lo 0.85: -
+  libero_object[2] 20/20 lo 0.85: -
+  libero_object[3] 20/20 lo 0.85: -
+  libero_object[4] 20/20 lo 0.85: -
+  libero_object[5] 20/20 lo 0.85: -
+  libero_object[7] 20/20 lo 0.85: -
+  libero_object[8] 20/20 lo 0.85: -
+  libero_object[9] 20/20 lo 0.85: -
+  libero_spatial[0] 20/20 lo 0.85: -
+  libero_spatial[1] 20/20 lo 0.85: -
+  libero_spatial[2] 20/20 lo 0.85: -
+  libero_spatial[5] 20/20 lo 0.85: -
+  libero_spatial[9] 20/20 lo 0.85: -
+
+failures by mechanism: pick/reached-but-no-grip (after losing it in place_on) 21, pick/never-reached-grasp (after losing it in place_on) 11, place_on/held-but-not-delivered (after losing it in place_on) 8, pick/blocked-reaching (after losing it in place_on) 8, pick/never-reached-grasp (after losing it in place_in) 4, pick/never-reached-grasp 4, articulate/held-but-not-moved 4, relocate/held-but-not-delivered 3, place_in/held-but-not-delivered (after losing it in place_in) 3, place_in/held-but-not-delivered 2, pick/blocked-reaching 2, place_on/delivered-but-unscored (after losing it in place_on) 2, pick/reached-but-no-grip (after losing it in place_in) 2, relocate/reached-but-no-grip 1, place_in/delivered-but-unscored (after losing it in place_in) 1, pick/blocked-reaching (after losing it in place_in) 1
+
+==== diagnosis, worst task first ====
