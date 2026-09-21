@@ -10,7 +10,10 @@ drawer):
                    the teacher let go on purpose (a release phase within RELEASE_WINDOW steps);
                    -1 if it never did (component-belief's rules cannot compare a missing value)
   drop_count       times the grip let an object go anywhere else, more than DROP_GAP up
-  acc_p95, jerk_p95  tool acceleration (m/s^2) and jerk (m/s^3), finite differences at 20 Hz
+  acc_p95, jerk_p95  tool acceleration (m/s^2) and jerk (m/s^3) at PHYSICS-SUBSTEP resolution
+                   (the grip site, every 2 ms). At 20 Hz the same episode read p95 3.9 against
+                   12.1 at substeps: the joint target stepped every 50 ms and the arm lunged
+                   and coasted inside each period, which a 20 Hz difference averages away
   reanchors        times the servo abandoned its pose reference this episode
 """
 from __future__ import annotations
@@ -29,7 +32,6 @@ sys.path.insert(0, str(ROOT / "tools"))
 CASES = [("libero_spatial", 0), ("libero_spatial", 6), ("libero_spatial", 8), ("libero_goal", 3)]
 HORIZON = {"libero_goal": 800}      # goal 3 needs four skills in sequence
 DEFAULT_HORIZON = 500
-CONTROL_HZ = 20
 RELEASE_WINDOW = 10                 # steps: a let-go this soon after a release phase was meant
 DROP_GAP = 0.010                    # m: an unmeant let-go below this is a set-down, not a drop
 SEED = 555
@@ -46,15 +48,29 @@ def _support_gap(env, planner, obj: str) -> tuple[float, float]:
     return (dist + 0.001 if dist >= 0 else float("nan")), float(c[2])
 
 
-def episode(env, teacher, objs: list[str]) -> dict:
+def _record_substeps(env) -> list:
+    """Grip-site positions after every physics substep, from here on."""
+    m, d = env.scene.m, env.scene.d
+    sim = env.env.env.sim if hasattr(env.env, "env") else env.env.sim
+    site, track, step = m.site_name2id("gripper0_grip_site"), [], sim.step
+
+    def recorded(*a, **k):
+        r = step(*a, **k)
+        track.append(d.site_xpos[site].copy())
+        return r
+    sim.step = recorded
+    return track
+
+
+def episode(env, teacher, objs: list[str], track: list) -> dict:
     sk = teacher.skills
     env.reset()
+    track.clear()
     r0, done, info = env.servo.reanchors, False, {}
-    tool, held, last_release, gaps, drops = [], dict.fromkeys(objs, False), -10**6, [], 0
+    held, last_release, gaps, drops = dict.fromkeys(objs, False), -10**6, [], 0
     while not done:
         s = env.snapshot()
         a = teacher.act(s)
-        tool.append(np.asarray(s["p_tool"], float))
         if teacher.phase.endswith("release"):
             last_release = env.t
         for o in objs:
@@ -67,10 +83,10 @@ def episode(env, teacher, objs: list[str]) -> dict:
                     drops += 1
             held[o] = h
         _, _, done, info = env.step(a)
-    P = np.array(tool)
-    v = np.diff(P, axis=0) * CONTROL_HZ
-    acc = np.diff(v, axis=0) * CONTROL_HZ
-    jerk = np.linalg.norm(np.diff(acc, axis=0) * CONTROL_HZ, axis=1)
+    dt = float(env.scene.m.opt.timestep)
+    v = np.diff(np.array(track), axis=0) / dt
+    acc = np.diff(v, axis=0) / dt
+    jerk = np.linalg.norm(np.diff(acc, axis=0) / dt, axis=1)
     return dict(success=bool(info["success"]), steps=env.t,
                 release_gap_mm=round(1000 * max(gaps), 1) if gaps else -1.0, releases=len(gaps),
                 drop_count=drops, acc_p95=round(float(np.percentile(np.linalg.norm(acc, axis=1), 95)), 2),
@@ -91,8 +107,9 @@ def main() -> int:
                       render=False, start=StartNoise())
         teacher = SkillTeacher(env)
         objs = sorted({st.obj for st in teacher.plan if st.obj})
+        track = _record_substeps(env)
         for ep in range(args.episodes):
-            m = episode(env, teacher, objs)
+            m = episode(env, teacher, objs, track)
             print(f"{suite} task {task} ep {ep}: {m}", flush=True)
             trials.append({"metrics": {k: m[k] for k in ("release_gap_mm", "drop_count", "acc_p95",
                                                           "jerk_p95", "reanchors", "success")},
