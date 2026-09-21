@@ -181,6 +181,13 @@ axioms:
       -1.3 rad and closed above -0.005.
     rationale: Read from libero/envs/objects/articulated_objects.py (WhiteCabinet, Microwave).
 
+  - id: AXM-one-gripper
+    domain: physics
+    statement: >-
+      The robot has one gripper: while it holds an object it cannot grip anything else,
+      drive a fixture's joint or push, and it frees its hand only by setting the object down.
+    rationale: The Panda in every LIBERO task (robots=["Panda"], gripper_types="PandaGripper").
+
   - id: AXM-reproducible-measurement
     domain: epistemic
     statement: >-
@@ -215,13 +222,21 @@ definitions:
       The tool's acceleration, measured at the 2 ms physics substep, has a 95th percentile of
       at most 2 m/s^2 over an episode, and the servo never abandons its pose reference.
 
+  - id: DEF-skill-contract
+    term: Skill contract
+    meaning: >-
+      A skill's preconditions and effects, each a predicate on the current state -- held(o),
+      hand empty, uncrowded(o), graspable(o), admits(C, o), accessible(j), a free spot for o,
+      and LIBERO's own In, On, Open, Close, TurnOn, TurnOff -- with the parameters the
+      affordance table supplies (how a category is moved, held and set down).
+
   - id: DEF-plan
     term: Plan
     meaning: >-
-      The task's goal conjuncts, ordered by the relations between them, each expanded into
-      its method's steps (skill, object, region, mode, and the state predicate that ends the
-      step), re-derived from the goal set, the affordance table and the current state at
-      every control step.
+      The skill a regression over the skill contracts selects, at each control step, from
+      the task's goal conjuncts and the current state: the first unmet conjunct in
+      goal-relation order, then the first unmet precondition of the skill that achieves it,
+      recursively, down to a skill whose preconditions hold.
 
 lemmas:
   - id: LMA-whole-path-reachable
@@ -320,47 +335,61 @@ lemmas:
       known only once held.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
-  - id: LMA-order-from-goal-relations
+  - id: LMA-regression-selects-an-applicable-skill
     statement: >-
-      Goal conjuncts are ordered by relations the goal set itself states, not by category: a
-      Close(C) after every conjunct that puts something in or on C; an object that is both
-      moved and a support (On(x, o) with o moved) placed before whatever goes on it. With
-      those edges, and every achieved conjunct protected -- one that turns false again (an
-      object knocked out of its container) is current again -- the conjuncts are reached.
-    premises: [AXM-bddl-states-goals-not-methods, AXM-libero-scores-final-state]
+      If the achiever relation of the declared contracts is acyclic -- no predicate is, even
+      indirectly, a precondition of its own achiever -- then regressing from the first unmet
+      goal conjunct through first unmet preconditions ends, within the number of declared
+      predicates, at a skill whose preconditions all hold or at a predicate no declared skill
+      achieves (a named gap, reported, not a silent stall); and the skill it ends at is a
+      function of the state.
+    premises: [DEF-skill-contract, DEF-plan, AXM-dagger-needs-markov-labels]
     derivation_rule: >-
-      Final-state scoring leaves order free only among conjuncts that do not interfere; the
-      two interferences the 130 bddl files contain (fill vs close of one container, stacking
-      on a support that is itself moved) are read off the goal set and ordered.
+      Each regression step moves to a predicate strictly lower in the acyclic achiever order,
+      so the chain is finite; every test on the chain reads the current state.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
-  - id: LMA-method-from-table-preconditions-from-scene
+  - id: LMA-hand-is-a-precondition
     statement: >-
-      Each conjunct's method -- pick then place with the category's resting pose for that
-      support, push, or drive the fixture's declared joint -- comes from the affordance table;
-      the scene may add precondition steps of declared kinds only (open the container if it
-      cannot admit the object; move a crowded object clear), each decided by a geometric test
-      on the state. The table holds category facts, including object-frame ones (a bottle
-      rests lying in a rack cradle); it holds no world-frame numbers.
-    premises: [AXM-category-affordances-declared, AXM-object-geometry-known, AXM-support-scannable]
+      With one gripper, "hand empty" is a precondition of every skill that grips something
+      new, drives a joint or pushes, and parking the held object (setting it down on a free
+      spot of a surface it can rest on) achieves it; so a state where the current goal needs
+      the hand while it holds something else regresses to parking that object, never to a
+      step that cannot run.
+    premises: [AXM-one-gripper, DEF-skill-contract, AXM-support-scannable]
     derivation_rule: >-
-      Category facts are the same in every scene and belong in the table; whether a scene
-      needs a precondition depends on where things stand, which the state gives
-      (AXM-object-geometry-known); a world-frame number fixed per category could not follow it.
+      AXM-one-gripper makes the hand a shared resource; declaring it as a precondition with
+      park as its achiever puts every conflict over it on the regression chain.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
-  - id: LMA-transient-steps-serve-a-goal
+  - id: LMA-geometry-answers-predicates
     statement: >-
-      A transient step (pick, move clear, open to fill) is current only while the conjunct it
-      serves is false and every earlier conjunct holds, and it ends on a state predicate
-      evaluated without per-episode caches (held; no longer crowded; open enough to admit the
-      object). So no step undoes an achieved conjunct: closing a filled drawer cannot
-      re-trigger its open-to-fill step, because the fill already holds -- though the drawer
-      passes through LIBERO's band where neither Open nor Close holds.
-    premises: [AXM-dagger-needs-markov-labels, AXM-libero-joint-bands, DEF-plan, LMA-order-from-goal-relations]
+      uncrowded, graspable, admits, accessible and free-spot are computed from the geometry
+      in the current state each step, with no per-episode cache in the test; a failed one is
+      achieved by the skills whose declared effects make it true -- close the container that
+      crowds an object or blocks a joint, move a crowded object or an obstacle clear -- chosen
+      by the predicate, never by a list of tasks. Tests that depend on the held grasp are
+      evaluated once the object is held, on the actual in-hand pose.
+    premises: [AXM-object-geometry-known, AXM-support-scannable, DEF-skill-contract]
     derivation_rule: >-
-      A step keyed to its conjunct is dead once the conjunct holds, whatever its own
-      predicate reads; end tests on the state keep the current step a function of the state.
+      Everything these predicates depend on -- object and fixture geometry and poses, the
+      in-hand pose once held -- is in the state (AXM-object-geometry-known); achievers are
+      found by matching a predicate against declared effects.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: LMA-protected-progress
+    statement: >-
+      Goal conjuncts are tried in an order that respects the relations the goal set states
+      (every fill of a container before its Close; a moved support before what is placed on
+      it), and a skill whose declared effect would falsify an already-achieved earlier
+      conjunct is not selected while the regression offers another; so the executor does not
+      alternate between two skills that undo each other's goals.
+    premises: [AXM-bddl-states-goals-not-methods, AXM-libero-scores-final-state, DEF-skill-contract, DEF-plan]
+    derivation_rule: >-
+      Effects are declared, so "would falsify an achieved conjunct" is checkable before
+      selection; fill-before-close and support-first remove the two goal-stated conflicts.
+      Conflicts over geometry (capacity of one region for two objects, access occlusion)
+      are predicates to be added when a suite needs them, not covered by this ordering.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: LMA-smooth-in-execution
@@ -519,23 +548,24 @@ branches:
       CTR-teacher-reliable (libero_spatial 188/200 against 186).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
-  - id: BRN-task-spec-plans-from-affordances
+  - id: BRN-regression-planner
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      task_spec builds the ordered goal graph and each conjunct's method from the bddl and
-      affordances.yaml, with no per-task or per-category branches in code; the executor takes
-      the first unmet conjunct in graph order and, within it, the first step whose state
-      predicate is false; end tests read the state, not the drop or clearing caches; joint
-      thresholds come from the fixture's declaration, not a table in code keyed by category
-      name. Out of scope, named: enclosed regions (under a shelf, inside a microwave) and
-      packing two objects into one region.
-    premises: [LMA-order-from-goal-relations, LMA-method-from-table-preconditions-from-scene,
-               LMA-transient-steps-serve-a-goal]
+      The skill teacher executes by regression over declared contracts, re-run every control
+      step: pick(o) {hand empty, uncrowded(o), graspable(o)} -> held(o); place(o, R) {held(o),
+      admits(R, o)} -> In/On(o, R); drive(j, mode) {hand empty, accessible(j)} -> the joint's
+      predicate; park(o) {held(o)} -> hand empty, o resting on a free spot; move-clear(o) is
+      pick then park outside what crowds it. task_spec reads the goals and affordances.yaml;
+      predicates read the state only. Scope now: the predicates libero_object, spatial and
+      goal and libero_10's put-in-drawer-and-close need; named, not yet covered: two objects
+      into one region, enclosed regions, access occlusion, reorienting or regrasping an object.
+    premises: [LMA-regression-selects-an-applicable-skill, LMA-hand-is-a-precondition,
+               LMA-geometry-answers-predicates, LMA-protected-progress]
     derivation_rule: >-
-      (to be implemented) evidence: CTR-teacher-reliable -- first the 600-episode reference
-      of libero_object/spatial/goal at bcf19e9 (523/600) reproduced, then libero_10's
-      put-and-close tasks, then the push and lay-down skills the table selects for goal 5 and 9.
+      (to be implemented) evidence: CTR-teacher-reliable -- the 600-episode reference at
+      bcf19e9 (523/600) reproduced wherever the old executor had no special case, then
+      libero_10 KITCHEN_SCENE4 (bowl into the bottom drawer, close it).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 policies:
@@ -550,7 +580,7 @@ policies:
 
   - id: POL-planning-data-driven
     criteria:
-      - {target: BRN-task-spec-plans-from-affordances, require: proven}
+      - {target: BRN-regression-planner, require: proven}
 
   - id: POL-teacher-motion-sound
     criteria:
