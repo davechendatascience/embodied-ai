@@ -183,7 +183,8 @@ class EpisodeLog:
             track["to_place"] = min(track["to_place"], float(np.linalg.norm(tq - q)))
         elif step.skill in ("articulate", "turn"):
             art = self.env.scene.articulation(step.region)
-            track["held"] = track["held"] or sk.holding(art["body"])
+            w = sk.handle_width(step.region)
+            track["held"] = track["held"] or (w is not None and sk.holding(art["body"], w))
 
     def mechanism(self, missing: str) -> str:
         """One of five ways an episode fails, prefixed by the plan step it failed in."""

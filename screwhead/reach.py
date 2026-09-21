@@ -73,13 +73,15 @@ class Reach:
         return grade
 
     # -- choosing a grasp -------------------------------------------------------------------
-    def choose(self, cands: list, via: np.ndarray | None, allow: int = -1, strict: bool = False):
+    def choose(self, cands: list, via: np.ndarray | None, allow: int = -1, strict: bool = False,
+               extra=None):
         """The candidate grasp the arm can use: reachable at the grasp, down the column
         above it, and (when known) at the place pose the same grasp must reach.
 
         Shape proposes in list order (narrow faces first), conditioning decides how far
         down that list to look: the first merely-feasible candidate put the arm where the
         damped solve clamps on a limit, the best-conditioned one ignored the shape.
+        `extra(cand)` adds whole poses the candidate must also reach (the end of a drive).
         """
         Ts, meta = [], []
         for i, (R, p_g, _w, app) in enumerate(cands):
@@ -87,6 +89,9 @@ class Reach:
             column = [pre + Z * h for h in COLUMN_PROBES]
             for pt in [p_g, pre, *column] + ([via] if via is not None else []):
                 Ts.append(pose(R, pt))
+                meta.append(i)
+            for T in (extra(cands[i]) if extra is not None else []):
+                Ts.append(T)
                 meta.append(i)
         th, conv, sig, margin = self.solve(Ts)
         scores = {i: s for i in range(len(cands))

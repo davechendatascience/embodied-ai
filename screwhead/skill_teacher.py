@@ -13,6 +13,8 @@ from .gripper_servo import A_OPEN
 from .skills import Skills, SkillConfig
 from .task_spec import Step
 
+OPEN_MARGIN = 0.012       # a container counts as open for filling this far past LIBERO's threshold
+
 
 class SkillTeacher:
     def __init__(self, env, config: SkillConfig | None = None):
@@ -74,10 +76,15 @@ class SkillTeacher:
         if step is None or step.skill != "place_in":
             return None
         try:
-            self.env.scene.articulation(step.region)
+            art = self.env.scene.articulation(step.region)
         except ValueError:
             return None                       # not an articulated region
-        return None if self.satisfied(("open", step.region)) else step.region
+        # open with room to spare: released the moment LIBERO's threshold was crossed, the
+        # drawer sat 4.7 mm past it, the arm brushed the cabinet on its way out, and the
+        # precondition flickered between "open" and "shut" every few steps
+        past = (art["qpos"] - art["thresholds"]["open"]) * art["sign"]
+        wide = self.satisfied(("open", step.region)) and past >= OPEN_MARGIN
+        return None if wide else step.region
 
     def _goal_for(self, step):
         return None if step is None else step.goal

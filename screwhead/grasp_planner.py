@@ -48,18 +48,24 @@ class GraspPlanner:
         reach 5 mm below it. A grasp deeper than that under an object's top drives the palm
         into the object: a 146 mm bottle grasped 48 mm down stalled with the palm in contact
         and the arm 28 mm short of its target, with no finger contact at all.
+
+        Measured along the tool's own axis, not world z: in "open the top drawer and put the
+        bowl inside" the first grasp came straight after the drawer, gripper horizontal, and
+        a world-z measurement there put every grasp 70 mm above the bowl -- the jaws closed
+        on air at the grasp point, 0/20.
         """
         if self._palm is not None:
             return self._palm
         m, d = self.scene.m, self.scene.d
-        p_tool = self.env.snapshot()["p_tool"] + self.scene.base
+        s = self.env.snapshot()
+        p_tool, back = s["p_tool"] + self.scene.base, -s["R_tool"][:, 2]    # toward the palm
         lo = np.inf
         for g in range(m.ngeom):
             b = m.body_id2name(int(m.geom_bodyid[g])) or ""
             if not b.startswith("gripper0") or "finger" in b or not _collides_geom(m, g):
                 continue
-            h = np.abs(d.geom_xmat[g].reshape(3, 3) @ np.diag(_geom_half(m, g))).sum(1)
-            lo = min(lo, float(d.geom_xpos[g][2] - h[2] - p_tool[2]))
+            ext = float(np.abs(back @ (d.geom_xmat[g].reshape(3, 3) @ np.diag(_geom_half(m, g)))).sum())
+            lo = min(lo, float((d.geom_xpos[g] - p_tool) @ back) - ext)
         self._palm = PALM_DEFAULT if not np.isfinite(lo) else lo
         return self._palm
 

@@ -25,7 +25,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import contacts
-from .frames import Z, axis_rot, rot_angle, rotvec
+from .frames import Z, axis_rot, pose, rot_angle, rotvec
 from .grasp_planner import GraspPlanner
 from .gripper_servo import A_OPEN, target_to_channel
 from .reach import Reach
@@ -55,6 +55,11 @@ class SkillConfig:
     short_max: float = 0.035       # the pads reach 35 mm back from the tool point
     past_max: float = 0.015        # the tips 15 mm beyond it
     reach_misalign: float = 0.5    # handle approach reads as "reach" above this misalignment
+    handle_open_slack: float = 0.012   # jaws have closed ON a handle when the aperture lies in
+    handle_min_frac: float = 0.5       # [frac * width, width + slack]; near zero they missed it
+    handle_short_max: float = 0.008    # squeeze a handle only with the tool point this close to it:
+                                       # the object envelope (35 mm short) let the jaws finish
+                                       # closing 17 mm in front of the drawer's bar
     # grip
     grip_margin: float = 0.012     # jaws this much wider than the object before descending
     max_grip: float = 0.075        # widest jaw opening used (A_OPEN is the hard limit)
@@ -198,13 +203,13 @@ class Skills:
         return c[5] if c is not None else -Z
 
     # -- state tests -------------------------------------------------------------------------
-    def _in_envelope(self, p, p_target, app, lateral_max: float) -> bool:
-        """The target is inside the jaw envelope: `lateral_max` either side, from the pads'
-        reach behind the tool point to the tips' reach beyond it."""
+    def _in_envelope(self, p, p_target, app, lateral_max: float, short_max: float | None = None) -> bool:
+        """The target is inside the jaw envelope: `lateral_max` either side, and from
+        `short_max` short of the target to `past_max` beyond it."""
         d = p - p_target
         along = float(d @ app)                         # negative while short of the target
-        return bool(np.linalg.norm(d - app * along) < lateral_max
-                    and -self.k.short_max < along < self.k.past_max)
+        short = self.k.short_max if short_max is None else short_max
+        return bool(np.linalg.norm(d - app * along) < lateral_max and -short < along < self.k.past_max)
 
     def at_grasp(self, p: np.ndarray, p_g: np.ndarray, app: np.ndarray | None = None) -> bool:
         """The object is inside the jaw envelope, so squeeze.
@@ -232,10 +237,19 @@ class Skills:
         return (abs(self.env.snapshot()["aperture_rate"]) < self.k.squeeze_rate
                 or contacts.only_gripper(m, d, bid))
 
-    def holding(self, body: int) -> bool:
-        """Both finger groups touch this body and the jaws have stopped closing."""
+    def holding(self, body: int, width: float) -> bool:
+        """Both finger groups touch this body and the jaws have closed down to its width.
+
+        Not "the jaws have stopped moving": pulling a handle moves the jaws, so that test
+        went false on the first step of every pull, the teacher re-centred on the handle,
+        and squeeze and drive alternated step by step. And not "both fingers touch the
+        body": replayed, the jaws had closed to 1 mm in front of the drawer's bar, fingertips
+        pressed on its face, and that passed as holding. The aperture has to be stopped by
+        the handle itself.
+        """
+        ap = self.env.snapshot()["aperture"]
         return (len(contacts.finger_sides(self.scene.m, self.scene.d, body)) == 2
-                and abs(self.env.snapshot()["aperture_rate"]) < self.k.squeeze_rate)
+                and self.k.handle_min_frac * width <= ap <= width + self.k.handle_open_slack)
 
     # -- regions -------------------------------------------------------------------------------
     def region_pose(self, region: str):
@@ -426,12 +440,12 @@ class Skills:
         k = self.k
         R, p = s["R_tool"], s["p_tool"]
         a = self.scene.articulation(region)
-        R_h, w, app = self._handle_frame(region, a)
+        R_h, w, app = self._handle_frame(region, a, mode)
         p_h = self.scene.d.geom_xpos[a["handle_geom"]] - self.scene.base
-        if self.holding(a["body"]):
+        if self.holding(a["body"], w):
             return self._drive(a, mode, R, p)
         e_rot = rot_angle(R.T @ R_h)
-        if self._in_envelope(p, p_h, app, k.handle_lateral) and e_rot < k.at_rot:
+        if self._in_envelope(p, p_h, app, k.handle_lateral, k.handle_short_max) and e_rot < k.at_rot:
             self.phase = "squeeze"
             return self.action(self.twist_to(R, p, R_h, p_h, v_min=0.0), 0.0)
         off = p - p_h
@@ -441,7 +455,12 @@ class Skills:
         self.phase = "reach" if misalign >= k.reach_misalign else "descend"
         return self.action(self.twist_to(R, p, R_h, target), min(k.max_grip, w + k.grip_margin))
 
-    def _handle_frame(self, region: str, a: dict) -> tuple[np.ndarray, float, np.ndarray]:
+    def handle_width(self, region: str) -> float | None:
+        """The width of the handle grasp chosen this episode, if one has been."""
+        c = self._handle_cache.get(region)
+        return None if c is None else c[1]
+
+    def _handle_frame(self, region: str, a: dict, mode: str) -> tuple[np.ndarray, float, np.ndarray]:
         """The handle grasp's frame, chosen ONCE per episode: re-solving every step let the
         winner flip between candidates and the jaws cycled 15-35 mm without closing. The
         handle moves as the fixture opens, so only the frame is held, not the point."""
@@ -451,7 +470,16 @@ class Skills:
         cands = self.planner.handle_grasps(a["handle_geom"])
         if not cands:
             raise NotImplementedError(f"{region}: no graspable handle geom")
-        R_h, _p, w, app = self.reach.choose(cands, None, allow=a["body"])
+        dq = self._drive_dq(a, mode)
+
+        def along_the_motion(cand):
+            # the grasp has to stay usable while the joint moves, not only where it starts:
+            # a stove-knob grasp with 1 feasible candidate in 10 turned the knob to 0.35 of
+            # its 0.5 and ran the arm into its limits, re-anchoring, every time
+            R, p = cand[0], cand[1]
+            return [pose(*self._joint_motion(a, f * dq, R, p)) for f in (0.5, 1.0)]
+
+        R_h, _p, w, app = self.reach.choose(cands, None, allow=a["body"], extra=along_the_motion)
         self._handle_cache[region] = (R_h, w, app)
         choice = self.reach.last_choice
         self.grasp_log[region] = dict(
@@ -465,13 +493,20 @@ class Skills:
         """Carry the held handle along the joint's own motion to just past its goal."""
         k = self.k
         self.phase = "drive"
-        th, sign = a["thresholds"], a["sign"]
-        past = k.drive_past_open if mode in ("open", "on") else -k.drive_past_close
-        dq = float(th[mode]) + sign * past - a["qpos"]
-        if a["jnt_type"] == 2:                                     # slide: translate
-            R_goal, p_goal = R, p + a["axis"] * dq
-        else:                                                      # hinge: turn about the anchor
-            Rr = axis_rot(a["axis"], dq)
-            R_goal, p_goal = Rr @ R, a["anchor"] + Rr @ (p - a["anchor"])
+        R_goal, p_goal = self._joint_motion(a, self._drive_dq(a, mode), R, p)
         return self.action(self.twist_to(R, p, R_goal, p_goal, v_max=k.drive_speed,
                                          v_min=k.drive_speed_min), 0.0)
+
+    def _drive_dq(self, a: dict, mode: str) -> float:
+        """How far the joint still has to move: to just past its goal threshold."""
+        th, sign = a["thresholds"], a["sign"]
+        past = self.k.drive_past_open if mode in ("open", "on") else -self.k.drive_past_close
+        return float(th[mode]) + sign * past - a["qpos"]
+
+    @staticmethod
+    def _joint_motion(a: dict, dq: float, R, p):
+        """A pose carried by the joint's own motion: along the slide, or about the hinge."""
+        if a["jnt_type"] == 2:                                     # slide: translate
+            return R, p + a["axis"] * dq
+        Rr = axis_rot(a["axis"], dq)                               # hinge: turn about the anchor
+        return Rr @ R, a["anchor"] + Rr @ (p - a["anchor"])
