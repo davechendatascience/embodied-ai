@@ -26,7 +26,7 @@ from teacher_report import teacher_revision  # noqa: E402
 
 CASES = [("libero_object", "0"), ("libero_spatial", "6"), ("libero_goal", "0 7")]
 EPISODES = 4          # 4 tasks x 4 episodes = CTR-teacher-deterministic's n_min of 16
-HORIZON = 400
+HORIZON = 500         # the reliability report's horizon: reproducible over the whole episode it scores
 CPUS = "5,6,7,8,9,15,16,17,18,19"
 
 

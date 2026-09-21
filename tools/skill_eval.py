@@ -43,11 +43,22 @@ class Job:
     max_videos: int
 
 
+def _observe(errors: list, fn, *args):
+    """Run a diagnostic. Its failure is reported, never scored: inside the episode's own
+    guard, a diagnostic TypeError once recorded episodes LIBERO had not scored as failures."""
+    try:
+        return fn(*args)
+    except Exception as e:  # noqa: BLE001  the observer boundary
+        errors.append(f"{type(e).__name__}: {e}")
+        return None
+
+
 def _run_episode(env, teacher, job: Job, ep: int, record: bool):
     """One episode: the row for the report, and frames if recording."""
     from screwhead.episode_log import EpisodeLog
     env.reset()
-    log = EpisodeLog(env, teacher)
+    errors: list[str] = []
+    log = _observe(errors, EpisodeLog, env, teacher)
     frames, done, info, missing = [], False, {}, ""
     phases = collections.Counter()
     while not done:
@@ -59,28 +70,50 @@ def _run_episode(env, teacher, job: Job, ep: int, record: bool):
             teacher.phase = f"unimplemented:{missing}"
             a = np.zeros(7)
         phases[teacher.phase] += 1
-        log.step(s)
+        if log is not None and not errors:
+            _observe(errors, log.step, s)
         if record:
             ag, wr = env.images()
             frames.append(np.concatenate([ag[::-1], wr[::-1]], axis=1))
         _, _, done, info = env.step(a)
     ok = bool(info["success"])
+    diag = mechanism = ""
+    detail = dict(timeline="", events=[], grasp={}, final=[])
+    if log is not None and not errors:
+        if not ok:
+            diag = _observe(errors, log.summary, missing) or ""
+            mechanism = _observe(errors, log.mechanism, missing) or ""
+        detail = _observe(errors, log.finish, ok) or detail
+    detail["observer_errors"] = errors
+    track = log.track if log is not None else {}
     row = dict(task=job.task, episode=job.ep_offset + ep, success=ok, steps=env.t,
                last_phase=teacher.phase, step_index=teacher.step_index, phases=dict(phases),
-               language=env.language, diag="" if ok else log.summary(missing),
-               mechanism="" if ok else log.mechanism(missing), detail=log.finish(ok),
+               language=env.language, diag=diag, mechanism=mechanism, detail=detail,
                **{k: round(float(v), 4) if isinstance(v, float) else v
-                  for k, v in log.track.items() if k not in ("skill", "regressed")})
+                  for k, v in track.items() if k not in ("skill", "regressed")})
     return row, frames
+
+
+def _failed_row(task: int, episode: int, steps: int, language: str, what: str, mechanism: str) -> dict:
+    return dict(task=task, episode=episode, success=False, steps=steps, last_phase=mechanism,
+                step_index=-1, phases={}, language=language, diag=what, mechanism=mechanism,
+                detail=dict(timeline="", events=[what], grasp={}, final=[]))
 
 
 def _crashed_row(job: Job, ep: int, env, e: Exception) -> dict:
     import traceback
     where = traceback.extract_tb(e.__traceback__)[-1]
     what = f"crash: {type(e).__name__}: {e} at {Path(where.filename).name}:{where.lineno}"
-    return dict(task=job.task, episode=job.ep_offset + ep, success=False, steps=env.t, last_phase="crash",
-                step_index=-1, phases={}, language=env.language, diag=what, mechanism="crash",
-                detail=dict(timeline="", events=[what], grasp={}, final=[]))
+    return _failed_row(job.task, job.ep_offset + ep, env.t, env.language, what, "crash")
+
+
+def _fill_lost(rows: list[dict], jobs: list[Job]) -> list[dict]:
+    """Every episode a job owed is a row. One a dead worker never sent is a failure, not an
+    absence: dropped, it biased the rate toward the episodes that got to finish."""
+    have = {(r["task"], r["episode"]) for r in rows}
+    return rows + [_failed_row(j.task, ep, 0, "", "lost: the worker died before sending it", "lost")
+                   for j in jobs for ep in range(j.ep_offset, j.ep_offset + j.episodes)
+                   if (j.task, ep) not in have]
 
 
 def _worker(remote, job_fields: dict) -> None:
@@ -226,6 +259,7 @@ def _write_trials(rows: list[dict], args) -> None:
                         "mechanism": r.get("mechanism", "")},
          "detail": dict(r.get("detail", {}), episode=r["episode"], steps=r["steps"], language=r["language"]),
          "repro": {"seed": args.seed * 100 + r["task"], "task": r["task"], "task_suite": args.suite,
+                   "episode": r["episode"], "horizon": args.horizon,
                    "teacher_revision": "skill_teacher"}} for r in rows]}, indent=1))
     print("->", args.trials)
 
@@ -233,7 +267,8 @@ def _write_trials(rows: list[dict], args) -> None:
 def main() -> int:
     args = _parse()
     t0 = time.time()
-    rows = _run(_jobs(args), args.suite)
+    jobs = _jobs(args)
+    rows = _fill_lost(_run(jobs, args.suite), jobs)
     _summarise(rows, args, time.time() - t0)
     if args.trials:
         _write_trials(rows, args)

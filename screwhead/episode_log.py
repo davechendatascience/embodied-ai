@@ -98,8 +98,8 @@ class EpisodeLog:
         sk, at = self.teacher.skills, False
         for st in self.teacher.plan:
             if st.obj == obj and st.skill in ("place_in", "place_on"):
-                q, tq = sk.place_target(st.obj, st.region, st.skill == "place_in")
-                at = sk.at_place(q, tq)
+                tgt = sk.place_target(st.obj, st.region, st.skill == "place_in", decide=False)
+                at = tgt is not None and sk.at_place(*tgt)
         return at
 
     def _pushes(self, ph: str) -> None:
@@ -137,8 +137,10 @@ class EpisodeLog:
                 d = np.asarray(s["p_tool"]) - p_g
                 return f"{1000 * np.linalg.norm(d):.0f} mm from grasp (dz {1000 * d[2]:+.0f})"
             if st.skill in ("place_in", "place_on"):
-                q, tq = sk.place_target(st.obj, st.region, st.skill == "place_in")
-                d = q - tq
+                tgt = sk.place_target(st.obj, st.region, st.skill == "place_in", decide=False)
+                if tgt is None:
+                    return "no drop point chosen yet"
+                d = tgt[0] - tgt[1]
                 return f"object {1000 * np.linalg.norm(d):.0f} mm from target (dz {1000 * d[2]:+.0f})"
             if st.skill in ("articulate", "turn"):
                 a = self.env.scene.articulation(st.region)
@@ -179,8 +181,9 @@ class EpisodeLog:
                 track["to_grasp"] = min(track["to_grasp"], float(np.linalg.norm(p_g - s["p_tool"])))
             track["held"] = track["held"] or sk.held(step.obj)
         if step.skill in ("place_in", "place_on"):
-            q, tq = sk.place_target(step.obj, step.region, step.skill == "place_in")
-            track["to_place"] = min(track["to_place"], float(np.linalg.norm(tq - q)))
+            tgt = sk.place_target(step.obj, step.region, step.skill == "place_in", decide=False)
+            if tgt is not None:
+                track["to_place"] = min(track["to_place"], float(np.linalg.norm(tgt[1] - tgt[0])))
         elif step.skill in ("articulate", "turn"):
             art = self.env.scene.articulation(step.region)
             w = sk.handle_width(step.region)
@@ -222,8 +225,9 @@ class EpisodeLog:
             if p_g is not None:
                 bits.append(f"to_grasp {np.linalg.norm(p_g - s['p_tool']) * 1000:.0f}mm")
             if step.skill in ("place_in", "place_on"):
-                q, tq = t.skills.place_target(step.obj, step.region, step.skill == "place_in")
-                bits.append(f"to_place {np.linalg.norm(tq - q) * 1000:.0f}mm")
+                tgt = t.skills.place_target(step.obj, step.region, step.skill == "place_in", decide=False)
+                if tgt is not None:
+                    bits.append(f"to_place {np.linalg.norm(tgt[1] - tgt[0]) * 1000:.0f}mm")
         except GEOMETRY_ERRORS as e:                     # the object has left the scene
             bits.append(f"geom? {type(e).__name__}")
         bits.append("touch " + (",".join(touching[:3]) or "-"))

@@ -34,18 +34,41 @@ ROOT = Path(__file__).resolve().parents[1]
 PERF = "5,6,7,8,9,15,16,17,18,19"
 BELIEF_REPO = Path.home() / "Documents/GitHub/Theoretically_Driven_LLM_Planning"
 # the code whose behaviour a reliability number describes: change any of it and old
-# trials stop being comparable (the ledger's compatibility key reads teacher_revision)
-TEACHER_CODE = ["screwhead/skills.py", "screwhead/skill_teacher.py", "screwhead/grasp_planner.py",
-                "screwhead/reach.py", "screwhead/frames.py", "screwhead/contacts.py", "screwhead/scene.py",
-                "screwhead/task_env.py", "screwhead/sim_arm.py", "screwhead/task_spec.py",
-                "screwhead/servo.py", "screwhead/gripper_servo.py", "screwhead/kin_np.py",
-                "screwhead/episode_log.py"]
+# trials stop being comparable (the ledger's compatibility key reads teacher_revision).
+# Found by following imports from what an episode runs; a hand-kept list missed the
+# action decode (interface.py), the env wrapper and the episode runner itself.
+TEACHER_ENTRY = ["tools/skill_eval.py", "screwhead/skill_teacher.py", "screwhead/task_env.py",
+                 "screwhead/episode_log.py"]
+
+
+def teacher_code() -> list[str]:
+    """Every file in the static import closure of TEACHER_ENTRY within this repo."""
+    import ast
+    seen: set[str] = set()
+    todo = list(TEACHER_ENTRY)
+    while todo:
+        f = todo.pop()
+        if f in seen or not (ROOT / f).exists():
+            continue
+        seen.add(f)
+        for node in ast.walk(ast.parse((ROOT / f).read_text())):
+            if isinstance(node, ast.Import):
+                todo += [f"screwhead/{a.name.split('.', 1)[1]}.py" for a in node.names
+                         if a.name.startswith("screwhead.")]
+            elif isinstance(node, ast.ImportFrom):
+                mod = node.module or ""
+                if node.level == 0 and not (mod == "screwhead" or mod.startswith("screwhead.")):
+                    continue
+                base = mod.removeprefix("screwhead").lstrip(".") if node.level == 0 else mod
+                todo += ([f"screwhead/{base.replace('.', '/')}.py"] if base
+                         else [f"screwhead/{a.name}.py" for a in node.names])
+    return sorted(seen)
 
 
 def teacher_revision() -> str:
     import hashlib
     h = hashlib.sha1()
-    for f in TEACHER_CODE:
+    for f in teacher_code():
         fp = ROOT / f
         h.update(fp.read_bytes() if fp.exists() else b"")
     return f"skill_teacher:{h.hexdigest()[:10]}"
@@ -105,13 +128,15 @@ def collect(suite: str, episodes: int, horizon: int, out: Path) -> Path:
            "PATH": "/usr/bin:/bin", "HOME": str(Path.home())}
     log = out.with_suffix(".log")
     rev = teacher_revision()                   # the code that RAN, stamped before it runs
+    out.unlink(missing_ok=True)                # never re-stamp a previous run's trials
     with log.open("w") as f:
-        subprocess.run(cmd, cwd=ROOT, env=env, stdout=f, stderr=subprocess.STDOUT, check=False)
-    if out.exists():
-        data = json.loads(out.read_text())
-        for t in data["trials"]:
-            t["repro"]["teacher_revision"] = rev
-        out.write_text(json.dumps(data, indent=1))
+        proc = subprocess.run(cmd, cwd=ROOT, env=env, stdout=f, stderr=subprocess.STDOUT, check=False)
+    if proc.returncode != 0 or not out.exists():
+        raise SystemExit(f"{suite}: skill_eval exited {proc.returncode} without trials; see {log}")
+    data = json.loads(out.read_text())
+    for t in data["trials"]:
+        t["repro"]["teacher_revision"] = rev
+    out.write_text(json.dumps(data, indent=1))
     return out
 
 

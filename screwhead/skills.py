@@ -358,8 +358,13 @@ class Skills:
         self.phase = "release"
         return self.action(np.zeros(6), A_OPEN)
 
-    def place_target(self, obj: str, region: str, inside: bool) -> tuple[np.ndarray, np.ndarray]:
-        """(object origin now, where that origin has to end up)."""
+    def place_target(self, obj: str, region: str, inside: bool,
+                     decide: bool = True) -> tuple[np.ndarray, np.ndarray] | None:
+        """(object origin now, where that origin has to end up). With decide=False, None if
+        the drop point has not been chosen this episode: observers read it, never choose it."""
+        if not decide and (getattr(self.env, "episode", None) != self._episode
+                           or (obj, region) not in self._drop_cache):
+            return None
         self.new_episode_check()
         R_reg, p_reg, half = self.region_pose(region)
         box = self.scene.object_box(obj)
