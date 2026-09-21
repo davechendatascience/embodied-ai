@@ -1,21 +1,10 @@
-"""Two action heads over the same frozen features.
-
-They differ in exactly one thing -- what they predict -- so a difference in
-transfer is attributable to the action representation and not to perception,
-capacity, data, or optimisation.
-
-  BaselineHead    delta-q in joint space, padded to MAX_DOF. This is how pi0
-                  and GR00T handle embodiment: a fixed-width vector, sliced per
-                  robot, with the kinematics never reaching the model. On an
-                  arm it was not trained on there is nothing to do but slice,
-                  which is the charitable reading of zero-shot transfer for
-                  those systems.
+"""The CLIP-feature action head: ScrewHead over frozen pooled features.
 
   ScrewHead       a body twist in the tool frame plus grasp intent, decoded by
                   the arm's own Jacobian. The learned output carries no joint
                   count, and the spec tokens tell it which arm it is driving.
 
-Both emit an action CHUNK. Chunking is near-universal in this literature and
+It emits an action CHUNK. Chunking is near-universal in this literature and
 buys temporal consistency; it also means the twist decoder is exercised over a
 horizon, where null-space drift would show up.
 """
@@ -33,7 +22,7 @@ MAX_DOF = 7
 
 
 class Trunk(nn.Module):
-    """Shared perception-to-latent stack. Identical in both policies."""
+    """Perception-to-latent stack: both cameras' pooled features, the instruction and the state."""
 
     def __init__(self, width: int = 512, state_dim: int = STATE_DIM, depth: int = 2):
         super().__init__()
@@ -50,38 +39,6 @@ class Trunk(nn.Module):
     def forward(self, agent: Tensor, wrist: Tensor, text: Tensor, state: Tensor) -> Tensor:
         h = self.img(torch.cat([agent, wrist], -1)) + self.txt(text) + self.state(state)
         return self.norm(h + self.mlp(h))
-
-
-class BaselineHead(nn.Module):
-    """Padded joint-space delta, conditioned on a learned embodiment EMBEDDING.
-
-    Deliberately not a weaker straw man. It carries the same trunk, the same
-    attention block and within 2% of the same parameter count as ScrewHead, and
-    it conditions on embodiment exactly the way GR00T does -- an integer id
-    selecting learned weights (CategorySpecificMLP over max_num_embodiments=32).
-    The single difference is WHAT the conditioning carries: an opaque id here, a
-    screw axis per joint there. That is the variable under test.
-
-    An id has no value for an arm that was never trained, which is the real
-    limitation of the approach rather than an artifact of this implementation.
-    """
-
-    def __init__(self, width: int = 512, chunk: int = 8, heads: int = 4,
-                 num_embodiments: int = 32):
-        super().__init__()
-        self.chunk = chunk
-        self.trunk = Trunk(width)
-        self.embodiment = nn.Embedding(num_embodiments, width)
-        self.emb_attn = nn.MultiheadAttention(width, heads, batch_first=True)
-        self.emb_norm = nn.LayerNorm(width)
-        self.out = nn.Linear(width, chunk * (MAX_DOF + 1))
-
-    def forward(self, agent, wrist, text, state, embodiment_id) -> Tensor:
-        h = self.trunk(agent, wrist, text, state)
-        tok = self.embodiment(embodiment_id)[:, None]
-        attended, _ = self.emb_attn(h[:, None], tok, tok, need_weights=False)
-        h = self.emb_norm(h + attended[:, 0])
-        return self.out(h).view(-1, self.chunk, MAX_DOF + 1)
 
 
 class ScrewHead(nn.Module):

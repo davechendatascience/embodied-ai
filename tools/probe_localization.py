@@ -19,9 +19,14 @@ the tolerance bites -- for four input sets:
 from __future__ import annotations
 
 import argparse
+
 import numpy as np
 import torch
 from torch import nn
+
+NEAR_GRASP = 0.06          # m, tool-to-grasp distance: "tool <60 mm"
+VERY_NEAR_GRASP = 0.025    # m, "tool <25 mm"
+MIN_SLICE = 20             # fewer held-out states than this and a slice reports n/a
 
 
 def load(paths):
@@ -45,9 +50,9 @@ def fit(X, Y, tr, va, epochs=60, dev="cuda"):
     opt = torch.optim.AdamW(net.parameters(), 1e-3, weight_decay=1e-3)
     tri = torch.tensor(np.where(tr)[0], device=dev); vai = torch.tensor(np.where(va)[0], device=dev)
     best, best_state = 1e9, None
-    for ep in range(epochs):
+    for _ in range(epochs):
         net.train()
-        for k in range(0, len(tri), 1024):
+        for _ in range(0, len(tri), 1024):
             i = tri[torch.randperm(len(tri), device=dev)[:1024]]
             loss = nn.functional.smooth_l1_loss(net(Xt[i]), Yt[i])
             opt.zero_grad(); loss.backward(); opt.step()
@@ -58,8 +63,14 @@ def fit(X, Y, tr, va, epochs=60, dev="cuda"):
             best, best_state = vl, {k: v.clone() for k, v in net.state_dict().items()}
     net.load_state_dict(best_state); net.eval()
     with torch.no_grad():
-        P = net(Xt[vai]).cpu().numpy() * ys + ym
-    return P
+        return net(Xt[vai]).cpu().numpy() * ys + ym
+
+
+def _median_p90(err, m) -> str:
+    """'median / p90' of the errors selected by mask m, or n/a when the slice is too thin."""
+    if m.sum() > MIN_SLICE:
+        return f"{np.median(err[m]):5.1f} / {np.percentile(err[m], 90):5.1f}"
+    return "   n/a       "
 
 
 def main() -> int:
@@ -84,11 +95,10 @@ def main() -> int:
     for name, X in sets.items():
         P = fit(X, Y, tr, va)
         err = np.linalg.norm(P - Yv, axis=1) * 1000
-        def mp(m):
-            return f"{np.median(err[m]):5.1f} / {np.percentile(err[m], 90):5.1f}" if m.sum() > 20 else "   n/a       "
-        near, vnear = (dv < 0.06) & pv, (dv < 0.025) & pv
-        print(f"{name:6s} | {mp(np.ones(len(err), bool)):>14s} {mp(near):>14s} {mp(vnear):>14s} | "
-              f"{mp(near & (sv == 0)):>18s} {mp(near & (sv == 1)):>15s}")
+        near, vnear = (dv < NEAR_GRASP) & pv, (dv < VERY_NEAR_GRASP) & pv
+        print(f"{name:6s} | {_median_p90(err, np.ones(len(err), bool)):>14s} {_median_p90(err, near):>14s} "
+              f"{_median_p90(err, vnear):>14s} | "
+              f"{_median_p90(err, near & (sv == 0)):>18s} {_median_p90(err, near & (sv == 1)):>15s}")
     print("\nreference: the teacher closes only within ~6 mm of the grasp pose; the wall is 3 mm thick")
     return 0
 

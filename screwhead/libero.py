@@ -33,7 +33,6 @@ import os
 from pathlib import Path
 
 import torch
-from torch import Tensor
 
 from .mjcf import from_mjcf
 from .poe import Chain

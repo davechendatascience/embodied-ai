@@ -23,13 +23,13 @@ from .kinematics import fk
 from .poe import Chain
 
 TOKEN_DIM = 10          # 6 screw + 1 type + 2 limits + 1 normalised index
-GLOBAL_DIM = 8          # reach + dof + redundancy + log(M) as a 6-vector? see below
+MIN_REACH = 1e-9        # guards the reach normalisation of a degenerate (zero-reach) chain
 
 
 @dataclass
 class Spec:
     tokens: Tensor      # (n, TOKEN_DIM)
-    globals_: Tensor    # (GLOBAL_DIM,)
+    globals_: Tensor    # (8,) reach, dof / 10, redundant, M position / reach, det R_M, 0
     n: int
 
     def padded(self, max_n: int) -> tuple[Tensor, Tensor]:
@@ -57,7 +57,7 @@ def encode(chain: Chain, scale: float | None = None) -> Spec:
     policy's output frame untouched (ch.4 sec.4.3)."""
     L = reach(chain) if scale is None else scale
     B = chain.B.clone()
-    B[:, 3:] = B[:, 3:] / max(L, 1e-9)                  # linear part is a length
+    B[:, 3:] = B[:, 3:] / max(L, MIN_REACH)             # linear part is a length
     kind = torch.tensor([[0.0 if t == "revolute" else 1.0] for t in chain.joint_types],
                         dtype=B.dtype)
     lim = chain.limits.clone().to(B.dtype) / torch.pi   # radians -> O(1)
@@ -67,40 +67,7 @@ def encode(chain: Chain, scale: float | None = None) -> Spec:
     M = chain.M
     globals_ = torch.cat([
         torch.tensor([L, chain.n / 10.0, float(chain.n > 6)], dtype=B.dtype),
-        M[:3, 3] / max(L, 1e-9),
+        M[:3, 3] / max(L, MIN_REACH),
         torch.tensor([float(torch.linalg.det(M[:3, :3])), 0.0], dtype=B.dtype),
     ])
     return Spec(tokens=tokens, globals_=globals_, n=chain.n)
-
-
-def perturb(chain: Chain, magnitude: float, seed: int) -> Chain:
-    """A geometrically valid variation of an arm: the randomisation the design
-    depends on, and the probe that shows whether the tokens are read at all.
-
-    Link offsets move, so screw-axis moment arms change; axis directions tilt.
-    Both keep the chain a legal open chain, so the decode stays exact for the
-    perturbed arm -- which is what makes it a fair test.
-    """
-    g = torch.Generator().manual_seed(seed)
-    S = chain.S.clone()
-    w = S[:, :3]
-    tilt = torch.randn(chain.n, 3, generator=g) * magnitude
-    w_new = w + tilt
-    w_new = w_new / torch.clamp(torch.linalg.norm(w_new, dim=-1, keepdim=True), min=1e-9)
-    # Recover a point on each axis, jitter it, and rebuild v = -w x q.
-    q = torch.linalg.cross(w, S[:, 3:])
-    q = q + torch.randn(chain.n, 3, generator=g) * magnitude
-    revolute = torch.tensor([t == "revolute" for t in chain.joint_types])
-    S_new = S.clone()
-    S_new[revolute, :3] = w_new[revolute]
-    S_new[revolute, 3:] = -torch.linalg.cross(w_new, q)[revolute]
-    S_new[~revolute, 3:] = w_new[~revolute]
-
-    M = chain.M.clone()
-    M[:3, 3] = M[:3, 3] + torch.randn(3, generator=g) * magnitude
-    return Chain(
-        name=f"{chain.name}-perturbed", joint_names=list(chain.joint_names),
-        joint_types=list(chain.joint_types), S=S_new, M=M,
-        limits=chain.limits.clone(), base_frame=chain.base_frame,
-        tool_frame=chain.tool_frame, source=f"{chain.source}#perturb{magnitude}",
-    )

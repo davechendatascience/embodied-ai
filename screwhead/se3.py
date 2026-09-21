@@ -10,6 +10,21 @@ from __future__ import annotations
 import torch
 from torch import Tensor
 
+# An angular norm below this is zero: the screw is prismatic, or the twist a pure
+# translation. The same floor guards every division by a norm.
+_ZERO_NORM = 1e-12
+# Below this angle the log takes the identity branch: w = 0, v = p.
+_SMALL_ANGLE = 1e-9
+# sin(theta) below which the log reads the axis from R + I rather than from `dual`.
+# Threshold at sqrt(2*eps) ~ 2e-8, where the two axis estimators cross.
+# R + I = 2 a a^T + delta*[a], so its axis error is O(delta); dual/sin has
+# error O(eps/delta). Switching at 1e-6 uses the R+I branch across three
+# decades where it is the WORSE of the two -- measured 3.6e-7 error at
+# delta = 9e-7, which is 0.4*delta exactly as that analysis predicts.
+_NEAR_PI_SIN = 2e-8
+# Below this angle the W^2 coefficient of G^-1 comes from its series (see log_se3).
+_SERIES_ANGLE = 1e-3
+
 
 def hat3(w: Tensor) -> Tensor:
     """(..., 3) -> (..., 3, 3) skew-symmetric [w]."""
@@ -38,7 +53,7 @@ def exp_se3(S: Tensor, theta: Tensor) -> Tensor:
     """
     w, v = S[..., :3], S[..., 3:]
     wn = torch.linalg.norm(w, dim=-1)
-    revolute = wn > 1e-12
+    revolute = wn > _ZERO_NORM
 
     T = torch.eye(4, dtype=S.dtype, device=S.device).expand(*S.shape[:-1], 4, 4).clone()
 
@@ -103,7 +118,7 @@ def log_se3(T: Tensor) -> Tensor:
     cos_t = (R[..., 0, 0] + R[..., 1, 1] + R[..., 2, 2] - 1) / 2
     theta = torch.atan2(sin_t, cos_t)
 
-    small = theta < 1e-9
+    small = theta < _SMALL_ANGLE
     # Near theta = pi the axis cannot come from `dual`, which vanishes there.
     # R + I = 2 a a^T instead: every column is parallel to the axis, so take the
     # best conditioned one. The sign of a is genuinely ambiguous at exactly pi
@@ -111,19 +126,14 @@ def log_se3(T: Tensor) -> Tensor:
     # cos_t < 0 is essential: sin(theta) is small at theta ~ 0 too, and without
     # the cosine test a rotation of 1e-7 rad takes the pi branch and decodes
     # about an arbitrary axis.
-    # Threshold at sqrt(2*eps) ~ 2e-8, where the two axis estimators cross.
-    # R + I = 2 a a^T + delta*[a], so its axis error is O(delta); dual/sin has
-    # error O(eps/delta). Switching at 1e-6 uses the R+I branch across three
-    # decades where it is the WORSE of the two -- measured 3.6e-7 error at
-    # delta = 9e-7, which is 0.4*delta exactly as that analysis predicts.
-    near_pi = (sin_t < 2e-8) & (cos_t < 0)
+    near_pi = (sin_t < _NEAR_PI_SIN) & (cos_t < 0)
 
-    axis_gen = dual / torch.clamp(sin_t, min=1e-12)[..., None]
+    axis_gen = dual / torch.clamp(sin_t, min=_ZERO_NORM)[..., None]
     I3 = torch.eye(3, dtype=T.dtype, device=T.device).expand(R.shape)
     A = R + I3
     col = torch.argmax(torch.diagonal(A, dim1=-2, dim2=-1), dim=-1)
     axis_pi = torch.gather(A, -1, col[..., None, None].expand(*A.shape[:-1], 1))[..., 0]
-    axis_pi = axis_pi / torch.clamp(torch.linalg.norm(axis_pi, dim=-1, keepdim=True), min=1e-12)
+    axis_pi = axis_pi / torch.clamp(torch.linalg.norm(axis_pi, dim=-1, keepdim=True), min=_ZERO_NORM)
 
     # Fix the sign against `dual`, which still carries orientation even when it
     # is small. Without this, a rotation of pi - 1e-6 can be decoded about the
@@ -147,7 +157,7 @@ def log_se3(T: Tensor) -> Tensor:
     t_s = th.squeeze(-1).squeeze(-1)
     coef_series = t_s / 12 + t_s ** 3 / 720
     coef_exact = 1 / t_s - 1 / (2 * torch.tan(t_s / 2))
-    coef = torch.where(t_s < 1e-3, coef_series, coef_exact)[..., None, None]
+    coef = torch.where(t_s < _SERIES_ANGLE, coef_series, coef_exact)[..., None, None]
     Gi = I3 / th - W / 2 + coef * (W @ W)
     # S is a unit screw; the twist is S * theta, so v scales too.
     v = (Gi @ p[..., None])[..., 0] * theta[..., None]
@@ -167,9 +177,9 @@ def exp_twist(V: Tensor) -> Tensor:
     """
     w = V[..., :3]
     theta = torch.linalg.norm(w, dim=-1)
-    pure_translation = theta < 1e-12
+    pure_translation = theta < _ZERO_NORM
     # A prismatic-only twist is scaled by its linear norm instead.
     lin = torch.linalg.norm(V[..., 3:], dim=-1)
     theta = torch.where(pure_translation, lin, theta)
-    safe = torch.clamp(theta, min=1e-12)
+    safe = torch.clamp(theta, min=_ZERO_NORM)
     return exp_se3(V / safe[..., None], theta)

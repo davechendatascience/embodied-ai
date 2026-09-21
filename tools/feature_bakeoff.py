@@ -24,14 +24,16 @@ Variants:
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import torch
 from torch import nn
 
 ROOT = Path(__file__).resolve().parents[1]
+NEAR_GRASP = 0.06          # m, tool-to-grasp distance that counts as near the grasp
+MIN_SLICE = 20             # fewer held-out states than this and a slice reports nan
 MEAN = dict(clip=(0.48145466, 0.4578275, 0.40821073), siglip=(0.5, 0.5, 0.5), dino=(0.485, 0.456, 0.406))
 STD = dict(clip=(0.26862954, 0.26130258, 0.27577711), siglip=(0.5, 0.5, 0.5), dino=(0.229, 0.224, 0.225))
 
@@ -93,7 +95,16 @@ class Probe(nn.Module):
         return self.mlp(torch.cat(parts + [self.txt(t), s], 1))
 
 
-def train_probe(A, W, T, S, Y, tr, va, dev, epochs=40):
+class ProbeInputs(NamedTuple):
+    """What the probe sees: agent and wrist tokens (None when blind), language, tool pose."""
+    agent: np.ndarray | None
+    wrist: np.ndarray | None
+    text: np.ndarray
+    state: np.ndarray
+
+
+def train_probe(x: ProbeInputs, Y, tr, va, dev, epochs=40):
+    A, W, T, S = x.agent, x.wrist, x.text, x.state
     n_tok = 0 if A is None else A.shape[1]
     d_in = 128 if A is None else A.shape[2]
     ym, ys = Y[tr].mean(0), Y[tr].std(0) + 1e-6
@@ -110,7 +121,7 @@ def train_probe(A, W, T, S, Y, tr, va, dev, epochs=40):
     tri = torch.tensor(np.where(tr)[0], device=dev); vai = torch.tensor(np.where(va)[0], device=dev)
     fwd = lambda i: net(None if At is None else At[i], None if Wt is None else Wt[i], Tt[i], St[i])
     best, state = 1e9, None
-    for ep in range(epochs):
+    for _ in range(epochs):
         net.train()
         perm = tri[torch.randperm(len(tri), device=dev)]
         for k in range(0, len(perm), 512):
@@ -127,6 +138,11 @@ def train_probe(A, W, T, S, Y, tr, va, dev, epochs=40):
     with torch.no_grad():
         P = torch.cat([fwd(vai[k:k + 2048]) for k in range(0, len(vai), 2048)]).cpu().numpy()
     return P * ys + ym
+
+
+def _median_p90(err, m):
+    """(median, p90) of the errors selected by mask m; nan when the slice is too thin."""
+    return (np.median(err[m]), np.percentile(err[m], 90)) if m.sum() > MIN_SLICE else (np.nan, np.nan)
 
 
 def main() -> int:
@@ -150,7 +166,7 @@ def main() -> int:
     ep = np.concatenate([m["episode"] + 10_000_000 * i for i, m in enumerate(metas)])
     va = (ep % 5) == 0; tr = ~va
     dist = np.linalg.norm(Y, axis=1)
-    near = (dist < 0.06) & np.isin(ph, ["approach", "descend", "close"])
+    near = (dist < NEAR_GRASP) & np.isin(ph, ["approach", "descend", "close"])
     print(f"{len(Y)} states from {len(np.unique(ep))} episodes; held-out {va.sum()}; near-grasp held-out: "
           f"teacher-driven {int((near & va & (src == 0)).sum())}, VLA-driven {int((near & va & (src == 1)).sum())}")
     g = torch.Generator().manual_seed(0)
@@ -173,12 +189,11 @@ def main() -> int:
             tr_f = tr & ((src == 0) | np.isin(ep, list(keep)))
             for seed in range(args.probe_seeds):
                 torch.manual_seed(seed)
-                pred = train_probe(A, W, T, S, Y, tr_f, va, dev)
+                pred = train_probe(ProbeInputs(A, W, T, S), Y, tr_f, va, dev)
                 err = np.linalg.norm(pred - Y[va], axis=1) * 1000
                 nv, sv = near[va], src[va]
-                stat = lambda m: (np.median(err[m]), np.percentile(err[m], 90)) if m.sum() > 20 else (np.nan, np.nan)
-                r = dict(variant=v, frac=frac, seed=seed, all=stat(np.ones(len(err), bool)),
-                         t_near=stat(nv & (sv == 0)), s_near=stat(nv & (sv == 1)))
+                r = dict(variant=v, frac=frac, seed=seed, all=_median_p90(err, np.ones(len(err), bool)),
+                         t_near=_median_p90(err, nv & (sv == 0)), s_near=_median_p90(err, nv & (sv == 1)))
                 results.append(r)
                 print(f"  {v:16s} VLA-driven train episodes {int(round(frac * len(order))):3d} ({frac:.2f}) seed {seed}  "
                       f"near grasp, teacher-driven {r['t_near'][0]:5.1f}/{r['t_near'][1]:5.1f}"

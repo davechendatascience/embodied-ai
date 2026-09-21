@@ -6,7 +6,8 @@ measured against bowl geometry. This environment takes a task specification inst
 (screwhead/task_spec.py) and reads what it needs from the scene (screwhead/scene.py),
 so the other 120 LIBERO tasks are reachable without new per-task code.
 
-What is kept identical to the spatial pipeline, because gate 2 was measured with it:
+What is kept identical to the spatial pipeline, because gate 2 was measured with it (the
+shared parts live in screwhead/sim_arm.py):
   - JOINT_POSITION control at kp=4000 with absolute holds during settling,
   - the arm driven by TwistServo (body twist integrated on SE(3) to a joint reference),
   - the gripper driven by GripperServo from a target aperture,
@@ -17,177 +18,144 @@ Success is LIBERO's own predicate check, so no reward or progress function is re
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 
 import numpy as np
 import torch
 
 from .interface import ActionSpec
-from .kinematics import fk
+from .sim_arm import SimArm
+
+REST_SPEED = 0.005        # m/s: the scene is at rest when no free object moves faster
+INITIAL_SETTLE = 10       # control steps held after loading an initial state
+SETTLE_CHUNK = 5          # then in chunks of this many, until at rest
+SETTLE_ROUNDS = 10        # at most this many chunks
+CAMERA_PX = 128
+SEED_MOD = 2**32 - 1      # numpy's legacy seed range
 
 
-def _rot(axis: np.ndarray, angle: float) -> np.ndarray:
-    axis = axis / (np.linalg.norm(axis) + 1e-12)
-    K = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
-    return np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * K @ K
+@dataclass(frozen=True)
+class Execution:
+    """How actions are executed -- the part that must be identical for teacher and student."""
+    kp: float = 4000.0
+    servo_iters: int = 1
+    settle_steps: int = 5
+    gripper_mode: str = "target"      # "target": a target aperture; otherwise a raw command
+    hard_reset: bool = False
 
 
-class TaskEnv:
+@dataclass(frozen=True)
+class StartNoise:
+    """Start-pose randomisation in task space (zero: LIBERO's own start)."""
+    xy_m: float = 0.0
+    z_m: float = 0.0
+    yaw_deg: float = 0.0
+    tilt_deg: float = 0.0
+    null_rad: float = 0.0
+
+    def as_dict(self) -> dict:
+        return dict(xy=self.xy_m, z=self.z_m, yaw=np.deg2rad(self.yaw_deg),
+                    tilt=np.deg2rad(self.tilt_deg), null=self.null_rad)
+
+
+class TaskEnv(SimArm):
     def __init__(self, suite: str, task_index: int, horizon: int = 600, seed: int = 0,
-                 render: bool = True, kp: float = 4000.0, servo_iters: int = 1,
-                 settle_steps: int = 5, hard_reset: bool = False, gripper_mode: str = "target",
-                 start_xy_m: float = 0.0, start_z_m: float = 0.0, start_yaw_deg: float = 0.0,
-                 start_tilt_deg: float = 0.0, start_null_rad: float = 0.0):
-        from libero.libero import benchmark, get_libero_path
-        from libero.libero.envs import OffScreenRenderEnv
-
+                 render: bool = True, execution: Execution | None = None, start: StartNoise | None = None):
         from .gripper_servo import GripperServo
         from .libero_env import JOINT_ACTION_SCALE, build_chain, gripper_geom, register_ur5e
         from .scene import Scene
         from .servo import TwistServo
-        from .task_spec import parse
         register_ur5e()
-
-        self.suite, self.ti, self.horizon, self.kp = suite, task_index, horizon, kp
-        self.gripper_mode = gripper_mode
+        ex = execution or Execution()
+        self.suite, self.ti, self.horizon, self.kp = suite, task_index, horizon, ex.kp
+        self.gripper_mode, self.settle_steps = ex.gripper_mode, ex.settle_steps
         self.gripper_servo = GripperServo()
         self.rng = np.random.default_rng(seed)
+        self._scene_seed = seed
         self.spec = ActionSpec()
-        self.scale = np.array([self.spec.rot_scale * self.spec.control_hz] * 3 +
-                              [self.spec.pos_scale * self.spec.control_hz] * 3)
-        bm = benchmark.get_benchmark_dict()[suite]()
-        task = bm.get_task(task_index)
-        self.language = task.language
-        bddl = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
-        self.task_spec = parse(bddl, suite)
-        kw = (dict(camera_heights=128, camera_widths=128) if render else
-              dict(use_camera_obs=False, has_offscreen_renderer=False))
-        kw["hard_reset"] = hard_reset
-        self.env = OffScreenRenderEnv(bddl_file_name=bddl, robots=["Panda"],
-                                      gripper_types="PandaGripper", controller="JOINT_POSITION", **kw)
-        _load = torch.load
-        torch.load = lambda *a, **k: _load(*a, **{**k, "weights_only": False})
-        try:
-            self.init_states = bm.get_task_init_states(task_index)
-        finally:
-            torch.load = _load
+        self.scale = np.array([self.spec.max_angular_speed] * 3 + [self.spec.max_linear_speed] * 3)
+        self._load_task(suite, task_index, render, ex.hard_reset)
         self.env.reset()
         flange, _ = gripper_geom(self.env)
         self.chain = build_chain("panda", flange)
-        self.servo = TwistServo(self.chain, self.spec, JOINT_ACTION_SCALE, iters=servo_iters,
-                                limit_gain=float(os.environ.get("SERVO_LIMIT_GAIN", "0.5")))
+        self.servo = TwistServo(self.chain, self.spec, JOINT_ACTION_SCALE, iters=ex.servo_iters)
         self.scene = Scene(self.env.env)
-        self.settle_steps = settle_steps
-        self.start = dict(xy=start_xy_m, z=start_z_m, yaw=np.deg2rad(start_yaw_deg),
-                          tilt=np.deg2rad(start_tilt_deg), null=start_null_rad)
-        self.start_offset = None
+        self.start = (start or StartNoise()).as_dict()
         self.episode = 0
         self.t = 0
         self.raw = None
         self._snap = None
         self._settled: dict[int, np.ndarray] = {}
 
-    # -- plumbing -------------------------------------------------------------------
-    def _gains(self):
-        from .libero_env import set_joint_gains
-        set_joint_gains(self.env, self.kp)
+    @property
+    def label(self) -> str:
+        return f"{self.suite}[{self.ti}]"
 
-    def _settle(self, n: int = 3, gripper: float = -1.0):
-        """Absolute joint hold: a zero delta on this controller drifts 22 mm."""
-        from .libero_env import JOINT_ACTION_SCALE
-        hold = np.asarray(self.env.env._get_observations(force_update=True)["robot0_joint_pos"])
-        for _ in range(n):
-            meas = np.asarray(self.env.env._get_observations(force_update=True)["robot0_joint_pos"])
-            cmd = np.zeros(self.env.env.action_dim)
-            cmd[:7] = np.clip((hold - meas) / JOINT_ACTION_SCALE, -1, 1)
-            cmd[-1] = gripper
-            self._gains()
-            self.env.step(cmd)
+    def _load_task(self, suite: str, task_index: int, render: bool, hard_reset: bool) -> None:
+        from libero.libero import benchmark, get_libero_path
+        from libero.libero.envs import OffScreenRenderEnv
 
-    def _max_object_speed(self) -> float:
-        m, d = self.env.sim.model, self.env.sim.data
-        v = 0.0
-        for j in range(m.njnt):
-            if int(m.jnt_type[j]) == 0:
-                name = m.joint_id2name(j) or ""
-                if not name.startswith(("robot", "gripper")):
-                    a = int(m.jnt_dofadr[j]); v = max(v, float(np.linalg.norm(d.qvel[a:a + 3])))
-        return v
-
-    def _robot_contact(self) -> bool:
-        m, d = self.env.sim.model, self.env.sim.data
-        for i in range(d.ncon):
-            c = d.contact[i]
-            if c.dist >= 0:
-                continue
-            n1 = m.body_id2name(m.geom_bodyid[c.geom1]) or ""
-            n2 = m.body_id2name(m.geom_bodyid[c.geom2]) or ""
-            r1, r2 = n1.startswith(("robot", "gripper")), n2.startswith(("robot", "gripper"))
-            if r1 != r2:
-                return True
-        return False
-
-    def _randomize_start(self, batch: int = 16, max_rounds: int = 10) -> None:
-        from .ik import sigma_min, solve_ik
-        sim = self.env.sim
-        idx = self.env.env.robots[0]._ref_joint_pos_indexes
-        q0 = sim.data.qpos[idx].copy()
-        T0 = fk(self.chain, torch.tensor(q0)[None])[0].numpy()
-        st = self.start
-        for _ in range(max_rounds):
-            targets, seeds, meta = [], [], []
-            for _ in range(batch):
-                dp = np.array([self.rng.uniform(-st["xy"], st["xy"]), self.rng.uniform(-st["xy"], st["xy"]),
-                               self.rng.uniform(-st["z"], st["z"])])
-                yaw = self.rng.uniform(-st["yaw"], st["yaw"])
-                ax = self.rng.normal(size=2); ax = np.array([*ax / (np.linalg.norm(ax) + 1e-12), 0.0])
-                tilt = self.rng.uniform(-st["tilt"], st["tilt"])
-                T = T0.copy()
-                T[:3, :3] = _rot(np.array([0, 0, 1.0]), yaw) @ _rot(ax, tilt) @ T0[:3, :3]
-                T[:3, 3] = T0[:3, 3] + dp
-                T[2, 3] = max(T[2, 3], 0.08)
-                targets.append(T); seeds.append(q0 + self.rng.normal(0, st["null"], size=len(q0)))
-                meta.append((dp * 1000, np.rad2deg(yaw), np.rad2deg(tilt)))
-            res = solve_ik(self.chain, torch.tensor(np.stack(targets)), torch.tensor(np.stack(seeds)),
-                           lam=0.02, max_iters=200, trust=0.2)
-            ok = res["converged"] & (sigma_min(self.chain, res["theta"]) > 0.02)
-            for k in torch.nonzero(ok).flatten().tolist():
-                sim.data.qpos[idx] = res["theta"][k].numpy()
-                sim.data.qvel[:] = 0.0
-                sim.forward()
-                if not self._robot_contact():
-                    self._settle(self.settle_steps)
-                    self.start_offset = meta[k]
-                    return
-            sim.data.qpos[idx] = q0; sim.forward()
-        raise RuntimeError(f"{self.suite}[{self.ti}]: no collision-free start pose")
+        from .task_spec import parse
+        bm = benchmark.get_benchmark_dict()[suite]()
+        task = bm.get_task(task_index)
+        self.language = task.language
+        bddl = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
+        self.task_spec = parse(bddl, suite)
+        kw = (dict(camera_heights=CAMERA_PX, camera_widths=CAMERA_PX) if render else
+              dict(use_camera_obs=False, has_offscreen_renderer=False))
+        self.env = OffScreenRenderEnv(bddl_file_name=bddl, robots=["Panda"], gripper_types="PandaGripper",
+                                      controller="JOINT_POSITION", hard_reset=hard_reset, **kw)
+        # LIBERO pickles its init states; torch>=2.6 refuses that unless told otherwise
+        _load = torch.load
+        torch.load = lambda *a, **k: _load(*a, **{**k, "weights_only": False})
+        try:
+            self.init_states = bm.get_task_init_states(task_index)
+        finally:
+            torch.load = _load
 
     # -- episode --------------------------------------------------------------------
+    def _reset_scene(self, k: int) -> None:
+        """env.reset(), with LIBERO's fixture placement for init state k made repeatable.
+
+        Every reset re-samples fixture poses (a cabinet within +-1 cm of its region) from
+        numpy's global RNG, and writes them to model.body_pos -- which set_init_state does
+        not restore. Unseeded, two resets moved the cabinet 12 mm apart, so identical runs
+        diverged, and a state settled with the fixture in one place was replayed with it in
+        another: an object resting ON the fixture started embedded in it or floating.
+        """
+        np.random.seed((self._scene_seed * 1009 + k) % SEED_MOD)
+        self.env.reset()
+
     def reset(self, init_index: int | None = None):
-        from .libero_env import remap_init_state
         self.episode += 1
         k = int(self.rng.integers(len(self.init_states))) if init_index is None else init_index
         if k not in self._settled:
-            self.env.reset()
-            self.env.set_init_state(remap_init_state(self.init_states[k], self.env.sim))
-            self._settle(10)
-            for _ in range(10):                      # settle until at rest, not a fixed count
-                if self._max_object_speed() < 0.005:
-                    break
-                self._settle(5)
-            self._settled[k] = np.asarray(self.env.sim.get_state().flatten()).copy()
-        self.env.reset()
+            self._settled[k] = self._settled_state(k)
+        self._reset_scene(k)
         self.env.set_init_state(self._settled[k])
         if any(v > 0 for v in self.start.values()):
             self._randomize_start()
-        self.servo.reset(np.asarray(self.env.env._get_observations(force_update=True)["robot0_joint_pos"]))
+        self.servo.reset(np.asarray(self.observe()["robot0_joint_pos"]))
         self.t = 0
-        self.raw = self.env.env._get_observations(force_update=True)
+        self.raw = self.observe()
         return self.raw
+
+    def _settled_state(self, k: int) -> np.ndarray:
+        """LIBERO's initial state k, held until the objects in it are at rest."""
+        from .libero_env import remap_init_state
+        self._reset_scene(k)
+        self.env.set_init_state(remap_init_state(self.init_states[k], self.env.sim))
+        self._settle(INITIAL_SETTLE)
+        for _ in range(SETTLE_ROUNDS):                  # settle until at rest, not a fixed count
+            if self._max_object_speed() < REST_SPEED:
+                break
+            self._settle(SETTLE_CHUNK)
+        return np.asarray(self.env.sim.get_state().flatten()).copy()
 
     def step(self, action: np.ndarray):
         """action: 6 normalised body-twist + 1 gripper (command or target aperture)."""
         a = np.clip(np.asarray(action, np.float64), -1, 1)
-        o = self.env.env._get_observations(force_update=True)
+        o = self.observe()
         cmd = np.zeros(self.env.env.action_dim)
         cmd[:7] = self.servo.command(np.asarray(o["robot0_joint_pos"]), a[:6] * self.scale)
         if self.gripper_mode == "target":
@@ -206,18 +174,16 @@ class TaskEnv:
 
     # -- what the teacher and the student read --------------------------------------
     def snapshot(self) -> dict:
-        """Tool pose and gripper state. Object poses come from Scene, by name.
-
-        Computed once per control step: the teacher and its tests asked for it three
-        times a step, and at 3.9 ms of torch FK each that was a sixth of the episode.
-        """
+        """Tool pose and gripper state, once per control step. Object poses come from
+        Scene, by name."""
         key = (self.episode, self.t)
         if self._snap is not None and self._snap[0] == key:
             return self._snap[1]
-        from .kin_np import NpChain, fk as fk_np
-        raw = self.raw or self.env.env._get_observations(force_update=True)
+        from .kin_np import NpChain
+        from .kin_np import fk as fk_np
+        raw = self.raw or self.observe()
         T = fk_np(NpChain.of(self.chain), np.asarray(raw["robot0_joint_pos"], float))[0]
-        gq = raw["robot0_gripper_qpos"]; gv = raw.get("robot0_gripper_qvel", np.zeros(2))
+        gq, gv = raw["robot0_gripper_qpos"], raw.get("robot0_gripper_qvel", np.zeros(2))
         snap = dict(R_tool=T[:3, :3], p_tool=T[:3, 3], aperture=float(gq[0] - gq[1]),
                     aperture_rate=float(gv[0] - gv[1]), success=bool(self.env.env._check_success()))
         self._snap = (key, snap)
@@ -225,13 +191,13 @@ class TaskEnv:
 
     def student_state(self) -> np.ndarray:
         from .state import tool_state
-        raw = self.raw or self.env.env._get_observations(force_update=True)
+        raw = self.raw or self.observe()
         q = torch.tensor(np.asarray(raw["robot0_joint_pos"]), dtype=torch.float64)[None]
         g = raw["robot0_gripper_qpos"]
         return tool_state(self.chain, q, torch.tensor([float(g[0] - g[1])], dtype=torch.float64))[0].float().numpy()
 
     def images(self):
-        raw = self.raw or self.env.env._get_observations(force_update=True)
+        raw = self.raw or self.observe()
         return raw["agentview_image"], raw["robot0_eye_in_hand_image"]
 
     def close(self):

@@ -35,9 +35,11 @@ PERF = "5,6,7,8,9,15,16,17,18,19"
 BELIEF_REPO = Path.home() / "Documents/GitHub/Theoretically_Driven_LLM_Planning"
 # the code whose behaviour a reliability number describes: change any of it and old
 # trials stop being comparable (the ledger's compatibility key reads teacher_revision)
-TEACHER_CODE = ["screwhead/skills.py", "screwhead/skill_teacher.py", "screwhead/scene.py",
-                "screwhead/task_env.py", "screwhead/task_spec.py", "screwhead/servo.py",
-                "screwhead/gripper_servo.py"]
+TEACHER_CODE = ["screwhead/skills.py", "screwhead/skill_teacher.py", "screwhead/grasp_planner.py",
+                "screwhead/reach.py", "screwhead/frames.py", "screwhead/contacts.py", "screwhead/scene.py",
+                "screwhead/task_env.py", "screwhead/sim_arm.py", "screwhead/task_spec.py",
+                "screwhead/servo.py", "screwhead/gripper_servo.py", "screwhead/kin_np.py",
+                "screwhead/episode_log.py"]
 
 
 def teacher_revision() -> str:
@@ -71,9 +73,15 @@ def ingest(trials: list[dict], artifact: str) -> str:
 
 SUITE_TASKS = {"libero_object": 10, "libero_spatial": 10, "libero_goal": 10,
                "libero_10": 10, "libero_90": 90}
+RELIABLE_LO = 0.90        # the contract's bar (CTR-teacher-reliable), on the lower bound
+MARGINAL_LO = 0.50
+Z94 = 1.881               # normal quantile for a two-sided 94% interval
+TIMELINE_MAX = 700        # characters of a timeline shown before it is elided
+TIMELINE_KEEP = 340
+EVENTS_SHOWN = 10
 
 
-def interval(k: int, n: int, z: float = 1.881) -> tuple[float, float]:
+def interval(k: int, n: int, z: float = Z94) -> tuple[float, float]:
     """Wilson interval, 94% by default -- the width the ledger's contracts are written to."""
     if n == 0:
         return 0.0, 1.0
@@ -85,7 +93,7 @@ def interval(k: int, n: int, z: float = 1.881) -> tuple[float, float]:
 
 
 def grade(lo: float) -> str:
-    return "reliable" if lo >= 0.90 else ("marginal" if lo >= 0.50 else "broken")
+    return "reliable" if lo >= RELIABLE_LO else ("marginal" if lo >= MARGINAL_LO else "broken")
 
 
 def collect(suite: str, episodes: int, horizon: int, out: Path) -> Path:
@@ -134,9 +142,42 @@ def _kind(ev: str) -> str:
     return text.strip()
 
 
+def _counts(counter: collections.Counter | dict, limit: int | None = None) -> str:
+    items = counter.most_common(limit) if isinstance(counter, collections.Counter) else \
+        sorted(counter.items(), key=lambda x: -x[1])
+    return ", ".join(f"{k} x{c}" for k, c in items) or "-"
+
+
+def _episode_lines(t: dict, d: dict) -> list[str]:
+    """One failed episode in full: timeline, events, grasp, false predicate."""
+    tl = d.get("timeline", "")
+    lines = [f"  -- ep{d.get('episode')} ({d.get('steps')} steps) [{t['conditions'].get('mechanism')}]",
+             "     timeline: " + (tl if len(tl) < TIMELINE_MAX else tl[:TIMELINE_KEEP] + " ... " + tl[-TIMELINE_KEEP:])]
+    lines += ["     " + e for e in d.get("events", [])[:EVENTS_SHOWN]]
+    lines += [f"     grasp {obj}: " + ", ".join(f"{k}={v}" for k, v in g.items())
+              for obj, g in d.get("grasp", {}).items()]
+    lines += ["     final: " + f for f in d.get("final", [])]
+    return lines
+
+
+def _task_section(r: dict, fails: list[dict], examples: int) -> list[str]:
+    """What a task's failed episodes have in common, and the first few in full."""
+    det = [t.get("detail", {}) for t in fails]
+    lang = det[0].get("language", "") if det else ""
+    kinds = collections.Counter(k for d in det for k in {_kind(e) for e in d.get("events", [])})
+    tiers = collections.Counter(g.get("tier") for d in det for g in d.get("grasp", {}).values())
+    lines = [f"\n### {r['suite']}[{r['task']}] {r['k']}/{r['n']}  {lang}",
+             "  mechanisms: " + _counts(r["mechanisms"]),
+             "  events in failed episodes: " + _counts(kinds, 8),
+             "  grasp tiers chosen: " + _counts(tiers)]
+    for t, d in list(zip(fails, det, strict=True))[:examples]:
+        lines += _episode_lines(t, d)
+    return lines
+
+
 def diagnose(rows: list[dict], trials: list[dict], examples: int, out_md: Path | None) -> None:
     """Per task that is not perfect: what the failed episodes have in common, and two of
-    them in full -- timeline, events, the grasp that was chosen, and the false predicate."""
+    them in full; every failed episode goes to `out_md`."""
     by = collections.defaultdict(list)
     for t in trials:
         by[(t["conditions"]["suite"], t["conditions"]["task"])].append(t)
@@ -145,40 +186,17 @@ def diagnose(rows: list[dict], trials: list[dict], examples: int, out_md: Path |
         if r["k"] == r["n"]:
             continue
         fails = [t for t in by[(r["suite"], r["task"])] if not t["metrics"]["success"]]
-        det = [t.get("detail", {}) for t in fails]
-        lang = det[0].get("language", "") if det else ""
-        kinds = collections.Counter(k for d in det for k in {_kind(e) for e in d.get("events", [])})
-        tiers = collections.Counter(g.get("tier") for d in det for g in d.get("grasp", {}).values())
-        head = f"\n### {r['suite']}[{r['task']}] {r['k']}/{r['n']}  {lang}"
-        lines = [head,
-                 "  mechanisms: " + ", ".join(f"{m} x{c}" for m, c in
-                                              sorted(r["mechanisms"].items(), key=lambda x: -x[1])),
-                 "  events in failed episodes: " + (", ".join(f"{k} x{c}" for k, c in kinds.most_common(8)) or "-"),
-                 "  grasp tiers chosen: " + (", ".join(f"{k} x{c}" for k, c in tiers.most_common()) or "-")]
-        for t, d in list(zip(fails, det))[:examples]:
-            lines.append(f"  -- ep{d.get('episode')} ({d.get('steps')} steps) [{t['conditions'].get('mechanism')}]")
-            tl = d.get("timeline", "")
-            lines.append("     timeline: " + (tl if len(tl) < 700 else tl[:340] + " ... " + tl[-340:]))
-            for e in d.get("events", [])[:10]:
-                lines.append("     " + e)
-            for obj, g in d.get("grasp", {}).items():
-                lines.append(f"     grasp {obj}: " + ", ".join(f"{k}={v}" for k, v in g.items()))
-            for f in d.get("final", []):
-                lines.append("     final: " + f)
-        print("\n".join(lines))
-        md += lines
-        if out_md is not None:          # the full record: every failed episode
-            for t, d in list(zip(fails, det))[examples:]:
-                md.append(f"  -- ep{d.get('episode')} [{t['conditions'].get('mechanism')}] "
-                          f"{d.get('timeline', '')}")
-                md += ["     " + e for e in d.get("events", [])]
-                md += ["     final: " + f for f in d.get("final", [])]
+        section = _task_section(r, fails, examples)
+        print("\n".join(section))
+        md += section
+        for t in fails[examples:]:                    # the full record, in the file only
+            md += _episode_lines(t, t.get("detail", {}))
     if out_md is not None:
         out_md.write_text("\n".join(md) + "\n")
         print(f"\nfull record of every failed episode -> {out_md}")
 
 
-def main() -> int:
+def _parse() -> argparse.Namespace:
     ap = argparse.ArgumentParser()
     ap.add_argument("--suites", nargs="*", default=["libero_object", "libero_spatial", "libero_goal"])
     ap.add_argument("--episodes", type=int, default=20)
@@ -187,48 +205,54 @@ def main() -> int:
     ap.add_argument("--from", dest="reuse", default="", help="read existing trials, do not run")
     ap.add_argument("--ingest", action="store_true")
     ap.add_argument("--examples", type=int, default=2, help="failed episodes shown in full per task")
-    args = ap.parse_args()
+    return ap.parse_args()
 
+
+def _gather(args) -> list[dict]:
+    """Run each suite (unless --from) and read its trials."""
     trials: list[dict] = []
     for suite in args.suites:
-        path = Path(args.reuse or args.evidence) / f"{suite}.trials.json"
+        path = ROOT / (args.reuse or args.evidence) / f"{suite}.trials.json"
         if not args.reuse:
-            print(f"[run] {suite}: {args.episodes} episodes x {SUITE_TASKS.get(suite, 10)} tasks",
-                  flush=True)
-            collect(suite, args.episodes, args.horizon, ROOT / path)
-        p = ROOT / path
-        if not p.exists():
+            print(f"[run] {suite}: {args.episodes} episodes x {SUITE_TASKS.get(suite, 10)} tasks", flush=True)
+            collect(suite, args.episodes, args.horizon, path)
+        if not path.exists():
             print(f"  (no trials at {path})")
             continue
-        trials += json.loads(p.read_text())["trials"]
+        trials += json.loads(path.read_text())["trials"]
+    return trials
 
-    rows = report(trials)
+
+def _print_table(rows: list[dict]) -> None:
     print(f"\n{'task':28s} {'rate':>9s} {'94% interval':>15s}  {'grade':9s} mechanisms")
     for r in rows:
-        mech = ", ".join(f"{k} x{v}" for k, v in sorted(r["mechanisms"].items(), key=lambda x: -x[1]))
         print(f"{r['suite'][7:]:>8s}[{r['task']:2d}]{'':14s}"[:28]
-              + f" {r['k']:3d}/{r['n']:<5d} [{r['lo']:.2f}, {r['hi']:.2f}]  {r['grade']:9s} {mech}")
+              + f" {r['k']:3d}/{r['n']:<5d} [{r['lo']:.2f}, {r['hi']:.2f}]  {r['grade']:9s} "
+              + (_counts(r["mechanisms"]) if r["mechanisms"] else ""))
     by_grade = collections.Counter(r["grade"] for r in rows)
-    worst = [r for r in rows if r["grade"] != "reliable"]
-    n = sum(r["n"] for r in rows)
-    k = sum(r["k"] for r in rows)
+    n, k = sum(r["n"] for r in rows), sum(r["k"] for r in rows)
     lo, hi = interval(k, n)
     print(f"\noverall {k}/{n} = {k / max(n, 1):.3f}  [{lo:.2f}, {hi:.2f}]   "
           + "  ".join(f"{g} {by_grade[g]}" for g in ("reliable", "marginal", "broken")))
+    worst = sorted((r for r in rows if r["grade"] != "reliable"), key=lambda r: r["lo"])
     if worst:
         print("\nnot reliable, worst first:")
-        for r in sorted(worst, key=lambda r: r["lo"]):
-            print(f"  {r['suite']}[{r['task']}] {r['k']}/{r['n']} lo {r['lo']:.2f}: "
-                  + ", ".join(f"{m} x{c}" for m, c in sorted(r["mechanisms"].items(),
-                                                             key=lambda x: -x[1])))
+        for r in worst:
+            print(f"  {r['suite']}[{r['task']}] {r['k']}/{r['n']} lo {r['lo']:.2f}: {_counts(r['mechanisms'])}")
     agg = collections.Counter()
     for r in rows:
         agg.update(r["mechanisms"])
     if agg:
         print("\nfailures by mechanism: " + ", ".join(f"{m} {c}" for m, c in agg.most_common()))
+
+
+def main() -> int:
+    args = _parse()
+    trials = _gather(args)
+    rows = report(trials)
+    _print_table(rows)
     print("\n==== diagnosis, worst task first ====")
     diagnose(rows, trials, args.examples, ROOT / (args.reuse or args.evidence) / "diagnosis.md")
-
     if args.ingest:
         revs = sorted({t["repro"].get("teacher_revision", "?") for t in trials})
         print(f"\ningest ({', '.join(revs)}):")

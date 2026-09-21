@@ -19,6 +19,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+VERTICAL_COS = 0.7      # an axis with |z| above this is not a jaw direction
+
 # joint qpos thresholds LIBERO's own predicates use (libero/envs/objects/articulated_objects.py)
 ARTICULATION = {
     "wooden_cabinet": dict(open=-0.14, close=0.0, sign=-1),
@@ -51,7 +53,7 @@ class Box:
         out = []
         for i in (0, 1, 2):
             d = self.R[:, i]
-            if abs(d[2]) > 0.7:          # a mostly-vertical axis is not a jaw direction
+            if abs(d[2]) > VERTICAL_COS:
                 continue
             out.append((2 * float(self.half[i]), d))
         return sorted(out, key=lambda x: x[0])
@@ -69,6 +71,10 @@ class Scene:
     @property
     def base(self) -> np.ndarray:
         return self.d.body_xpos[self.m.body_name2id("robot0_base")].copy()
+
+    def raw(self):
+        """The mujoco.MjModel / MjData under robosuite's wrappers, for mujoco.* calls."""
+        return getattr(self.m, "_model", self.m), getattr(self.d, "_data", self.d)
 
     def body_id(self, name: str) -> int:
         """robosuite names an object's root body `<instance>_main`; the bddl calls it `<instance>`."""

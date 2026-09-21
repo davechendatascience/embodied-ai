@@ -106,9 +106,7 @@ class SkillTeacher:
             a = self.skills.pick(step.obj, s, via=via)
         elif step.skill in ("place_in", "place_on"):
             a = self.skills.place(step.obj, step.region, s, inside=step.skill == "place_in")
-        elif step.skill == "articulate":
-            a = self.skills.articulate(step.region, step.mode, s)
-        elif step.skill == "turn":
+        elif step.skill == "articulate" or step.skill == "turn":
             a = self.skills.articulate(step.region, step.mode, s)
         else:
             raise NotImplementedError(f"skill {step.skill!r}")

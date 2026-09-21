@@ -29,12 +29,14 @@ from .kinematics import fk
 from .mjcf import from_mjcf, leaf_paths
 from .poe import Chain
 
+# Body origins closer than this give no closing axis (metres).
+_COINCIDENT = 1e-12
+
 
 @dataclass
 class Gripper:
     name: str
     fingers: dict[str, Chain]           # tip body name -> chain from the palm
-    linkage: bool                       # coupled (soft tendon) vs independent jaws
 
     @property
     def tips(self) -> list[str]:
@@ -59,16 +61,17 @@ def load(path: str | Path, name: str | None = None) -> Gripper:
     """Parse a gripper MJCF into one chain per finger branch."""
     path = Path(path)
     root = ET.parse(path).getroot()
-    coupled = root.find("tendon") is not None or root.find("equality") is not None
     fingers = {}
     for tip in _tip_bodies(path):
         try:
             fingers[tip] = from_mjcf(path, tool_body=tip, name=f"{path.stem}:{tip}",
                                      angle="radian")
-        except Exception:
+        except (ValueError, NotImplementedError):
+            # from_mjcf refuses a branch it cannot model as an open chain (a free or
+            # ball joint, an orientation it does not implement); that branch is not a
+            # finger, so it is left out rather than guessed at.
             continue
-    return Gripper(name=name or root.get("model") or path.stem,
-                   fingers=fingers, linkage=coupled)
+    return Gripper(name=name or root.get("model") or path.stem, fingers=fingers)
 
 
 def pad_position(g: Gripper, q: dict[str, Tensor], tip: str) -> Tensor:
@@ -81,10 +84,6 @@ def pad_position(g: Gripper, q: dict[str, Tensor], tip: str) -> Tensor:
     chain = g.fingers[tip]
     theta = torch.stack([torch.as_tensor(q[j]) for j in chain.joint_names], -1)
     return fk(chain, theta.reshape(-1, chain.n))[:, :3, 3]
-
-
-def pad_positions(g: Gripper, q: dict[str, Tensor], tips=None) -> dict[str, Tensor]:
-    return {t: pad_position(g, q, t) for t in (tips or g.tips)}
 
 
 def separation(g: Gripper, q: dict[str, Tensor], a: str, b: str) -> Tensor:
@@ -104,7 +103,7 @@ def separation_bounds(g: Gripper, a: str, b: str, samples: int = 20000,
     joints = list(dict.fromkeys(ca.joint_names + cb.joint_names))
     lo, hi = {}, {}
     for chain in (ca, cb):
-        for j, (l, h) in zip(chain.joint_names, chain.limits):
+        for j, (l, h) in zip(chain.joint_names, chain.limits, strict=True):
             lo[j], hi[j] = float(l), float(h)
 
     gen = torch.Generator().manual_seed(seed)
@@ -176,7 +175,7 @@ def pad_gap(model, data, body_a: str, body_b: str, collision_group: int = 0) -> 
     ia, ib = model.body_name2id(body_a), model.body_name2id(body_b)
     d = data.xpos[ib] - data.xpos[ia]
     n = float(np.linalg.norm(d))
-    if n < 1e-12:
+    if n < _COINCIDENT:
         raise ValueError(f"{body_a} and {body_b} are coincident; no closing axis")
     axis = d / n                                    # points from a toward b
 

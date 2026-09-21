@@ -58,15 +58,11 @@ robosuite／LIBERO 提供的是 MJCF 而非 URDF，流程與 ch.4 sec.4.5 相同
 - λ 保證靠近奇異點時步長有界（已驗證 `CTR-ik-step-bounded`）。
 - 回傳 `Decoded(theta, delta, residual, clamped)`：**做不到的部分以殘差回報**，不會假裝成功。
 - `solve_ik`：在 SE(3) 上以矩陣對數算誤差、用 body Jacobian 迭代，用於重定向與可達性檢查。
-- `sigma_min`、`manipulability`：衡量離奇異點多遠。
+- `sigma_min`：最小奇異值，衡量離奇異點多遠。
 
 ### 3.5 零空間（`ik.py`）
 
 7 軸手臂做 6 維任務時多出 1 個自由度。次要目標（例如把手肘拉回好條件的姿態）經 **真正的** 虛反矩陣投影 I − J⁺J 後才加入，保證工具端不動（已驗證 `CTR-nullspace-tool-invariant`）。刻意不用阻尼版投影，因為那只是近似，會讓工具偏移 O(λ²)。
-
-### 3.6 批次與遮罩（`batch.py`）
-
-混合不同關節數的手臂一起訓練時需要補齊。補的關節螺旋軸為 0、關節值也為 0，e^[0]·0 恰為單位矩陣，不會引入錯誤變換；但遮罩仍一路傳下去，因為零欄位在注意力與零空間投影裡都有意義。
 
 ## 4. 機器人規格 token（`spec.py`）
 

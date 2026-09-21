@@ -46,12 +46,9 @@ class Step:
 class TaskSpec:
     suite: str
     name: str
-    instruction: str
     goals: list[tuple]                       # [('in', 'alphabet_soup_1', 'basket_1_contain_region'), ...]
     objects: dict[str, str] = field(default_factory=dict)      # instance -> category
     fixtures: dict[str, str] = field(default_factory=dict)
-    regions: dict[str, dict] = field(default_factory=dict)
-    obj_of_interest: list[str] = field(default_factory=list)
 
     @property
     def plan(self) -> list[Step]:
@@ -62,14 +59,10 @@ def parse(path: str | Path, suite: str | None = None) -> TaskSpec:
     from libero.libero.envs.bddl_utils import robosuite_parse_problem
     path = Path(path)
     p = robosuite_parse_problem(str(path))
-    lang = p["language_instruction"]
     objects = {inst: cat for cat, insts in p["objects"].items() for inst in insts}
     fixtures = {inst: cat for cat, insts in p["fixtures"].items() for inst in insts}
     return TaskSpec(suite=suite or path.parent.name, name=path.stem,
-                    instruction=" ".join(lang) if isinstance(lang, list) else str(lang),
-                    goals=[tuple(g) for g in p["goal_state"]],
-                    objects=objects, fixtures=fixtures, regions=p["regions"],
-                    obj_of_interest=list(p["obj_of_interest"]))
+                    goals=[tuple(g) for g in p["goal_state"]], objects=objects, fixtures=fixtures)
 
 
 def plan_for(goals: list[tuple]) -> list[Step]:
@@ -100,7 +93,3 @@ def plan_for(goals: list[tuple]) -> list[Step]:
     # with an empty gripper, and a closed drawer must stay closed)
     return opens + places + closes + switches
 
-
-def all_tasks(root: str | Path) -> list[TaskSpec]:
-    root = Path(root)
-    return [parse(f, suite=f.parent.name) for f in sorted(root.glob("*/*.bddl"))]

@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import xml.etree.ElementTree as ET
 import zlib
 from pathlib import Path
 
@@ -49,6 +50,12 @@ MAX_ITERS = 200
 # successes at 0.085-0.124. Declared on the run line so the bucket boundary is
 # versioned with the test rather than floating in the code.
 SIGMA_THRESH = 0.02
+# A residual above solve_ik's default convergence tolerance counts as reported.
+UNREACHABLE_RESIDUAL = 1e-5
+# What a missing or broken robot asset raises: no file (OSError), malformed XML
+# (ParseError), MuJoCo's compiler and from_mjcf's own checks (ValueError), and a
+# joint type or orientation from_mjcf does not implement (NotImplementedError).
+ASSET_ERRORS = (OSError, ET.ParseError, ValueError, NotImplementedError)
 
 
 def geodesic(Ra: np.ndarray, Rb: np.ndarray) -> float:
@@ -92,21 +99,6 @@ def regime_pair(chain, k: int, seed: int, near_singular: bool, span: float = 0.1
     return q0, q1, g
 
 
-def reachable_pair(chain, k: int, seed: int, span: float = 0.15):
-    """(start, target) where the target is reachable from the start IN LIMITS.
-
-    Built by perturbing a sampled configuration and clamping back into the box,
-    so a within-limits solution provably exists. Random start to random target
-    would conflate solver failure with genuine infeasibility -- with limits on,
-    only ~50% of such pairs are locally reachable at all.
-    """
-    g = torch.Generator().manual_seed(seed)
-    q0 = chain.sample(k, g)
-    lo, hi = chain.limits[:, 0], chain.limits[:, 1]
-    dq = (torch.rand(k, chain.n, generator=g) * 2 - 1) * span
-    return q0, torch.clamp(q0 + dq, lo, hi), g
-
-
 def load(robot: str):
     import mujoco
     f = ASSETS / robot / "robot.xml"
@@ -117,6 +109,22 @@ def load(robot: str):
 def robot_seed(robot: str) -> int:
     """Stable across processes, unlike hash() on a str."""
     return (BASE_SEED * 1_000_003 + zlib.crc32(robot.encode())) % 2**31
+
+
+def loaded(robots, loader):
+    """Yield (robot, loader(robot)) for each robot whose asset loads.
+
+    Asset problems are not evidence about the converter: a robot that cannot be
+    loaded is reported on stderr with the exception's type and message, and
+    emits no trials.
+    """
+    for robot in robots:
+        try:
+            item = loader(robot)
+        except ASSET_ERRORS as exc:
+            print(f"skip {robot}: {type(exc).__name__}: {exc}", file=sys.stderr)
+            continue
+        yield robot, item
 
 
 def wide_sample(chain, k: int, seed: int) -> torch.Tensor:
@@ -138,12 +146,7 @@ def wide_sample(chain, k: int, seed: int) -> torch.Tensor:
 def case_poe_fk() -> list[dict]:
     import mujoco
     trials = []
-    for robot in ROBOTS:
-        try:
-            model, data, chain = load(robot)
-        except Exception as exc:  # asset problems are not evidence about the converter
-            print(f"skip {robot}: {type(exc).__name__}: {exc}", file=sys.stderr)
-            continue
+    for robot, (model, data, chain) in loaded(ROBOTS, load):
         bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, chain.tool_frame)
         q = wide_sample(chain, N_PER_ROBOT, seed=robot_seed(robot))
         T = fk(chain, q)
@@ -171,12 +174,7 @@ def case_jacobian_fd() -> list[dict]:
     """
     trials = []
     eps = 1e-6
-    for robot in ROBOTS:
-        try:
-            _, _, chain = load(robot)
-        except Exception as exc:
-            print(f"skip {robot}: {type(exc).__name__}: {exc}", file=sys.stderr)
-            continue
+    for robot, (_, _, chain) in loaded(ROBOTS, load):
         q = wide_sample(chain, N_PER_ROBOT, seed=robot_seed(robot))
         Js = space_jacobian(chain, q)
         Jb = body_jacobian(chain, q)
@@ -209,12 +207,7 @@ def case_jacobian_fd() -> list[dict]:
 
 def _convergence(near_singular: bool) -> list[dict]:
     trials = []
-    for robot in ROBOTS:
-        try:
-            chain = arm(robot)
-        except Exception as exc:
-            print(f"skip {robot}: {type(exc).__name__}: {exc}", file=sys.stderr)
-            continue
+    for robot, chain in loaded(ROBOTS, arm):
         q0, q1, _ = regime_pair(chain, N_PER_ROBOT, robot_seed(robot), near_singular)
         res = solve_ik(chain, fk(chain, q1), q0, lam=LAM, max_iters=MAX_ITERS, trust=0.2)
         sig = sigma_min(chain, q0)
@@ -257,12 +250,7 @@ def case_ik_step_bound() -> list[dict]:
     measured separately: it can only shorten the step, never lengthen it.
     """
     trials = []
-    for robot in ROBOTS:
-        try:
-            chain = arm(robot)
-        except Exception as exc:
-            print(f"skip {robot}: {type(exc).__name__}: {exc}", file=sys.stderr)
-            continue
+    for robot, chain in loaded(ROBOTS, arm):
         g = torch.Generator().manual_seed(robot_seed(robot))
         q = chain.sample(N_PER_ROBOT, g)
         e = torch.randn(N_PER_ROBOT, 6, generator=g) * 0.2
@@ -298,12 +286,7 @@ def case_ik_unreachable() -> list[dict]:
     an impossible pose is FM-silent-infeasible.
     """
     trials = []
-    for robot in ROBOTS:
-        try:
-            chain = arm(robot)
-        except Exception as exc:
-            print(f"skip {robot}: {type(exc).__name__}: {exc}", file=sys.stderr)
-            continue
+    for robot, chain in loaded(ROBOTS, arm):
         g = torch.Generator().manual_seed(robot_seed(robot))
         q0 = chain.sample(N_PER_ROBOT, g)
         T = fk(chain, q0)
@@ -321,7 +304,7 @@ def case_ik_unreachable() -> list[dict]:
         for k in range(len(q0)):
             trials.append({
                 "metrics": {"residual_reported": bool(
-                    not bool(res["converged"][k]) and float(res["residual_norm"][k]) > 1e-5
+                    not bool(res["converged"][k]) and float(res["residual_norm"][k]) > UNREACHABLE_RESIDUAL
                 )},
                 "conditions": {"robot": robot, "dof": chain.n},
                 "repro": {"robot": robot, "seed": robot_seed(robot)},
@@ -336,12 +319,7 @@ def case_nullspace_drift() -> list[dict]:
     is only approximately a projector and leaks O(lambda^2) into the tool.
     """
     trials = []
-    for robot in ROBOTS:
-        try:
-            chain = arm(robot)
-        except Exception as exc:
-            print(f"skip {robot}: {type(exc).__name__}: {exc}", file=sys.stderr)
-            continue
+    for robot, chain in loaded(ROBOTS, arm):
         g = torch.Generator().manual_seed(robot_seed(robot))
         q = chain.sample(N_PER_ROBOT, g)
         J = body_jacobian(chain, q)
@@ -371,12 +349,7 @@ def case_action_interface() -> list[dict]:
     spec = ActionSpec()
     trials = []
     horizon = 32
-    for robot in ROBOTS:
-        try:
-            chain = arm(robot)
-        except Exception as exc:
-            print(f"skip {robot}: {type(exc).__name__}: {exc}", file=sys.stderr)
-            continue
+    for robot, chain in loaded(ROBOTS, arm):
         g = torch.Generator().manual_seed(robot_seed(robot))
         lo, hi = chain.limits[:, 0], chain.limits[:, 1]
         q = chain.sample(N_PER_ROBOT, g)
@@ -414,7 +387,7 @@ def _rot_axis_angle(R):
 
 
 def compose_from_twist(T, twist, spec):
-    from screwhead.interface import compose_delta, twist_to_delta
+    from screwhead.interface import compose_delta
     return compose_delta(T, twist_to_delta(T, twist, spec))
 
 
@@ -433,12 +406,7 @@ def case_retarget_roundtrip() -> list[dict]:
     spec = ActionSpec()
     horizon = 32
     trials = []
-    for robot in ROBOTS:
-        try:
-            chain = arm(robot)
-        except Exception as exc:
-            print(f"skip {robot}: {type(exc).__name__}: {exc}", file=sys.stderr)
-            continue
+    for robot, chain in loaded(ROBOTS, arm):
         g = torch.Generator().manual_seed(robot_seed(robot))
         lo, hi = chain.limits[:, 0], chain.limits[:, 1]
         B = N_PER_ROBOT
@@ -509,7 +477,7 @@ def case_retarget_libero() -> list[dict]:
     print(f"retarget_libero: dropped {dropped}/{q_traj.shape[1]} near-singular windows",
           file=sys.stderr)
     q_traj = q_traj[:, keep]
-    tasks = [t for t, k in zip(tasks, keep.tolist()) if k]
+    tasks = [t for t, k in zip(tasks, keep.tolist(), strict=True) if k]
     B = q_traj.shape[1]
     tw = to_twists(chain, q_traj, spec)
     res = decode(chain, q_traj[0], tw, spec)

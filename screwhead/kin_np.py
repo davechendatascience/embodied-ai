@@ -14,11 +14,18 @@ versions stay the reference; this is the fast path through the same maths.
 """
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 
 import numpy as np
 
 I3 = np.eye(3)
+# the same guards as se3.py, named: tests/test_kin_np.py holds the two to agreement
+EPS_AXIS = 1e-12          # |w| below this is a prismatic joint / a pure translation
+EPS_ANGLE = 1e-9          # a rotation smaller than this is the identity (log)
+EPS_NEAR_PI = 2e-8        # sin(theta) below this with cos < 0 is a half turn
+SERIES_BELOW = 1e-3       # use the series for the log's coefficient below this angle
+EPS_DIV = 1e-12           # floor for a norm that is divided by
 
 
 def hat3(w: np.ndarray) -> np.ndarray:
@@ -56,7 +63,7 @@ def exp_se3(S: np.ndarray, theta: np.ndarray) -> np.ndarray:
     w, v = S[..., :3], S[..., 3:]
     T = np.broadcast_to(np.eye(4), S.shape[:-1] + (4, 4)).copy()
     T[..., :3, 3] = v * theta[..., None]
-    rev = np.linalg.norm(w, axis=-1) > 1e-12
+    rev = np.linalg.norm(w, axis=-1) > EPS_AXIS
     if np.any(rev):
         W = hat3(w[rev])
         WW = W @ W
@@ -71,9 +78,9 @@ def exp_se3(S: np.ndarray, theta: np.ndarray) -> np.ndarray:
 def exp_twist(V: np.ndarray) -> np.ndarray:
     V = np.asarray(V, float)
     theta = np.linalg.norm(V[..., :3], axis=-1)
-    pure = theta < 1e-12
+    pure = theta < EPS_AXIS
     theta = np.where(pure, np.linalg.norm(V[..., 3:], axis=-1), theta)
-    safe = np.maximum(theta, 1e-12)
+    safe = np.maximum(theta, EPS_DIV)
     return exp_se3(V / safe[..., None], theta)
 
 
@@ -85,14 +92,14 @@ def log_se3(T: np.ndarray) -> np.ndarray:
     sin_t = np.linalg.norm(dual, axis=-1)
     cos_t = (R[..., 0, 0] + R[..., 1, 1] + R[..., 2, 2] - 1) / 2
     theta = np.arctan2(sin_t, cos_t)
-    small = theta < 1e-9
-    near_pi = (sin_t < 2e-8) & (cos_t < 0)
+    small = theta < EPS_ANGLE
+    near_pi = (sin_t < EPS_NEAR_PI) & (cos_t < 0)
 
-    axis_gen = dual / np.maximum(sin_t, 1e-12)[..., None]
+    axis_gen = dual / np.maximum(sin_t, EPS_DIV)[..., None]
     A = R + I3
     col = np.argmax(np.diagonal(A, axis1=-2, axis2=-1), axis=-1)
     axis_pi = np.take_along_axis(A, col[..., None, None].repeat(3, -2), -1)[..., 0]
-    axis_pi = axis_pi / np.maximum(np.linalg.norm(axis_pi, axis=-1, keepdims=True), 1e-12)
+    axis_pi = axis_pi / np.maximum(np.linalg.norm(axis_pi, axis=-1, keepdims=True), EPS_DIV)
     sign = np.sign(np.sum(axis_pi * dual, axis=-1))
     sign = np.where(sign == 0, 1.0, sign)
     axis_pi = axis_pi * sign[..., None]
@@ -103,7 +110,7 @@ def log_se3(T: np.ndarray) -> np.ndarray:
     t_s = np.where(small, 1.0, theta)
     with np.errstate(divide="ignore", invalid="ignore"):
         coef_exact = 1 / t_s - 1 / (2 * np.tan(t_s / 2))
-    coef = np.where(t_s < 1e-3, t_s / 12 + t_s ** 3 / 720, coef_exact)[..., None, None]
+    coef = np.where(t_s < SERIES_BELOW, t_s / 12 + t_s ** 3 / 720, coef_exact)[..., None, None]
     th = t_s[..., None, None]
     Gi = I3 / th - W / 2 + coef * (W @ W)
     v = (Gi @ p[..., None])[..., 0] * theta[..., None]
@@ -120,16 +127,14 @@ class NpChain:
     limits: np.ndarray      # (n, 2)
 
     @classmethod
-    def of(cls, chain) -> "NpChain":
+    def of(cls, chain) -> NpChain:
         c = getattr(chain, "_np", None)
         if c is None:
             c = cls(S=chain.S.detach().cpu().numpy().astype(float),
                     M=chain.M.detach().cpu().numpy().astype(float),
                     limits=chain.limits.detach().cpu().numpy().astype(float))
-            try:
+            with contextlib.suppress(AttributeError):     # a frozen Chain: just recompute
                 chain._np = c
-            except Exception:
-                pass
         return c
 
     @property
@@ -220,7 +225,7 @@ def solve_ik(c: NpChain, target: np.ndarray, theta0: np.ndarray, lam: float = 0.
         active = active & ~(nerr < tol)
         if not active.any():
             break
-        scale = np.minimum(trust / np.maximum(nerr, 1e-12), 1.0)
+        scale = np.minimum(trust / np.maximum(nerr, EPS_DIV), 1.0)
         new, _, _ = decode_twist(c, theta, err * scale[:, None], dt=1.0, lam=lam,
                                  respect_limits=respect_limits, J=J)
         theta = np.where(active[:, None], new, theta)

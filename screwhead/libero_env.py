@@ -1,4 +1,4 @@
-"""Put a non-Panda arm in LIBERO. Several things break; this fixes exactly those.
+"""Put a non-Panda arm in LIBERO. Several things break; this fixes the first two.
 
 Recovered from stash@{0} of the cross-gripper-transfer work (examples/libero_ur5e.py)
 rather than rewritten. Every item below was established by measurement then, and
@@ -23,12 +23,12 @@ silent if you skip it:
  3. robosuite draws `randn(len(init_qpos))` of initialization noise EVEN AT
     ZERO MAGNITUDE. The draw length is the arm's DOF, so a 6-DOF arm leaves the
     RNG one number ahead of a 7-DOF one and every sampled fixture lands
-    elsewhere -- ~7 mm on libero_goal/0, which reads as nothing at all.
+    elsewhere -- ~7 mm on libero_goal/0, which reads as nothing at all. Not
+    corrected here: a non-Panda scene keeps the fixtures its own draw placed.
 
-Also: build the reference Panda scene BEFORE the main env. Two live LIBERO envs
-means two EGL contexts, and destroying the second corrupts the first -- the
-symptom is `get_real_depth_map` asserting on a garbage depth buffer many calls
-later.
+Also: two live LIBERO envs means two EGL contexts, and destroying the second
+corrupts the first -- the symptom is `get_real_depth_map` asserting on a garbage
+depth buffer many calls later.
 """
 
 import os
@@ -40,7 +40,6 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if os.path.join(REPO, "third_party", "LIBERO") not in sys.path:
     sys.path.insert(0, os.path.join(REPO, "third_party", "LIBERO"))
 
-CAMS = ("agentview", "robot0_eye_in_hand")
 _JNT_W = {0: (7, 6), 1: (4, 3), 2: (1, 1), 3: (1, 1)}   # free/ball/slide/hinge
 PANDA_ROBOT_NQ = PANDA_ROBOT_NV = 9
 ROBOT_PREFIX = ("robot", "gripper", "mount")
@@ -61,14 +60,33 @@ def register_ur5e():
         def __init__(self, idn=0):
             super().__init__(xml_path_completion("robots/ur5e/robot.xml"), idn=idn)
 
-        default_mount = property(lambda self: "RethinkMount")
-        default_gripper = property(lambda self: "Robotiq85Gripper")
-        default_controller_config = property(lambda self: "default_ur5e")
-        init_qpos = property(lambda self: np.array(
-            [-0.470, -1.735, 2.480, -2.275, -1.590, -1.991]))
-        top_offset = property(lambda self: np.array((0, 0, 1.0)))
-        _horizontal_radius = property(lambda self: 0.5)
-        arm_type = property(lambda self: "single")
+        @property
+        def default_mount(self):
+            return "RethinkMount"
+
+        @property
+        def default_gripper(self):
+            return "Robotiq85Gripper"
+
+        @property
+        def default_controller_config(self):
+            return "default_ur5e"
+
+        @property
+        def init_qpos(self):
+            return np.array([-0.470, -1.735, 2.480, -2.275, -1.590, -1.991])
+
+        @property
+        def top_offset(self):
+            return np.array((0, 0, 1.0))
+
+        @property  # noqa: V106  read by robosuite's RobotModel.horizontal_radius
+        def _horizontal_radius(self):
+            return 0.5
+
+        @property
+        def arm_type(self):
+            return "single"
 
         @property
         def base_xpos_offset(self):
@@ -88,7 +106,7 @@ def register_ur5e():
     # scene, so registering only MountedUR5e means the UR5e is never built
     # there -- KeyError: 'OnTheGroundUR5e'. Base positions differ by 0.912 m
     # between the two arenas, so goals are not portable across them either.
-    class OnTheGroundUR5e(MountedUR5e):
+    class OnTheGroundUR5e(MountedUR5e):  # noqa: V102  robosuite's metaclass registers it by name
         """Floor arena. Offsets come from OnTheGroundPanda, NOT the table
         mount: subclassing MountedUR5e inherits `table` offsets and puts the
         arm 912 mm above where the Panda stands in the same scene, which the
@@ -151,36 +169,6 @@ def remap_init_state(state, sim):
     return np.concatenate([[0.0], qpos, np.zeros(m.nv)])
 
 
-def fixture_snapshot(sim):
-    """World-child bodies with no joints: the furniture the sampler places."""
-    m = sim.model
-    return {m.body_id2name(b): (m.body_pos[b].copy(), m.body_quat[b].copy())
-            for b in range(m.nbody)
-            if (m.body_id2name(b) and m.body_id2name(b) != "world"
-                and not m.body_id2name(b).startswith(ROBOT_PREFIX)
-                and m.body_parentid[b] == 0 and m.body_jntnum[b] == 0)}
-
-
-def pin_fixtures(sim, ref):
-    m = sim.model
-    worst = 0.0
-    for name, (pos, quat) in ref.items():
-        b = m.body_name2id(name)
-        worst = max(worst, float(np.linalg.norm(m.body_pos[b] - pos)) * 1000)
-        m.body_pos[b], m.body_quat[b] = pos, quat
-    sim.forward()
-    return worst
-
-
-#: camera->TCP as a VECTOR in the camera frame, metres: [x_img, y_img, z_depth].
-#: robosuite Panda + PandaGripper, and bit-for-bit identical on a UR5e wearing
-#: the same gripper -- which is exactly why the arm swap transfers and the
-#: gripper swap does not. A Robotiq85 gives [0, -0.050, -0.145]: it perturbs
-#: DEPTH ONLY, leaving the 50 mm image-plane offset untouched.
-PANDA_CAM_TO_TCP_VEC = np.array([0.0, -0.0500, -0.0970])
-PANDA_CAM_TO_TCP = float(np.linalg.norm(PANDA_CAM_TO_TCP_VEC))   # 0.1091 m
-
-
 def gripper_geom(env):
     """[flange-to-TCP, wristcam-to-TCP] in metres, measured from the live model.
 
@@ -194,169 +182,6 @@ def gripper_geom(env):
         np.linalg.norm(d.site_xpos[site] - d.body_xpos[m.body_name2id("robot0_right_hand")]),
         np.linalg.norm(d.site_xpos[site] - d.cam_xpos[m.camera_name2id("robot0_eye_in_hand")]),
     ], float)
-
-
-def _support(m, gi, axis):
-    """Half-extent of geom `gi` along unit `axis` -- its support radius.
-
-    geom_rbound is a bounding SPHERE and is far too loose here: it reads the
-    PandaGripper's 80 mm span as 32 mm, which is what made the first aperture
-    measurement in this project useless. Project the actual primitive instead.
-    """
-    t, s = m.geom_type[gi], m.geom_size[gi]
-    a = np.abs(axis)                          # caller passes it in the geom frame
-    if t == 2:                                # sphere
-        return float(s[0])
-    if t == 3:                                # capsule
-        return float(s[0] + s[1] * a[2])
-    if t == 4:                                # ellipsoid
-        return float(np.sqrt(np.sum((s[:3] * a) ** 2)))
-    if t == 5:                                # cylinder
-        return float(s[0] * np.sqrt(max(0.0, 1 - a[2] ** 2)) + s[1] * a[2])
-    if t == 6:                                # box
-        return float(np.dot(a, s[:3]))
-    return float(m.geom_rbound[gi])           # mesh / unknown
-
-
-def _finger_geoms(m):
-    return [gi for gi in range(m.ngeom)
-            if (("finger" in (m.body_id2name(m.geom_bodyid[gi]) or "").lower()
-                 or "pad" in (m.body_id2name(m.geom_bodyid[gi]) or "").lower())
-                and not (m.geom_contype[gi] == 0 and m.geom_conaffinity[gi] == 0))]
-
-
-def gripper_span(env):
-    """Free gap between the two finger groups, in metres, from real surfaces.
-
-    THE DEGREE OF FREEDOM THIS PROJECT WAS BLIND TO. The policy's gripper
-    channel is binary, so "open" means whatever the mounted hardware's maximum
-    happens to be -- 80 mm on the PandaGripper it trained with, ~42 mm on a
-    RethinkGripper. Nothing in the observation, the action, or `gripper_geom`
-    carried that number, so every "aligned" grasp was attempted with an
-    unaligned aperture. The libero_spatial/0 bowl is grasped by pinching its
-    RIM, fingertips straddling a wall at ~43 mm radius; a jaw that cannot open
-    that far fails at every TCP offset (measured: Rethink 0/37).
-    """
-    m, d = env.sim.model, env.sim.data
-    gs = _finger_geoms(m)
-    if len(gs) < 2:
-        return float("nan")
-    p = np.array([d.geom_xpos[g] for g in gs])
-    c = p - p.mean(0)
-    axis = np.linalg.svd(c, full_matrices=False)[2][0]      # closing direction
-    s = c @ axis
-    lo, hi = s < 0, s >= 0
-    if not lo.any() or not hi.any():
-        return float("nan")
-    r = np.array([_support(m, g, d.geom_xmat[g].reshape(3, 3).T @ axis) for g in gs])
-    return float((s[hi] - r[hi]).min() - (s[lo] + r[lo]).max())
-
-
-def gripper_limits(env, settle=40):
-    """(span_open, span_closed) in metres -- the gripper's physical range.
-
-    Commands the jaw fully open, then fully closed, holding the arm still.
-    Static per gripper, so measure once and cache.
-    """
-    a = env.env.action_dim - 1
-    for _ in range(settle):
-        env.step([0.] * a + [-1.])
-    lo = gripper_span(env)
-    for _ in range(settle):
-        env.step([0.] * a + [1.])
-    return lo, gripper_span(env)
-
-
-def align_wrist_camera(sim, target=PANDA_CAM_TO_TCP_VEC):
-    """Move the wrist camera so the camera->TCP VECTOR matches the training arm.
-
-    The camera is mounted on the wrist LINK (pos="0.05 0 0"), identically for
-    the Panda and the UR5e -- so swapping the gripper does not move the camera,
-    it moves the TCP away from it. A policy that servos on that image has no
-    access to the TCP: it learned to drive the CAMERA, and the TCP followed
-    because camera->TCP was a rigid constant. That constant is the thing to
-    preserve.
-
-    Preserve the VECTOR, not its length. Measured in the camera frame
-    [x_img, y_img, z_depth], the Panda is [0, -50.0, -97.0] mm and a Robotiq85
-    is [0, -50.0, -145.0] mm -- the swap perturbs DEPTH ONLY. Rescaling along
-    the whole vector to fix the length instead drags the image-plane offset from
-    -50.0 to -35.6 mm, i.e. it repairs depth while moving the grasp point 14 mm
-    across the field of view, which the policy reads as the object having
-    shifted sideways.
-
-    Every camera extrinsic is a free design choice on a real robot, so this
-    restores training-time geometry rather than papering over it downstream.
-    Returns (before, after) camera->TCP vectors in the camera frame, metres.
-    """
-    m, d = sim.model, sim.data
-    cid = m.camera_name2id("robot0_eye_in_hand")
-    # The grasp site is namespaced by the GRIPPER, not the robot.
-    site = m.site_name2id(next(n for n in ("gripper0_grip_site",
-                                           "robot0_grip_site")
-                               if n in m.site_names))
-    Rc = d.cam_xmat[cid].reshape(3, 3)
-    before = Rc.T @ (d.site_xpos[site] - d.cam_xpos[cid])
-    # Camera orientation is untouched, so matching the vector is a pure
-    # translation of the camera by the difference, rotated into its parent body.
-    world_shift = Rc @ (before - np.asarray(target, float))
-    bid = m.cam_bodyid[cid]
-    m.cam_pos[cid] += d.xmat[bid].reshape(3, 3).T @ world_shift
-    sim.forward()
-    Rc = d.cam_xmat[cid].reshape(3, 3)
-    after = Rc.T @ (d.site_xpos[site] - d.cam_xpos[cid])
-    return before, after
-
-
-PANDA_TIP_FRICTION = (2.0, 0.05, 0.0)   # robosuite PandaGripper fingertip pads
-
-
-def equalise_finger_friction(sim, friction=PANDA_TIP_FRICTION):
-    """Give the target gripper the SAME fingertip pad as the policy's gripper.
-
-    robosuite's PandaGripper carries a dedicated high-friction pad -- sliding
-    friction 2.0 -- while every other gripper's fingers sit at 1.0 or below. The
-    bowl is 0.95 with condim 3, and MuJoCo takes the element-wise MAX, so a
-    Panda grips this object with TWICE the sliding friction of any replacement.
-
-    That is a property of the benchmark's asset, not of the embodiment. Leaving
-    it in place means a gripper-swap experiment silently measures friction and
-    reports it as a transfer failure. Returns the number of geoms changed.
-    """
-    m = sim.model
-    n = 0
-    for gi in range(m.ngeom):
-        bn = m.body_id2name(m.geom_bodyid[gi]) or ""
-        if "finger" not in bn.lower() and "pad" not in bn.lower():
-            continue
-        if m.geom_contype[gi] == 0 and m.geom_conaffinity[gi] == 0:
-            continue                      # visual-only geom
-        m.geom_friction[gi] = friction
-        n += 1
-    sim.forward()
-    return n
-
-
-def build(suite_name, task_id, robot="Panda", gripper="default", res=256,
-          fixture_ref=None, seed=0):
-    from libero.libero import benchmark, get_libero_path
-    from libero.libero.envs import OffScreenRenderEnv
-
-    if robot != "Panda":
-        register_ur5e()
-    suite = benchmark.get_benchmark_dict()[suite_name]()
-    task = suite.get_task(task_id)
-    bddl = os.path.join(get_libero_path("bddl_files"),
-                        task.problem_folder, task.bddl_file)
-    env = OffScreenRenderEnv(
-        bddl_file_name=bddl, robots=[robot], gripper_types=gripper,
-        camera_heights=res, camera_widths=res, controller="OSC_POSE",
-        camera_depths=True, camera_names=list(CAMS), horizon=10000)
-    np.random.seed(seed)
-    env.reset()
-    if fixture_ref:
-        pin_fixtures(env.sim, fixture_ref)
-    return env, suite, task
 
 
 JOINT_ACTION_SCALE = 0.05          # robosuite joint_position.json output_max
@@ -386,8 +211,7 @@ def set_joint_gains(env, kp: float) -> None:
     """Stiffen the joint controller. Re-fetched every call on purpose: reset()
     rebuilds the controller object, so a handle captured once goes stale and
     silently leaves the gain at its default."""
-    import numpy as np
     c = env.env.robots[0].controller
     n = len(np.atleast_1d(c.kp))
     c.kp = np.ones(n) * kp
-    c.kd = 2 * np.sqrt(c.kp)
+    c.kd = 2 * np.sqrt(c.kp)  # noqa: V101  read by robosuite's joint controller

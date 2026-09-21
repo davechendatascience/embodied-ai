@@ -33,7 +33,7 @@ from screwhead.scripted_teacher import PROGRAMS  # noqa: E402
 
 def from_phases(task, phase, command):
     return np.array([target_to_channel(program_target(str(p), float(c), PROGRAMS[int(t)].preshape_aperture))
-                     for t, p, c in zip(task, phase, command)], np.float32)
+                     for t, p, c in zip(task, phase, command, strict=True)], np.float32)
 
 
 def from_sequence(task, episode, step, command):
@@ -84,7 +84,8 @@ def main():
     meta["label_gt"] = lab
     np.savez(meta_path, **meta)
     vals, counts = np.unique(np.round(g, 3), return_counts=True)
-    print(f"{meta_path}: label_gt written; gripper channel values {dict(zip(vals.tolist(), counts.tolist()))}")
+    values = dict(zip(vals.tolist(), counts.tolist(), strict=True))
+    print(f"{meta_path}: label_gt written; gripper channel values {values}")
     return 0
 
 

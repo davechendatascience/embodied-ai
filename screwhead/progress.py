@@ -58,6 +58,12 @@ class PickPlaceGeometry:
     hold_max: float = 0.020
 
 
+DEFAULT_GEOMETRY = PickPlaceGeometry()
+MIN_RADIAL = 1e-6        # m: a tool this close to the bowl axis has no radial direction
+MIN_ANGLE = 1e-6         # rad: below this a rotation has no axis
+NEAR_PI = 1e-4           # rad from pi: the skew part of R vanishes, read the axis off the diagonal
+
+
 def rot_angle(R: np.ndarray) -> float:
     return float(np.arccos(np.clip((np.trace(R) - 1) / 2, -1.0, 1.0)))
 
@@ -67,7 +73,7 @@ def grasp_frames(p_tool: np.ndarray, p_bowl: np.ndarray, R_bowl: np.ndarray, g: 
     z_b = R_bowl[:, 2]
     rel = p_tool - p_bowl
     rel_h = rel - z_b * (rel @ z_b)
-    radial = rel_h / (np.linalg.norm(rel_h) + 1e-9) if np.linalg.norm(rel_h) > 1e-6 else R_bowl[:, 0]
+    radial = rel_h / (np.linalg.norm(rel_h) + 1e-9) if np.linalg.norm(rel_h) > MIN_RADIAL else R_bowl[:, 0]
     z_t = -z_b                                   # tool z toward the bowl base
     y_t = radial                                 # closing axis radial
     x_t = np.cross(y_t, z_t)
@@ -84,13 +90,7 @@ def tool_distance(R_tool, p_tool, R_goal, p_goal, g):
     return float(np.linalg.norm(p_tool - p_goal)) + g.rho * ang, ang
 
 
-def bowl_distance(R_bowl, p_bowl, p_goal, g):
-    """Position plus tilt from upright; yaw is free, the bowl is rotationally symmetric."""
-    tilt = float(np.arccos(np.clip(R_bowl[2, 2], -1.0, 1.0)))
-    return float(np.linalg.norm(p_bowl - p_goal)) + g.rho * tilt
-
-
-def progress(s: dict, g: PickPlaceGeometry = PickPlaceGeometry()) -> tuple[float, int, dict]:
+def progress(s: dict, g: PickPlaceGeometry = DEFAULT_GEOMETRY) -> tuple[float, int, dict]:
     """s: R_tool, p_tool, aperture, R_bowl, p_bowl, p_plate, rest_z, side1, side2 (a pad or
     finger of that side touches the bowl), any_grip (any gripper geom touches it),
     supported (the bowl touches something that is not the gripper), success,
@@ -103,7 +103,6 @@ def progress(s: dict, g: PickPlaceGeometry = PickPlaceGeometry()) -> tuple[float
     """
     if s["success"]:
         return 6.0, 6, {}
-    dz = s["p_bowl"][2] - s["rest_z"]
     # Measured on demonstrations: a bowl pinched across its 3 mm wall leaves the
     # gripper 3.8-15.6 mm open (p1-p99), well apart from open (78 mm) and from
     # closed on nothing (~0). Both pads touch in only ~82% of carried frames, and
@@ -125,7 +124,7 @@ def progress(s: dict, g: PickPlaceGeometry = PickPlaceGeometry()) -> tuple[float
     return v, (1 if below else 0), dict(d=d_reach)
 
 
-def is_held(s: dict, g: PickPlaceGeometry = PickPlaceGeometry()) -> bool:
+def is_held(s: dict, g: PickPlaceGeometry = DEFAULT_GEOMETRY) -> bool:
     """The bowl is in the gripper. Shared by the progress reward and the scripted teacher.
 
     Contact flags flicker on the same grasp -- a bowl 99 mm in the air with the
@@ -150,7 +149,7 @@ def wall_between_pads(s: dict, g: PickPlaceGeometry) -> bool:
     Rb = s["R_bowl"]
     rel = Rb.T @ (s["p_tool"] - s["p_bowl"])
     r = float(np.hypot(rel[0], rel[1]))
-    if r < 1e-6:
+    if r < MIN_RADIAL:
         return False
     radial = np.array([rel[0] / r, rel[1] / r, 0.0])
     y_t = Rb.T @ s["R_tool"][:, 1]
@@ -197,17 +196,17 @@ def reach_distance(s: dict, g: PickPlaceGeometry) -> tuple[float, float, bool]:
 def rotvec(R: np.ndarray) -> np.ndarray:
     """Axis-angle of a rotation matrix (the so(3) log)."""
     ang = rot_angle(R)
-    if ang < 1e-6:
+    if ang < MIN_ANGLE:
         return np.zeros(3)
     w = np.array([R[2, 1] - R[1, 2], R[0, 2] - R[2, 0], R[1, 0] - R[0, 1]])
-    if np.pi - ang < 1e-4:                         # near pi the skew part vanishes
+    if np.pi - ang < NEAR_PI:
         k = int(np.argmax(np.diag(R)))
         axis = R[:, k] + np.eye(3)[:, k]
         return ang * axis / (np.linalg.norm(axis) + 1e-12)
     return ang * w / (2 * np.sin(ang))
 
 
-def grasp_error(s: dict, g: PickPlaceGeometry = PickPlaceGeometry()) -> np.ndarray:
+def grasp_error(s: dict, g: PickPlaceGeometry = DEFAULT_GEOMETRY) -> np.ndarray:
     """Grasp position minus tool position, and the rotation from tool to grasp
     (the nearer of the two symmetric jaw orientations), both in the base frame."""
     R_g, p_g, _ = grasp_frames(s["p_tool"], s["p_bowl"], s["R_bowl"], g)

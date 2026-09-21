@@ -32,28 +32,23 @@ import numpy as np
 import torch
 
 from .interface import ActionSpec
-from .ik import decode_twist
 from .kinematics import fk
+from .sim_arm import SimArm
 
 TARGET = "akita_black_bowl_1"
 RECEPTACLE = "plate_1"
 N_TASKS = 10
-OBS_DIM = 7 + 10 + 9 + 3 + 3 + 3 + N_TASKS      # see obs()
-ACT_DIM = 7
 EJECT_MM = 10.0
+AT_REST_SPEED = 0.005       # m/s: a settled init state has no free object moving faster
+CONTACT_SLACK = 0.0005      # m: snapshot() counts contacts up to this far apart as touching
 
 
-def _rot(axis: np.ndarray, angle: float) -> np.ndarray:
-    """Rodrigues rotation about a unit axis."""
-    a = axis / (np.linalg.norm(axis) + 1e-12)
-    K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
-    return np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * K @ K
-
-
-class PrivilegedEnv:
-    def __init__(self, task_index: int, suite: str = "libero_spatial", radius_m: float = 0.0,
-                 horizon: int = 300, seed: int = 0, kp: float = 4000.0, render: bool = False,
-                 hard_reset: bool = False, servo_iters: int = 1, settle_steps: int = 5,
+class PrivilegedEnv(SimArm):
+    # these keywords are the constructor API of distill.py, collect_scripted.py, scripted_eval.py and
+    # record_rollout.py, so they are not regrouped into a config
+    def __init__(self, task_index: int, suite: str = "libero_spatial",  # noqa: PLR0913 -- public keyword API
+                 radius_m: float = 0.0, horizon: int = 300, seed: int = 0, kp: float = 4000.0,
+                 render: bool = False, hard_reset: bool = False, servo_iters: int = 1, settle_steps: int = 5,
                  start_xy_m: float = 0.0, start_z_m: float = 0.0, start_yaw_deg: float = 0.0,
                  start_tilt_deg: float = 0.0, start_null_rad: float = 0.0,
                  shaping: bool = False, gamma: float = 0.99, success_bonus: float = 10.0,
@@ -74,8 +69,7 @@ class PrivilegedEnv:
         self.gripper_servo = GripperServo()
         self.rng = np.random.default_rng(seed)
         self.spec = ActionSpec()
-        self.scale = np.array([self.spec.rot_scale * self.spec.control_hz] * 3 +
-                              [self.spec.pos_scale * self.spec.control_hz] * 3)
+        self.scale = np.array([self.spec.max_angular_speed] * 3 + [self.spec.max_linear_speed] * 3)
         bm = benchmark.get_benchmark_dict()[suite]()
         task = bm.get_task(task_index)
         self.language = task.language
@@ -129,100 +123,9 @@ class PrivilegedEnv:
                 int(m.jnt_bodyid[m.joint_name2id(f"{RECEPTACLE}_joint0")]),
                 m.body_name2id("robot0_base"))
 
-    def _gains(self):
-        from .libero_env import set_joint_gains
-        set_joint_gains(self.env, self.kp)
-
-    def _max_object_speed(self) -> float:
-        sim = self.env.sim; m, d = sim.model, sim.data
-        v = 0.0
-        for j in range(m.njnt):
-            if int(m.jnt_type[j]) == 0:
-                name = m.joint_id2name(j) or ""
-                if not name.startswith(("robot", "gripper")):
-                    a = int(m.jnt_dofadr[j]); v = max(v, float(np.linalg.norm(d.qvel[a:a + 3])))
-        return v
-
-    def _settle(self, n=3, gripper: float = -1.0):
-        """Hold the arm where it is, as an ABSOLUTE joint target.
-
-        A zero action on robosuite's joint controller is a zero DELTA, and right
-        after set_init_state it does not hold: measured, the tool moves 16 mm on
-        the first step and 22 mm by the third (only 6 mm of it vertical, so not
-        sag), while an absolute hold keeps it within 0.0 mm of where it was put.
-        A servo armed after a zero-delta settle integrates every later twist from
-        a start 22 mm off the demonstrations'.
-        """
-        from .libero_env import JOINT_ACTION_SCALE
-        hold = np.asarray(self.env.env._get_observations(force_update=True)["robot0_joint_pos"])
-        for _ in range(n):
-            cur = np.asarray(self.env.env._get_observations(force_update=True)["robot0_joint_pos"])
-            cmd = np.zeros(self.env.env.action_dim)
-            cmd[:7] = np.clip((hold - cur) / JOINT_ACTION_SCALE, -1, 1)
-            cmd[-1] = gripper
-            self._gains()
-            self.env.step(cmd)
-
-
-    # -- start pose -----------------------------------------------------------------
-    def _robot_contact(self) -> bool:
-        """True if any robot or gripper geom penetrates something that is not the robot."""
-        sim = self.env.sim; m, d = sim.model, sim.data
-        for i in range(d.ncon):
-            c = d.contact[i]
-            if c.dist >= 0:
-                continue
-            n1 = m.body_id2name(m.geom_bodyid[c.geom1]) or ""
-            n2 = m.body_id2name(m.geom_bodyid[c.geom2]) or ""
-            r1 = n1.startswith(("robot0", "gripper0")); r2 = n2.startswith(("robot0", "gripper0"))
-            if r1 != r2:
-                return True
-        return False
-
-    def _randomize_start(self, batch: int = 16, max_rounds: int = 10) -> None:
-        """Move the arm to a random TOOL pose near LIBERO's start, via IK.
-
-        Sampled in task space -- position box, yaw about vertical, tilt about a
-        random horizontal axis -- because that is what the approach depends on;
-        jittering joints directly gives a tool distribution nobody chose. The IK
-        seed is perturbed so the elbow (the null space of a 7-DoF arm) varies too.
-        A candidate is kept only if Newton converged, it is away from
-        singularity, and the arm penetrates nothing when placed there.
-        """
-        from .ik import sigma_min, solve_ik
-        sim = self.env.sim
-        idx = self.env.env.robots[0]._ref_joint_pos_indexes
-        q0 = sim.data.qpos[idx].copy()
-        T0 = fk(self.chain, torch.tensor(q0)[None])[0].numpy()
-        st = self.start
-        for _ in range(max_rounds):
-            targets, seeds, meta = [], [], []
-            for _ in range(batch):
-                dp = np.array([self.rng.uniform(-st["xy"], st["xy"]), self.rng.uniform(-st["xy"], st["xy"]),
-                               self.rng.uniform(-st["z"], st["z"])])
-                yaw = self.rng.uniform(-st["yaw"], st["yaw"])
-                ax = self.rng.normal(size=2); ax = np.array([*ax / (np.linalg.norm(ax) + 1e-12), 0.0])
-                tilt = self.rng.uniform(-st["tilt"], st["tilt"])
-                T = T0.copy()
-                T[:3, :3] = _rot(np.array([0, 0, 1.0]), yaw) @ _rot(ax, tilt) @ T0[:3, :3]
-                T[:3, 3] = T0[:3, 3] + dp
-                T[2, 3] = max(T[2, 3], 0.08)                      # keep the tool clear of the table
-                targets.append(T)
-                seeds.append(q0 + self.rng.normal(0, st["null"], size=len(q0)))
-                meta.append((dp * 1000, np.rad2deg(yaw), np.rad2deg(tilt)))
-            res = solve_ik(self.chain, torch.tensor(np.stack(targets)), torch.tensor(np.stack(seeds)),
-                           lam=0.02, max_iters=200, trust=0.2)
-            ok = res["converged"] & (sigma_min(self.chain, res["theta"]) > 0.02)
-            for k in torch.nonzero(ok).flatten().tolist():
-                sim.data.qpos[idx] = res["theta"][k].numpy()
-                sim.data.qvel[:] = 0.0
-                sim.forward()
-                if not self._robot_contact():
-                    self._settle(self.settle_steps)
-                    self.start_offset = meta[k]
-                    return
-            sim.data.qpos[idx] = q0; sim.forward()
-        raise RuntimeError(f"task {self.ti}: no collision-free reachable start pose found")
+    @property
+    def label(self) -> str:
+        return f"task {self.ti}"
 
     # -- episode --------------------------------------------------------------------
     def reset(self, init_index: int | None = None, max_tries: int = 20) -> np.ndarray:
@@ -235,52 +138,88 @@ class PrivilegedEnv:
         settle again, and accept only if the bowl stayed on the table surface
         and landed within EJECT_MM of where it was put.
         """
-        from .libero_env import remap_init_state
         self.episode = getattr(self, "episode", 0) + 1     # consumers key per-episode caches on this
         k = int(self.rng.integers(len(self.init_states))) if init_index is None else init_index
-        if k not in self._settled:
-            # The drop from LIBERO's spawn height is the same every time for a
-            # given init state: pay for it once. Resets were 145 ms, 124 of them
-            # settling, and a synchronous vector env waits on its slowest reset.
-            self.env.reset()
-            self.env.set_init_state(remap_init_state(self.init_states[k], self.env.sim))
-            # settle until the objects stop moving, not for a fixed count: in some init
-            # states an object is still sliding off a neighbour after 10 steps (measured,
-            # a bowl at 48.6 deg tilt moving 0.10 m/s), and a cached "settled" state
-            # that is not at rest corrupts everything measured from it
-            self._settle(10)
-            for _ in range(10):
-                if self._max_object_speed() < 0.005:
-                    break
-                self._settle(5)
-            qadr, *_ = self._ids()
-            self._settled[k] = (np.asarray(self.env.sim.get_state().flatten()).copy(),
-                                self.env.sim.data.qpos[qadr:qadr + 3].copy())
+        self._settle_init_state(k)
         settled, rest = self._settled[k]
         if self.layout_radius > 0 and init_index is None:
+            found = self._compatible_init_state(settled, rest)
+            if found is None:
+                return self.reset(init_index=None, max_tries=max_tries)
+            settled, rest = found
+        now, rest = self._place(settled, rest, max_tries)
+        if any(v > 0 for v in self.start.values()):
+            self._randomize_start()
+        self.begin()
+        self.placement = now - rest           # `now` is a view: the bowl after the start settled too
+        self.ever_lifted = False
+        self.last_obs = self.obs()            # refreshes self.raw, which snapshot() reads
+        self.set_reference()
+        if self.layout_check is not None and not self.layout_check(self):
+            # a layout the demonstration program cannot solve (no verified grasp, or
+            # the plate out of reach) is redrawn rather than kept as an impossible episode
+            self.layout_rejected += 1
+            if self.layout_rejected < self.layout_tries:
+                return self.reset(init_index=init_index, max_tries=max_tries)
+        self.layout_rejected = 0
+        if self.rich_obs:
+            self.last_obs = np.concatenate([self.last_obs, self._rich(self.snapshot())])
+        return self.last_obs
+
+    def _settle_init_state(self, k: int) -> None:
+        """Cache init state k settled to rest, with the goal object's resting position."""
+        if k in self._settled:
+            return
+        from .libero_env import remap_init_state
+        # The drop from LIBERO's spawn height is the same every time for a
+        # given init state: pay for it once. Resets were 145 ms, 124 of them
+        # settling, and a synchronous vector env waits on its slowest reset.
+        self.env.reset()
+        self.env.set_init_state(remap_init_state(self.init_states[k], self.env.sim))
+        # settle until the objects stop moving, not for a fixed count: in some init
+        # states an object is still sliding off a neighbour after 10 steps (measured,
+        # a bowl at 48.6 deg tilt moving 0.10 m/s), and a cached "settled" state
+        # that is not at rest corrupts everything measured from it
+        self._settle(10)
+        for _ in range(10):
+            if self._max_object_speed() < AT_REST_SPEED:
+                break
+            self._settle(5)
+        qadr, *_ = self._ids()
+        self._settled[k] = (np.asarray(self.env.sim.get_state().flatten()).copy(),
+                            self.env.sim.data.qpos[qadr:qadr + 3].copy())
+
+    def _layout_sampler(self):
+        if self.layout is None:
             from .layouts import LayoutSampler
-            for _ in range(len(self.init_states)):
-                self.env.reset(); self.env.set_init_state(settled)
-                if self.layout is None:
-                    self.layout = LayoutSampler(self, radius=self.layout_radius)
-                if self.layout.compatible():
-                    break
-                k = int(self.rng.integers(len(self.init_states)))
-                if k not in self._settled:
-                    return self.reset(init_index=None, max_tries=max_tries)
-                settled, rest = self._settled[k]
-        self.rejected = 0
+            self.layout = LayoutSampler(self, radius=self.layout_radius)
+        return self.layout
+
+    def _compatible_init_state(self, settled, rest):
+        """Redraw settled init states until one the layout grouping can move. Returns
+        (settled, rest), or None when the draw lands on an init state not settled yet
+        (the caller then starts the reset over)."""
+        for _ in range(len(self.init_states)):
+            self.env.reset(); self.env.set_init_state(settled)
+            if self._layout_sampler().compatible():
+                break
+            k = int(self.rng.integers(len(self.init_states)))
+            if k not in self._settled:
+                return None
+            settled, rest = self._settled[k]
+        return settled, rest
+
+    def _place(self, settled, rest, max_tries: int):
+        """Lay out the objects and displace the goal object, redrawing a placement that
+        was ejected on settling. Returns the goal object's position (a live view of qpos)
+        and the rest position it was displaced from."""
         for _ in range(max_tries):
             self.env.reset()
             self.env.set_init_state(settled)
             sim = self.env.sim
             qadr, vadr, *_ = self._ids()
             if self.layout_radius > 0:
-                from .layouts import LayoutSampler
-                if self.layout is None:
-                    self.layout = LayoutSampler(self, radius=self.layout_radius)
-                if not self.layout.sample(self.rng, settle=self._settle):
-                    self.rejected += 1
+                if not self._layout_sampler().sample(self.rng, settle=self._settle):
                     continue
                 rest = sim.data.qpos[qadr:qadr + 3].copy()      # the bowl rests somewhere new
             want = np.zeros(2)
@@ -296,28 +235,9 @@ class PrivilegedEnv:
             dz = abs(now[2] - rest[2]) * 1000
             dxy = np.linalg.norm(now[:2] - rest[:2] - want) * 1000
             if dz <= EJECT_MM and dxy <= EJECT_MM:
-                break
-            self.rejected += 1
-        else:
-            raise RuntimeError(f"task {self.ti}: no valid placement in {max_tries} draws "
-                               f"at radius {self.radius} m")
-        if any(v > 0 for v in self.start.values()):
-            self._randomize_start()
-        self.begin()
-        self.placement = now - rest
-        self.ever_lifted = False
-        self.last_obs = self.obs()            # refreshes self.raw, which snapshot() reads
-        self.set_reference()
-        if self.layout_check is not None and not self.layout_check(self):
-            # a layout the demonstration program cannot solve (no verified grasp, or
-            # the plate out of reach) is redrawn rather than kept as an impossible episode
-            self.layout_rejected += 1
-            if self.layout_rejected < self.layout_tries:
-                return self.reset(init_index=init_index, max_tries=max_tries)
-        self.layout_rejected = 0
-        if self.rich_obs:
-            self.last_obs = np.concatenate([self.last_obs, self._rich(self.snapshot())])
-        return self.last_obs
+                return now, rest
+        raise RuntimeError(f"task {self.ti}: no valid placement in {max_tries} draws "
+                           f"at radius {self.radius} m")
 
     def obs(self, raw: dict | None = None) -> np.ndarray:
         """PRIVILEGED. The only place simulator object state enters the teacher.
@@ -329,7 +249,7 @@ class PrivilegedEnv:
         environment renders both cameras a second time.
         """
         sim = self.env.sim
-        o = raw if raw is not None else self.env.env._get_observations(force_update=True)
+        o = raw if raw is not None else self.observe()
         self.raw = o
         q = np.asarray(o["robot0_joint_pos"], np.float64)
         gq = o["robot0_gripper_qpos"]
@@ -358,13 +278,14 @@ class PrivilegedEnv:
         because per-step deltas lose 18% of every step to controller lag and the
         loss compounds (see servo.py)."""
         a = np.clip(np.asarray(action, np.float64), -1, 1)
-        o = self.env.env._get_observations(force_update=True)
+        o = self.observe()
         cmd = np.zeros(self.env.env.action_dim)
         cmd[:7] = self.servo.command(np.asarray(o["robot0_joint_pos"]), a[:6] * self.scale)
         if self.gripper_mode == "target":
             from .gripper_servo import channel_to_target
             gq, gv = o["robot0_gripper_qpos"], o.get("robot0_gripper_qvel", np.zeros(2))
-            cmd[-1] = self.gripper_servo.command(float(channel_to_target(a[6])), float(gq[0] - gq[1]), float(gv[0] - gv[1]))
+            cmd[-1] = self.gripper_servo.command(float(channel_to_target(a[6])), float(gq[0] - gq[1]),
+                                                 float(gv[0] - gv[1]))
         else:
             cmd[-1] = a[6]
         self._gains()
@@ -401,25 +322,15 @@ class PrivilegedEnv:
     def begin(self) -> None:
         """Arm the servo at the current joints. Called by reset(); call it yourself
         after placing the sim in a state by any other route."""
-        o = self.env.env._get_observations(force_update=True)
+        o = self.observe()
         self.servo.reset(np.asarray(o["robot0_joint_pos"]))
         self.t = 0
-
-    def obs_at(self, flat_state: np.ndarray) -> np.ndarray:
-        """PRIVILEGED observation at a recorded simulator state (for BC)."""
-        from .libero_env import remap_init_state
-        sim = self.env.sim
-        sim.set_state_from_flattened(remap_init_state(flat_state, sim))
-        sim.forward()
-        return self.obs()
-
 
     # -- task progress (privileged) ---------------------------------------------------
     def snapshot(self) -> dict:
         """Everything progress() needs, read from the simulator, base frame."""
-        from .progress import grasp_frames
         sim = self.env.sim; m, d = sim.model, sim.data
-        raw = getattr(self, "raw", None) or self.env.env._get_observations(force_update=True)
+        raw = getattr(self, "raw", None) or self.observe()
         q = torch.tensor(np.asarray(raw["robot0_joint_pos"]), dtype=torch.float64)[None]
         T = fk(self.chain, q)[0].numpy()
         tb = d.body_xpos[m.body_name2id("robot0_base")]
@@ -430,7 +341,7 @@ class PrivilegedEnv:
         sides, any_grip, supported = set(), False, False
         for i in range(d.ncon):
             c = d.contact[i]
-            if c.dist > 0.0005:
+            if c.dist > CONTACT_SLACK:
                 continue
             for a, b in ((c.geom1, c.geom2), (c.geom2, c.geom1)):
                 if b not in bowl_geoms or a in bowl_geoms:
@@ -450,8 +361,6 @@ class PrivilegedEnv:
                     p_plate=(d.body_xpos[plate] - tb).copy(), side1=1 in sides, side2=2 in sides,
                     any_grip=any_grip, supported=supported, success=bool(self.env.check_success()))
 
-    RICH_DIM = 1 + 7 + 6
-
     def _rich(self, snap: dict, phi: float | None = None, stage: int | None = None) -> np.ndarray:
         """PRIVILEGED progress features: phi/6, stage one-hot, tool->grasp waypoint error."""
         from .progress import grasp_error
@@ -462,7 +371,7 @@ class PrivilegedEnv:
 
     def set_reference(self, snap: dict | None = None) -> None:
         """Episode constants: bowl rest height and the two stage normalisers that depend on layout."""
-        from .progress import bowl_distance, reach_distance
+        from .progress import reach_distance
         s = snap or self.snapshot(); g = self.geom
         d0_reach, _, _ = reach_distance(dict(s, rest_z=float(s["p_bowl"][2])), g)
         from .progress import transport_remaining

@@ -39,11 +39,6 @@ def contact_wrench_planar(p: Tensor, n: Tensor) -> Tensor:
     return torch.stack([m, n[..., 0], n[..., 1]], -1)
 
 
-def contact_wrench_spatial(p: Tensor, n: Tensor) -> Tensor:
-    """(..., 3), (..., 3) -> (..., 6) as (p x n, n), moment first."""
-    return torch.cat([torch.linalg.cross(p, n), n], -1)
-
-
 def friction_edges_planar(n: Tensor, mu: float) -> Tensor:
     """The two edges of a planar friction cone, (..., 2, 2).
 

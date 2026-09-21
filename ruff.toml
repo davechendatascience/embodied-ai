@@ -1,0 +1,36 @@
+# The code standard, as ruff enforces it. docs/code_smell_guide.md says why each rule is
+# here; scripts/smell_check.sh runs this together with the dead-code and duplication checks.
+line-length = 110
+target-version = "py311"
+extend-exclude = ["third_party", ".venv", ".venv-libero", ".venv-pw", "runs", "cache", "checkpoints"]
+
+[lint]
+select = [
+    "F",        # pyflakes: unused imports and variables, undefined names, redefinitions
+    "E9",       # syntax errors
+    "B",        # bugbear: closures over loop variables, zip without strict, mutable defaults
+    "C90",      # cyclomatic complexity (max below)
+    "SIM",      # needlessly complicated conditionals
+    "ARG",      # unused arguments
+    "RET504",   # assign-then-return
+    "UP",       # outdated syntax
+    "PLR0912",  # too many branches
+    "PLR0913",  # too many arguments
+    "PLR0915",  # too many statements
+    "PLR2004",  # magic numbers in comparisons: name the threshold (guide S5)
+    "BLE001",   # blind `except Exception` (guide S4)
+]
+ignore = ["UP007"]
+
+[lint.mccabe]
+max-complexity = 15
+
+[lint.pylint]
+max-args = 8
+max-branches = 15
+max-statements = 60
+allow-magic-value-types = ["int", "str", "bytes"]
+
+[lint.per-file-ignores]
+# tests compare against literal tolerances by design
+"tests/*" = ["PLR2004"]

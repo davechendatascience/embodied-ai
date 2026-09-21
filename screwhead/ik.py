@@ -38,10 +38,6 @@ class Decoded:
     residual: Tensor        # (B, 6) commanded twist minus achieved twist
     clamped: Tensor         # (B,) bool -- a joint limit truncated the step
 
-    @property
-    def residual_norm(self) -> Tensor:
-        return torch.linalg.norm(self.residual, dim=-1)
-
 
 def dls(J: Tensor, e: Tensor, lam: float) -> Tensor:
     """Damped least squares: argmin ||J d - e||^2 + lam^2 ||d||^2.
@@ -159,7 +155,7 @@ def solve_ik(
     iters = torch.zeros(b, dtype=torch.long, device=theta.device)
     active = torch.ones(b, dtype=torch.bool, device=theta.device)
 
-    for k in range(max_iters):
+    for _ in range(max_iters):
         T = fk(chain, theta)
         err = log_se3(inverse(T) @ target)          # body twist from T to target
         done = torch.linalg.norm(err, dim=-1) < tol
@@ -183,12 +179,6 @@ def solve_ik(
         "converged": torch.linalg.norm(err, dim=-1) < tol,
         "iters": iters,
     }
-
-
-def manipulability(chain: Chain, theta: Tensor) -> Tensor:
-    """Yoshikawa's measure, sqrt(det(J J^T)) -- zero at a singularity (ch.5 sec.4.6)."""
-    J = body_jacobian(chain, theta)
-    return torch.sqrt(torch.clamp(torch.linalg.det(J @ J.transpose(-1, -2)), min=0.0))
 
 
 def sigma_min(chain: Chain, theta: Tensor) -> Tensor:

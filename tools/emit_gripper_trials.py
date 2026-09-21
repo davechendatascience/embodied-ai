@@ -179,6 +179,23 @@ def case_loop_closure() -> list[dict]:
     return case_finger_fk()
 
 
+def _softness_tolerance(g, m, d, joints, a: str, b: str) -> float:
+    """Propagate each joint's limit violation through d sep / d q (see case_span_derived)."""
+    import torch
+    from screwhead.gripper import separation
+    qv, viol = {}, {}
+    for j in joints:
+        jid = m.joint_name2id(f"gripper0_{j}")
+        q = float(d.qpos[m.get_joint_qpos_addr(f"gripper0_{j}")])
+        l, h = m.jnt_range[jid]
+        viol[j] = max(l - q, q - h, 0.0)
+        qv[j] = torch.tensor(q, requires_grad=True)
+    sep = separation(g, qv, a, b).sum()
+    grads = torch.autograd.grad(sep, [qv[j] for j in joints], allow_unused=True)
+    return sum(abs(float(gr if gr is not None else 0.0)) * viol[j]
+               for j, gr in zip(joints, grads, strict=True))
+
+
 def case_span_derived() -> list[dict]:
     """Is the separation derived from joint limits an outer bound on the observed?
 
@@ -212,26 +229,10 @@ def case_span_derived() -> list[dict]:
         m, d = env.sim.model, env.sim.data
         ia, ib = m.body_name2id(f"gripper0_{a}"), m.body_name2id(f"gripper0_{b}")
         joints = list(dict.fromkeys(g.fingers[a].joint_names + g.fingers[b].joint_names))
-
-        def softness_tolerance():
-            """Propagate each joint's limit violation through d sep / d q."""
-            from screwhead.gripper import separation
-            qv, viol = {}, {}
-            for j in joints:
-                jid = m.joint_name2id(f"gripper0_{j}")
-                q = float(d.qpos[m.get_joint_qpos_addr(f"gripper0_{j}")])
-                l, h = m.jnt_range[jid]
-                viol[j] = max(l - q, q - h, 0.0)
-                qv[j] = torch.tensor(q, requires_grad=True)
-            sep = separation(g, qv, a, b).sum()
-            grads = torch.autograd.grad(sep, [qv[j] for j in joints], allow_unused=True)
-            return sum(abs(float(gr if gr is not None else 0.0)) * viol[j]
-                       for j, gr in zip(joints, grads))
-
         for _cmd in sweep(env, N, SEED, settle=6):
             sep = float(np.linalg.norm(d.xpos[ia] - d.xpos[ib]))
             gap = pad_gap(m, d, f"gripper0_{a}", f"gripper0_{b}")
-            tol = softness_tolerance() + 1e-9
+            tol = _softness_tolerance(g, m, d, joints, a, b) + 1e-9
             trials.append({
                 "metrics": {"bound_violated": bool(sep < lo - tol or sep > hi + tol)},
                 "conditions": {"gripper": name, "linkage": spec["linkage"],
@@ -279,7 +280,7 @@ def case_grasp_infeasible() -> list[dict]:
         # geometry is static, so reading it once is a property of the gripper
         # and not of this episode.
         from screwhead.gripper import separation_bounds
-        lo_sep, hi_sep = separation_bounds(g, a_tip, b_tip)
+        _, hi_sep = separation_bounds(g, a_tip, b_tip)
         ia = m.body_name2id(f"gripper0_{a_tip}"); ib = m.body_name2id(f"gripper0_{b_tip}")
         sep_now = float(np.linalg.norm(d.xpos[ia] - d.xpos[ib]))
         pad_thickness = sep_now - pad_gap(m, d, f"gripper0_{a_tip}", f"gripper0_{b_tip}")

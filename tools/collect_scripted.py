@@ -49,30 +49,31 @@ def worker(a):
     n_ok = n_ep = frames = 0
     t0 = time.time()
     tag = f"task{task:02d}" + (f"_w{wid}" if wid is not None else "")
-    log = open(Path(out_dir) / f"{tag}.log", "a")
-    while n_ok < n_success and n_ep < max_episodes:
-        env.reset()
-        ep = {k: [] for k in kept}
-        done, info = False, {}
-        while not done:
-            a_img, w_img = env.images()
-            label = prog.act().astype(np.float32)
-            ep["agent"].append(a_img.copy()); ep["wrist"].append(w_img.copy())
-            ep["state"].append(env.student_state()); ep["label"].append(label)
-            ep["step"].append(env.t)
-            act = label
-            if noise > 0 and prog.phase in NOISY_PHASES:
-                act = np.clip(label + noise * scale * rng.standard_normal(7).astype(np.float32), -1, 1)
-            _, _, done, info = env.step(act)
-        n_ep += 1
-        if info.get("success"):
-            eid = task * 100000 + (0 if wid is None else wid) * 1000 + n_ok
-            ep["episode"] = [eid] * len(ep["label"])
-            for k in kept:
-                kept[k] += ep[k]
-            n_ok += 1; frames += len(ep["label"])
-        log.write(json.dumps(dict(task=task, episode=n_ep, success=bool(info.get("success")), steps=env.t,
-                                  kept=n_ok, frames=frames, elapsed=round(time.time() - t0, 1))) + "\n"); log.flush()
+    with open(Path(out_dir) / f"{tag}.log", "a") as log:
+        while n_ok < n_success and n_ep < max_episodes:
+            env.reset()
+            ep = {k: [] for k in kept}
+            done, info = False, {}
+            while not done:
+                a_img, w_img = env.images()
+                label = prog.act().astype(np.float32)
+                ep["agent"].append(a_img.copy()); ep["wrist"].append(w_img.copy())
+                ep["state"].append(env.student_state()); ep["label"].append(label)
+                ep["step"].append(env.t)
+                act = label
+                if noise > 0 and prog.phase in NOISY_PHASES:
+                    act = np.clip(label + noise * scale * rng.standard_normal(7).astype(np.float32), -1, 1)
+                _, _, done, info = env.step(act)
+            n_ep += 1
+            if info.get("success"):
+                eid = task * 100000 + (0 if wid is None else wid) * 1000 + n_ok
+                ep["episode"] = [eid] * len(ep["label"])
+                for k in kept:
+                    kept[k] += ep[k]
+                n_ok += 1; frames += len(ep["label"])
+            log.write(json.dumps(dict(task=task, episode=n_ep, success=bool(info.get("success")), steps=env.t,
+                                      kept=n_ok, frames=frames, elapsed=round(time.time() - t0, 1))) + "\n")
+            log.flush()
     env.close()
     path = Path(out_dir) / f"{tag}.npz"
     np.savez(path, agent=np.stack(kept["agent"]), wrist=np.stack(kept["wrist"]),

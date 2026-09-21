@@ -50,9 +50,3 @@ class DinoFeatures:
         g = h.float().transpose(1, 2).reshape(len(h), DIM, side, side)
         g = nn.functional.adaptive_avg_pool2d(g, GRID)
         return g.flatten(2).transpose(1, 2).half()
-
-    def encode_array(self, frames: np.ndarray, batch: int = 128) -> np.ndarray:
-        out = np.empty((len(frames), GRID * GRID, DIM), np.float16)
-        for k in range(0, len(frames), batch):
-            out[k:k + batch] = self(frames[k:k + batch]).cpu().numpy()
-        return out

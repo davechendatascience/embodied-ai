@@ -32,10 +32,6 @@ class Chain:
         return len(self.joint_names)
 
     @property
-    def dof(self) -> int:
-        return self.n
-
-    @property
     def B(self) -> Tensor:
         """Body-form axes, seen from the tool: B = Ad(M^-1) S (ch.4 sec.4.3).
 
@@ -44,7 +40,7 @@ class Chain:
         """
         return (adjoint(inverse(self.M)) @ self.S.T).T
 
-    def with_tool(self, offset: Tensor, name: str | None = None) -> "Chain":
+    def with_tool(self, offset: Tensor, name: str | None = None) -> Chain:
         """Move the tool frame by a fixed transform: M' = M @ offset.
 
         The screw axes are untouched -- they live in the reference frame and do

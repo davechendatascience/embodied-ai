@@ -51,7 +51,7 @@ def _euler_to_R(e: list[float], seq: str, degrees: bool) -> Tensor:
     """MuJoCo eulerseq: lowercase axes are intrinsic, applied left to right."""
     ang = [v * (_DEG if degrees else 1.0) for v in e]
     R = torch.eye(3, dtype=torch.float64)
-    for axis, a in zip(seq, ang):
+    for axis, a in zip(seq, ang, strict=True):
         c, s = torch.cos(torch.tensor(a, dtype=torch.float64)), torch.sin(torch.tensor(a, dtype=torch.float64))
         if axis.lower() == "x":
             Ri = torch.tensor([[1, 0, 0], [0, c, -s], [0, s, c]], dtype=torch.float64)
@@ -115,6 +115,50 @@ def _find_path(root: ET.Element, tool: str) -> list[ET.Element] | None:
     return None
 
 
+def _angle_convention(root: ET.Element, angle: str | None) -> tuple[bool, str]:
+    """(degrees, eulerseq) from the file's <compiler>, `angle` overriding the unit."""
+    compiler = root.find("compiler")
+    # MuJoCo's default is degrees. Getting this wrong silently rescales every
+    # euler angle and joint limit, so it is read, never assumed.
+    degrees = True
+    seq = "xyz"
+    if compiler is not None:
+        degrees = compiler.get("angle", "degree") == "degree"
+        seq = compiler.get("eulerseq", "xyz")
+    if angle is not None:
+        if angle not in ("radian", "degree"):
+            raise ValueError(f"angle must be 'radian' or 'degree', got {angle!r}")
+        degrees = angle == "degree"
+    return degrees, seq
+
+
+def _tool_path(root: ET.Element, tool_body: str, path: str | Path) -> list[ET.Element]:
+    """Bodies from the first worldbody child that leads to `tool_body`, down to it."""
+    world = root.find("worldbody")
+    if world is None:
+        raise ValueError(f"{path}: no <worldbody>")
+    for b in world.findall("body"):
+        path_bodies = _find_path(b, tool_body)
+        if path_bodies is not None:
+            return path_bodies
+    raise ValueError(f"{path}: no body named {tool_body!r}")
+
+
+def _joint_screw(joint: ET.Element, R: Tensor, p: Tensor) -> tuple[Tensor, str]:
+    """Screw axis and type of a joint on a body at pose (R, p), steps 2-4 of the recipe."""
+    jtype = joint.get("type", "hinge")
+    if jtype in ("free", "ball"):
+        raise NotImplementedError(f"joint {joint.get('name')!r} is {jtype}; not a 1-DoF chain")
+    axis = torch.tensor(_floats(joint.get("axis"), [0, 0, 1]), dtype=torch.float64)
+    jpos = torch.tensor(_floats(joint.get("pos"), [0, 0, 0]), dtype=torch.float64)
+    w_ref = R @ axis
+    w_ref = w_ref / torch.linalg.norm(w_ref)
+    q_ref = p + R @ jpos
+    if jtype == "slide":
+        return torch.cat([torch.zeros(3, dtype=torch.float64), w_ref]), "prismatic"
+    return torch.cat([w_ref, -torch.linalg.cross(w_ref, q_ref)]), "revolute"
+
+
 def from_mjcf(
     path: str | Path,
     tool_body: str = "right_hand",
@@ -132,30 +176,8 @@ def from_mjcf(
     """
     tree = ET.parse(path)
     root = tree.getroot()
-
-    compiler = root.find("compiler")
-    # MuJoCo's default is degrees. Getting this wrong silently rescales every
-    # euler angle and joint limit, so it is read, never assumed.
-    degrees = True
-    seq = "xyz"
-    if compiler is not None:
-        degrees = compiler.get("angle", "degree") == "degree"
-        seq = compiler.get("eulerseq", "xyz")
-    if angle is not None:
-        if angle not in ("radian", "degree"):
-            raise ValueError(f"angle must be 'radian' or 'degree', got {angle!r}")
-        degrees = angle == "degree"
-
-    world = root.find("worldbody")
-    if world is None:
-        raise ValueError(f"{path}: no <worldbody>")
-    path_bodies = None
-    for b in world.findall("body"):
-        path_bodies = _find_path(b, tool_body)
-        if path_bodies is not None:
-            break
-    if path_bodies is None:
-        raise ValueError(f"{path}: no body named {tool_body!r}")
+    degrees, seq = _angle_convention(root, angle)
+    path_bodies = _tool_path(root, tool_body, path)
 
     R = torch.eye(3, dtype=torch.float64)
     p = torch.zeros(3, dtype=torch.float64)
@@ -166,24 +188,13 @@ def from_mjcf(
         p = p + R @ pb
         R = R @ Rb
         for joint in body.findall("joint"):
-            jtype = joint.get("type", "hinge")
-            if jtype in ("free", "ball"):
-                raise NotImplementedError(f"joint {joint.get('name')!r} is {jtype}; not a 1-DoF chain")
-            axis = torch.tensor(_floats(joint.get("axis"), [0, 0, 1]), dtype=torch.float64)
-            jpos = torch.tensor(_floats(joint.get("pos"), [0, 0, 0]), dtype=torch.float64)
-            w_ref = R @ axis
-            w_ref = w_ref / torch.linalg.norm(w_ref)
-            q_ref = p + R @ jpos
-            if jtype == "slide":
-                S = torch.cat([torch.zeros(3, dtype=torch.float64), w_ref])
-                types.append("prismatic")
-            else:
-                S = torch.cat([w_ref, -torch.linalg.cross(w_ref, q_ref)])
-                types.append("revolute")
+            S, kind = _joint_screw(joint, R, p)
+            types.append(kind)
             names.append(joint.get("name") or f"joint{len(names) + 1}")
             axes.append(S)
             rng = _floats(joint.get("range"), [-torch.pi, torch.pi])
-            scale = _DEG if (degrees and jtype != "slide") else 1.0
+            # Angles convert; a slide's range is a length and never does.
+            scale = _DEG if (degrees and kind == "revolute") else 1.0
             limits.append([rng[0] * scale, rng[1] * scale])
 
     M = torch.eye(4, dtype=torch.float64)

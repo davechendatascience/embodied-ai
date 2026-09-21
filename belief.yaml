@@ -80,7 +80,7 @@ components:
       - {id: FM-tool-frame-drift, observable: axes are right but the tool offset is measured to the wrong link}
     remediation: The five-step conversion in Modern Robotics ch.4 sec.4.5; check against sim FK before anything downstream
 
-  # code: screwhead/kinematics.py, screwhead/batch.py, screwhead/kin_np.py (NumPy fast path for the control loop), tests/test_kin_np.py (holds it to the torch reference)
+  # code: screwhead/kinematics.py, screwhead/kin_np.py (NumPy fast path for the control loop), tests/test_kin_np.py (holds it to the torch reference)
   - id: CMP-kinematics
     purpose: Batched differentiable forward kinematics and body Jacobian from screw axes
     inputs: [IFC-poe__kinematics]
@@ -186,7 +186,7 @@ components:
       - {id: FM-world-body-mixup, observable: the twist is integrated in the world frame and rotations swing the tool}
     remediation: Integrate the twist on SE(3) into an absolute pose reference, solve IK to an absolute joint target, and hold absolutely
 
-  # code: screwhead/layouts.py, screwhead/teacher_env.py, screwhead/libero_env.py
+  # code: screwhead/layouts.py, screwhead/teacher_env.py, screwhead/libero_env.py, screwhead/sim_arm.py (what both environments share), screwhead/contacts.py (every contact query, once)
   - id: CMP-scene-randomizer
     purpose: Randomize object layouts and robot start pose while keeping each instruction true
     outputs: [IFC-randomizer__teacher]
@@ -217,7 +217,7 @@ components:
       - {id: FM-stale-grasp-cache, observable: a grasp chosen in a previous episode is reused after reset}
     remediation: Per-task ProgramConfig (sector, pre-shape, posture, selection); per-episode grasp cache; clearance, IK, path and sigma-min checks
 
-  # code: screwhead/skills.py, screwhead/skill_teacher.py, screwhead/scene.py, screwhead/task_spec.py, screwhead/task_env.py, tools/skill_eval.py, tools/skill_trace.py, tools/teacher_report.py, scripts/skill_sweep.sh
+  # code: screwhead/skills.py (feedback laws), screwhead/grasp_planner.py (candidates from geometry), screwhead/reach.py (IK, conditioning, collision), screwhead/frames.py, screwhead/skill_teacher.py, screwhead/scene.py, screwhead/task_spec.py, screwhead/task_env.py, screwhead/episode_log.py (per-episode diagnosis), tools/skill_eval.py, tools/skill_trace.py, tools/teacher_report.py, scripts/skill_sweep.sh
   - id: CMP-skill-library
     purpose: >-
       Build a task's demonstration program from its goal specification and the scene's
@@ -324,6 +324,23 @@ components:
   # robosuite's close/hold/open. Adopted because the drawer program's lag-compensated
   # pre-shape, learned as a 3-valued command, matched the teacher on 20-25% of held-out
   # pre-shape frames and the drawer fell to 0/10 after DAgger.
+  # code: scripts/smell_check.sh, ruff.toml -- the standard itself is docs/code_smell_guide.md
+  - id: CMP-code-standard
+    purpose: Keep every file of ours within the standard in docs/code_smell_guide.md
+    outputs: []
+    testable_capability: >-
+      scripts/smell_check.sh exits 0 on the whole repository: no unused code, no blocks
+      duplicated across files, no function over the complexity limits, no unnamed float
+      thresholds, no blind excepts without a recorded reason
+    failure_modes:
+      - {id: FM-duplicated-logic, observable: pylint duplicate-code reports a block of 6+ similar lines in two files}
+      - {id: FM-dead-code, observable: vulture reports a function, method or attribute nothing uses}
+      - {id: FM-complexity, observable: ruff C901/PLR0912/PLR0915 -- complexity over 15, 15 branches or 60 statements}
+      - {id: FM-swallowed-errors, observable: ruff BLE001 -- a blind except without noqa and a reason}
+    remediation: >-
+      Fix by the guide's rule for that smell; a justified exception carries `# noqa: CODE`
+      with the reason, or an entry with its reason in the checker's IGNORE list
+
   # code: screwhead/gripper_servo.py, tools/relabel_gripper.py
   - id: CMP-gripper-decoder
     purpose: Decode a grasp intent (target aperture) to this gripper's actuated command
@@ -754,6 +771,17 @@ contracts:
   # layouts it happens to be good at, which biases the demonstrations. The bar for
   # collecting from a task is 0.9 at its lower bound. Per task, as a slice, so one
   # broken task cannot hide inside a suite average.
+  # One run per code revision decides it: the gate is deterministic.
+  - id: CTR-code-clean
+    subject: CMP-code-standard
+    claim_type: capability
+    metrics:
+      - {id: clean, unit: bool}
+    acceptance: {rule: "clean == true", target_rate: 0.1}
+    compatibility_key: [code_revision]
+    evaluable_by: [TST-smell-check]
+    sufficiency: {n_min: 1, max_ci_width: 1.0}
+
   - id: CTR-teacher-reliable
     subject: CMP-skill-library
     claim_type: capability
@@ -1071,7 +1099,7 @@ tests:
   - id: TST-spec-sensitivity
     layer: component
     targets: [CMP-spec-conditioning]
-    run: .venv/bin/python tools/emit_trials.py $OUT spec_sensitivity --n 800 --seed 0
+    run: sh -c "echo blocked - no spec_sensitivity case exists in tools/emit_trials.py; the perturbation test was never written >&2; exit 2"
     metrics: [spec_sensitivity]
     capture: [policy_revision, perturbation]
 
@@ -1127,6 +1155,15 @@ tests:
 
   # The assessment: every task, 20 episodes, with the mechanism of each failure. Ingest
   # with `tools/teacher_report.py --from runs/evidence/reliability --ingest`.
+  - id: TST-smell-check
+    layer: component
+    targets: [CMP-code-standard]
+    run: scripts/smell_check.sh
+    metrics: [clean]
+    capture: [code_revision]
+    cost: 2.0
+    timeout_s: 600
+
   - id: TST-teacher-reliability
     layer: e2e
     targets: [CMP-skill-library]
