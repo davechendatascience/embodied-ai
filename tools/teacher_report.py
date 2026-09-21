@@ -199,7 +199,7 @@ def _episode_lines(t: dict, d: dict) -> list[str]:
     lines = [f"  -- ep{d.get('episode')} ({d.get('steps')} steps) [{t['conditions'].get('mechanism')}]",
              "     timeline: " + (tl if len(tl) < TIMELINE_MAX else tl[:TIMELINE_KEEP] + " ... " + tl[-TIMELINE_KEEP:])]
     lines += ["     " + e for e in d.get("events", [])[:EVENTS_SHOWN]]
-    lines += [f"     grasp {obj}: " + ", ".join(f"{k}={v}" for k, v in g.items())
+    lines += [f"     grasp {obj}: " + (", ".join(f"{k}={v}" for k, v in g.items()) if isinstance(g, dict) else str(g))
               for obj, g in d.get("grasp", {}).items()]
     lines += ["     final: " + f for f in d.get("final", [])]
     return lines
@@ -210,7 +210,8 @@ def _task_section(r: dict, fails: list[dict], examples: int) -> list[str]:
     det = [t.get("detail", {}) for t in fails]
     lang = det[0].get("language", "") if det else ""
     kinds = collections.Counter(k for d in det for k in {_kind(e) for e in d.get("events", [])})
-    tiers = collections.Counter(g.get("tier") for d in det for g in d.get("grasp", {}).values())
+    tiers = collections.Counter(g.get("tier") for d in det for g in d.get("grasp", {}).values()
+                                if isinstance(g, dict) and "tier" in g)
     lines = [f"\n### {r['suite']}[{r['task']}] {r['k']}/{r['n']}  {lang}",
              "  mechanisms: " + _counts(r["mechanisms"]),
              "  events in failed episodes: " + _counts(kinds, 8),
@@ -304,11 +305,11 @@ def main() -> int:
     trials = _gather(args)
     rows = report(trials)
     _print_table(rows)
-    print("\n==== diagnosis, worst task first ====")
-    diagnose(rows, trials, args.examples, ROOT / (args.reuse or args.evidence) / "diagnosis.md")
-    if args.out:
+    if args.out:        # before the diagnosis: a report bug must not discard measured trials
         write_out(trials, args.out)
         print(f"\n{len(trials)} trials -> {args.out}")
+    print("\n==== diagnosis, worst task first ====")
+    diagnose(rows, trials, args.examples, ROOT / (args.reuse or args.evidence) / "diagnosis.md")
     if args.ingest:
         revs = sorted({t["repro"].get("teacher_revision", "?") for t in trials})
         print(f"\ningest ({', '.join(revs)}):")

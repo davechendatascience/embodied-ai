@@ -293,8 +293,8 @@ class Skills:
                 self._spots[name] = (np.eye(3), np.array([xy[0], xy[1], surface]),
                                      np.array([ext[0], ext[1], 0.0]))
             self._clearing[key] = name
-            self.grasp_log[f"clearing {obj}"] = (
-                "not crowded" if xy is None and not self.clearing.crowds(obj, a, dq)
+            self.grasp_log[f"clearing {obj}"] = dict(      # grasp_log entries are dicts: the report reads them
+                decision="not crowded" if xy is None and not self.clearing.crowds(obj, a, dq)
                 else "crowded, no spot" if xy is None else f"move to {np.round(xy, 3).tolist()}")
         return self._clearing[key]
 
