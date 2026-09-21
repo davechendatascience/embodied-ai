@@ -275,7 +275,7 @@ branches:
       the carry is logged as unverified.
     premises: [LMA-whole-path-reachable, DEF-reachable-pose]
     derivation_rule: >-
-      screwhead/reach.py carry_height solves every height tried, the floor included, at the
+      screwhead/teacher/reach.py carry_height solves every height tried, the floor included, at the
       three stops and screens each accepted one with collides(); Skills caches it per grasp.
       Three stops sample the path, which LMA-whole-path-reachable says endpoints cannot
       replace; the lift and lowering columns are not sampled.
@@ -291,7 +291,7 @@ branches:
       does; otherwise from the start of the motion alone, logged as drive_checked false.
     premises: [LMA-whole-path-reachable]
     derivation_rule: >-
-      screwhead/skills.py _choose_handle calls Reach.choose(extra=joint-motion poses,
+      screwhead/teacher/skills.py _choose_handle calls Reach.choose(extra=joint-motion poses,
       strict=True) and falls back to the non-strict start-only choice only on None.
       Choose's conditioning bars are a ranking, not DEF-reachable-pose's thresholds.
       evidence: CTR-teacher-reliable (goal 0/3/7: drive_checked in 60 of 60 episodes).
@@ -306,7 +306,7 @@ branches:
       opening (width plus 12 mm) and its servo band of 3 mm.
     premises: [LMA-holding-is-geometric]
     derivation_rule: >-
-      screwhead/skills.py holding(geom, width) with contacts.finger_sides_on_geom. Held, the
+      screwhead/teacher/skills.py holding(geom, width) with contacts.finger_sides_on_geom. Held, the
       aperture measured 0.9-1.4 mm over the width with the fingers on the handle geom on
       every one of 278 drive steps (drawer and knob).
       evidence: CTR-teacher-reliable (goal 0, 14 -> 20/20 paired; the geom/4 mm revision 20/0/20 unchanged).
@@ -342,7 +342,7 @@ branches:
       (slide), less than the squeeze alignment tolerance of 0.10 rad.
     premises: [AXM-dagger-needs-markov-labels, AXM-panda-gripper-geometry, LMA-holding-is-geometric]
     derivation_rule: >-
-      screwhead/skills.py _handle_frame (frame via _joint_motion(qpos - q0)) and _drive
+      screwhead/teacher/skills.py _handle_frame (frame via _joint_motion(qpos - q0)) and _drive
       (dq clipped to the lead, from R_h and p_h). A frame fixed in the world makes the label
       depend on the joint angle at selection; a target led from the tool's own pose lets the
       tool outrun a damped knob and pry the jaws open.
@@ -357,7 +357,7 @@ branches:
       out along that handle's approach axis before any other motion.
     premises: [AXM-panda-gripper-geometry, AXM-handle-shares-body]
     derivation_rule: >-
-      screwhead/skill_teacher.py calls Skills.leave_handle before pick. The jaws surround the
+      screwhead/teacher/skill_teacher.py calls Skills.leave_handle before pick. The jaws surround the
       handle along the jaw axis, so any first motion with a component along it (rising, for
       a vertical pinch) pushes a finger into the handle; along the approach axis they clear it.
       evidence: traced on goal 3 -- the drawer stays at -0.159 through the pick.

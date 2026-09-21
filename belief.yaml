@@ -28,7 +28,7 @@
 #                   POL-thesis-supported)
 #
 # Data for gate 2 comes from per-task demonstration programs with privileged
-# state (screwhead/scripted_teacher.py), executed through TwistServo, filtered to
+# state (screwhead/scripted/scripted_teacher.py), executed through TwistServo, filtered to
 # successes, then aggregated with DAgger (tools/distill.py). Teacher and student
 # share one declared evaluation: tools/distill.py collect --trials, seed 555,
 # layouts 0.08 m, start 0.10 m / 0.05 m / 30 deg / 10 deg / 0.3 rad, horizon 400.
@@ -66,7 +66,7 @@
 #     writes grasp_offset_mm = 1e6 rather than null when nothing was measured.
 
 components:
-  # code: screwhead/poe.py, screwhead/mjcf.py, screwhead/se3.py, screwhead/libero.py (Panda chain at LIBERO's grip site)
+  # code: screwhead/geometry/poe.py, screwhead/sim/mjcf.py, screwhead/geometry/se3.py, screwhead/sim/libero.py (Panda chain at LIBERO's grip site)
   - id: CMP-poe-conversion
     purpose: Convert a URDF into a home pose and one screw axis per joint
     outputs: [IFC-poe__kinematics]
@@ -80,7 +80,7 @@ components:
       - {id: FM-tool-frame-drift, observable: axes are right but the tool offset is measured to the wrong link}
     remediation: The five-step conversion in Modern Robotics ch.4 sec.4.5; check against sim FK before anything downstream
 
-  # code: screwhead/kinematics.py, screwhead/kin_np.py (NumPy fast path for the control loop), tests/test_kin_np.py (holds it to the torch reference)
+  # code: screwhead/geometry/kinematics.py, screwhead/geometry/kin_np.py (NumPy fast path for the control loop), tests/test_kin_np.py (holds it to the torch reference)
   - id: CMP-kinematics
     purpose: Batched differentiable forward kinematics and body Jacobian from screw axes
     inputs: [IFC-poe__kinematics]
@@ -94,7 +94,7 @@ components:
       - {id: FM-batch-leak, observable: results depend on batch composition when joint counts differ}
     remediation: Column i is joint i's screw axis carried by the Adjoint of everything upstream; ch.5 sec.4.2
 
-  # code: screwhead/ik.py
+  # code: screwhead/geometry/ik.py
   - id: CMP-ik-decoder
     purpose: Decode a tool twist to joint commands by damped least squares
     inputs: [IFC-expert__ik, IFC-kinematics__ik]
@@ -109,7 +109,7 @@ components:
       - {id: FM-chunk-drift, observable: null-space posture wanders across a decoded action chunk}
     remediation: The damped least-squares derivation and its step bound, ch.6 sec.4.4; warm-start each solve from the previous
 
-  # code: screwhead/ik.py (nullspace_projector)
+  # code: screwhead/geometry/ik.py (nullspace_projector)
   - id: CMP-nullspace
     purpose: Resolve redundancy for arms with more joints than the task needs
     inputs: [IFC-kinematics__ik]
@@ -121,7 +121,7 @@ components:
       - {id: FM-masked-as-zero, observable: a 6-DoF arm is trained toward a zero preference instead of no preference}
     remediation: Project through the null space; prefer the inertia-weighted inverse where dynamics exist, ch.11 sec.4.7
 
-  # code: screwhead/retarget.py
+  # code: screwhead/analysis/retarget.py
   - id: CMP-retarget
     purpose: Convert demonstration joint trajectories into embodiment-free tool twists
     outputs: [IFC-demo__twist]
@@ -135,7 +135,7 @@ components:
       - {id: FM-unconverged-frame, observable: a near-singular frame is kept as a training target without converging}
     remediation: Retarget through the demonstrating robot's own FK and Jacobian; the conversion is arithmetic, not learned
 
-  # code: screwhead/spec.py
+  # code: screwhead/student/spec.py
   - id: CMP-spec-conditioning
     purpose: Carry the robot specification into the learned policy as tokens
     outputs: [IFC-spec__expert]
@@ -147,7 +147,7 @@ components:
       - {id: FM-spec-shortcut, observable: the policy reads spec tokens as an embodiment id rather than as geometry}
     remediation: Kinematic domain randomisation over procedurally varied URDFs during training
 
-  # code: screwhead/token_head.py, screwhead/policy.py, screwhead/state.py, tools/token_data.py, tools/distill.py, tools/record_rollout.py
+  # code: screwhead/student/token_head.py, screwhead/student/policy.py, screwhead/geometry/state.py, tools/token_data.py, tools/distill.py, tools/record_rollout.py
   - id: CMP-action-expert
     purpose: >-
       The student VLA -- predict the tool twist and three-valued gripper command
@@ -173,7 +173,7 @@ components:
       scaling plateaus
 
   # ---- Gate 2 machinery. The teacher reads the simulator; the student never does.
-  # code: screwhead/servo.py
+  # code: screwhead/sim/servo.py
   - id: CMP-twist-servo
     purpose: Execute a body twist on the simulator's joint-position controller
     inputs: [IFC-expert__ik]
@@ -186,7 +186,7 @@ components:
       - {id: FM-world-body-mixup, observable: the twist is integrated in the world frame and rotations swing the tool}
     remediation: Integrate the twist on SE(3) into an absolute pose reference, solve IK to an absolute joint target, and hold absolutely
 
-  # code: screwhead/layouts.py, screwhead/teacher_env.py, screwhead/libero_env.py, screwhead/sim_arm.py (what both environments share), screwhead/contacts.py (every contact query, once)
+  # code: screwhead/scripted/layouts.py, screwhead/sim/teacher_env.py, screwhead/sim/libero_env.py, screwhead/sim/sim_arm.py (what both environments share), screwhead/sim/contacts.py (every contact query, once)
   - id: CMP-scene-randomizer
     purpose: Randomize object layouts and robot start pose while keeping each instruction true
     outputs: [IFC-randomizer__teacher]
@@ -202,7 +202,7 @@ components:
       - {id: FM-teacher-veto-bias, observable: layouts the program cannot solve are redrawn, so the evaluated distribution is the teacher-feasible one}
     remediation: Move objects in rigid groups, settle, reject slid/ejected/relation-false proposals; redraw incompatible init states
 
-  # code: screwhead/scripted_teacher.py, screwhead/progress.py, tools/collect_scripted.py, tools/scripted_eval.py
+  # code: screwhead/scripted/scripted_teacher.py, screwhead/scripted/progress.py, tools/collect_scripted.py, tools/scripted_eval.py
   - id: CMP-scripted-teacher
     purpose: Per-task demonstration programs that choose a verified grasp from privileged state and drive to it
     inputs: [IFC-randomizer__teacher]
@@ -217,7 +217,7 @@ components:
       - {id: FM-stale-grasp-cache, observable: a grasp chosen in a previous episode is reused after reset}
     remediation: Per-task ProgramConfig (sector, pre-shape, posture, selection); per-episode grasp cache; clearance, IK, path and sigma-min checks
 
-  # code: screwhead/skills.py (feedback laws), screwhead/grasp_planner.py (candidates from geometry), screwhead/reach.py (IK, conditioning, collision), screwhead/frames.py, screwhead/skill_teacher.py, screwhead/scene.py, screwhead/task_spec.py, screwhead/task_env.py, screwhead/episode_log.py (per-episode diagnosis), tools/skill_eval.py, tools/skill_trace.py, tools/teacher_report.py, tools/teacher_determinism.py, tools/teacher_motion.py, screwhead/clearing.py, scripts/skill_sweep.sh
+  # code: screwhead/teacher/skills.py (feedback laws), screwhead/teacher/grasp_planner.py (candidates from geometry), screwhead/teacher/reach.py (IK, conditioning, collision), screwhead/geometry/frames.py, screwhead/teacher/skill_teacher.py, screwhead/sim/scene.py, screwhead/teacher/task_spec.py, screwhead/sim/task_env.py, screwhead/teacher/episode_log.py (per-episode diagnosis), tools/skill_eval.py, tools/skill_trace.py, tools/teacher_report.py, tools/teacher_determinism.py, tools/teacher_motion.py, screwhead/teacher/clearing.py, scripts/skill_sweep.sh
   - id: CMP-skill-library
     purpose: >-
       Build a task's demonstration program from its goal specification and the scene's
@@ -242,7 +242,7 @@ components:
       keep every skill a Markov feedback law so DAgger still applies. Fix by mechanism, not
       by task: tools/teacher_report.py names the mechanism of every failed episode
 
-  # code: screwhead/dino_features.py, screwhead/clip_features.py (language), tools/feature_bakeoff.py, tools/probe_localization.py
+  # code: screwhead/student/dino_features.py, screwhead/student/clip_features.py (language), tools/feature_bakeoff.py, tools/probe_localization.py
   - id: CMP-vision-encoder
     purpose: Frozen DINOv2-base patch tokens (8x8 per camera) as the student's visual input
     outputs: [IFC-encoder__expert]
@@ -254,7 +254,7 @@ components:
       - {id: FM-teacher-state-only, observable: localizes in teacher-driven states and not in the student's own}
     remediation: Patch tokens; measure on student-driven states; the learning curve decides between more data and fine-tuning
 
-  # code: screwhead/interface.py
+  # code: screwhead/geometry/interface.py
   - id: CMP-action-interface
     purpose: Convert between the policy's action units and the decoder's twist units
     outputs: [IFC-expert__ik]
@@ -280,7 +280,7 @@ components:
   # derived from its forward kinematics over its joint limits, exactly as the
   # arm's reach is. A derived number can be checked against the model; a
   # tabulated one can only be trusted.
-  # code: screwhead/gripper.py, tools/emit_gripper_trials.py
+  # code: screwhead/analysis/gripper.py, tools/emit_gripper_trials.py
   - id: CMP-gripper-chain
     purpose: Parse a gripper into finger chains with screw axes, as for an arm
     outputs: [IFC-gripper__grasp]
@@ -293,7 +293,7 @@ components:
       - {id: FM-slide-vs-hinge, observable: a prismatic finger joint is read as revolute}
     remediation: The five-step conversion, with closed loops cut at one passive joint into two open chains (ch.7 sec.4.3)
 
-  # code: screwhead/gripper.py (pad pose from observed joints)
+  # code: screwhead/analysis/gripper.py (pad pose from observed joints)
   - id: CMP-tendon-coupling
     purpose: Relate a gripper's actuated command to its passive finger joints
     inputs: [IFC-gripper__grasp]
@@ -305,7 +305,7 @@ components:
       - {id: FM-command-assumed-monotone, observable: pad separation is assumed to decrease with the close command, which a compliant linkage does not guarantee}
     remediation: Read pad pose from the observed joint vector by open-chain FK; treat command-to-separation as dynamic, not kinematic
 
-  # code: screwhead/grasp.py
+  # code: screwhead/analysis/grasp.py
   - id: CMP-grasp-map
     purpose: Build the grasp matrix from contacts and decide force closure
     inputs: [IFC-gripper__grasp]
@@ -319,7 +319,7 @@ components:
       - {id: FM-planar-result-in-space, observable: an antipodal pair is accepted in 3D, where it cannot resist moment about the finger line}
     remediation: Escape direction decides, alternating projection exhibits, never the reverse (ch.12 sec.4.8)
 
-  # Implemented as screwhead/gripper_servo.py: the policy names a target aperture in
+  # Implemented as screwhead/sim/gripper_servo.py: the policy names a target aperture in
   # metres and a fixed servo, reading the gripper's measured aperture and rate, emits
   # robosuite's close/hold/open. Adopted because the drawer program's lag-compensated
   # pre-shape, learned as a 3-valued command, matched the teacher on 20-25% of held-out
@@ -341,7 +341,7 @@ components:
       Fix by the guide's rule for that smell; a justified exception carries `# noqa: CODE`
       with the reason, or an entry with its reason in the checker's IGNORE list
 
-  # code: screwhead/gripper_servo.py, tools/relabel_gripper.py
+  # code: screwhead/sim/gripper_servo.py, tools/relabel_gripper.py
   - id: CMP-gripper-decoder
     purpose: Decode a grasp intent (target aperture) to this gripper's actuated command
     inputs: [IFC-expert__ik, IFC-gripper__grasp]
