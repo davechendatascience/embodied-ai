@@ -25,7 +25,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 from teacher_report import teacher_revision  # noqa: E402
 
 CASES = [("libero_object", "0"), ("libero_spatial", "6"), ("libero_goal", "0 7")]
-EPISODES = 2
+EPISODES = 4          # 4 tasks x 4 episodes = CTR-teacher-deterministic's n_min of 16
 HORIZON = 400
 CPUS = "5,6,7,8,9,15,16,17,18,19"
 
@@ -36,7 +36,7 @@ def run_once(suite: str, tasks: str, out: Path) -> dict:
            "--episodes", str(EPISODES), "--horizon", str(HORIZON), "--cpus", CPUS, "--trials", str(out)]
     subprocess.run(cmd, cwd=ROOT, env=env, capture_output=True, check=False)
     trials = json.loads(out.read_text())["trials"] if out.exists() else []
-    return {(t["conditions"]["task"], t["detail"]["episode"]): t for t in trials}
+    return {(str(t["conditions"]["task"]), int(t["detail"]["episode"])): t for t in trials}
 
 
 def main() -> int:
@@ -49,7 +49,8 @@ def main() -> int:
         for suite, tasks in CASES:
             a = run_once(suite, tasks, Path(tmp) / f"{suite}_a.json")
             b = run_once(suite, tasks, Path(tmp) / f"{suite}_b.json")
-            for key in sorted(set(a) | set(b)):
+            # every expected episode is a trial: one a crashed run lost is not reproducible
+            for key in [(task, ep) for task in tasks.split() for ep in range(EPISODES)]:
                 ta, tb = a.get(key), b.get(key)
                 same = (ta is not None and tb is not None
                         and ta["detail"]["timeline"] == tb["detail"]["timeline"]
