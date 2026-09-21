@@ -178,6 +178,11 @@ class SimArm:
     def gripper_indexes(self):
         return self.robot._ref_gripper_joint_pos_indexes
 
+    def render(self, camera: str, px: int) -> np.ndarray:
+        """An upright px x px image from a named camera -- for videos; the observation
+        cameras are CAMERA_PX."""
+        return np.ascontiguousarray(self.env.sim.render(width=px, height=px, camera_name=camera)[::-1])
+
     def observe(self) -> dict:
         return self.env.env._get_observations(force_update=True)
 

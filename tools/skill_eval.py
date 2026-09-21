@@ -41,6 +41,7 @@ class Job:
     start: dict
     video: str
     max_videos: int
+    video_px: int
 
 
 def _observe(errors: list, fn, *args):
@@ -73,8 +74,8 @@ def _run_episode(env, teacher, job: Job, ep: int, record: bool):
         if log is not None and not errors:
             _observe(errors, log.step, s)
         if record:
-            ag, wr = env.images()
-            frames.append(np.concatenate([ag[::-1], wr[::-1]], axis=1))
+            frames.append(_frame(env, job, teacher.phase) if job.video_px else
+                          np.concatenate([im[::-1] for im in env.images()], axis=1))
         _, _, done, info = env.step(a)
     ok = bool(info["success"])
     diag = mechanism = ""
@@ -92,6 +93,17 @@ def _run_episode(env, teacher, job: Job, ep: int, record: bool):
                **{k: round(float(v), 4) if isinstance(v, float) else v
                   for k, v in track.items() if k not in ("skill", "regressed")})
     return row, frames
+
+
+def _frame(env, job: Job, phase: str) -> np.ndarray:
+    """Agentview and wrist at video_px, with the step, time, phase and task written on top."""
+    import cv2
+    img = np.concatenate([env.render("agentview", job.video_px),
+                          env.render("robot0_eye_in_hand", job.video_px)], axis=1)
+    cv2.rectangle(img, (0, 0), (img.shape[1], 30), (0, 0, 0), -1)
+    label = f"{job.suite}[{job.task}]   step {env.t:3d}   {env.t / VIDEO_FPS:5.1f} s   {phase}"
+    cv2.putText(img, label, (8, 21), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
+    return img
 
 
 def _failed_row(task: int, episode: int, steps: int, language: str, what: str, mechanism: str) -> dict:
@@ -140,7 +152,7 @@ def _worker(remote, job_fields: dict) -> None:
         if record and frames and not row["success"]:
             import imageio.v2 as imageio
             Path(job.video).mkdir(parents=True, exist_ok=True)
-            imageio.mimsave(Path(job.video) / f"{job.suite}_t{job.task}_ep{ep}_fail.mp4", frames,
+            imageio.mimsave(Path(job.video) / f"{job.suite}_t{job.task}_ep{job.ep_offset + ep}_fail.mp4", frames,
                             fps=VIDEO_FPS, macro_block_size=1)
             videos += 1
         remote.send(row)
@@ -167,6 +179,7 @@ def _parse() -> argparse.Namespace:
                          "seed -- for iterating on one task without waiting on one core")
     ap.add_argument("--video", default="")
     ap.add_argument("--max-videos", type=int, default=1)
+    ap.add_argument("--video-px", type=int, default=0, help="record at this size, with a caption (0: the 128 px observation cameras)")
     ap.add_argument("--trials", default="")
     ap.add_argument("-v", "--verbose", action="store_true",
                     help="timeline, events, grasp, and the false predicate term for every failure")
@@ -186,7 +199,7 @@ def _jobs(args) -> list[Job]:
             if n > 0:
                 seed = args.seed * 100 + t if args.split == 1 else (args.seed * 100 + t) * 1000 + j
                 jobs.append(Job(args.suite, t, n, seed, cpus[len(jobs) % len(cpus)], j * per,
-                                args.horizon, start, args.video, args.max_videos))
+                                args.horizon, start, args.video, args.max_videos, args.video_px))
     return jobs
 
 
