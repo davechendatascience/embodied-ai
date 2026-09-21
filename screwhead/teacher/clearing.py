@@ -19,7 +19,7 @@ import numpy as np
 
 from ..geometry.frames import Z, axis_rot, pose
 from .reach import SIGMA_WEIGHT
-from ..sim.scene import _geom_half
+from ..sim.scene import geom_world_box
 
 CROWD_XY = 0.03        # m: an open footprint this close to an object, in plan, crowds it
 HAND_BAND = 0.15       # m: container parts this far above the object's top are in the hand's way
@@ -52,8 +52,8 @@ class Clearing:
         for g in range(m.ngeom):
             if int(m.geom_bodyid[g]) != a["body"] or not (m.geom_contype[g] or m.geom_conaffinity[g]):
                 continue
-            R = d.geom_xmat[g].reshape(3, 3)
-            corners = (d.geom_xpos[g] - self.scene.base) + (SIGNS * _geom_half(m, g)) @ R.T
+            c, R, half = geom_world_box(m, d, g, self.scene.base)
+            corners = c + (SIGNS * half) @ R.T
             if a["jnt_type"] == 2:                                   # slide
                 corners = corners + a["axis"] * dq
             else:                                                    # hinge, about its anchor

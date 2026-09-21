@@ -15,13 +15,17 @@ from __future__ import annotations
 import numpy as np
 
 from ..geometry.frames import EPS_DIR, EPS_NORM, Z, tool_frame, top_down
-from ..sim.scene import VERTICAL_COS, _geom_half
+from ..sim.scan import GripperScan, support_below
+from ..sim.scene import VERTICAL_COS, geom_world_box
 
 MIN_DEPTH = 0.02          # grasp at least this far below an object's top
 DEPTH_FRACTION = 0.66     # ... or this fraction of its half-height, whichever is deeper
-PALM_MARGIN = 0.010       # never deeper than the palm clearance less this
+PALM_MARGIN = 0.003       # never deeper than the palm clearance less this. It was 10 mm against a
+#                           palm measured at 40.6 mm; the palm is at 31 mm, so grasps had been
+#                           running 0.4 mm clear of it, and 10 mm on the true value made tall
+#                           grasps 10 mm shallower (orange juice slipped out mid-carry)
 FLOOR_MARGIN = 0.005      # never lower than this above the object's bottom
-PALM_DEFAULT = 0.04       # palm clearance if the gripper geoms cannot be measured
+FLOOR_CLEARANCE = 0.002   # the fingers' deepest point stays this far above the support
 HEIGHT_TOL = 0.005        # a geom is "at the jaws' height" within this
 PAD_HALF_WIDTH = 0.01     # material further than this off the jaw line misses the pads
 MERGE_GAP = 0.002         # spans closer than this along the jaw axis are one piece
@@ -38,36 +42,24 @@ def _collides_geom(m, g: int) -> bool:
 class GraspPlanner:
     def __init__(self, env, config):
         self.env, self.scene, self.k = env, env.scene, config
-        self._palm: float | None = None
+        self._gripper: GripperScan | None = None
 
     # -- the gripper, measured once -----------------------------------------------------
-    def palm_clearance(self) -> float:
-        """How far below the palm the tool point sits, measured from the model.
+    def gripper(self) -> GripperScan:
+        """The gripper's reach past the tool point and its palm clearance behind it, measured
+        once from its exact collision geometry (sim/scan.py).
 
-        The Panda's palm shell bottoms out 40 mm above the tool point and the fingertips
-        reach 5 mm below it. A grasp deeper than that under an object's top drives the palm
-        into the object: a 146 mm bottle grasped 48 mm down stalled with the palm in contact
-        and the arm 28 mm short of its target, with no finger contact at all.
-
-        Measured along the tool's own axis, not world z: in "open the top drawer and put the
-        bowl inside" the first grasp came straight after the drawer, gripper horizontal, and
-        a world-z measurement there put every grasp 70 mm above the bowl -- the jaws closed
-        on air at the grasp point, 0/20.
+        A grasp deeper than the palm clearance under an object's top drives the palm into the
+        object: a 146 mm bottle grasped 48 mm down stalled with the palm in contact and no
+        finger contact at all. A grasp lower than the reach above the support puts the fingers
+        into it: every candidate on the butter did. Measured along the tool's own axis, not
+        world z: straight after a drawer the gripper is horizontal, and a world-z measurement
+        put every bowl grasp 70 mm too high (0/20).
         """
-        if self._palm is not None:
-            return self._palm
-        m, d = self.scene.m, self.scene.d
-        s = self.env.snapshot()
-        p_tool, back = s["p_tool"] + self.scene.base, -s["R_tool"][:, 2]    # toward the palm
-        lo = np.inf
-        for g in range(m.ngeom):
-            b = m.body_id2name(int(m.geom_bodyid[g])) or ""
-            if not b.startswith("gripper0") or "finger" in b or not _collides_geom(m, g):
-                continue
-            ext = float(np.abs(back @ (d.geom_xmat[g].reshape(3, 3) @ np.diag(_geom_half(m, g)))).sum())
-            lo = min(lo, float((d.geom_xpos[g] - p_tool) @ back) - ext)
-        self._palm = PALM_DEFAULT if not np.isfinite(lo) else lo
-        return self._palm
+        if self._gripper is None:
+            s = self.env.snapshot()
+            self._gripper = GripperScan.measure(self.scene, s["R_tool"], s["p_tool"])
+        return self._gripper
 
     # -- tiers --------------------------------------------------------------------------
     def tiers(self, obj: str, box) -> list[tuple[str, list]]:
@@ -79,24 +71,28 @@ class GraspPlanner:
         """
         bid = self.scene.body_id(obj)
         half_h = float(np.abs(box.R @ np.diag(box.half)).sum(1)[2])
+        floor = support_below(self.scene, self._ray, obj) + self.gripper().reach + FLOOR_CLEARANCE
         faces, parts, sides = [], [], []
         for w, d in box.width_axes():                     # narrow face first
             if w + self.k.grip_margin <= self.k.max_grip and self.clear_body(box.world_centre, -Z, bid):
-                faces += self.at(box.world_centre, half_h, d, w, body=bid)
+                faces += self.at(box.world_centre, half_h, d, w, body=bid, floor=floor)
         for c, hw, d, w in self.parts(obj, box):
             if self.clear_body(c, -Z, bid):
-                parts += self.at(c, hw, d, w, body=bid)
+                parts += self.at(c, hw, d, w, body=bid, floor=floor)
         for g in self.part_geoms(obj, box):
             sides += self.handle_grasps(g)
         if not (faces or parts or sides):
             d0 = box.width_axes()[0][1] if box.width_axes() else np.array([1.0, 0.0, 0.0])
-            faces = self.at(box.world_centre, half_h, d0, self.k.max_grip - self.k.grip_margin)
+            faces = self.at(box.world_centre, half_h, d0, self.k.max_grip - self.k.grip_margin, floor=floor)
         return [(n, t) for n, t in (("faces", faces), ("parts", parts), ("sides", sides)) if t]
 
-    def at(self, centre: np.ndarray, half_h: float, d: np.ndarray, w: float, body: int = -1) -> list:
-        """Top-down grasps on a body of this height, jaws both ways round."""
-        depth = min(max(MIN_DEPTH, DEPTH_FRACTION * half_h), self.palm_clearance() - PALM_MARGIN)
+    def at(self, centre: np.ndarray, half_h: float, d: np.ndarray, w: float, body: int = -1,
+           floor: float = -np.inf) -> list:
+        """Top-down grasps on a body of this height, jaws both ways round, the tool point no
+        lower than `floor` (the support plus the fingers' reach)."""
+        depth = min(max(MIN_DEPTH, DEPTH_FRACTION * half_h), self.gripper().palm - PALM_MARGIN)
         p = centre + Z * max(half_h - depth, -half_h + FLOOR_MARGIN)
+        p[2] = max(float(p[2]), floor)
         h = np.array([d[0], d[1], 0.0])
         n = np.linalg.norm(h)
         if n < EPS_DIR:
@@ -132,10 +128,8 @@ class GraspPlanner:
     def _span(self, g: int, p: np.ndarray, jaw: np.ndarray) -> tuple[float, float] | None:
         """This geom's extent along the jaw axis, if it is where the pads will be."""
         m, d = self.scene.m, self.scene.d
-        Rg = d.geom_xmat[g].reshape(3, 3)
-        hl = _geom_half(m, g)
+        c, Rg, hl = geom_world_box(m, d, g, self.scene.base)
         hw = np.abs(Rg @ np.diag(hl)).sum(1)
-        c = d.geom_xpos[g] - self.scene.base
         if not (c[2] - hw[2] - HEIGHT_TOL <= p[2] <= c[2] + hw[2] + HEIGHT_TOL):
             return None
         across = np.cross(Z, jaw)
@@ -158,9 +152,7 @@ class GraspPlanner:
         one pairing of the geom's axes, found the same way for any handle.
         """
         m, d = self.scene.m, self.scene.d
-        Rg = d.geom_xmat[g].reshape(3, 3)
-        hl = _geom_half(m, g)
-        c = d.geom_xpos[g] - self.scene.base
+        c, Rg, hl = geom_world_box(m, d, g, self.scene.base)
         out, blocked = [], []
         for j in range(3):
             w = 2 * float(hl[j])
@@ -212,14 +204,13 @@ class GraspPlanner:
     def geom_part(self, g: int) -> tuple[np.ndarray, float, np.ndarray, float] | None:
         """(centre, half height, thin horizontal direction, width) of one collision geom."""
         m, d = self.scene.m, self.scene.d
-        Rg = d.geom_xmat[g].reshape(3, 3)
-        hl = _geom_half(m, g)
+        c, Rg, hl = geom_world_box(m, d, g, self.scene.base)
         hw = np.abs(Rg @ np.diag(hl)).sum(1)
         axes = sorted(((2 * float(hl[i]), Rg[:, i]) for i in range(3) if abs(Rg[2, i]) < VERTICAL_COS),
                       key=lambda a: a[0])
         if not axes:
             return None
-        return (d.geom_xpos[g] - self.scene.base, float(hw[2]), axes[0][1], axes[0][0])
+        return (c, float(hw[2]), axes[0][1], axes[0][0])
 
     def part_geoms(self, obj: str, box) -> list[int]:
         """Collision geoms near the object's top that the jaws could fit around."""
@@ -227,9 +218,9 @@ class GraspPlanner:
         top = box.p[2] + (box.R @ box.centre)[2] + float(np.abs(box.R @ np.diag(box.half)).sum(1)[2])
         out = []
         for g in self._body_geoms(self.scene.body_id(obj)):
-            hl = _geom_half(m, g)
-            hw = np.abs(d.geom_xmat[g].reshape(3, 3) @ np.diag(hl)).sum(1)
-            if float(d.geom_xpos[g][2] - self.scene.base[2] + hw[2]) < top - RIM_BAND:
+            c, Rg, hl = geom_world_box(m, d, g, self.scene.base)
+            hw = np.abs(Rg @ np.diag(hl)).sum(1)
+            if float(c[2] + hw[2]) < top - RIM_BAND:
                 continue                               # the foot ring, not the rim
             if min(2 * float(hl[i]) for i in range(3)) + self.k.grip_margin > self.k.max_grip:
                 continue

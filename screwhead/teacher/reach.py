@@ -17,7 +17,7 @@ import numpy as np
 from ..sim import contacts
 from ..geometry.frames import Z, pose
 from ..geometry.kin_np import NpChain, sigma_min, solve_ik
-from ..sim.scene import _geom_half
+from ..sim.scene import geom_box
 
 IK = dict(lam=0.02, max_iters=200, trust=0.2)
 MIN_SIGMA = 0.05          # a crossing or carry pose must be at least this well conditioned
@@ -42,6 +42,7 @@ class Reach:
         self.last_carry: dict = {}
         self._geom_mask: np.ndarray | None = None
         self._geom_half: np.ndarray | None = None
+        self._geom_centre: np.ndarray | None = None
 
     # -- primitives -----------------------------------------------------------------------
     def solve(self, Ts: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -135,9 +136,12 @@ class Reach:
         if self._geom_mask is None:
             self._geom_mask = np.array([not contacts.is_robot(contacts.body_name(m, int(m.geom_bodyid[g])))
                                         for g in range(m.ngeom)])
-            self._geom_half = np.stack([_geom_half(m, g) for g in range(m.ngeom)])
-        pos = d.geom_xpos - self.scene.base
-        tops = pos[:, 2] + (np.abs(d.geom_xmat.reshape(-1, 3, 3)[:, 2, :]) * self._geom_half).sum(1)
+            boxes = [geom_box(m, g) for g in range(m.ngeom)]
+            self._geom_centre = np.stack([b[0] for b in boxes])
+            self._geom_half = np.stack([b[1] for b in boxes])
+        xmat = d.geom_xmat.reshape(-1, 3, 3)
+        pos = d.geom_xpos - self.scene.base + np.einsum("gij,gj->gi", xmat, self._geom_centre)
+        tops = pos[:, 2] + (np.abs(xmat[:, 2, :]) * self._geom_half).sum(1)
         rad = np.linalg.norm(self._geom_half[:, :2], axis=1)
         a, b = np.asarray(p_from[:2], float), np.asarray(p_to[:2], float)
         ab = b - a

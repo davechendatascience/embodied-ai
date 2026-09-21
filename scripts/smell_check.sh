@@ -24,6 +24,8 @@ IGNORE=(
   default_mount default_gripper default_controller_config init_qpos top_offset arm_type
   # read by torch.nn / dataclass machinery or by callers outside this repo's call graph
   forward
+  # called on sim/joint_ramp.JointRamp by robosuite's JointPositionController (its interpolator API)
+  set_goal get_interpolated_goal
 )
 IGNORE_CSV=$(IFS=,; echo "${IGNORE[*]}")
 

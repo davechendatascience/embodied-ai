@@ -98,9 +98,10 @@ class Scene:
                 continue
             if not (self.m.geom_contype[g] or self.m.geom_conaffinity[g]):
                 continue                      # visual-only mesh
-            c = self.m.geom_pos[g]
             R = _quat_to_R(self.m.geom_quat[g])
-            h = np.abs(R @ np.diag(_geom_half(self.m, g))).sum(1)
+            centre, half = geom_box(self.m, g)
+            c = self.m.geom_pos[g] + R @ centre
+            h = np.abs(R @ np.diag(half)).sum(1)
             lo = np.minimum(lo, c - h); hi = np.maximum(hi, c + h)
         if not np.isfinite(lo).all():
             raise ValueError(f"{name}: no collision geoms")
@@ -182,21 +183,24 @@ def _category(instance: str) -> str:
     return "_".join(parts[:-1]) if parts[-1].isdigit() else instance
 
 
-def _geom_half(m, g) -> np.ndarray:
-    """Half-extents of a geom as a box, by geom type (mujoco geom_size packing)."""
-    s = np.asarray(m.geom_size[g], float)
-    t = int(m.geom_type[g])
-    if t == 6:                                 # box
-        return s.copy()
-    if t == 2:                                 # sphere
-        return np.full(3, s[0])
-    if t in (3, 5):                            # capsule, cylinder: radius, half-length
-        return np.array([s[0], s[0], s[1] + (s[0] if t == 3 else 0.0)])
-    if t == 4:                                 # ellipsoid
-        return s.copy()
-    if t == 7:                                 # mesh: mujoco stores the bounding radius
-        return np.full(3, s[0] if s[0] > 0 else 0.02)
-    return np.maximum(s, 1e-4)
+def geom_box(m, g) -> tuple[np.ndarray, np.ndarray]:
+    """(centre, half-extents) of a geom's bounding box in the geom's own frame.
+
+    MuJoCo's geom_aabb, exact for every type but the unbounded plane. The helper it replaces
+    agreed with it on every primitive but treated a mesh as a cube of geom_size[0] about the
+    geom's origin -- 21 to 118 mm off on each of the Panda's link and gripper meshes.
+    """
+    if int(m.geom_type[g]) == 0:               # a plane is unbounded; keep its drawn size
+        return np.zeros(3), np.maximum(np.asarray(m.geom_size[g], float), 1e-4)
+    a = np.asarray(m.geom_aabb[g], float)
+    return a[:3].copy(), a[3:].copy()
+
+
+def geom_world_box(m, d, g, base) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(centre relative to base, rotation, half-extents) of a geom's box, in the world."""
+    centre, half = geom_box(m, g)
+    Rg = d.geom_xmat[g].reshape(3, 3)
+    return d.geom_xpos[g] - base + Rg @ centre, Rg, half
 
 
 def _quat_to_R(q) -> np.ndarray:
