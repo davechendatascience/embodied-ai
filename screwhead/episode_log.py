@@ -187,7 +187,7 @@ class EpisodeLog:
         elif step.skill in ("articulate", "turn"):
             art = self.env.scene.articulation(step.region)
             w = sk.handle_width(step.region)
-            track["held"] = track["held"] or (w is not None and sk.holding(art["body"], w))
+            track["held"] = track["held"] or (w is not None and sk.holding(art["handle_geom"], w))
 
     def mechanism(self, missing: str) -> str:
         """One of five ways an episode fails, prefixed by the plan step it failed in."""

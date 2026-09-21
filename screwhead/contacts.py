@@ -75,6 +75,21 @@ def finger_sides(m, d, body: int) -> set[int]:
     return sides
 
 
+def finger_sides_on_geom(m, d, geom: int) -> set[int]:
+    """Which finger groups touch this one geom: 0 left, 1 right."""
+    sides = set()
+    for i in range(d.ncon):
+        c = d.contact[i]
+        if geom not in (c.geom1, c.geom2):
+            continue
+        name = body_name(m, int(m.geom_bodyid[c.geom2 if c.geom1 == geom else c.geom1]))
+        if any(k in name for k in LEFT_FINGER):
+            sides.add(0)
+        elif any(k in name for k in RIGHT_FINGER):
+            sides.add(1)
+    return sides
+
+
 def only_gripper(m, d, body: int) -> bool:
     """`body` touches the gripper and nothing else -- it is being carried."""
     seen = False

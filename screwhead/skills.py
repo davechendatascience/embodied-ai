@@ -55,8 +55,10 @@ class SkillConfig:
     short_max: float = 0.035       # the pads reach 35 mm back from the tool point
     past_max: float = 0.015        # the tips 15 mm beyond it
     reach_misalign: float = 0.5    # handle approach reads as "reach" above this misalignment
-    handle_open_slack: float = 0.012   # jaws have closed ON a handle when the aperture lies in
-    handle_min_frac: float = 0.5       # [frac * width, width + slack]; near zero they missed it
+    handle_open_slack: float = 0.004   # jaws have closed ON a handle when the aperture lies in
+    handle_min_frac: float = 0.5       # [frac * width, width + slack]; near zero they missed it.
+    #                                    Held, it reads 0.9-1.4 mm over the width (drawer and knob,
+    #                                    278 drive steps); the approach opening is width + 12 mm
     handle_leave_lateral: float = 0.03  # the jaws are still around a handle within this of its axis
     handle_short_max: float = 0.008    # squeeze a handle only with the tool point this close to it:
                                        # the object envelope (35 mm short) let the jaws finish
@@ -242,18 +244,19 @@ class Skills:
         return (abs(self.env.snapshot()["aperture_rate"]) < self.k.squeeze_rate
                 or contacts.only_gripper(m, d, bid))
 
-    def holding(self, body: int, width: float) -> bool:
-        """Both finger groups touch this body and the jaws have closed down to its width.
+    def holding(self, geom: int, width: float) -> bool:
+        """Both finger groups touch the handle geom and the jaws have closed down to its width.
 
         Not "the jaws have stopped moving": pulling a handle moves the jaws, so that test
         went false on the first step of every pull, the teacher re-centred on the handle,
         and squeeze and drive alternated step by step. And not "both fingers touch the
         body": replayed, the jaws had closed to 1 mm in front of the drawer's bar, fingertips
         pressed on its face, and that passed as holding. The aperture has to be stopped by
-        the handle itself.
+        the handle itself -- and with an upper bound at the approach opening (width + 12 mm)
+        and contact anywhere on the drawer's body, open jaws brushing its face also passed.
         """
         ap = self.env.snapshot()["aperture"]
-        return (len(contacts.finger_sides(self.scene.m, self.scene.d, body)) == 2
+        return (len(contacts.finger_sides_on_geom(self.scene.m, self.scene.d, geom)) == 2
                 and self.k.handle_min_frac * width <= ap <= width + self.k.handle_open_slack)
 
     # -- regions -------------------------------------------------------------------------------
@@ -452,7 +455,7 @@ class Skills:
         a = self.scene.articulation(region)
         R_h, w, app = self._handle_frame(region, a, mode)
         p_h = self.scene.d.geom_xpos[a["handle_geom"]] - self.scene.base
-        if self.holding(a["body"], w):
+        if self.holding(a["handle_geom"], w):
             return self._drive(a, mode, R, p, R_h, p_h)
         e_rot = rot_angle(R.T @ R_h)
         if self._in_envelope(p, p_h, app, k.handle_lateral, k.handle_short_max) and e_rot < k.at_rot:
