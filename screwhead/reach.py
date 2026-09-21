@@ -23,7 +23,6 @@ IK = dict(lam=0.02, max_iters=200, trust=0.2)
 MIN_SIGMA = 0.05          # a crossing or carry pose must be at least this well conditioned
 MIN_MARGIN = 0.15         # rad from every joint limit
 SIGMA_WEIGHT = 8.0        # sigma is scaled to compete with joint margin in a grasp's score
-TOUCH_COST = 0.3          # score lost for brushing something loose at a candidate pose
 CONDITION_BARS = (0.35, 0.20, 0.05)   # take the first candidate clearing the highest bar
 COLUMN_PROBES = (0.05, 0.10)          # heights above the pre-grasp checked on the way down
 TRANSIT_STEP = 0.05       # crossing heights tried, top down
@@ -94,29 +93,37 @@ class Reach:
                 Ts.append(T)
                 meta.append(i)
         th, conv, sig, margin = self.solve(Ts)
-        scores = {i: s for i in range(len(cands))
-                  if (s := self._score(cands[i], [j for j, mi in enumerate(meta) if mi == i],
-                                       th, conv, sig, margin, allow)) is not None}
-        if not scores:
+        rated = {i: r for i in range(len(cands))
+                 if (r := self._score(cands[i], [j for j, mi in enumerate(meta) if mi == i],
+                                      th, conv, sig, margin, allow)) is not None}
+        if not rated:
             if strict:
                 return None
             self.last_choice = dict(n=len(cands), feasible=0, score=None, forced=True)
             return cands[0]
+        # touch nothing if anything clean is feasible. Brushing a loose object used to cost
+        # only 0.3 of score, so a candidate early in the list that pushed the palm into the
+        # wine bottle beside the bowl beat clean ones further down -- the tool was shoved off
+        # its column at the pre-grasp and never recovered (goal 3)
+        clean = {i: sc for i, (sc, touch) in rated.items() if touch == 0}
+        scores = clean or {i: sc for i, (sc, _touch) in rated.items()}
         pick = next((ok[0] for bar in CONDITION_BARS
                      if (ok := [i for i in sorted(scores) if scores[i] >= bar])), None)
         if pick is None:
             pick = max(scores, key=scores.get)
-        self.last_choice = dict(n=len(cands), feasible=len(scores), score=float(scores[pick]), forced=False)
+        self.last_choice = dict(n=len(cands), feasible=len(rated), clean=len(clean),
+                                score=float(scores[pick]), forced=False)
         return cands[pick]
 
-    def _score(self, cand, sel, th, conv, sig, margin, allow) -> float | None:
+    def _score(self, cand, sel, th, conv, sig, margin, allow) -> tuple[float, int] | None:
+        """(conditioning score, contact grade) of a candidate, or None if unusable."""
         if not all(conv[j] for j in sel):
             return None
         ap = min(self.k.max_grip, cand[2] + self.k.grip_margin)
         touch = max(self.collides(th[j], allow, ap) for j in sel)
         if touch == 2:                                  # reachable on paper, the arm in the cabinet
             return None
-        return min(min(margin[j] for j in sel), SIGMA_WEIGHT * min(sig[j] for j in sel)) - TOUCH_COST * touch
+        return min(min(margin[j] for j in sel), SIGMA_WEIGHT * min(sig[j] for j in sel)), touch
 
     # -- how high to cross ------------------------------------------------------------------
     def transit_height(self, p_from: np.ndarray, p_to: np.ndarray, exclude: int) -> float:
