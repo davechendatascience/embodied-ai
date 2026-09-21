@@ -43,6 +43,15 @@ class Execution:
     settle_steps: int = 5
     gripper_mode: str = "target"      # "target": a target aperture; "command": robosuite's -1/0/+1
     hard_reset: bool = False
+    max_lin_acc: float = 2.0          # m/s^2 the commanded twist may change by (servo.py)
+    max_ang_acc: float = 5.0          # rad/s^2
+    joint_ramp: float = 1.0           # fraction of each control period the joint goal is ramped over
+    #                                   (joint_ramp.py); 0 steps it, as LIBERO does
+    joint_step: float = 0.1           # rad the joint goal may move per period: robosuite's output_max
+    #                                   and the servo's lead limit. LIBERO's 0.05 was sized for a stepped
+    #                                   goal; a ramped arm trails by a period more, the 0.05 clips
+    #                                   saturated, and the tool sank 52 mm below its transit plane and
+    #                                   surged at 0.64 m/s against a 0.25 m/s command
 
 
 class SimArm:
@@ -56,7 +65,7 @@ class SimArm:
 
         from .gripper_servo import GripperServo
         from ..geometry.interface import ActionSpec
-        from .libero_env import JOINT_ACTION_SCALE, build_chain, gripper_geom, register_ur5e
+        from .libero_env import build_chain, gripper_geom, register_ur5e
         from .servo import TwistServo
         register_ur5e()
         assert ex.gripper_mode in ("command", "target"), ex.gripper_mode
@@ -74,6 +83,8 @@ class SimArm:
         # set_init_state overwrites the full state afterwards anyway
         self.env = OffScreenRenderEnv(bddl_file_name=bddl, robots=["Panda"], gripper_types="PandaGripper",
                                       controller="JOINT_POSITION", hard_reset=ex.hard_reset, **kw)
+        self.joint_step = ex.joint_step      # read by robosuite when a reset rebuilds the controller
+        self.robot.controller_config.update(output_max=ex.joint_step, output_min=-ex.joint_step)
         _load = torch.load        # LIBERO pickles its init states; torch>=2.6 refuses unless told
         torch.load = lambda *a, **k: _load(*a, **{**k, "weights_only": False})
         try:
@@ -83,7 +94,9 @@ class SimArm:
         self.env.reset()
         flange, _ = gripper_geom(self.env)
         self.chain = build_chain("panda", flange)
-        self.servo = TwistServo(self.chain, self.spec, JOINT_ACTION_SCALE, iters=ex.servo_iters)
+        self.servo = TwistServo(self.chain, self.spec, ex.joint_step, iters=ex.servo_iters, max_lag=ex.joint_step)
+        self.servo.max_lin_acc, self.servo.max_ang_acc = ex.max_lin_acc, ex.max_ang_acc
+        self.joint_ramp = ex.joint_ramp
         self.t = 0
         return bddl
 
@@ -170,8 +183,11 @@ class SimArm:
 
     # -- holding still ----------------------------------------------------------------
     def _gains(self):
+        from .joint_ramp import install
         from .libero_env import set_joint_gains
         set_joint_gains(self.env, self.kp)
+        e = self.env.env
+        install(self.robot.controller, self.joint_ramp, round(e.control_timestep / e.model_timestep))
 
     def _settle(self, n: int = 3, gripper: float = -1.0):
         """Hold the arm where it is, as an ABSOLUTE joint target.
@@ -182,12 +198,11 @@ class SimArm:
         armed after a zero-delta settle integrates every later twist from a start 22 mm
         off the demonstrations'.
         """
-        from .libero_env import JOINT_ACTION_SCALE
         hold = np.asarray(self.observe()["robot0_joint_pos"])
         for _ in range(n):
             meas = np.asarray(self.observe()["robot0_joint_pos"])
             cmd = np.zeros(self.env.env.action_dim)
-            cmd[:7] = np.clip((hold - meas) / JOINT_ACTION_SCALE, -1, 1)
+            cmd[:7] = np.clip((hold - meas) / self.joint_step, -1, 1)
             cmd[-1] = gripper
             self._gains()
             self.env.step(cmd)

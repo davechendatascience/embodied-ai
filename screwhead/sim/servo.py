@@ -20,6 +20,14 @@ of the measurement so it cannot run away and snap the arm when released.
 
 A gain correction (command /= 0.82) would be tuned to this controller, this
 stiffness and this load. The reference is correct by construction.
+
+Acceleration: the reference follows each twist within one control period, so a step in
+the commanded twist is executed as a step in velocity -- 0.25 m/s from rest in one 50 ms
+period is 5 m/s^2, the measured p95 of the teacher's tool acceleration. The commanded twist
+may therefore change by at most max_lin_acc / max_ang_acc times dt from the twist executed
+last. This is execution, not policy: every policy's output is smoothed the same way, and
+the previous twist is exact where a measured joint velocity is not (J qdot overshot the
+commanded speed by 20-45%).
 """
 from __future__ import annotations
 
@@ -35,6 +43,10 @@ class TwistServo:
                  lam: float = 0.01, iters: int = 3, max_lag: float = 0.05,
                  max_pose_err: float = 0.02, limit_gain: float = 0.5):
         self.chain, self.spec, self.jas = chain, spec, joint_action_scale
+        # m/s^2 and rad/s^2 the commanded twist may change by (set by the env); None: unbounded
+        self.max_lin_acc: float | None = None
+        self.max_ang_acc: float | None = None
+        self.V_prev = np.zeros(6)                # the twist executed last (moment first)
         self.lam, self.iters, self.max_lag, self.max_pose_err = lam, iters, max_lag, max_pose_err
         self.ref: np.ndarray | None = None
         self.T_ref: np.ndarray | None = None
@@ -53,6 +65,19 @@ class TwistServo:
     def reset(self, theta_measured: np.ndarray) -> None:
         self.ref = np.asarray(theta_measured, np.float64).copy()
         self.T_ref = kin_np.fk(self._np, self.ref)[0]
+        self.V_prev = np.zeros(6)
+
+    def _limit(self, V: np.ndarray) -> np.ndarray:
+        """V moved toward the request by at most the acceleration bounds times dt."""
+        dV = V - self.V_prev
+        for sl, a_max in ((slice(0, 3), self.max_ang_acc), (slice(3, 6), self.max_lin_acc)):
+            if a_max is None:
+                continue
+            n, cap = float(np.linalg.norm(dV[sl])), a_max * self.spec.dt
+            if n > cap:
+                dV[sl] *= cap / n
+        self.V_prev = self.V_prev + dV
+        return self.V_prev.copy()
 
     def command(self, theta_measured: np.ndarray, twist: np.ndarray) -> np.ndarray:
         """twist: body twist RATE (rad/s, m/s), moment first. Returns normalised joint action.
@@ -66,7 +91,7 @@ class TwistServo:
         meas = np.asarray(theta_measured, np.float64)
         if self.ref is None:
             self.reset(meas)
-        V = np.asarray(twist, np.float64)
+        V = self._limit(np.asarray(twist, np.float64))
         self.T_ref = self.T_ref @ kin_np.exp_twist(V * self.spec.dt)
         th = self.ref[None].copy()
         for _ in range(self.iters):

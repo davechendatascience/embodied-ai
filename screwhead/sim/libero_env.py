@@ -184,7 +184,6 @@ def gripper_geom(env):
     ], float)
 
 
-JOINT_ACTION_SCALE = 0.05          # robosuite joint_position.json output_max
 
 
 def build_chain(mjcf_name: str, tool_z: float):
