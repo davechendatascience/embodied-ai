@@ -36,7 +36,7 @@ from .se3 import exp_twist, inverse, log_se3
 class TwistServo:
     def __init__(self, chain: Chain, spec: ActionSpec, joint_action_scale: float,
                  lam: float = 0.01, iters: int = 3, max_lag: float = 0.05,
-                 max_pose_err: float = 0.02):
+                 max_pose_err: float = 0.02, limit_gain: float = 0.5):
         self.chain, self.spec, self.jas = chain, spec, joint_action_scale
         self.lam, self.iters, self.max_lag, self.max_pose_err = lam, iters, max_lag, max_pose_err
         self.ref: np.ndarray | None = None
@@ -44,6 +44,10 @@ class TwistServo:
         self.reanchors = 0          # diagnostics: how often the pose reference was abandoned
         self.posture: np.ndarray | None = None   # null-space target joints, or None
         self.posture_gain = 0.0
+        self.limit_gain = limit_gain             # null-space push away from the joint limits
+        mid = chain.limits.mean(1)
+        self._mid = mid
+        self._span = (chain.limits[:, 1] - chain.limits[:, 0]).clamp(min=1e-6)
         self.limit_clamps = 0
 
     def reset(self, theta_measured: np.ndarray) -> None:
@@ -68,10 +72,15 @@ class TwistServo:
         for _ in range(self.iters):
             e = log_se3(inverse(fk(self.chain, th)) @ self.T_ref[None])      # body-frame pose error
             secondary = None
+            if self.limit_gain > 0:
+                # The 7th joint is not specified by a 6-D twist. Spend it staying off the
+                # limits: measured reaching a bowl on the cabinet, the damped solve clamped
+                # against a limit on 110 of 200 steps and the tool settled 20 mm off the
+                # pose it was asking for, never closing. Pulling the redundancy toward
+                # mid-range in the null space leaves the tool pose untouched.
+                secondary = self.limit_gain * (self._mid - th) / self._span
             if self.posture is not None and self.posture_gain > 0:
-                # the 7th joint is not specified by a 6-D twist: spend it pulling the
-                # elbow toward a well-conditioned posture, projected into the null space
-                # so the tool pose is untouched
+                # an explicit posture target overrides it (used to compare branches)
                 secondary = self.posture_gain * (torch.as_tensor(self.posture) - th)
             d = decode_twist(self.chain, th, e, dt=1.0, lam=self.lam, secondary=secondary)
             th = d.theta

@@ -100,10 +100,12 @@ class Skills:
         self.scene = env.scene
         self.k = config or SkillConfig()
         self.phase = ""
-        self._grasp_cache: dict[str, tuple[np.ndarray, np.ndarray, float, np.ndarray]] = {}
+        self._grasp_cache: dict[str, tuple] = {}
         self._palm: float | None = None
         self._handle_cache: dict[str, tuple[np.ndarray, float, np.ndarray]] = {}
         self.last_choice: dict = {}
+        self._geom_mask = None
+        self._geom_half = None
 
     # -- twist helper ---------------------------------------------------------------
     def twist_to(self, R, p, R_goal, p_goal, v_max=None, v_min=None):
@@ -140,39 +142,98 @@ class Skills:
         cached = self._grasp_cache.get(obj)
         if cached is not None and np.linalg.norm(cached[3] - centre) < 0.01:
             return cached[0], cached[1], cached[2]
-        cands = self._candidates(obj, box)
-        R_grasp, p_grasp, width, _ = self._choose(cands, via, allow=self.scene.body_id(obj))
-        self._grasp_cache[obj] = (R_grasp, p_grasp, width, centre)
+        bid = self.scene.body_id(obj)
+        chosen = None
+        for tier in self._tiers(obj, box):
+            chosen = self._choose(tier, via, allow=bid, strict=True)
+            if chosen is not None:
+                break
+        if chosen is None:                      # nothing feasible anywhere: take the best try
+            tiers = self._tiers(obj, box)
+            chosen = self._choose(sum(tiers, []), via, allow=bid)
+        R_grasp, p_grasp, width, app = chosen
+        h = self._reachable_transit(R_grasp, p_grasp - app * self.k.approach, bid)
+        self._grasp_cache[obj] = (R_grasp, p_grasp, width, centre, h, app)
         return R_grasp, p_grasp, width
 
-    def _candidates(self, obj: str, box) -> list[tuple[np.ndarray, np.ndarray, float]]:
-        """(grasp point, jaw direction, width) worth trying, best shape first.
+    def transit_for(self, obj: str) -> float:
+        """The cached crossing height for this object's grasp."""
+        c = self._grasp_cache.get(obj)
+        return float(c[4]) if c is not None else 0.0
+
+    def approach_for(self, obj: str) -> np.ndarray:
+        """The direction the tool advances on this object: down, or in from the side."""
+        c = self._grasp_cache.get(obj)
+        return c[5] if c is not None else -Z
+
+    def _reachable_transit(self, R: np.ndarray, p_g: np.ndarray, body: int) -> float:
+        """The highest crossing height the ARM can actually hold, at or below the one the
+        obstacles ask for.
+
+        Clearing the wooden cabinet means a pose 30 cm over its top, and the Panda cannot
+        hold it: the servo re-anchored 565 times in one episode with the tool touching
+        nothing at all and the jaws never closing. Converging is not enough either --
+        the highest converging crossing put the arm at sigma 0.021, nearly straight,
+        where it cannot track a twist at all. So walk the height down until the arm has
+        room to move in every direction.
+        """
+        import torch
+
+        from .ik import sigma_min, solve_ik
+        s = self.env.snapshot()
+        top = self.transit_height(s["p_tool"], p_g, body)
+        floor = float(p_g[2] + self.k.approach)
+        hs = list(np.arange(top, floor - 1e-9, -0.05)) or [floor]
+        if hs[-1] > floor:
+            hs.append(floor)
+        Ts = []
+        for h in hs:
+            T = np.eye(4); T[:3, :3] = R; T[:3, 3] = np.array([p_g[0], p_g[1], h])
+            Ts.append(T)
+        q0 = torch.tensor(np.asarray(self.env.raw["robot0_joint_pos"]), dtype=torch.float64)
+        res = solve_ik(self.env.chain, torch.tensor(np.stack(Ts)), q0[None].expand(len(Ts), -1),
+                       lam=0.02, max_iters=200, trust=0.2)
+        conv = res["converged"].numpy(); th = res["theta"].numpy()
+        sig = sigma_min(self.env.chain, res["theta"]).numpy()
+        lim = self.env.chain.limits.numpy()
+        margin = np.minimum(th - lim[:, 0], lim[:, 1] - th).min(1)
+        for i, h in enumerate(hs):
+            if (conv[i] and sig[i] > 0.05 and margin[i] > 0.15
+                    and self._collides(th[i], body) < 2):
+                return float(h)
+        return floor
+
+    def _tiers(self, obj: str, box) -> list[list[tuple[np.ndarray, np.ndarray, float, np.ndarray]]]:
+        """Candidate grasps in order of preference, each tier tried on its own.
 
         Whole-object faces when one fits. When none does -- a 107 mm bowl against 75 mm of
         jaw -- grasp a PART: LIBERO decomposes a bowl into 2.6 mm wall segments 38 mm tall,
         and a segment near the rim fits easily. That is the rim grasp the hand-written
         spatial programs did by hand, derived here from the collision geometry.
+
+        The last tier comes in from the side, because a bowl inside a drawer has the next
+        shelf over it exactly as the pull bar did, and a tier that offers nothing FEASIBLE
+        must hand over rather than force: forcing left the teacher reaching for a 107 mm
+        grasp it could never close, 0/3 with the arm re-anchoring and touching nothing.
         """
         bid = self.scene.body_id(obj)
-        out, blocked = [], []
         half_h = float(np.abs(box.R @ np.diag(box.half)).sum(1)[2])
+        faces, parts, sides = [], [], []
         for w, d in box.width_axes():                     # narrow face first
-            if w + self.k.grip_margin <= self.k.max_grip:
-                cs = self._at(box.world_centre, half_h, d, w)
-                (out if self._clear_body(box.world_centre, -Z, bid) else blocked).extend(cs)
-        if out or blocked:
-            return out or blocked
+            if w + self.k.grip_margin <= self.k.max_grip and self._clear_body(box.world_centre, -Z, bid):
+                faces += self._at(box.world_centre, half_h, d, w, body=bid)
         for c, hw, d, w in self._parts(obj, box):
-            cs = self._at(c, hw, d, w)
-            (out if self._clear_body(c, -Z, bid) else blocked).extend(cs)
-        if out or blocked:
-            return out or blocked
-        d0 = box.width_axes()[0][1] if box.width_axes() else np.array([1.0, 0.0, 0.0])
-        return self._at(box.world_centre, float(np.abs(box.R @ np.diag(box.half)).sum(1)[2]),
-                        d0, self.k.max_grip - self.k.grip_margin)
+            if self._clear_body(c, -Z, bid):
+                parts += self._at(c, hw, d, w, body=bid)
+        for g in self._part_geoms(obj, box):
+            sides += self._handle_grasps(g)
+        if not (faces or parts or sides):
+            d0 = box.width_axes()[0][1] if box.width_axes() else np.array([1.0, 0.0, 0.0])
+            faces = self._at(box.world_centre, half_h, d0, self.k.max_grip - self.k.grip_margin)
+        return [t for t in (faces, parts, sides) if t]
 
-    def _at(self, centre: np.ndarray, half_h: float, d: np.ndarray,
-            w: float) -> list[tuple[np.ndarray, np.ndarray, float, np.ndarray]]:
+    def _at(self, centre: np.ndarray, half_h: float, d: np.ndarray, w: float,
+            body: int = -1) -> list[tuple[np.ndarray, np.ndarray, float, np.ndarray]]:
         """Top-down grasps on a body of this height, jaws both ways round."""
         depth = min(max(0.02, 0.66 * half_h), self.palm_clearance() - 0.010)
         p = centre + Z * max(half_h - depth, -half_h + 0.005)
@@ -181,7 +242,53 @@ class Skills:
         if n < 1e-6:
             return []
         h = h / n
+        if body >= 0:
+            w = self._width_at(body, p, h) or w
         return [(top_down(h), p, w, -Z), (top_down(-h), p, w, -Z)]
+
+    def _width_at(self, body: int, p: np.ndarray, jaw: np.ndarray) -> float:
+        """How wide the object is WHERE THE JAWS WILL BE, not overall.
+
+        A wine bottle's bounding box is 43 mm across and its neck, which is what a grasp
+        30 mm below the top actually holds, is far narrower. Opening to the box width
+        means the jaws travel the difference before they touch anything, and swing wide
+        enough to catch the shoulder on the way down.
+
+        What the jaws span is the material CONNECTED to the grasp point, not everything
+        the ray crosses: taking the outer extent returned a bowl's full 107 mm diameter
+        for a grasp on its 2.6 mm wall -- the far wall is a separate piece, 100 mm along
+        the same axis -- and no candidate was feasible at all.
+        """
+        from .scene import _geom_half
+        m, d = self.scene.m, self.scene.d
+        spans = []
+        for g in range(m.ngeom):
+            if int(m.geom_bodyid[g]) != body or not (m.geom_contype[g] or m.geom_conaffinity[g]):
+                continue
+            Rg = d.geom_xmat[g].reshape(3, 3)
+            hl = _geom_half(m, g)
+            hw = np.abs(Rg @ np.diag(hl)).sum(1)
+            c = d.geom_xpos[g] - self.scene.base
+            if not (c[2] - hw[2] - 0.005 <= p[2] <= c[2] + hw[2] + 0.005):
+                continue                       # this geom is not at the jaws' height
+            across = np.cross(Z, jaw)          # along the jaws' line of sight
+            if abs(float((c - p) @ across)) > 0.03 + float(np.abs(across @ (Rg @ np.diag(hl))).sum()):
+                continue                       # off to one side: the jaws never meet it
+            extent = float(np.abs(jaw @ (Rg @ np.diag(hl))).sum())
+            m_c = float(c @ jaw)
+            spans.append((m_c - extent, m_c + extent))
+        if not spans:
+            return 0.0
+        at = float(p @ jaw)
+        lo = hi = None
+        for a, b in sorted(spans):                     # merge, keep the piece under the jaws
+            if lo is None or a > hi + 0.002:
+                if lo is not None and lo - 0.002 <= at <= hi + 0.002:
+                    return float(hi - lo)
+                lo, hi = a, b
+            else:
+                hi = max(hi, b)
+        return float(hi - lo) if lo is not None and lo - 0.002 <= at <= hi + 0.002 else 0.0
 
     def _handle_grasps(self, g: int) -> list[tuple[np.ndarray, np.ndarray, float, np.ndarray]]:
         """Grasps on a handle geom, from every pairing of its own axes.
@@ -326,12 +433,11 @@ class Skills:
             return None
         return (d.geom_xpos[g] - self.scene.base, float(hw[2]), axes[0][1], axes[0][0])
 
-    def _parts(self, obj: str, box) -> list[tuple[np.ndarray, float, np.ndarray, float]]:
-        """Collision geoms near the object's top that the jaws fit around, tallest first."""
+    def _part_geoms(self, obj: str, box) -> list[int]:
+        """Collision geoms near the object's top that the jaws could fit around."""
         from .scene import _geom_half
         m, d = self.scene.m, self.scene.d
         bid = self.scene.body_id(obj)
-        base = self.scene.base
         top = box.p[2] + (box.R @ box.centre)[2] + float(np.abs(box.R @ np.diag(box.half)).sum(1)[2])
         out = []
         for g in range(m.ngeom):
@@ -340,20 +446,25 @@ class Skills:
             Rg = d.geom_xmat[g].reshape(3, 3)
             hl = _geom_half(m, g)
             hw = np.abs(Rg @ np.diag(hl)).sum(1)
-            c = d.geom_xpos[g] - base
-            if c[2] + hw[2] < top - 0.02:              # the foot ring, not the rim
+            if float(d.geom_xpos[g][2] - self.scene.base[2] + hw[2]) < top - 0.02:
+                continue                               # the foot ring, not the rim
+            if min(2 * float(hl[i]) for i in range(3)) + self.k.grip_margin > self.k.max_grip:
                 continue
-            axes = [(2 * float(hl[i]), Rg[:, i]) for i in range(3) if abs(Rg[2, i]) < 0.7]
-            axes.sort(key=lambda a: a[0])
-            if not axes or axes[0][0] + self.k.grip_margin > self.k.max_grip:
-                continue
-            out.append((c, float(hw[2]), axes[0][1], axes[0][0]))
+            out.append(g)
+        return out[:16]
+
+    def _parts(self, obj: str, box) -> list[tuple[np.ndarray, float, np.ndarray, float]]:
+        """Top-down grasp sites on those geoms, the tallest wall first."""
+        out = []
+        for g in self._part_geoms(obj, box):
+            part = self._geom_part(g)
+            if part is not None and part[3] + self.k.grip_margin <= self.k.max_grip:
+                out.append(part)
         out.sort(key=lambda o: -o[1])                  # a taller wall gives the pads more to hold
         return out[:16]
 
     def _choose(self, cands: list[tuple[np.ndarray, np.ndarray, float, np.ndarray]],
-                via: np.ndarray | None,
-                allow: int = -1) -> tuple[np.ndarray, np.ndarray, float, np.ndarray]:
+                via: np.ndarray | None, allow: int = -1, strict: bool = False):
         """The first candidate grasp the arm can actually reach -- at the grasp, at the
         pre-grasp above it, and (when known) at the place pose the same grasp must reach.
 
@@ -384,14 +495,27 @@ class Skills:
             touch = max(self._collides(th[j], allow) for j in sel)
             if touch == 2:                   # reachable on paper, the arm in the cabinet
                 continue
-            scores[i] = min(min(margin[j] for j in sel), 4 * min(sig[j] for j in sel)) - 0.3 * touch
+            scores[i] = min(min(margin[j] for j in sel), 8 * min(sig[j] for j in sel)) - 0.3 * touch
         if not scores:
+            if strict:
+                return None
             self.last_choice = dict(n=len(cands), feasible=0, score=None, forced=True)
             return cands[0]
-        good = [i for i in sorted(scores) if scores[i] > 0.05]
-        pick = good[0] if good else max(scores, key=scores.get)
+        # Shape proposes in list order (narrow faces first), conditioning decides how far
+        # down that list to look. Taking the first merely-feasible candidate put the arm
+        # where the damped solve clamps on a limit and the tool settled 20 mm off; taking
+        # the best-conditioned one ignored the shape and cost four object episodes. So:
+        # the first candidate that is comfortably conditioned, then progressively less.
+        pick = None
+        for bar in (0.35, 0.20, 0.05):
+            ok = [i for i in sorted(scores) if scores[i] >= bar]
+            if ok:
+                pick = ok[0]
+                break
+        if pick is None:
+            pick = max(scores, key=scores.get)
         self.last_choice = dict(n=len(cands), feasible=len(scores), score=float(scores[pick]),
-                                forced=not good)
+                                forced=False)
         return cands[pick]
 
     def palm_clearance(self) -> float:
@@ -419,7 +543,7 @@ class Skills:
         self._palm = 0.04 if not np.isfinite(lo) else lo
         return self._palm
 
-    def at_grasp(self, p: np.ndarray, p_g: np.ndarray) -> bool:
+    def at_grasp(self, p: np.ndarray, p_g: np.ndarray, app: np.ndarray | None = None) -> bool:
         """The object is inside the jaw envelope, so squeeze.
 
         A tight ball around the grasp point is not the right test: the grasp point is
@@ -429,8 +553,10 @@ class Skills:
         The envelope is the one the fingers actually sweep: 15 mm laterally, and from
         35 mm above the grasp point (pads) to 15 mm below it (tips).
         """
+        app = -Z if app is None else app
         d = p - p_g
-        return bool(np.linalg.norm(d[:2]) < 0.015 and -0.015 < d[2] < 0.035)
+        along = float(d @ app)                         # negative once the tool is short of it
+        return bool(np.linalg.norm(d - app * along) < 0.015 and -0.035 < along < 0.015)
 
     def _grasp_width(self, box) -> float:
         widths = box.width_axes()
@@ -481,25 +607,31 @@ class Skills:
         k = self.k
         R, p = s["R_tool"], s["p_tool"]
         R_g, p_g, width = self.grasp_for(obj, via)
+        app = self.approach_for(obj)
         open_to = min(k.max_grip, width + k.grip_margin)
         if self.held(obj):
             self.phase = "lift"
-            box = self.scene.object_box(obj)
             return self.action(self.twist_to(R, p, R_g, p + Z * 0.05, v_max=0.12), 0.0)
         e_rot = rot_angle(R.T @ R_g)
-        if self.at_grasp(p, p_g) and e_rot < k.at_rot:
+        if self.at_grasp(p, p_g, app) and e_rot < k.at_rot:
             self.phase = "squeeze"
             return self.action(self.twist_to(R, p, R_g, p_g, v_min=0.0), 0.0)
         off = p - p_g
-        lateral = float(np.linalg.norm(off - Z * (off @ Z)))
+        lateral = float(np.linalg.norm(off - app * (off @ app)))
         misalign = max(lateral / k.funnel_xy, e_rot / k.funnel_rot)
-        height = k.approach * float(np.clip(misalign, 0.0, 1.0))
-        target = p_g + Z * height
-        if p[2] < p_g[2] + 0.02 and lateral > k.funnel_xy:      # below the object: rise first
-            self.phase = "rise"
-            target = np.array([p[0], p[1], p_g[2] + k.approach])
+        pre = p_g - app * k.approach                   # where the advance starts
+        if lateral > k.funnel_xy:
+            # cross ABOVE what is on the table, then come down on to the start of the
+            # advance. Aiming straight at the pre-grasp drags the tool diagonally through
+            # whatever stands in between, and left `approach` the commonest failure.
+            self.phase = "approach"
+            if float(np.linalg.norm((p - pre)[:2])) > k.funnel_xy:
+                target = np.array([pre[0], pre[1], max(self.transit_for(obj), pre[2])])
+            else:
+                target = pre
         else:
-            self.phase = "descend" if misalign < 0.5 else "approach"
+            self.phase = "descend"
+            target = p_g - app * (k.approach * float(np.clip(misalign, 0.0, 1.0)))
         return self.action(self.twist_to(R, p, R_g, target), open_to)
 
     def place(self, obj: str, region: str, s: dict, inside: bool) -> np.ndarray:
@@ -512,19 +644,13 @@ class Skills:
         k = self.k
         R, p = s["R_tool"], s["p_tool"]
         R_reg, p_reg, half = self.region_pose(region)
+        q, target_q = self.place_target(obj, region, inside)
         if not self.held(obj):
+            if self.at_place(q, target_q):     # let go of it, do not take it back
+                self.phase = "settle"
+                return self.retreat(s)
             self.phase = "regrasp"
             return self.pick(obj, s, via=self.via_for(region))
-        obj_box = self.scene.object_box(obj)
-        q = self.scene.body_pose(obj)[1]                      # the origin LIBERO tests
-        half_h = float(np.abs(obj_box.R @ np.diag(obj_box.half)).sum(1)[2])
-        centre_off = float((obj_box.world_centre - q)[2])     # origin to box centre, world z
-        if inside:
-            target_q = p_reg.copy()                           # inside the container box
-            target_q[2] = p_reg[2] + max(0.0, float(half[2]) - half_h) + k.place_clearance
-        else:
-            target_q = p_reg + R_reg @ np.array([0.0, 0.0, float(half[2])])
-            target_q[2] += half_h - centre_off + k.place_clearance
         delta = target_q - q
         over = float(np.linalg.norm(delta[:2]))
         # a fixed height from the scene: deriving it from the object's own z chases upward
@@ -612,6 +738,61 @@ class Skills:
             Rr = _axis_rot(a["axis"], dq)
             R_goal, p_goal = Rr @ R, a["anchor"] + Rr @ (p - a["anchor"])
         return self.action(self.twist_to(R, p, R_goal, p_goal, v_max=0.12, v_min=0.02), 0.0)
+
+    def transit_height(self, p_from: np.ndarray, p_to: np.ndarray, exclude: int) -> float:
+        """A height that clears everything standing between here and there.
+
+        Measured from the scene: every geom whose footprint is within 8 cm of the line,
+        minus the robot and the target itself, taken at its top. The bounding radius is
+        enough -- being generous costs a few centimetres of travel and avoids a stall.
+        """
+        from .scene import _geom_half
+        m, d = self.scene.m, self.scene.d
+        if self._geom_mask is None:
+            names = [m.body_id2name(int(m.geom_bodyid[g])) or "" for g in range(m.ngeom)]
+            self._geom_mask = np.array([not n.startswith(("robot", "gripper")) for n in names])
+            self._geom_half = np.stack([_geom_half(m, g) for g in range(m.ngeom)])
+        pos = d.geom_xpos - self.scene.base
+        xmat = d.geom_xmat.reshape(-1, 3, 3)
+        # the exact top of each geom, not its bounding radius: the table's radius is a
+        # metre, and asking to clear that sent the tool to the ceiling (0/50 everywhere)
+        tops = pos[:, 2] + (np.abs(xmat[:, 2, :]) * self._geom_half).sum(1)
+        rad = np.linalg.norm(self._geom_half[:, :2], axis=1)
+        a, b = np.asarray(p_from[:2], float), np.asarray(p_to[:2], float)
+        ab = b - a
+        L2 = float(ab @ ab)
+        t = np.clip(((pos[:, :2] - a) @ ab) / L2, 0.0, 1.0) if L2 > 1e-9 else np.zeros(len(pos))
+        near = np.linalg.norm(pos[:, :2] - (a + t[:, None] * ab), axis=1) - rad < 0.08
+        keep = near & self._geom_mask & (np.asarray(m.geom_bodyid) != exclude)
+        floor = float(p_to[2] + self.k.approach)
+        if not keep.any():
+            return floor
+        return float(min(max(np.max(tops[keep]) + 0.05, floor), p_to[2] + 0.30))
+
+    def place_target(self, obj: str, region: str, inside: bool) -> tuple[np.ndarray, np.ndarray]:
+        """(object origin now, where that origin has to end up)."""
+        R_reg, p_reg, half = self.region_pose(region)
+        box = self.scene.object_box(obj)
+        q = self.scene.body_pose(obj)[1]                      # the origin LIBERO tests
+        half_h = float(np.abs(box.R @ np.diag(box.half)).sum(1)[2])
+        centre_off = float((box.world_centre - q)[2])         # origin to box centre, world z
+        if inside:
+            target_q = p_reg.copy()
+            target_q[2] = p_reg[2] + max(0.0, float(half[2]) - half_h) + self.k.place_clearance
+        else:
+            target_q = p_reg + R_reg @ np.array([0.0, 0.0, float(half[2])])
+            target_q[2] += half_h - centre_off + self.k.place_clearance
+        return q, target_q
+
+    def at_place(self, q: np.ndarray, target_q: np.ndarray) -> bool:
+        """The object is where it was carried to, whether or not it is still in the jaws.
+
+        Without this the release chatters: the jaws open, `held` goes false, the goal is
+        not scored yet, and the teacher takes the object back -- measured on the wine
+        bottle, release and squeeze alternating every two steps until the horizon.
+        """
+        d = target_q - q
+        return bool(np.linalg.norm(d[:2]) < 0.04 and d[2] < 0.03)
 
     def retreat(self, s: dict) -> np.ndarray:
         self.phase = "retreat"

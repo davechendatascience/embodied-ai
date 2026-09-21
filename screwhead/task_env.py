@@ -73,7 +73,8 @@ class TaskEnv:
         self.env.reset()
         flange, _ = gripper_geom(self.env)
         self.chain = build_chain("panda", flange)
-        self.servo = TwistServo(self.chain, self.spec, JOINT_ACTION_SCALE, iters=servo_iters)
+        self.servo = TwistServo(self.chain, self.spec, JOINT_ACTION_SCALE, iters=servo_iters,
+                                limit_gain=float(os.environ.get("SERVO_LIMIT_GAIN", "0.5")))
         self.scene = Scene(self.env.env)
         self.settle_steps = settle_steps
         self.start = dict(xy=start_xy_m, z=start_z_m, yaw=np.deg2rad(start_yaw_deg),

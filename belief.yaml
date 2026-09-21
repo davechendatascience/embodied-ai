@@ -217,7 +217,7 @@ components:
       - {id: FM-stale-grasp-cache, observable: a grasp chosen in a previous episode is reused after reset}
     remediation: Per-task ProgramConfig (sector, pre-shape, posture, selection); per-episode grasp cache; clearance, IK, path and sigma-min checks
 
-  # code: (planned) screwhead/skills.py, tools/skill_teacher.py -- not written yet
+  # code: screwhead/skills.py, screwhead/skill_teacher.py, screwhead/scene.py, screwhead/task_spec.py, screwhead/task_env.py, tools/skill_eval.py, tools/skill_trace.py, tools/teacher_report.py, scripts/skill_sweep.sh
   - id: CMP-skill-library
     purpose: >-
       Build a task's demonstration program from its goal specification and the scene's
@@ -231,10 +231,16 @@ components:
       - {id: FM-goal-unparsed, observable: the goal predicates are read as a task id rather than as conditions to achieve}
       - {id: FM-skill-missing, observable: a suite needs a skill the library has no parameterisation for (open a drawer, turn a knob)}
       - {id: FM-sequence-brittle, observable: a multi-step task fails because a skill's exit state is not the next skill's entry state}
+      - {id: FM-never-reached-grasp, observable: "teacher_report mechanism never-reached-grasp: tool never within 30 mm of the chosen grasp, no fixture contact -- the arm cannot hold the path (singular, clamped on a limit)"}
+      - {id: FM-blocked-reaching, observable: "mechanism blocked-reaching: the arm pressed against a fixture on the way to the grasp -- the path, not the endpoint, is in collision"}
+      - {id: FM-no-grip, observable: "mechanism reached-but-no-grip: tool at the grasp and the object never held -- wrong face, wrong width, or the object pushed away"}
+      - {id: FM-not-delivered, observable: "mechanism held-but-not-delivered: object held, never within 50 mm of its target -- slipped in transit or the carry path is unreachable"}
+      - {id: FM-unscored, observable: "mechanism delivered-but-unscored: object at the target and LIBERO's predicate still false -- the placement pose is wrong for that predicate"}
     remediation: >-
       Parameterise each skill by measured geometry (gripper span from finger FK, clearance
       from the scene, grasp frames from the object); sequence from the BDDL goal predicates;
-      keep every skill a Markov feedback law so DAgger still applies
+      keep every skill a Markov feedback law so DAgger still applies. Fix by mechanism, not
+      by task: tools/teacher_report.py names the mechanism of every failed episode
 
   # code: screwhead/dino_features.py, screwhead/clip_features.py (language), tools/feature_bakeoff.py, tools/probe_localization.py
   - id: CMP-vision-encoder
@@ -743,6 +749,21 @@ contracts:
     evaluable_by: [TST-skill-teacher-unseen]
     sufficiency: {n_min: 50, max_ci_width: 0.25}
 
+  # Reliability is a different claim from "can solve it": a teacher that succeeds 75% of
+  # the time spends a quarter of every collection run on failures and keeps only the
+  # layouts it happens to be good at, which biases the demonstrations. The bar for
+  # collecting from a task is 0.9 at its lower bound. Per task, as a slice, so one
+  # broken task cannot hide inside a suite average.
+  - id: CTR-teacher-reliable
+    subject: CMP-skill-library
+    claim_type: capability
+    metrics:
+      - {id: success, unit: bool}
+    acceptance: {rule: "success == true", target_rate: 0.9}
+    compatibility_key: [task_suite, task, teacher_revision]
+    evaluable_by: [TST-teacher-reliability]
+    sufficiency: {n_min: 20, max_ci_width: 0.25}
+
   # ---- Gate 3: the premise. If the padded-vector baseline transfers fine,
   # there is nothing to fix and the project has no reason to exist.
   # Split in two: opposite expected verdicts need opposite bars, and a bar is
@@ -1099,10 +1120,21 @@ tests:
   - id: TST-skill-teacher-unseen
     layer: e2e
     targets: [CMP-skill-library, CMP-scripted-teacher]
-    run: sh -c "echo blocked - tools/skill_teacher.py not written - generate a program from the task goal and run it >&2; exit 2"
+    run: env HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/skill_eval.py --suite libero_object --episodes 5 --trials runs/evidence/skill_libero_object.trials.json
     metrics: [success]
     capture: [task, task_suite, teacher_revision]
     cost: 60.0
+
+  # The assessment: every task, 20 episodes, with the mechanism of each failure. Ingest
+  # with `tools/teacher_report.py --from runs/evidence/reliability --ingest`.
+  - id: TST-teacher-reliability
+    layer: e2e
+    targets: [CMP-skill-library]
+    run: python3 tools/teacher_report.py --suites libero_object libero_spatial libero_goal --episodes 20
+    metrics: [success]
+    capture: [task, task_suite, teacher_revision, mechanism]
+    cost: 80.0
+    timeout_s: 10800
 
   # ---- Gate 3 rollouts. Blocked, deliberately: the canonical-init rollout.py
   # cells these used to run measure a trajectory prior (see header).

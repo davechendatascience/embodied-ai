@@ -42,6 +42,11 @@ class SkillTeacher:
                 goal = self._goal_for(nxt) if nxt is not None else None
                 if goal is not None and self.satisfied(goal):
                     continue
+                if nxt is not None and nxt.skill in ("place_in", "place_on"):
+                    q, target = self.skills.place_target(nxt.obj, nxt.region,
+                                                         nxt.skill == "place_in")
+                    if self.skills.at_place(q, target):   # delivered, waiting to be scored
+                        continue
                 if not self.skills.held(step.obj):
                     return i, step
                 continue
