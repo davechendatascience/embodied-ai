@@ -85,9 +85,11 @@ axioms:
   - id: AXM-support-scannable
     domain: environment
     statement: >-
-      The surface an object will rest on at a target position is the first collision
-      geometry that downward rays over the object's footprint there meet; the teacher reads
-      that geometry from the simulator (privileged, like object poses).
+      For a region open from above, the surface an object will rest on at a target position
+      is the first collision geometry that downward rays over the object's footprint there
+      meet; the teacher reads that geometry from the simulator (privileged, like object
+      poses). Enclosed regions -- under a shelf board, inside a microwave -- are not found
+      this way: a downward ray meets the ceiling first.
     rationale: The drop-point search and clearing.py already locate open surfaces with mj_ray.
 
   - id: AXM-release-is-free-fall
@@ -148,8 +150,8 @@ axioms:
   - id: AXM-object-geometry-known
     domain: environment
     statement: >-
-      Every object's collision geometry, in its current pose, is in the simulator state (a
-      privileged input, like object poses).
+      Every object's and fixture's collision geometry, in its current pose, is in the
+      simulator state (a privileged input, like object poses).
     rationale: Scene.object_box and the grasp planner already read MuJoCo geoms.
 
   - id: AXM-bddl-states-goals-not-methods
@@ -170,6 +172,14 @@ axioms:
     rationale: >-
       The user's decision (2026-09-21) -- per-category facts, not per-task scripts, so the
       teacher stays generic across suites; tests/test_affordances.py keeps the table complete.
+
+  - id: AXM-libero-joint-bands
+    domain: environment
+    statement: >-
+      LIBERO's Open and Close predicates for one joint leave a band where neither holds:
+      drawers count open below -0.14 and closed above 0.0; the microwave door open below
+      -1.3 rad and closed above -0.005.
+    rationale: Read from libero/envs/objects/articulated_objects.py (WhiteCabinet, Microwave).
 
   - id: AXM-reproducible-measurement
     domain: epistemic
@@ -208,9 +218,10 @@ definitions:
   - id: DEF-plan
     term: Plan
     meaning: >-
-      The ordered steps (skill, object, region, mode, and the predicate that ends the step)
-      that achieve a task's goal conjuncts, re-derived from the goal set, the affordance table
-      and the current state at every control step.
+      The task's goal conjuncts, ordered by the relations between them, each expanded into
+      its method's steps (skill, object, region, mode, and the state predicate that ends the
+      step), re-derived from the goal set, the affordance table and the current state at
+      every control step.
 
 lemmas:
   - id: LMA-whole-path-reachable
@@ -309,42 +320,47 @@ lemmas:
       known only once held.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
-  - id: LMA-plan-from-goals-and-affordances
+  - id: LMA-order-from-goal-relations
     statement: >-
-      The skill for each goal conjunct is fixed by the conjunct and the affordances of the
-      categories it names, with no per-task code: In/On of an object moved by pick is a pick
-      then a place that rests it as its entry says for that support; of an object moved by
-      push, a push to the region; Open/Close/TurnOn/TurnOff drive the joint the fixture's
-      entry declares; filling a container fixture that has a joint is preceded by opening it.
-    premises: [AXM-bddl-states-goals-not-methods, AXM-category-affordances-declared, AXM-libero-scores-final-state]
+      Goal conjuncts are ordered by relations the goal set itself states, not by category: a
+      Close(C) after every conjunct that puts something in or on C; an object that is both
+      moved and a support (On(x, o) with o moved) placed before whatever goes on it. With
+      those edges, and every achieved conjunct protected -- one that turns false again (an
+      object knocked out of its container) is current again -- the conjuncts are reached.
+    premises: [AXM-bddl-states-goals-not-methods, AXM-libero-scores-final-state]
     derivation_rule: >-
-      The bddl gives the conjunct and the categories; the table gives, per category, the
-      method; LIBERO scores only the final state, so any order consistent with the declared
-      preconditions is admissible.
+      Final-state scoring leaves order free only among conjuncts that do not interfere; the
+      two interferences the 130 bddl files contain (fill vs close of one container, stacking
+      on a support that is itself moved) are read off the goal set and ordered.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
-  - id: LMA-config-holds-no-geometry
+  - id: LMA-method-from-table-preconditions-from-scene
     statement: >-
-      Nothing in the affordance table is a pose, a height, a distance or a threshold: grasp
-      poses, reachability, clearance, crowding and touchdown depend on the scene of each
-      episode, and the skills compute them from the state. The table chooses the skill and
-      its mode; the skill does the geometry.
-    premises: [AXM-category-affordances-declared, AXM-support-scannable, AXM-servo-tracks-reachable-poses]
+      Each conjunct's method -- pick then place with the category's resting pose for that
+      support, push, or drive the fixture's declared joint -- comes from the affordance table;
+      the scene may add precondition steps of declared kinds only (open the container if it
+      cannot admit the object; move a crowded object clear), each decided by a geometric test
+      on the state. The table holds category facts, including object-frame ones (a bottle
+      rests lying in a rack cradle); it holds no world-frame numbers.
+    premises: [AXM-category-affordances-declared, AXM-object-geometry-known, AXM-support-scannable]
     derivation_rule: >-
-      A value fixed per category cannot follow a scene that changes per episode; anything the
-      state determines is read from the state (AXM-support-scannable, AXM-servo-tracks-reachable-poses).
+      Category facts are the same in every scene and belong in the table; whether a scene
+      needs a precondition depends on where things stand, which the state gives
+      (AXM-object-geometry-known); a world-frame number fixed per category could not follow it.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
-  - id: LMA-plan-stays-a-label
+  - id: LMA-transient-steps-serve-a-goal
     statement: >-
-      A plan re-derived each step from the goal set, the table and the state makes the
-      current step a function of the state: an object dropped mid-carry makes its move the
-      current step again, and a precondition step ends by its own predicate (a joint past its
-      open threshold), never by having been issued.
-    premises: [AXM-dagger-needs-markov-labels, DEF-plan]
+      A transient step (pick, move clear, open to fill) is current only while the conjunct it
+      serves is false and every earlier conjunct holds, and it ends on a state predicate
+      evaluated without per-episode caches (held; no longer crowded; open enough to admit the
+      object). So no step undoes an achieved conjunct: closing a filled drawer cannot
+      re-trigger its open-to-fill step, because the fill already holds -- though the drawer
+      passes through LIBERO's band where neither Open nor Close holds.
+    premises: [AXM-dagger-needs-markov-labels, AXM-libero-joint-bands, DEF-plan, LMA-order-from-goal-relations]
     derivation_rule: >-
-      Each step carries the predicate that ends it and is current while that predicate is
-      false and every earlier one holds, so the label depends on the state alone.
+      A step keyed to its conjunct is dead once the conjunct holds, whatever its own
+      predicate reads; end tests on the state keep the current step a function of the state.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: LMA-smooth-in-execution
@@ -507,16 +523,19 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      task_spec builds every plan from the bddl goals and affordances.yaml alone -- no
-      per-task or per-category branches in code: the skill of each step from moved_by and
-      joints, the place's resting pose from rests, open-before-fill and move-out-of-the-way as
-      declared preconditions, and every step, preconditions included, carrying the predicate
-      that ends it. SkillTeacher only executes the current step and holds no planning logic.
-    premises: [LMA-plan-from-goals-and-affordances, LMA-config-holds-no-geometry, LMA-plan-stays-a-label]
+      task_spec builds the ordered goal graph and each conjunct's method from the bddl and
+      affordances.yaml, with no per-task or per-category branches in code; the executor takes
+      the first unmet conjunct in graph order and, within it, the first step whose state
+      predicate is false; end tests read the state, not the drop or clearing caches; joint
+      thresholds come from the fixture's declaration, not a table in code keyed by category
+      name. Out of scope, named: enclosed regions (under a shelf, inside a microwave) and
+      packing two objects into one region.
+    premises: [LMA-order-from-goal-relations, LMA-method-from-table-preconditions-from-scene,
+               LMA-transient-steps-serve-a-goal]
     derivation_rule: >-
-      (to be implemented) evidence: CTR-teacher-reliable -- first unchanged on the 600
-      episodes of libero_object/spatial/goal (a refactor), then the push and lay-down skills
-      the table selects for libero_goal 5 and 9.
+      (to be implemented) evidence: CTR-teacher-reliable -- first the 600-episode reference
+      of libero_object/spatial/goal at bcf19e9 (523/600) reproduced, then libero_10's
+      put-and-close tasks, then the push and lay-down skills the table selects for goal 5 and 9.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 policies:
