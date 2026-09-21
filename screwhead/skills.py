@@ -59,18 +59,36 @@ def rot_angle(R: np.ndarray) -> float:
     return float(np.arccos(np.clip((np.trace(R) - 1) / 2, -1.0, 1.0)))
 
 
-def top_down(yaw_dir: np.ndarray) -> np.ndarray:
-    """Tool frame pointing down with the jaw axis along `yaw_dir` (a world direction).
+def _axis_rot(axis: np.ndarray, angle: float) -> np.ndarray:
+    a = np.asarray(axis, float)
+    a = a / (np.linalg.norm(a) + 1e-12)
+    K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
+    return np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * K @ K
 
-    The Panda gripper closes along its own y axis and looks along +z of the tool frame,
-    which points down here, so: z_tool = -Z, y_tool = the jaw direction, x = y x z.
+
+def tool_frame(jaw_dir: np.ndarray, approach: np.ndarray) -> np.ndarray:
+    """Tool frame that closes along `jaw_dir` and advances along `approach`.
+
+    The Panda gripper closes along its own y axis and looks along +z, so z_tool is the
+    approach direction and y_tool the jaw axis, squared against it.
     """
-    y = np.asarray(yaw_dir, float); y = y - Z * (y @ Z)
+    z = np.asarray(approach, float)
+    z = z / (np.linalg.norm(z) + 1e-12)
+    y = np.asarray(jaw_dir, float)
+    y = y - z * (y @ z)
     n = np.linalg.norm(y)
-    y = y / n if n > 1e-6 else np.array([1.0, 0.0, 0.0])
-    z = -Z
-    x = np.cross(y, z)
-    return np.column_stack([x, y, z])
+    if n < 1e-6:                                  # jaw parallel to the approach: any square axis
+        y = np.cross(z, Z if abs(z @ Z) < 0.9 else np.array([1.0, 0.0, 0.0]))
+        n = np.linalg.norm(y)
+    y = y / n
+    return np.column_stack([np.cross(y, z), y, z])
+
+
+def top_down(yaw_dir: np.ndarray) -> np.ndarray:
+    """The common case: straight down on to an object lying on a support."""
+    y = np.asarray(yaw_dir, float)
+    y = y - Z * (y @ Z)
+    return tool_frame(y if np.linalg.norm(y) > 1e-6 else np.array([1.0, 0.0, 0.0]), -Z)
 
 
 class Skills:
@@ -84,6 +102,8 @@ class Skills:
         self.phase = ""
         self._grasp_cache: dict[str, tuple[np.ndarray, np.ndarray, float, np.ndarray]] = {}
         self._palm: float | None = None
+        self._handle_cache: dict[str, tuple[np.ndarray, float, np.ndarray]] = {}
+        self.last_choice: dict = {}
 
     # -- twist helper ---------------------------------------------------------------
     def twist_to(self, R, p, R_goal, p_goal, v_max=None, v_min=None):
@@ -121,7 +141,7 @@ class Skills:
         if cached is not None and np.linalg.norm(cached[3] - centre) < 0.01:
             return cached[0], cached[1], cached[2]
         cands = self._candidates(obj, box)
-        R_grasp, p_grasp, width = self._choose(cands, via)
+        R_grasp, p_grasp, width, _ = self._choose(cands, via, allow=self.scene.body_id(obj))
         self._grasp_cache[obj] = (R_grasp, p_grasp, width, centre)
         return R_grasp, p_grasp, width
 
@@ -133,24 +153,27 @@ class Skills:
         and a segment near the rim fits easily. That is the rim grasp the hand-written
         spatial programs did by hand, derived here from the collision geometry.
         """
-        out = []
+        bid = self.scene.body_id(obj)
+        out, blocked = [], []
+        half_h = float(np.abs(box.R @ np.diag(box.half)).sum(1)[2])
         for w, d in box.width_axes():                     # narrow face first
             if w + self.k.grip_margin <= self.k.max_grip:
-                out += self._at(box.world_centre, float(np.abs(box.R @ np.diag(box.half)).sum(1)[2]), d, w)
-        if out:
-            return out
-        parts = self._parts(obj, box)
-        for c, hw, d, w in parts:
-            out += self._at(c, hw, d, w)
-        if out:
-            return out
+                cs = self._at(box.world_centre, half_h, d, w)
+                (out if self._clear_body(box.world_centre, -Z, bid) else blocked).extend(cs)
+        if out or blocked:
+            return out or blocked
+        for c, hw, d, w in self._parts(obj, box):
+            cs = self._at(c, hw, d, w)
+            (out if self._clear_body(c, -Z, bid) else blocked).extend(cs)
+        if out or blocked:
+            return out or blocked
         d0 = box.width_axes()[0][1] if box.width_axes() else np.array([1.0, 0.0, 0.0])
         return self._at(box.world_centre, float(np.abs(box.R @ np.diag(box.half)).sum(1)[2]),
                         d0, self.k.max_grip - self.k.grip_margin)
 
     def _at(self, centre: np.ndarray, half_h: float, d: np.ndarray,
-            w: float) -> list[tuple[np.ndarray, np.ndarray, float]]:
-        """The grasp point for a body of this height, offered with the jaws both ways round."""
+            w: float) -> list[tuple[np.ndarray, np.ndarray, float, np.ndarray]]:
+        """Top-down grasps on a body of this height, jaws both ways round."""
         depth = min(max(0.02, 0.66 * half_h), self.palm_clearance() - 0.010)
         p = centre + Z * max(half_h - depth, -half_h + 0.005)
         h = np.array([d[0], d[1], 0.0])
@@ -158,7 +181,150 @@ class Skills:
         if n < 1e-6:
             return []
         h = h / n
-        return [(p, h, w), (p, -h, w)]
+        return [(top_down(h), p, w, -Z), (top_down(-h), p, w, -Z)]
+
+    def _handle_grasps(self, g: int) -> list[tuple[np.ndarray, np.ndarray, float, np.ndarray]]:
+        """Grasps on a handle geom, from every pairing of its own axes.
+
+        A handle is not approached from above: the cabinet's pull bar has the next drawer
+        directly over it, and a top-down funnel never converged (the teacher sat in
+        `reach` for 500 steps). The bar is 15 x 16 mm across and 89 mm long, so the jaws
+        take it from the front and close vertically -- one pairing of the geom's axes,
+        found the same way for any handle.
+        """
+        from .scene import _geom_half
+        m, d = self.scene.m, self.scene.d
+        Rg = d.geom_xmat[g].reshape(3, 3)
+        hl = _geom_half(m, g)
+        c = d.geom_xpos[g] - self.scene.base
+        out, blocked = [], []
+        for j in range(3):
+            w = 2 * float(hl[j])
+            if w + self.k.grip_margin > self.k.max_grip:
+                continue
+            for i in range(3):
+                if i == j:
+                    continue
+                for sgn in (1.0, -1.0):
+                    app = sgn * Rg[:, i]
+                    if app[2] > 0.3:               # nothing is approached from underneath
+                        continue
+                    cands = [(tool_frame(jaw, app), c, w, app) for jaw in (Rg[:, j], -Rg[:, j])]
+                    (out if self._clear_geom(c, app, g) else blocked).extend(cands)
+        return out or blocked
+
+    def _collides(self, theta: np.ndarray, allow: int = -1) -> int:
+        """Would the ARM be in something at this joint configuration?
+
+        IK converging says nothing about the rest of the arm: reaching a bowl beside the
+        wooden cabinet, every candidate converged with 0.75 rad of joint margin and the
+        forearm sat in `wooden_cabinet_1_base` -- the servo re-anchored 89 times in 200
+        steps and the tool never closed the last 90 mm. The simulator answers exactly, so
+        put the configuration in, look, and put the state back.
+        """
+        sim = self.env.env.sim
+        idx = self.env.env.env.robots[0]._ref_joint_pos_indexes
+        qpos, qvel = sim.data.qpos.copy(), sim.data.qvel.copy()
+        sim.data.qpos[idx] = np.asarray(theta, float)
+        sim.forward()
+        hit = self._touching_other(allow)
+        sim.data.qpos[:] = qpos
+        sim.data.qvel[:] = qvel
+        sim.forward()
+        return hit
+
+    def _touching_other(self, allow: int) -> int:
+        """0 clear, 1 touching something loose, 2 touching something bolted down.
+
+        Touching the target is the point of a grasp, so the target does not count. Nor
+        should a plate: vetoing any contact left the drawer handle with no candidate at
+        all and the teacher fell back to a blocked top-down approach (0/5, having opened
+        the drawer in 78 steps before the screen). A fixture is different in kind -- the
+        forearm in `wooden_cabinet_1_base` stopped the arm dead, 89 re-anchors in 200
+        steps -- so a fixture vetoes and a loose object only costs.
+        """
+        m, d = self.scene.m, self.scene.d
+        worst = 0
+        for i in range(d.ncon):
+            c = d.contact[i]
+            if c.dist >= 0:
+                continue
+            b1, b2 = int(m.geom_bodyid[c.geom1]), int(m.geom_bodyid[c.geom2])
+            n1 = m.body_id2name(b1) or ""
+            n2 = m.body_id2name(b2) or ""
+            r1 = n1.startswith(("robot", "gripper"))
+            r2 = n2.startswith(("robot", "gripper"))
+            if r1 == r2:
+                continue
+            other = b2 if r1 else b1
+            if other == allow or int(m.body_parentid[other]) == allow:
+                continue
+            worst = max(worst, 1 if self._movable(other) else 2)
+        return worst
+
+    def _movable(self, body: int) -> bool:
+        """A body the arm can push out of the way: one that hangs on a free joint."""
+        m = self.scene.m
+        n = int(m.body_jntnum[body])
+        adr = int(m.body_jntadr[body])
+        return any(int(m.jnt_type[adr + i]) == 0 for i in range(n))
+
+    def _clear_geom(self, p: np.ndarray, app: np.ndarray, geom: int) -> bool:
+        """Can the tool come in along `app` and reach this geom, or is something in the way?
+
+        IK does not know about the cabinet. Straight down on to the drawer's pull bar is a
+        perfectly reachable pose, and the shelf 38 mm above the bar makes it impossible --
+        the teacher hovered there for 300 steps. A ray down the approach answers it.
+        """
+        import mujoco
+        m, d = self.scene.m, self.scene.d
+        mm = m._model if hasattr(m, "_model") else m
+        dd = d._data if hasattr(d, "_data") else d
+        v = np.asarray(app, float)
+        v = v / (np.linalg.norm(v) + 1e-12)
+        start = p + self.scene.base - v * self.k.approach
+        gid = np.zeros(1, np.int32)
+        dist = float(mujoco.mj_ray(mm, dd, start, v, None, 1, -1, gid))
+        hit = int(gid[0])
+        if hit < 0 or dist < 0:
+            return False                       # not even the handle: the ray missed it
+        if hit == geom:
+            return True
+        # another geom of the same moving part is fine if it is where the handle is
+        return (int(m.geom_bodyid[hit]) == int(m.geom_bodyid[geom])
+                and dist > self.k.approach - 0.03)
+
+    def _clear_body(self, p: np.ndarray, app: np.ndarray, body: int) -> bool:
+        """The tool can come down this line and meet the object, not something else.
+
+        The same blindness as the drawer shelf, on the table: a bowl beside the cookie box
+        has rim segments the arm cannot come down on to, and choosing one of those left
+        the teacher in `approach` for the whole episode.
+        """
+        import mujoco
+        m, d = self.scene.m, self.scene.d
+        mm = m._model if hasattr(m, "_model") else m
+        dd = d._data if hasattr(d, "_data") else d
+        v = np.asarray(app, float)
+        v = v / (np.linalg.norm(v) + 1e-12)
+        gid = np.zeros(1, np.int32)
+        dist = float(mujoco.mj_ray(mm, dd, p + self.scene.base - v * self.k.approach, v,
+                                   None, 1, -1, gid))
+        hit = int(gid[0])
+        return hit >= 0 and dist >= 0 and int(m.geom_bodyid[hit]) == body
+
+    def _geom_part(self, g: int) -> tuple[np.ndarray, float, np.ndarray, float] | None:
+        """(centre, half height, thin horizontal direction, width) of one collision geom."""
+        from .scene import _geom_half
+        m, d = self.scene.m, self.scene.d
+        Rg = d.geom_xmat[g].reshape(3, 3)
+        hl = _geom_half(m, g)
+        hw = np.abs(Rg @ np.diag(hl)).sum(1)
+        axes = [(2 * float(hl[i]), Rg[:, i]) for i in range(3) if abs(Rg[2, i]) < 0.7]
+        axes.sort(key=lambda a: a[0])
+        if not axes:
+            return None
+        return (d.geom_xpos[g] - self.scene.base, float(hw[2]), axes[0][1], axes[0][0])
 
     def _parts(self, obj: str, box) -> list[tuple[np.ndarray, float, np.ndarray, float]]:
         """Collision geoms near the object's top that the jaws fit around, tallest first."""
@@ -185,8 +351,9 @@ class Skills:
         out.sort(key=lambda o: -o[1])                  # a taller wall gives the pads more to hold
         return out[:16]
 
-    def _choose(self, cands: list[tuple[np.ndarray, np.ndarray, float]],
-                via: np.ndarray | None) -> tuple[np.ndarray, np.ndarray, float]:
+    def _choose(self, cands: list[tuple[np.ndarray, np.ndarray, float, np.ndarray]],
+                via: np.ndarray | None,
+                allow: int = -1) -> tuple[np.ndarray, np.ndarray, float, np.ndarray]:
         """The first candidate grasp the arm can actually reach -- at the grasp, at the
         pre-grasp above it, and (when known) at the place pose the same grasp must reach.
 
@@ -200,9 +367,8 @@ class Skills:
         q0 = torch.tensor(np.asarray(self.env.raw["robot0_joint_pos"]), dtype=torch.float64)
         lim = self.env.chain.limits.numpy()
         Ts, meta = [], []
-        for i, (p_g, d, _w) in enumerate(cands):
-            R = top_down(d)
-            for pt in [p_g, p_g + Z * self.k.approach] + ([via] if via is not None else []):
+        for i, (R, p_g, _w, app) in enumerate(cands):
+            for pt in [p_g, p_g - app * self.k.approach] + ([via] if via is not None else []):
                 T = np.eye(4); T[:3, :3] = R; T[:3, 3] = pt
                 Ts.append(T); meta.append(i)
         res = solve_ik(self.env.chain, torch.tensor(np.stack(Ts)), q0[None].expand(len(Ts), -1),
@@ -213,14 +379,20 @@ class Skills:
         scores = {}
         for i in range(len(cands)):
             sel = [j for j, mi in enumerate(meta) if mi == i]
-            if all(conv[j] for j in sel):
-                scores[i] = min(min(margin[j] for j in sel), 4 * min(sig[j] for j in sel))
+            if not all(conv[j] for j in sel):
+                continue
+            touch = max(self._collides(th[j], allow) for j in sel)
+            if touch == 2:                   # reachable on paper, the arm in the cabinet
+                continue
+            scores[i] = min(min(margin[j] for j in sel), 4 * min(sig[j] for j in sel)) - 0.3 * touch
         if not scores:
-            p_g, d, w = cands[0]
-            return top_down(d), p_g, w
+            self.last_choice = dict(n=len(cands), feasible=0, score=None, forced=True)
+            return cands[0]
         good = [i for i in sorted(scores) if scores[i] > 0.05]
-        p_g, d, w = cands[good[0] if good else max(scores, key=scores.get)]
-        return top_down(d), p_g, w
+        pick = good[0] if good else max(scores, key=scores.get)
+        self.last_choice = dict(n=len(cands), feasible=len(scores), score=float(scores[pick]),
+                                forced=not good)
+        return cands[pick]
 
     def palm_clearance(self) -> float:
         """How far below the palm the tool point sits, measured from the model.
@@ -370,6 +542,76 @@ class Skills:
             return self.action(self.twist_to(R, p, R_carry, p + Z * delta[2], v_max=0.10, v_min=0.03), 0.0)
         self.phase = "release"
         return self.action(np.zeros(6), A_OPEN)
+
+    # -- articulated fixtures --------------------------------------------------------
+    def holding(self, body: int) -> bool:
+        """Both finger groups touch this body and the jaws have stopped closing."""
+        m, d = self.scene.m, self.scene.d
+        sides = set()
+        for i in range(d.ncon):
+            c = d.contact[i]
+            b1, b2 = int(m.geom_bodyid[c.geom1]), int(m.geom_bodyid[c.geom2])
+            other = b2 if b1 == body else (b1 if b2 == body else None)
+            if other is None:
+                continue
+            name = m.body_id2name(other) or ""
+            if "leftfinger" in name or "finger_joint1" in name:
+                sides.add(0)
+            elif "rightfinger" in name or "finger_joint2" in name:
+                sides.add(1)
+        return len(sides) == 2 and abs(self.env.snapshot()["aperture_rate"]) < self.k.squeeze_rate
+
+    def articulate(self, region: str, mode: str, s: dict) -> np.ndarray:
+        """Drive a hinge or a slide to its goal by taking the handle with it.
+
+        The drawer and the stove knob are the same skill: LIBERO's fixtures move one joint,
+        the handle is the collision geom furthest along the opening direction, and the tool
+        pose that opens the fixture is the current tool pose carried by that joint's own
+        motion -- a translation along the slide axis, or a rotation about the hinge anchor.
+        Nothing here is per-fixture except the thresholds LIBERO's own predicates use.
+        """
+        k = self.k
+        R, p = s["R_tool"], s["p_tool"]
+        a = self.scene.articulation(region)
+        th, sign = a["thresholds"], a["sign"]
+        q_goal = {"open": th.get("open"), "close": th.get("close"),
+                  "on": th.get("on"), "off": th.get("off")}[mode]
+        q_goal = float(q_goal) + sign * (0.03 if mode in ("open", "on") else -0.01)
+        dq = q_goal - a["qpos"]
+        # choose the frame ONCE: re-solving every step let the winner flip between
+        # candidates, the wrist target jumped, and the jaws cycled 15-35 mm without ever
+        # closing on the bar. The handle itself moves as the fixture opens, so the POINT
+        # is re-read each step and only the frame is held.
+        held_frame = self._handle_cache.get(region)
+        if held_frame is None:
+            cands = self._handle_grasps(a["handle_geom"])
+            if not cands:
+                raise NotImplementedError(f"{region}: no graspable handle geom")
+            R_h, _p, w, app = self._choose(cands, None, allow=a["body"])
+            self._handle_cache[region] = (R_h, w, app)
+        else:
+            R_h, w, app = held_frame
+        p_h = self.scene.d.geom_xpos[a["handle_geom"]] - self.scene.base
+        if not self.holding(a["body"]):
+            open_to = min(k.max_grip, w + k.grip_margin)
+            off = p - p_h
+            along = float(off @ (-app))                    # how far short of the handle
+            lateral = float(np.linalg.norm(off + app * along))
+            e_rot = rot_angle(R.T @ R_h)
+            if lateral < 0.012 and -0.015 < along < 0.035 and e_rot < k.at_rot:
+                self.phase = "squeeze"
+                return self.action(self.twist_to(R, p, R_h, p_h, v_min=0.0), 0.0)
+            misalign = max(lateral / k.funnel_xy, e_rot / k.funnel_rot)
+            target = p_h - app * (k.approach * float(np.clip(misalign, 0.0, 1.0)))
+            self.phase = "reach" if misalign >= 0.5 else "descend"
+            return self.action(self.twist_to(R, p, R_h, target), open_to)
+        self.phase = "drive"
+        if a["jnt_type"] == 2:                                     # slide: translate
+            R_goal, p_goal = R, p + a["axis"] * dq
+        else:                                                      # hinge: turn about the anchor
+            Rr = _axis_rot(a["axis"], dq)
+            R_goal, p_goal = Rr @ R, a["anchor"] + Rr @ (p - a["anchor"])
+        return self.action(self.twist_to(R, p, R_goal, p_goal, v_max=0.12, v_min=0.02), 0.0)
 
     def retreat(self, s: dict) -> np.ndarray:
         self.phase = "retreat"
