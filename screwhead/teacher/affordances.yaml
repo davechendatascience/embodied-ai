@@ -1,0 +1,229 @@
+# Object-category affordances for the generic skill teacher.
+#
+# The bddl says WHAT must hold at the end (In, On, Open, TurnOn) and which objects and
+# fixtures there are; it does not say how a category is moved, where it is held, or how it
+# rests. Those facts belong to the category -- a plate is pushed in every task that moves
+# one -- so they are declared here once and reused by every task that names it, instead of
+# per-task scripts. Categories are the bddl's (task_spec.TaskSpec.objects / .fixtures).
+#
+# Every value says what backs it:
+#   measured  -- a number from the teacher's own runs (reliability run at 4edb9d0+smoothing,
+#                600 episodes, 20 per task; grasp logs from tools/skill_eval.py)
+#   declared  -- a fact read from the task or the asset, with where
+#   open      -- not known yet; the teacher must not rely on it
+#
+# Not yet read by the teacher. tests/test_affordances.py keeps it covering every category
+# the three suites name.
+#
+# Fields
+#   kind       object | fixture
+#   moved_by   pick | push | none            (none: never moved by a goal in these suites)
+#   held_by    faces | sides | rim | body | handle | none   (the grasp planner's tier names)
+#   rests      upright | lying | any         (how it is set down; per target where it differs)
+#   supports   surface | container | none    (whether things are set on / in it)
+#   joints     fixtures only: what moves and how
+
+categories:
+  # -- moved objects ----------------------------------------------------------------------
+  akita_black_bowl:
+    kind: object
+    moved_by: pick
+    held_by: rim
+    rests: upright
+    supports: container          # On(cream_cheese, bowl) in libero_goal
+    evidence:
+      measured: >-
+        rim ("parts") pinch in 265 of 280 grasps, 18 mm across the wall; 247 of 280 episodes
+        succeeded, and the failures are mostly the bowl slipping out of the rim pinch during
+        lift or carry (24-27 drops in 20 TST-teacher-motion episodes, unchanged by smoothing)
+    open: which rim pinch holds under load -- the drops are not explained yet
+
+  plate:
+    kind: object
+    moved_by: push
+    held_by: none
+    rests: upright
+    supports: surface            # On(bowl, plate) in libero_spatial
+    evidence:
+      declared: >-
+        libero_goal 5 "push the plate to the front of the stove"; the plate is 137 mm across,
+        beyond the gripper's 75 mm opening
+      measured: >-
+        picked instead: forced grasp in 14 of 20 episodes, 2 of 20 succeeded
+    open: the push itself (contact point, direction, how far) is not a skill yet
+
+  butter:
+    kind: object
+    moved_by: pick
+    held_by: faces
+    rests: upright
+    supports: none
+    evidence:
+      measured: >-
+        no feasible grasp candidate in 20 of 20 episodes (always forced), 39.5 mm across;
+        15 of 20 succeeded on the forced grasp (20 of 20 before execution smoothing)
+    open: why the candidates are infeasible -- a flat box on the floor; the fingertips may meet the floor
+
+  cream_cheese:
+    kind: object
+    moved_by: pick
+    held_by: faces
+    rests: upright
+    supports: none
+    evidence:
+      measured: >-
+        no feasible candidate in 39 of 40 episodes (forced), 42.7 mm across; 39 of 40 succeeded
+    open: same as butter -- a flat box whose candidates all fail the screen
+
+  chocolate_pudding:
+    kind: object
+    moved_by: pick
+    held_by: sides
+    rests: upright
+    supports: none
+    evidence:
+      measured: side pinch in 20 of 20, 46.3 mm, one feasible candidate typically; 20 of 20
+
+  alphabet_soup:
+    kind: object
+    moved_by: pick
+    held_by: faces
+    rests: upright
+    supports: none
+    evidence:
+      measured: face pinch 20 of 20, 62.5 mm; 20 of 20
+
+  tomato_sauce:
+    kind: object
+    moved_by: pick
+    held_by: faces
+    rests: upright
+    supports: none
+    evidence:
+      measured: face pinch 20 of 20, 61.8 mm; 20 of 20
+
+  ketchup:
+    kind: object
+    moved_by: pick
+    held_by: faces
+    rests: upright
+    supports: none
+    evidence:
+      measured: face pinch 20 of 20, 36.3 mm; 20 of 20
+
+  bbq_sauce:
+    kind: object
+    moved_by: pick
+    held_by: faces
+    rests: upright
+    supports: none
+    evidence:
+      measured: face pinch 20 of 20, 29.1 mm; 20 of 20
+
+  salad_dressing:
+    kind: object
+    moved_by: pick
+    held_by: faces
+    rests: upright
+    supports: none
+    evidence:
+      measured: face pinch 20 of 20, 35.4 mm; 20 of 20
+
+  milk:
+    kind: object
+    moved_by: pick
+    held_by: faces
+    rests: upright
+    supports: none
+    evidence:
+      measured: face pinch 20 of 20, 52.5 mm; 20 of 20
+
+  orange_juice:
+    kind: object
+    moved_by: pick
+    held_by: faces
+    rests: upright
+    supports: none
+    evidence:
+      measured: face pinch 20 of 20, 52.5 mm; 20 of 20
+
+  wine_bottle:
+    kind: object
+    moved_by: pick
+    held_by: faces
+    rests:
+      default: upright           # On(wine_bottle, cabinet top): 20 of 20
+      wine_rack: lying           # On(wine_bottle, rack): 0 of 20
+    supports: none
+    evidence:
+      measured: >-
+        faces in 33 of 40 grasps, 13.5 mm (the neck); upright onto the cabinet top 20 of 20;
+        into the rack 0 of 20
+      declared: the rack holds bottles lying in its cradle (wine_rack asset)
+    open: the lay-down motion (turning the bottle horizontal over the cradle) is not a skill yet
+
+  # -- landmarks: named by the scenes, never moved by a goal here ----------------------
+  cookies:
+    kind: object
+    moved_by: none
+    held_by: none
+    rests: upright
+    supports: surface            # "the bowl on the cookie box" (libero_spatial 3)
+    evidence:
+      declared: appears only as a landmark or support in libero_spatial
+
+  glazed_rim_porcelain_ramekin:
+    kind: object
+    moved_by: none
+    held_by: none
+    rests: upright
+    supports: surface            # "the bowl on the ramekin" (libero_spatial 5)
+    evidence:
+      declared: appears only as a landmark or support in libero_spatial
+
+  basket:
+    kind: object
+    moved_by: none
+    held_by: none
+    rests: upright
+    supports: container          # In(x, basket_contain_region) in all of libero_object
+    evidence:
+      declared: the target container of every libero_object task; never moved
+
+  # -- fixtures ---------------------------------------------------------------------------
+  table:
+    kind: fixture
+    supports: surface
+    evidence:
+      declared: the support surface of libero_spatial and libero_goal
+
+  floor:
+    kind: fixture
+    supports: surface
+    evidence:
+      declared: the support surface of libero_object (objects stand on the floor)
+
+  wooden_cabinet:
+    kind: fixture
+    supports: surface            # On(x, cabinet top) in libero_goal
+    joints:
+      drawers: slide, pulled open by a horizontal handle bar held with the jaw axis vertical
+    evidence:
+      measured: >-
+        middle drawer handle 16.3 mm, opened 20 of 20; top drawer opened 19 of 19 but the
+        bowl-into-drawer task needs the bowl moved clear first (screwhead/teacher/clearing.py)
+      declared: an open drawer overhangs whatever stands in front of it (libero_goal 3)
+
+  flat_stove:
+    kind: fixture
+    supports: surface            # On(bowl, stove cook region)
+    joints:
+      knob: hinge, turned on by rotating the 24 mm handle box about an axis 18 mm off it
+    evidence:
+      measured: knob grasp 24.3 mm, one feasible candidate typically; turned on 20 of 20
+
+  wine_rack:
+    kind: fixture
+    supports: container          # On(wine_bottle, rack region)
+    evidence:
+      declared: accepts a bottle lying in its cradle; see wine_bottle.rests
