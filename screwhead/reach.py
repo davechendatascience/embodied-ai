@@ -154,15 +154,21 @@ class Reach:
 
     def carry_height(self, box, q, target_q, R, p, body: int) -> float:
         """Object-origin height for a carry: its bottom clears what is between here and the
-        drop, and the arm holds the tool there with room to move (a fixed "region top +
-        12 cm" stalled the carry to a top drawer 200-400 mm short)."""
+        drop, and the arm holds the tool there with room to move ALONG THE WHOLE CARRY --
+        over the pick point, halfway, and over the drop (a fixed "region top + 12 cm"
+        stalled a top-drawer carry 200-400 mm short).
+
+        Checked over the drop alone, a marginal grasp was lifted, over the pick point, into
+        a joint limit at the same height every episode: the servo clamped, the wrist jerked
+        and the bowl fell (spatial 6, six of six failures, lost at 0.22 m)."""
         hang = float(q[2] - (box.world_centre[2] - np.abs(box.R @ np.diag(box.half)).sum(1)[2]))
         clear = self.transit_height(q, target_q, body) - CLEARANCE + hang + CARRY_EXTRA
         lo = float(target_q[2] + CARRY_FLOOR)
         hi = float(min(max(clear, lo), target_q[2] + CAP_ABOVE))
         hs = list(np.arange(hi, lo - EPS_LEN2, -CARRY_STEP)) or [lo]
         tool_off = p - q
-        _th, conv, sig, margin = self.solve([pose(R, np.array([target_q[0], target_q[1], h]) + tool_off)
-                                             for h in hs])
-        return next((float(h) for i, h in enumerate(hs)
-                     if conv[i] and sig[i] > MIN_SIGMA and margin[i] > MIN_MARGIN), lo)
+        stops = [q[:2], (q[:2] + target_q[:2]) / 2, target_q[:2]]      # pick, halfway, drop
+        _th, conv, sig, margin = self.solve([pose(R, np.array([xy[0], xy[1], h]) + tool_off)
+                                             for h in hs for xy in stops])
+        ok = (conv & (sig > MIN_SIGMA) & (margin > MIN_MARGIN)).reshape(len(hs), len(stops)).all(1)
+        return next((float(h) for h, good in zip(hs, ok, strict=True) if good), lo)

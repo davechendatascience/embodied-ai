@@ -42,6 +42,7 @@ class EpisodeLog:
         self.touched: set = set()
         self.held_prev: dict = {}
         self.pushed: set = set()
+        self.ever_held = False
         self.start = {st.obj: env.scene.body_pose(st.obj)[1].copy() for st in teacher.plan if st.obj}
 
     def event(self, text: str) -> None:
@@ -57,7 +58,7 @@ class EpisodeLog:
         if env.t % 4 == 0:
             self._track(s)
         self._held_events(s, ph)
-        if not any(self.held_prev.values()):
+        if not self.ever_held:                           # after a drop, a moved object was not "pushed"
             self._pushes(ph)
         if env.t % 6 == 0:
             self._fixtures(s, ph)
@@ -84,6 +85,7 @@ class EpisodeLog:
         h = t.skills.held(step.obj)
         was = self.held_prev.get(step.obj, False)
         if h and not was:
+            self.ever_held = True
             self.event(f"grasped {step.obj} in {ph}, aperture {1000 * s['aperture']:.0f} mm")
         elif was and not h and not self._delivered(step.obj):
             q = self.env.scene.body_pose(step.obj)[1]
@@ -257,7 +259,10 @@ class EpisodeLog:
             else:
                 dl = sm @ (op - sp)
                 parent = e.object_states_dict[tgt].parent_name
-                contact = e.check_contact(e.get_object(parent), e.get_object(obj))
+                # a region of the table itself has no parent, and LIBERO's On then checks
+                # position only -- asking robosuite for contact with None raised TypeError
+                contact = (e.check_contact(e.get_object(parent), e.get_object(obj))
+                           if parent is not None else "not checked")
                 line = (f" | under: dz {dl[2]:+.3f} needs ({size[2] - ON_BAND_BELOW:.3f}, "
                         f"{size[2] + ON_BAND_ABOVE:.3f}), |dxy| {np.round(np.abs(dl[:2]), 3)} < "
                         f"{np.round(size[:2], 3)}; contact with {parent} {contact}")

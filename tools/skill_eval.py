@@ -74,6 +74,15 @@ def _run_episode(env, teacher, job: Job, ep: int, record: bool):
     return row, frames
 
 
+def _crashed_row(job: Job, ep: int, env, e: Exception) -> dict:
+    import traceback
+    where = traceback.extract_tb(e.__traceback__)[-1]
+    what = f"crash: {type(e).__name__}: {e} at {Path(where.filename).name}:{where.lineno}"
+    return dict(task=job.task, episode=job.ep_offset + ep, success=False, steps=env.t, last_phase="crash",
+                step_index=-1, phases={}, language=env.language, diag=what, mechanism="crash",
+                detail=dict(timeline="", events=[what], grasp={}, final=[]))
+
+
 def _worker(remote, job_fields: dict) -> None:
     job = Job(**job_fields)
     os.sched_setaffinity(0, {job.cpu})
@@ -89,7 +98,12 @@ def _worker(remote, job_fields: dict) -> None:
     videos = 0
     for ep in range(job.episodes):
         record = bool(job.video) and videos < job.max_videos
-        row, frames = _run_episode(env, teacher, job, ep, record)
+        try:
+            row, frames = _run_episode(env, teacher, job, ep, record)
+        except Exception as e:  # noqa: BLE001  a worker boundary: a crash is one failed, recorded
+            #                     episode, not a lost worker -- one diagnostic TypeError once
+            #                     silently removed all 20 episodes of a task from an assessment
+            row, frames = _crashed_row(job, ep, env, e), []
         if record and frames and not row["success"]:
             import imageio.v2 as imageio
             Path(job.video).mkdir(parents=True, exist_ok=True)
