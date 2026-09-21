@@ -25,6 +25,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import contacts
+from .clearing import Clearing
 from .frames import Z, axis_rot, pose, rot_angle, rotvec
 from .grasp_planner import GraspPlanner
 from .gripper_servo import A_OPEN, target_to_channel
@@ -108,6 +109,7 @@ class Skills:
         self.k = config or SkillConfig()
         self.planner = GraspPlanner(env, self.k)
         self.reach = Reach(env, self.k)
+        self.clearing = Clearing(self.scene, self.planner, self.reach)
         self.phase = ""
         self.grasp_log: dict = {}      # what was decided and why, for tools/skill_eval.py
         self._episode = None
@@ -115,6 +117,8 @@ class Skills:
         self._handle_cache: dict[str, tuple[np.ndarray, float, np.ndarray, float]] = {}
         self._drop_cache: dict = {}
         self._carry_cache: dict = {}
+        self._spots: dict[str, tuple] = {}         # synthetic regions: where a crowded object goes
+        self._clearing: dict[tuple, str | None] = {}
 
     # -- commands -------------------------------------------------------------------------
     def twist_to(self, R, p, R_goal, p_goal, v_max=None, v_min=None):
@@ -148,7 +152,7 @@ class Skills:
         if ep != self._episode:
             self._episode = ep
             for cache in (self._grasp_cache, self._handle_cache, self.grasp_log,
-                          self._drop_cache, self._carry_cache):
+                          self._drop_cache, self._carry_cache, self._spots, self._clearing):
                 cache.clear()
 
     def grasp_for(self, obj: str, via: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray, float]:
@@ -261,12 +265,41 @@ class Skills:
 
     # -- regions -------------------------------------------------------------------------------
     def region_pose(self, region: str):
-        """(R, p, half) of a region site, or of an object used as one (On(x, plate))."""
+        """(R, p, half) of a region site, of an object used as one (On(x, plate)), or of a
+        spot chosen to move a crowded object to."""
+        if region in self._spots:
+            return self._spots[region]
         try:
             return self.scene.region(region)
         except ValueError:                             # not a site: an object
             box = self.scene.object_box(region)
             return box.R, box.world_centre, box.half
+
+    def clearing_spot(self, obj: str, container: str, R_tool: np.ndarray) -> str | None:
+        """The region to move `obj` to before `container` is opened, if opening it would
+        crowd the object (clearing.py); decided once per episode, from where it rests."""
+        self.new_episode_check()
+        key = (obj, container)
+        if key not in self._clearing:
+            a = self.scene.articulation(container)
+            dq = self._drive_dq(a, "open")
+            xy = self.clearing.spot(obj, a, dq, R_tool) if self.clearing.crowds(obj, a, dq) else None
+            name = None
+            if xy is not None:
+                box = self.scene.object_box(obj)
+                ext = np.abs(box.R) @ box.half
+                surface = float(box.world_centre[2] - ext[2])
+                name = f"clear:{obj}"
+                self._spots[name] = (np.eye(3), np.array([xy[0], xy[1], surface]),
+                                     np.array([ext[0], ext[1], 0.0]))
+            self._clearing[key] = name
+            self.grasp_log[f"clearing {obj}"] = (
+                "not crowded" if xy is None and not self.clearing.crowds(obj, a, dq)
+                else "crowded, no spot" if xy is None else f"move to {np.round(xy, 3).tolist()}")
+        return self._clearing[key]
+
+    def at_spot(self, obj: str, spot: str) -> bool:
+        return self.at_place(*self.place_target(obj, spot, inside=False))
 
     def via_for(self, region: str) -> np.ndarray:
         """Where the tool must be to deliver into this region -- the point the grasp has to

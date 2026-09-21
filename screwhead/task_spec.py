@@ -35,7 +35,7 @@ SWITCH = {"turnon", "turnoff"}
 class Step:
     """One skill invocation. `obj` is a body name, `region` a site name, both as the
     simulator knows them (the bddl region key IS the site name after robosuite's prefix)."""
-    skill: str                  # pick | place_in | place_on | articulate | turn
+    skill: str                  # pick | place_in | place_on | articulate | turn | relocate
     obj: str | None = None
     region: str | None = None
     mode: str | None = None     # open/close for articulate, on/off for turn

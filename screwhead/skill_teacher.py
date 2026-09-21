@@ -44,6 +44,13 @@ class SkillTeacher:
             if step.skill == "pick":
                 nxt = self.plan[i + 1] if i + 1 < len(self.plan) else None
                 closed = self._closed_container(nxt)
+                if closed is not None:
+                    # an object the open container would crowd is moved out of its way
+                    # first: with one gripper it cannot be held while the container opens
+                    spot = self.skills.clearing_spot(step.obj, closed, self.env.snapshot()["R_tool"])
+                    if spot is not None and (self.skills.held(step.obj)
+                                             or not self.skills.at_spot(step.obj, spot)):
+                        return i, Step("relocate", obj=step.obj, region=spot)
                 if closed is not None and not self.skills.held(step.obj):
                     return i, Step("articulate", region=closed, mode="open",
                                    goal=("open", closed))
@@ -115,6 +122,8 @@ class SkillTeacher:
                 a = self.skills.pick(step.obj, s, via=via)
         elif step.skill in ("place_in", "place_on"):
             a = self.skills.place(step.obj, step.region, s, inside=step.skill == "place_in")
+        elif step.skill == "relocate":                 # place picks it up first (regrasp)
+            a = self.skills.place(step.obj, step.region, s, inside=False)
         elif step.skill == "articulate" or step.skill == "turn":
             a = self.skills.articulate(step.region, step.mode, s)
         else:
