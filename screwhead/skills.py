@@ -57,6 +57,7 @@ class SkillConfig:
     reach_misalign: float = 0.5    # handle approach reads as "reach" above this misalignment
     handle_open_slack: float = 0.012   # jaws have closed ON a handle when the aperture lies in
     handle_min_frac: float = 0.5       # [frac * width, width + slack]; near zero they missed it
+    handle_leave_lateral: float = 0.03  # the jaws are still around a handle within this of its axis
     handle_short_max: float = 0.008    # squeeze a handle only with the tool point this close to it:
                                        # the object envelope (35 mm short) let the jaws finish
                                        # closing 17 mm in front of the drawer's bar
@@ -463,6 +464,27 @@ class Skills:
         target = p_h - app * (k.approach * float(np.clip(misalign, 0.0, 1.0)))
         self.phase = "reach" if misalign >= k.reach_misalign else "descend"
         return self.action(self.twist_to(R, p, R_h, target), min(k.max_grip, w + k.grip_margin))
+
+    def leave_handle(self, s: dict) -> np.ndarray | None:
+        """Back out of a driven handle the way the jaws went in, before anything else moves
+        the arm; None once clear of every handle.
+
+        The top drawer's bar is pinched with the jaw axis vertical, so rising first -- the
+        next pick's opening move -- hooked it with the lower finger and jolted the drawer
+        back past its open margin: the precondition flickered open/shut for 25 steps.
+        """
+        k, p = self.k, s["p_tool"]
+        for region in list(self._handle_cache):
+            a = self.scene.articulation(region)
+            R_h, w, app = self._handle_frame(region, a, "open")
+            p_h = self.scene.d.geom_xpos[a["handle_geom"]] - self.scene.base
+            off = p - p_h
+            ahead = float(off @ app)                       # 0 at the handle, -approach at the pre-grasp
+            if np.linalg.norm(off - app * ahead) < k.handle_leave_lateral and abs(ahead) < k.approach:
+                self.phase = "leave"
+                return self.action(self.twist_to(s["R_tool"], p, s["R_tool"], p_h - app * (k.approach + k.lift_dz)),
+                                   min(k.max_grip, w + k.grip_margin))
+        return None
 
     def handle_width(self, region: str) -> float | None:
         """The width of the handle grasp chosen this episode, if one has been."""

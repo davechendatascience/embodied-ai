@@ -110,7 +110,9 @@ class SkillTeacher:
             nxt = self.plan[i + 1] if i + 1 < len(self.plan) else None
             via = (self.skills.via_for(nxt.region)                 # the grasp must also reach
                    if nxt is not None and nxt.skill in ("place_in", "place_on") else None)
-            a = self.skills.pick(step.obj, s, via=via)
+            a = self.skills.leave_handle(s)
+            if a is None:
+                a = self.skills.pick(step.obj, s, via=via)
         elif step.skill in ("place_in", "place_on"):
             a = self.skills.place(step.obj, step.region, s, inside=step.skill == "place_in")
         elif step.skill == "articulate" or step.skill == "turn":
