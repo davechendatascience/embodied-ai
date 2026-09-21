@@ -217,7 +217,7 @@ components:
       - {id: FM-stale-grasp-cache, observable: a grasp chosen in a previous episode is reused after reset}
     remediation: Per-task ProgramConfig (sector, pre-shape, posture, selection); per-episode grasp cache; clearance, IK, path and sigma-min checks
 
-  # code: screwhead/skills.py (feedback laws), screwhead/grasp_planner.py (candidates from geometry), screwhead/reach.py (IK, conditioning, collision), screwhead/frames.py, screwhead/skill_teacher.py, screwhead/scene.py, screwhead/task_spec.py, screwhead/task_env.py, screwhead/episode_log.py (per-episode diagnosis), tools/skill_eval.py, tools/skill_trace.py, tools/teacher_report.py, tools/teacher_determinism.py, scripts/skill_sweep.sh
+  # code: screwhead/skills.py (feedback laws), screwhead/grasp_planner.py (candidates from geometry), screwhead/reach.py (IK, conditioning, collision), screwhead/frames.py, screwhead/skill_teacher.py, screwhead/scene.py, screwhead/task_spec.py, screwhead/task_env.py, screwhead/episode_log.py (per-episode diagnosis), tools/skill_eval.py, tools/skill_trace.py, tools/teacher_report.py, tools/teacher_determinism.py, tools/teacher_motion.py, screwhead/clearing.py, scripts/skill_sweep.sh
   - id: CMP-skill-library
     purpose: >-
       Build a task's demonstration program from its goal specification and the scene's
@@ -795,6 +795,32 @@ contracts:
     evaluable_by: [TST-teacher-deterministic]
     sufficiency: {n_min: 16, max_ci_width: 0.3}
 
+  # How the teacher sets objects down and moves (consistency.yaml: BRN-scan-then-place,
+  # BRN-pinch-for-the-whole-place, BRN-profiled-twists). Baseline at 4edb9d0: deliberate
+  # releases 14-29 mm (up to 88) above the surface, grip drops from 0.2-0.36 m, tool
+  # acceleration p95 3.5-5 m/s^2 with peaks to 35.
+  - id: CTR-teacher-gentle
+    subject: CMP-skill-library
+    claim_type: capability
+    metrics:
+      - {id: release_gap_mm, unit: mm}
+      - {id: drop_count, unit: count}
+    acceptance: {rule: "release_gap_mm >= 0 and release_gap_mm <= 5 and drop_count == 0", target_rate: 0.9}
+    compatibility_key: [teacher_revision]
+    evaluable_by: [TST-teacher-motion]
+    sufficiency: {n_min: 20, max_ci_width: 0.3}
+
+  - id: CTR-teacher-smooth
+    subject: CMP-skill-library
+    claim_type: capability
+    metrics:
+      - {id: acc_p95, unit: m/s^2}
+      - {id: reanchors, unit: count}
+    acceptance: {rule: "acc_p95 <= 2.0 and reanchors == 0", target_rate: 0.9}
+    compatibility_key: [teacher_revision]
+    evaluable_by: [TST-teacher-motion]
+    sufficiency: {n_min: 20, max_ci_width: 0.3}
+
   - id: CTR-teacher-reliable
     subject: CMP-skill-library
     claim_type: capability
@@ -1176,6 +1202,15 @@ tests:
     capture: [code_revision]
     cost: 2.0
     timeout_s: 600
+
+  - id: TST-teacher-motion
+    layer: component
+    targets: [CMP-skill-library]
+    run: HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/teacher_motion.py --out $OUT
+    metrics: [release_gap_mm, drop_count, acc_p95, jerk_p95, reanchors, success]
+    capture: [teacher_revision, task_suite, task]
+    cost: 10.0
+    timeout_s: 3600
 
   - id: TST-teacher-deterministic
     layer: component

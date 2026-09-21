@@ -66,6 +66,57 @@ axioms:
       model.body_pos, which set_init_state does not restore.
     rationale: Two unseeded resets moved the wooden cabinet 12 mm apart.
 
+  - id: AXM-handle-shares-body
+    domain: environment
+    statement: >-
+      A fixture's handle is one geom of the MuJoCo body it moves (the drawer's bar and its
+      face are one body; so are the stove knob's box and the rest of its button), so contact
+      with that body does not say the fingers are on the handle.
+    rationale: Read from the scene; replayed, fingertips pressed on the drawer face counted as contact with the drawer.
+
+  - id: AXM-grip-fixes-object-in-hand
+    domain: physics
+    statement: >-
+      While an object is held without slipping, its pose relative to the tool does not
+      change, and both poses are in the simulator state at every step (a privileged input:
+      the teacher reads object poses from the simulator, which the student will not).
+    rationale: The teacher's object poses come from Scene.body_pose / object_box, i.e. MuJoCo state.
+
+  - id: AXM-support-scannable
+    domain: environment
+    statement: >-
+      The surface an object will rest on at a target position is the first collision
+      geometry that downward rays over the object's footprint there meet; the teacher reads
+      that geometry from the simulator (privileged, like object poses).
+    rationale: The drop-point search and clearing.py already locate open surfaces with mj_ray.
+
+  - id: AXM-release-is-free-fall
+    domain: physics
+    statement: >-
+      Once the jaws open, an object not yet resting on a support falls; from a gap h it lands
+      at sqrt(2 g h) (20 mm: 0.63 m/s) and can bounce, tip or slide out of its target.
+    rationale: >-
+      Measured at 4edb9d0 (tools/teacher_motion.py): deliberate releases 14-29 mm (up to 88)
+      above the surface, the bowl already falling at 0.1-0.24 m/s.
+
+  - id: AXM-acceleration-loads-the-grip
+    domain: physics
+    statement: >-
+      A held object's inertial load is its mass times the tool's acceleration; the grip holds
+      only while pad friction, from at most 20 N of normal force per finger, exceeds gravity
+      plus that load along the gripped surfaces.
+    rationale: >-
+      Measured at 4edb9d0: rim grips lost the bowl 0.2-0.36 m up during lifts and carries,
+      with tool acceleration p95 3.5-5 m/s^2 and peaks up to 35.
+
+  - id: AXM-velocity-steps-are-jerks
+    domain: physics
+    statement: >-
+      The servo tracks each commanded twist within one 20 Hz control step, so a step change
+      of dv in the commanded velocity is executed as an acceleration of about dv x 20.
+    rationale: >-
+      Measured at 4edb9d0 -- acceleration p95 3.5-5 m/s^2, jerk p95 100-170 m/s^3, at phase switches.
+
   - id: AXM-reproducible-measurement
     domain: epistemic
     statement: >-
@@ -79,7 +130,8 @@ definitions:
     meaning: >-
       A tool pose with a converged IK solution whose smallest singular value exceeds 0.05
       and whose every joint is at least 0.15 rad from its limit, with the arm not
-      penetrating a fixture.
+      penetrating a fixture. This is the teacher's screen, a conservative stand-in for
+      "trackable by the servo"; the servo's actual boundary is not claimed to be here.
 
   - id: DEF-holding
     term: Holding
@@ -87,12 +139,24 @@ definitions:
       Both finger groups touch the target and the jaw aperture is stopped by it: neither
       near zero (closed on nothing) nor near fully open.
 
+  - id: DEF-gentle-placement
+    term: Gentle placement
+    meaning: >-
+      At release the object's lowest point is within 5 mm of the surface beneath it and its
+      vertical speed is below 0.05 m/s.
+
+  - id: DEF-smooth-motion
+    term: Smooth motion
+    meaning: >-
+      Consecutive commanded tool velocities differ by at most a_max / 20 Hz, with
+      a_max = 2 m/s^2 (0.1 m/s per step) -- across phase boundaries as well as within them.
+
 lemmas:
   - id: LMA-whole-path-reachable
     statement: >-
-      A motion segment is executable by the servo only if every pose along it is a
-      reachable pose -- checking its endpoints is not sufficient.
-    premises: [AXM-servo-tracks-reachable-poses, DEF-reachable-pose]
+      A motion segment fails if the servo cannot track some pose along it, whatever its
+      endpoints are, so checking the endpoints of a segment is not sufficient.
+    premises: [AXM-servo-tracks-reachable-poses]
     derivation_rule: >-
       The servo tracks each intermediate pose in turn; one unreachable intermediate pose
       triggers clamping and re-anchoring whatever the endpoints are.
@@ -100,29 +164,34 @@ lemmas:
 
   - id: LMA-holding-is-geometric
     statement: >-
-      Whether the gripper holds a target must be decided from finger contact on the target
-      and an aperture stopped by it, not from jaw speed and not from contact with any part
-      of the target's body.
-    premises: [AXM-panda-gripper-geometry, DEF-holding]
+      Whether the jaws hold a handle must be decided from both finger groups touching the
+      handle geom and an aperture the handle stopped -- not from contact with the body the
+      handle belongs to. (Objects are decided by Skills.held; this lemma is about handles.)
+    premises: [AXM-panda-gripper-geometry, AXM-handle-shares-body, DEF-holding]
     derivation_rule: >-
-      Pulling or carrying a held target moves the jaws, so a speed test goes false while
-      holding; fingertips pressed on a drawer face touch the drawer's body without
-      holding its handle.
+      Contact with the body does not locate the fingers on the handle (AXM-handle-shares-body),
+      and both finger groups on the handle with the aperture stopped by it is DEF-holding
+      applied to the handle geom.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: LMA-caches-reset-per-episode
     statement: >-
       Every decision the teacher caches (grasp, handle frame, drop point, carry height) is
-      cleared at each episode boundary and is re-derivable from the state.
+      cleared at each episode boundary. Within an episode a cached decision depends on the
+      state at which it was made; that is NOT claimed re-derivable from the current state.
     premises: [AXM-dagger-needs-markov-labels]
-    derivation_rule: A cache that survives an episode makes the label depend on a previous episode.
+    derivation_rule: >-
+      A cache that survives an episode makes the label depend on a previous episode, which
+      the axiom forbids outright. Skills.new_episode_check clears every cache before any
+      decision path reads one.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: LMA-seed-fixtures-per-init-state
     statement: >-
-      Seeding numpy's global RNG before every reset, per initial-state index, makes
-      episodes reproducible and keeps each cached settled state consistent with the
-      fixture poses it was settled on.
+      Seeding numpy's global RNG before every reset, per initial-state index, makes the
+      fixture poses a function of (seed, init index), identical when a state is settled
+      and when it is replayed. (That whole episodes reproduce is measured, not derived:
+      CTR-teacher-deterministic.)
     premises: [AXM-libero-resamples-fixtures, AXM-reproducible-measurement]
     derivation_rule: The fixture pose becomes a function of (seed, init index), identical at settle and replay.
     sufficiency: {n_min: 3, min_consensus: 0.8}
@@ -133,8 +202,66 @@ lemmas:
       cause one to be made.
     premises: [AXM-reproducible-measurement, AXM-dagger-needs-markov-labels]
     derivation_rule: >-
-      A diagnostic that chooses and caches a grasp changes the decision the teacher then
-      acts on, so the recorded episode is not the episode the teacher alone would produce.
+      A diagnostic that chooses and caches a decision changes what the teacher then acts on.
+      EpisodeLog reads decisions only through cached_grasp and place_target(decide=False),
+      which return None rather than choose, so this holds by construction, not by call order.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: LMA-touchdown-from-scan-and-hand
+    statement: >-
+      The tool pose at which an object touches down is fixed by two measurements: the support
+      height under its footprint at the target, and the object's current bottom-below-tool
+      offset read from its in-hand pose. A release height taken from the region site or the
+      grasp-time box is off by however much the site, or the actual grip, differs from them.
+    premises: [AXM-grip-fixes-object-in-hand, AXM-support-scannable]
+    derivation_rule: >-
+      Object bottom = tool pose composed with the in-hand transform, lowered to the scanned
+      support; both terms are in the state, so the touchdown pose is too.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: LMA-release-on-contact
+    statement: >-
+      A placement is gentle only if the object is lowered at a touch speed below 0.05 m/s over
+      its last centimetres and let go when it rests on the support, not at a precomputed
+      height: the scan and the grip estimate carry error, and any residual gap is free fall.
+    premises: [DEF-gentle-placement, AXM-release-is-free-fall, LMA-touchdown-from-scan-and-hand]
+    derivation_rule: >-
+      From a gap h the object lands at sqrt(2 g h); DEF-gentle-placement bounds h by 5 mm and
+      the speed by 0.05 m/s, which a height-triggered release cannot guarantee under estimate
+      error, and a contact-triggered release after a slow approach does.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: LMA-pinch-holds-along-the-path
+    statement: >-
+      The pinch point must hold the object under gravity plus the peak acceleration of the
+      path that carries it; so the choice of pinch and the bound on acceleration are one
+      decision -- the larger the friction margin at the pinch, the faster the path may be.
+    premises: [AXM-acceleration-loads-the-grip, AXM-panda-gripper-geometry, DEF-smooth-motion]
+    derivation_rule: >-
+      Load = m (g + a); holding needs friction capacity above it; DEF-smooth-motion bounds a.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: LMA-pinch-admits-touchdown
+    statement: >-
+      The pinch point must leave the fingers and hand clear of the support and of any
+      container walls at the touchdown pose: the object reaches its support only if nothing
+      holding it reaches something first.
+    premises: [LMA-touchdown-from-scan-and-hand, DEF-reachable-pose]
+    derivation_rule: >-
+      The touchdown pose is known before the grasp is chosen (LMA-touchdown-from-scan-and-hand),
+      so the gripper's collision at that pose can be screened per candidate pinch.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: LMA-smooth-from-a-profile
+    statement: >-
+      Motion is smooth when each commanded velocity is limited to change by at most
+      a_max / 20 Hz from the tool's measured velocity and decelerates to arrive at rest,
+      rather than jumping between feedback laws at phase boundaries; limited this way the
+      command is a function of the current state (pose and velocity), so it stays a label.
+    premises: [AXM-velocity-steps-are-jerks, DEF-smooth-motion, AXM-dagger-needs-markov-labels]
+    derivation_rule: >-
+      With the step change bounded by a_max / 20, AXM-velocity-steps-are-jerks bounds the
+      executed acceleration by a_max; the measured velocity is state, so the law stays Markov.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 branches:
@@ -142,36 +269,47 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      Reach.carry_height returns a height that is a reachable pose over the pick point, the
-      midpoint and the drop point, for the grasp the object is held by.
-    premises: [LMA-whole-path-reachable]
+      Reach.carry_height returns the highest height at which the tool is a reachable pose,
+      with the arm out of the fixtures, over the pick point, the midpoint and the drop point,
+      for the grasp the object is held by now; when no height is, it returns the floor and
+      the carry is logged as unverified.
+    premises: [LMA-whole-path-reachable, DEF-reachable-pose]
     derivation_rule: >-
-      screwhead/reach.py carry_height solves IK at all three stops for every height tried.
-      evidence: CTR-teacher-reliable (spatial 6, 14 -> 19/20 paired, 0 broken elsewhere).
+      screwhead/reach.py carry_height solves every height tried, the floor included, at the
+      three stops and screens each accepted one with collides(); Skills caches it per grasp.
+      Three stops sample the path, which LMA-whole-path-reachable says endpoints cannot
+      replace; the lift and lowering columns are not sampled.
+      evidence: CTR-teacher-reliable (spatial 6, 14 -> 19/20 paired; the per-grasp revision 186 -> 186 paired).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-handle-grasp-reachable-along-drive
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      A handle grasp is chosen only if its pose halfway through and at the end of the
-      joint's motion is also reachable.
+      A handle grasp is chosen among candidates that converge, outside the fixtures, at the
+      start, halfway through and at the end of the joint's motion whenever any candidate
+      does; otherwise from the start of the motion alone, logged as drive_checked false.
     premises: [LMA-whole-path-reachable]
     derivation_rule: >-
-      screwhead/skills.py _handle_frame passes the joint-motion poses to Reach.choose(extra=...).
-      evidence: CTR-teacher-reliable (goal 0, goal 7).
+      screwhead/skills.py _choose_handle calls Reach.choose(extra=joint-motion poses,
+      strict=True) and falls back to the non-strict start-only choice only on None.
+      Choose's conditioning bars are a ranking, not DEF-reachable-pose's thresholds.
+      evidence: CTR-teacher-reliable (goal 0/3/7: drive_checked in 60 of 60 episodes).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-handle-holding-by-aperture
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      Skills.holding is true iff both finger groups touch the handle's body and the
-      aperture lies between half the handle's width and its width plus 12 mm.
+      Skills.holding is true iff both finger groups touch the handle geom and the aperture
+      lies between half the handle's width and its width plus 4 mm -- below the approach
+      opening (width plus 12 mm) and its servo band of 3 mm.
     premises: [LMA-holding-is-geometric]
     derivation_rule: >-
-      screwhead/skills.py holding(body, width).
-      evidence: CTR-teacher-reliable (goal 0, 14 -> 20/20 paired).
+      screwhead/skills.py holding(geom, width) with contacts.finger_sides_on_geom. Held, the
+      aperture measured 0.9-1.4 mm over the width with the fingers on the handle geom on
+      every one of 278 drive steps (drawer and knob).
+      evidence: CTR-teacher-reliable (goal 0, 14 -> 20/20 paired; the geom/4 mm revision 20/0/20 unchanged).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-reliability-evidence-valid
@@ -184,9 +322,81 @@ branches:
     premises: [LMA-seed-fixtures-per-init-state, LMA-observers-read-only, LMA-caches-reset-per-episode,
                AXM-libero-scores-final-state]
     derivation_rule: >-
-      TaskEnv seeds each reset; EpisodeLog reads cached_grasp only; Skills clears its
-      caches on a new episode; SkillTeacher.satisfied delegates to _eval_predicate.
+      TaskEnv seeds each reset; EpisodeLog reads decisions without making them and runs
+      behind its own guard in skill_eval (its exceptions are reported, never scored); Skills
+      clears its caches on a new episode; success is LIBERO's _check_success via
+      info['success']. Evidence integrity: collect deletes a previous run's trials and fails
+      on a non-zero exit, episodes a dead worker never sent are failed rows, and
+      teacher_revision hashes the import closure of what an episode runs.
       evidence: CTR-teacher-deterministic (same seed, same timeline, run twice).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-drive-tracks-the-handle
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Skills.articulate derives the handle grasp frame and the drive target from the joint's
+      current position: the frame chosen once per episode is carried by the joint's motion
+      since it was chosen (a rotation for a hinge, nothing for a slide), and the drive
+      target leads the handle's current grasp pose by at most 0.06 rad (hinge) or 3 cm
+      (slide), less than the squeeze alignment tolerance of 0.10 rad.
+    premises: [AXM-dagger-needs-markov-labels, AXM-panda-gripper-geometry, LMA-holding-is-geometric]
+    derivation_rule: >-
+      screwhead/skills.py _handle_frame (frame via _joint_motion(qpos - q0)) and _drive
+      (dq clipped to the lead, from R_h and p_h). A frame fixed in the world makes the label
+      depend on the joint angle at selection; a target led from the tool's own pose lets the
+      tool outrun a damped knob and pry the jaws open.
+      evidence: CTR-teacher-reliable (goal 7, 12 -> 20/20 paired; goal 0 20 -> 20).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-leave-handle-along-approach
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      While the arm is free and within the approach distance of a handle it drove, it backs
+      out along that handle's approach axis before any other motion.
+    premises: [AXM-panda-gripper-geometry, AXM-handle-shares-body]
+    derivation_rule: >-
+      screwhead/skill_teacher.py calls Skills.leave_handle before pick. The jaws surround the
+      handle along the jaw axis, so any first motion with a component along it (rising, for
+      a vertical pinch) pushes a finger into the handle; along the approach axis they clear it.
+      evidence: traced on goal 3 -- the drawer stays at -0.159 through the pick.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-scan-then-place
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Skills.place scans the support under the object's footprint at the target, computes the
+      touchdown tool pose from the object's in-hand pose, lowers at touch speed over the last
+      centimetres, and releases when the object rests on the support.
+    premises: [LMA-touchdown-from-scan-and-hand, LMA-release-on-contact]
+    derivation_rule: >-
+      (to be implemented) evidence: CTR-teacher-gentle (release_gap_mm <= 5).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-pinch-for-the-whole-place
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Grasp selection screens each pinch candidate at the touchdown pose (fingers and hand
+      clear of the support and any container walls) and ranks the survivors by friction
+      margin under the carry's acceleration bound.
+    premises: [LMA-pinch-admits-touchdown, LMA-pinch-holds-along-the-path]
+    derivation_rule: >-
+      (to be implemented) evidence: CTR-teacher-gentle (drop_count == 0), CTR-teacher-reliable.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-profiled-twists
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Every twist the teacher commands changes by at most a_max / 20 Hz from the tool's
+      measured velocity and approaches its target on a deceleration profile, at phase
+      boundaries too.
+    premises: [LMA-smooth-from-a-profile]
+    derivation_rule: >-
+      (to be implemented) evidence: CTR-teacher-smooth (acc_p95 <= 2 m/s^2, no re-anchors).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 policies:
@@ -196,3 +406,11 @@ policies:
       - {target: BRN-handle-grasp-reachable-along-drive, require: proven}
       - {target: BRN-handle-holding-by-aperture, require: proven}
       - {target: BRN-reliability-evidence-valid, require: proven}
+      - {target: BRN-drive-tracks-the-handle, require: proven}
+      - {target: BRN-leave-handle-along-approach, require: proven}
+
+  - id: POL-teacher-motion-sound
+    criteria:
+      - {target: BRN-scan-then-place, require: proven}
+      - {target: BRN-pinch-for-the-whole-place, require: proven}
+      - {target: BRN-profiled-twists, require: proven}
