@@ -89,6 +89,10 @@ class SkillConfig:
     drive_past_open: float = 0.03  # drive a joint this far past its "open"/"on" threshold
     drive_past_close: float = 0.01 # and this far past "close"/"off"
     drive_speed: float = 0.12
+    drive_lead_rot: float = 0.06   # rad a hinge drive may lead the handle (< at_rot): leading by the
+    #                                whole remaining turn spun the tool at w_max while the knob, damped,
+    #                                followed at a fifth of that -- the jaws were pried open and let go
+    drive_lead_slide: float = 0.03 # m a slide drive may lead it (k_lin x this still saturates drive_speed)
     drive_speed_min: float = 0.02
 
 
@@ -105,7 +109,7 @@ class Skills:
         self.grasp_log: dict = {}      # what was decided and why, for tools/skill_eval.py
         self._episode = None
         self._grasp_cache: dict[str, tuple] = {}
-        self._handle_cache: dict[str, tuple[np.ndarray, float, np.ndarray]] = {}
+        self._handle_cache: dict[str, tuple[np.ndarray, float, np.ndarray, float]] = {}
         self._drop_cache: dict = {}
         self._carry_cache: dict = {}
 
@@ -448,7 +452,7 @@ class Skills:
         R_h, w, app = self._handle_frame(region, a, mode)
         p_h = self.scene.d.geom_xpos[a["handle_geom"]] - self.scene.base
         if self.holding(a["body"], w):
-            return self._drive(a, mode, R, p)
+            return self._drive(a, mode, R, p, R_h, p_h)
         e_rot = rot_angle(R.T @ R_h)
         if self._in_envelope(p, p_h, app, k.handle_lateral, k.handle_short_max) and e_rot < k.at_rot:
             self.phase = "squeeze"
@@ -467,11 +471,21 @@ class Skills:
 
     def _handle_frame(self, region: str, a: dict, mode: str) -> tuple[np.ndarray, float, np.ndarray]:
         """The handle grasp's frame, chosen ONCE per episode: re-solving every step let the
-        winner flip between candidates and the jaws cycled 15-35 mm without closing. The
-        handle moves as the fixture opens, so only the frame is held, not the point."""
+        winner flip between candidates and the jaws cycled 15-35 mm without closing.
+
+        What is held is the frame relative to the joint, carried by the joint's motion since
+        it was chosen: a slide does not turn its handle, a hinge does. Held fixed in the world,
+        the frame went stale as the stove knob turned, and a tool turning with the knob read
+        as misaligned (0.15 rad at a knob angle of 0.02) and let go to re-reach."""
         self.new_episode_check()
-        if region in self._handle_cache:
-            return self._handle_cache[region]
+        if region not in self._handle_cache:
+            self._choose_handle(region, a, mode)
+        R_h0, w, app0, q0 = self._handle_cache[region]
+        R_h, _ = self._joint_motion(a, a["qpos"] - q0, R_h0, np.zeros(3))
+        app, _ = self._joint_motion(a, a["qpos"] - q0, app0[:, None], np.zeros(3))
+        return R_h, w, app[:, 0]
+
+    def _choose_handle(self, region: str, a: dict, mode: str) -> None:
         cands = self.planner.handle_grasps(a["handle_geom"])
         if not cands:
             raise NotImplementedError(f"{region}: no graspable handle geom")
@@ -485,20 +499,23 @@ class Skills:
             return [pose(*self._joint_motion(a, f * dq, R, p)) for f in (0.5, 1.0)]
 
         R_h, _p, w, app = self.reach.choose(cands, None, allow=a["body"], extra=along_the_motion)
-        self._handle_cache[region] = (R_h, w, app)
+        self._handle_cache[region] = (R_h, w, app, float(a["qpos"]))
         choice = self.reach.last_choice
         self.grasp_log[region] = dict(
             tier="handle", offered={"handle": len(cands)}, feasible=choice.get("feasible"),
             score=choice.get("score"), forced=choice.get("forced"),
             approach=[round(float(v), 2) for v in app], jaw=[round(float(v), 2) for v in R_h[:, 1]],
             width_mm=round(1000 * float(w), 1), handle_geom=self.scene.m.geom_id2name(a["handle_geom"]))
-        return self._handle_cache[region]
 
-    def _drive(self, a: dict, mode: str, R, p) -> np.ndarray:
-        """Carry the held handle along the joint's own motion to just past its goal."""
+    def _drive(self, a: dict, mode: str, R, p, R_h, p_h) -> np.ndarray:
+        """Carry the held handle along the joint's own motion toward just past its goal, a
+        bounded step ahead of where the HANDLE is now: aimed from the tool's own pose, the
+        target ran on however far the handle lagged."""
         k = self.k
         self.phase = "drive"
-        R_goal, p_goal = self._joint_motion(a, self._drive_dq(a, mode), R, p)
+        lead = k.drive_lead_slide if a["jnt_type"] == 2 else k.drive_lead_rot
+        dq = float(np.clip(self._drive_dq(a, mode), -lead, lead))
+        R_goal, p_goal = self._joint_motion(a, dq, R_h, p_h)
         return self.action(self.twist_to(R, p, R_goal, p_goal, v_max=k.drive_speed,
                                          v_min=k.drive_speed_min), 0.0)
 
