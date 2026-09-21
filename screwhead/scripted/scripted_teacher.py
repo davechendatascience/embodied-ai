@@ -33,10 +33,10 @@ from typing import NamedTuple
 import numpy as np
 import torch
 
-from . import contacts
-from .frames import rot_angle, rotvec
+from ..sim import contacts
+from ..geometry.frames import rot_angle, rotvec
 from .progress import is_held
-from .teacher_env import TARGET
+from ..sim.teacher_env import TARGET
 
 HOME_Q = np.array([0.0, -0.161, 0.0, -2.4446, 0.0, 2.2268, np.pi / 4])   # LIBERO Panda home posture
 Z_UP = np.array([0, 0, 1.0])
@@ -314,7 +314,7 @@ class ScriptedTeacher:
         """IK per pose from two seeds, the current arm and LIBERO's home posture: from one
         seed alone the same scene could verify at one step and fail at the next as the arm
         moved. Returns (theta, ok, sigma_min); ok = converged, conditioned, off the limits."""
-        from .ik import sigma_min, solve_ik
+        from ..geometry.ik import sigma_min, solve_ik
         chain, k = self.env.chain, self.k
         lim = chain.limits.numpy()
         best = None
@@ -379,7 +379,7 @@ class ScriptedTeacher:
         """Accept a layout only if this program has a verified grasp AND can reach the
         place pose over the plate holding the bowl that way. Called by the environment
         after it samples a layout, so impossible scenes are redrawn, not kept."""
-        from .ik import sigma_min, solve_ik
+        from ..geometry.ik import sigma_min, solve_ik
         s = dict(env.snapshot(), **env.ref)
         R, p, _, verified = self.choose_grasp(s)
         if not verified:

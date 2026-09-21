@@ -14,7 +14,7 @@ import torch
 from torch import Tensor, nn
 
 from .spec import TOKEN_DIM
-from .state import STATE_DIM
+from ..geometry.state import STATE_DIM
 
 FEAT_DIM = 768          # CLIP ViT-B/32 vision pooler
 TEXT_DIM = 512          # CLIP text projection

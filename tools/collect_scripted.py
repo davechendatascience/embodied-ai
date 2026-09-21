@@ -37,8 +37,8 @@ def worker(a):
     import torch
     torch.set_num_threads(1)
     sys.path.insert(0, str(ROOT))
-    from screwhead.teacher_env import PrivilegedEnv
-    from screwhead.scripted_teacher import ScriptedTeacher
+    from screwhead.sim.teacher_env import PrivilegedEnv
+    from screwhead.scripted.scripted_teacher import ScriptedTeacher
     env = PrivilegedEnv(task, seed=seed, render=True, **env_kw)
     prog = ScriptedTeacher(env)
     if env.layout_radius > 0:
@@ -110,7 +110,7 @@ def encode(args):
     """Raw frames -> frozen CLIP features, in GPU batches, in the format distill.py trains on."""
     import torch
     sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "tools"))
-    from screwhead.clip_features import clip_encoder
+    from screwhead.student.clip_features import clip_encoder
     enc_img, enc_txt = clip_encoder(args.device)
     shards = sorted(Path(args.shards).glob("task*.npz"))
     A, W, S, L, E, ST, T = [], [], [], [], [], [], []

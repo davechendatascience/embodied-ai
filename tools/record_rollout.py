@@ -46,7 +46,7 @@ class _StudentPolicy:
 
     def __init__(self, ckpt, device):
         from distill import load_student, spec_tokens
-        from screwhead.dino_features import DinoFeatures
+        from screwhead.student.dino_features import DinoFeatures
         self.model, self.act_std, self.ck = load_student(ckpt, device)
         self.gt, self.zero = bool(self.ck.get("gripper_target")), self.ck.get("zero", "none")
         self.dino = DinoFeatures(device)
@@ -55,7 +55,7 @@ class _StudentPolicy:
 
     def set_instruction(self, language):
         import torch
-        from screwhead.clip_features import clip_encoder
+        from screwhead.student.clip_features import clip_encoder
         _, enc_txt = clip_encoder(self.device)
         self.text = enc_txt(language).float()[None]
         if self.zero == "text":
@@ -102,7 +102,7 @@ def _write_csv(path, rows):
 
 def _episode(env, prog, student, gt, R):
     """One episode from the current reset: the video frames, the per-step rows, and the final info."""
-    from screwhead.gripper_servo import channel_to_target, program_target, target_to_channel
+    from screwhead.sim.gripper_servo import channel_to_target, program_target, target_to_channel
     frames, rows, done, info = [], [], False, {}
     who = "teacher" if student is None else f"VLA{' (blind)' if student.zero == 'image' else ''}"
     while not done:
@@ -126,8 +126,8 @@ def main() -> int:
     args = _parse()
 
     import imageio.v2 as imageio
-    from screwhead.scripted_teacher import ScriptedTeacher
-    from screwhead.teacher_env import PrivilegedEnv
+    from screwhead.scripted.scripted_teacher import ScriptedTeacher
+    from screwhead.sim.teacher_env import PrivilegedEnv
 
     if args.policy == "teacher":
         student, gt, name = None, True, "teacher"

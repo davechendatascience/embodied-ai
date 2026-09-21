@@ -38,8 +38,8 @@ def _read_source(src):
 
 def encode(args):
     sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "tools"))
-    from screwhead.clip_features import clip_encoder
-    from screwhead.dino_features import DIM, GRID, DinoFeatures
+    from screwhead.student.clip_features import clip_encoder
+    from screwhead.student.dino_features import DIM, GRID, DinoFeatures
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
     feats = DinoFeatures(args.device)
     _, enc_txt = clip_encoder(args.device)
@@ -172,7 +172,7 @@ def _gripper_classes(args, lab, sets, rows):
     # (measured: snapped regression never closed in 22 of 62 failures)
     if not (args.gripper_target and args.gripper_levels):
         raise SystemExit("--gripper-classes needs --gripper-target and --gripper-levels")
-    from screwhead.gripper_servo import channel_to_target
+    from screwhead.sim.gripper_servo import channel_to_target
     classes = np.asarray(sorted(args.gripper_levels), np.float32)
     cls = np.abs(channel_to_target(lab[:, 6])[:, None] - classes[None]).argmin(1)
     print("gripper classes " + ", ".join(f"{c*1000:.0f} mm: {int((cls == i).sum())}" for i, c in enumerate(classes)), flush=True)
@@ -273,7 +273,7 @@ def train(args):
     import torch
     sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "tools"))
     from distill import spec_tokens
-    from screwhead.token_head import TokenHead
+    from screwhead.student.token_head import TokenHead
     torch.manual_seed(args.seed)
     dev = args.device
     sets = [_load_set(args, k, d) for k, d in enumerate(args.data)]

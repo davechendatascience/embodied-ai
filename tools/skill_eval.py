@@ -1,12 +1,12 @@
 #!/usr/bin/env python
-"""Run the geometry-driven teacher (screwhead/skill_teacher.py) on LIBERO tasks.
+"""Run the geometry-driven teacher (screwhead/teacher/skill_teacher.py) on LIBERO tasks.
 
   skill_eval.py --suite libero_object --episodes 5
   skill_eval.py --suite libero_spatial --tasks 4 --episodes 10 --split 5 -v
   skill_eval.py --suite libero_object --tasks 0 1 --episodes 3 --video videos/skill
 
 Per task: success, and for each failure the mechanism, a one-line summary and (with -v)
-the full account from screwhead/episode_log.py -- timeline, events, the grasp chosen, and
+the full account from screwhead/teacher/episode_log.py -- timeline, events, the grasp chosen, and
 the false predicate term. Trials go to --trials for tools/teacher_report.py and the ledger.
 """
 from __future__ import annotations
@@ -55,7 +55,7 @@ def _observe(errors: list, fn, *args):
 
 def _run_episode(env, teacher, job: Job, ep: int, record: bool):
     """One episode: the row for the report, and frames if recording."""
-    from screwhead.episode_log import EpisodeLog
+    from screwhead.teacher.episode_log import EpisodeLog
     env.reset()
     errors: list[str] = []
     log = _observe(errors, EpisodeLog, env, teacher)
@@ -123,8 +123,8 @@ def _worker(remote, job_fields: dict) -> None:
     import torch
     torch.set_num_threads(1)
     sys.path.insert(0, str(ROOT))
-    from screwhead.skill_teacher import SkillTeacher
-    from screwhead.task_env import StartNoise, TaskEnv
+    from screwhead.teacher.skill_teacher import SkillTeacher
+    from screwhead.sim.task_env import StartNoise, TaskEnv
     env = TaskEnv(job.suite, job.task, horizon=job.horizon, seed=job.seed, render=True,
                   start=StartNoise(**job.start))
     teacher = SkillTeacher(env)

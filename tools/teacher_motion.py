@@ -94,8 +94,8 @@ def episode(env, teacher, objs: list[str], track: list) -> dict:
 
 
 def main() -> int:
-    from screwhead.skill_teacher import SkillTeacher
-    from screwhead.task_env import StartNoise, TaskEnv
+    from screwhead.teacher.skill_teacher import SkillTeacher
+    from screwhead.sim.task_env import StartNoise, TaskEnv
     from teacher_report import teacher_revision
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)

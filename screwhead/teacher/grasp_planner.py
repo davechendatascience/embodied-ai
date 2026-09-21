@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from .frames import EPS_DIR, EPS_NORM, Z, tool_frame, top_down
-from .scene import VERTICAL_COS, _geom_half
+from ..geometry.frames import EPS_DIR, EPS_NORM, Z, tool_frame, top_down
+from ..sim.scene import VERTICAL_COS, _geom_half
 
 MIN_DEPTH = 0.02          # grasp at least this far below an object's top
 DEPTH_FRACTION = 0.66     # ... or this fraction of its half-height, whichever is deeper

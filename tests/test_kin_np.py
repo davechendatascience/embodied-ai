@@ -1,4 +1,4 @@
-"""The NumPy kinematics (screwhead/kin_np.py) must agree with the torch reference.
+"""The NumPy kinematics (screwhead/geometry/kin_np.py) must agree with the torch reference.
 
 The servo is the execution interface the teacher and the student share, so swapping its
 arithmetic is only allowed if nothing observable changes. These tests hold the fast path
@@ -14,9 +14,9 @@ import numpy as np
 import pytest
 import torch
 
-from screwhead import ik, kin_np, se3
-from screwhead.kinematics import body_jacobian, fk
-from screwhead.libero import panda_chain
+from screwhead.geometry import ik, kin_np, se3
+from screwhead.geometry.kinematics import body_jacobian, fk
+from screwhead.sim.libero import panda_chain
 
 CHAIN = panda_chain()
 NP = kin_np.NpChain.of(CHAIN)

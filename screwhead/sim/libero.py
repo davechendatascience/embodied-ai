@@ -35,7 +35,7 @@ from pathlib import Path
 import torch
 
 from .mjcf import from_mjcf
-from .poe import Chain
+from ..geometry.poe import Chain
 
 ROBOSUITE_ROBOTS = Path(os.environ.get(
     "ROBOT_ASSETS",

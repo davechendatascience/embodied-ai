@@ -14,10 +14,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from . import contacts
-from .frames import Z, pose
-from .kin_np import NpChain, sigma_min, solve_ik
-from .scene import _geom_half
+from ..sim import contacts
+from ..geometry.frames import Z, pose
+from ..geometry.kin_np import NpChain, sigma_min, solve_ik
+from ..sim.scene import _geom_half
 
 IK = dict(lam=0.02, max_iters=200, trust=0.2)
 MIN_SIGMA = 0.05          # a crossing or carry pose must be at least this well conditioned

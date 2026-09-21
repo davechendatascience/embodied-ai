@@ -17,9 +17,9 @@ import itertools
 
 import numpy as np
 
-from .frames import Z, axis_rot, pose
+from ..geometry.frames import Z, axis_rot, pose
 from .reach import SIGMA_WEIGHT
-from .scene import _geom_half
+from ..sim.scene import _geom_half
 
 CROWD_XY = 0.03        # m: an open footprint this close to an object, in plan, crowds it
 HAND_BAND = 0.15       # m: container parts this far above the object's top are in the hand's way

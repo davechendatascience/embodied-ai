@@ -19,8 +19,8 @@ from dataclasses import dataclass
 import torch
 from torch import Tensor
 
-from .kinematics import fk
-from .poe import Chain
+from ..geometry.kinematics import fk
+from ..geometry.poe import Chain
 
 TOKEN_DIM = 10          # 6 screw + 1 type + 2 limits + 1 normalised index
 MIN_REACH = 1e-9        # guards the reach normalisation of a degenerate (zero-reach) chain

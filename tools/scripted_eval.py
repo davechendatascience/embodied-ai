@@ -27,8 +27,8 @@ def run(a):
     import torch
     torch.set_num_threads(1)
     sys.path.insert(0, str(ROOT))
-    from screwhead.teacher_env import PrivilegedEnv
-    from screwhead.scripted_teacher import ScriptedTeacher
+    from screwhead.sim.teacher_env import PrivilegedEnv
+    from screwhead.scripted.scripted_teacher import ScriptedTeacher
     env = PrivilegedEnv(task, seed=seed, render=bool(video_dir), **env_kw)
     teacher = ScriptedTeacher(env)
     if env.layout_radius > 0:

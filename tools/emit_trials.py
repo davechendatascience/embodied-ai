@@ -25,11 +25,11 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 torch.set_default_dtype(torch.float64)
 
-from screwhead.interface import ActionSpec, delta_to_twist, denormalize, normalize, twist_to_delta  # noqa: E402
-from screwhead.ik import decode_twist, dls, nullspace_projector, sigma_min, solve_ik  # noqa: E402
-from screwhead.kinematics import body_jacobian, fk, space_jacobian  # noqa: E402
-from screwhead.mjcf import from_mjcf  # noqa: E402
-from screwhead.se3 import adjoint, inverse, log_se3  # noqa: E402
+from screwhead.geometry.interface import ActionSpec, delta_to_twist, denormalize, normalize, twist_to_delta  # noqa: E402
+from screwhead.geometry.ik import decode_twist, dls, nullspace_projector, sigma_min, solve_ik  # noqa: E402
+from screwhead.geometry.kinematics import body_jacobian, fk, space_jacobian  # noqa: E402
+from screwhead.sim.mjcf import from_mjcf  # noqa: E402
+from screwhead.geometry.se3 import adjoint, inverse, log_se3  # noqa: E402
 
 ASSETS = Path(os.environ.get(
     "ROBOT_ASSETS",
@@ -382,12 +382,12 @@ def case_action_interface() -> list[dict]:
 
 
 def _rot_axis_angle(R):
-    from screwhead.interface import _rot_log
+    from screwhead.geometry.interface import _rot_log
     return _rot_log(R)
 
 
 def compose_from_twist(T, twist, spec):
-    from screwhead.interface import compose_delta
+    from screwhead.geometry.interface import compose_delta
     return compose_delta(T, twist_to_delta(T, twist, spec))
 
 
@@ -401,8 +401,8 @@ def case_retarget_roundtrip() -> list[dict]:
     self-motion manifold and even ur5e switches IK branch. Scoring joints would
     refute a retarget that reproduces the demonstrated task exactly.
     """
-    from screwhead.interface import ActionSpec
-    from screwhead.retarget import decode, to_twists, usable
+    from screwhead.geometry.interface import ActionSpec
+    from screwhead.analysis.retarget import decode, to_twists, usable
     spec = ActionSpec()
     horizon = 32
     trials = []
@@ -441,9 +441,9 @@ def case_retarget_libero() -> list[dict]:
     these never pool with the synthetic trials -- this is the claim that the
     conversion survives real data, which the synthetic version cannot make.
     """
-    from screwhead.interface import ActionSpec
-    from screwhead.libero import demos, panda_chain, task_files
-    from screwhead.retarget import decode, to_twists, usable
+    from screwhead.geometry.interface import ActionSpec
+    from screwhead.sim.libero import demos, panda_chain, task_files
+    from screwhead.analysis.retarget import decode, to_twists, usable
 
     spec = ActionSpec()
     chain = panda_chain()
@@ -527,7 +527,7 @@ def case_force_closure() -> list[dict]:
     never used to decide -- alternating projection proves success and cannot
     prove failure, so reading a stall as `no closure` is FM-stall-read-as-failure.
     """
-    from screwhead.grasp import closure_certificate, grasp_matrix_planar, has_closure
+    from screwhead.analysis.grasp import closure_certificate, grasp_matrix_planar, has_closure
     g = torch.Generator().manual_seed(BASE_SEED)
     trials = []
     for _ in range(N_PER_ROBOT):

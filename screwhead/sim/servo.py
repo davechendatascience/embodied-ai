@@ -25,9 +25,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from . import kin_np
-from .interface import ActionSpec
-from .poe import Chain
+from ..geometry import kin_np
+from ..geometry.interface import ActionSpec
+from ..geometry.poe import Chain
 
 
 class TwistServo:
@@ -38,7 +38,7 @@ class TwistServo:
         self.lam, self.iters, self.max_lag, self.max_pose_err = lam, iters, max_lag, max_pose_err
         self.ref: np.ndarray | None = None
         self.T_ref: np.ndarray | None = None
-        # the arithmetic runs in NumPy (screwhead/kin_np.py, held to the torch reference
+        # the arithmetic runs in NumPy (screwhead/geometry/kin_np.py, held to the torch reference
         # by tests/test_kin_np.py): 17x faster per step, the same numbers
         self._np = kin_np.NpChain.of(chain)
         self.reanchors = 0          # diagnostics: how often the pose reference was abandoned

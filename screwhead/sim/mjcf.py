@@ -22,7 +22,7 @@ from pathlib import Path
 import torch
 from torch import Tensor
 
-from .poe import Chain
+from ..geometry.poe import Chain
 
 _DEG = torch.pi / 180.0
 

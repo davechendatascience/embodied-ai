@@ -14,7 +14,7 @@ import contextlib
 
 import numpy as np
 
-from . import contacts
+from ..sim import contacts
 
 STALL_STEPS = 30          # the tool still for this many steps ...
 STALL_SPAN = 0.003        # ... within this many metres is a stall

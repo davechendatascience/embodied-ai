@@ -18,11 +18,11 @@ from __future__ import annotations
 import torch
 from torch import Tensor
 
-from .ik import sigma_min, solve_ik
-from .interface import ActionSpec
-from .kinematics import fk
-from .poe import Chain
-from .se3 import inverse, log_se3
+from ..geometry.ik import sigma_min, solve_ik
+from ..geometry.interface import ActionSpec
+from ..geometry.kinematics import fk
+from ..geometry.poe import Chain
+from ..geometry.se3 import inverse, log_se3
 
 
 def to_twists(chain: Chain, q_traj: Tensor, spec: ActionSpec) -> Tensor:
@@ -83,5 +83,5 @@ def decode(
 
 
 def _exp(V: Tensor) -> Tensor:
-    from .se3 import exp_twist
+    from ..geometry.se3 import exp_twist
     return exp_twist(V)

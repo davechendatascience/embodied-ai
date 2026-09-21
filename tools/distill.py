@@ -73,11 +73,11 @@ def add_start_args(p) -> None:
 def _scripted_program(env, task, teacher_v_min):
     """The per-task demonstration program; it reads the simulator, so it is built around
     the environment, and it vetoes layouts it cannot solve."""
-    from screwhead.scripted_teacher import ScriptedTeacher
+    from screwhead.scripted.scripted_teacher import ScriptedTeacher
     if teacher_v_min > 0:
         from dataclasses import replace
 
-        from screwhead.scripted_teacher import PROGRAMS
+        from screwhead.scripted.scripted_teacher import PROGRAMS
         program = ScriptedTeacher(env, replace(PROGRAMS[task], v_min_approach=teacher_v_min))
     else:
         program = ScriptedTeacher(env)
@@ -92,7 +92,7 @@ def _program_label(env, program):
     regulating toward."""
     a = program.act().astype(np.float32)
     if env.gripper_mode == "target":
-        from screwhead.gripper_servo import program_target, target_to_channel
+        from screwhead.sim.gripper_servo import program_target, target_to_channel
         a[6] = target_to_channel(program_target(program.phase, float(a[6]), program.k.preshape_aperture))
     return a
 
@@ -100,7 +100,7 @@ def _program_label(env, program):
 def _grasp_error(env, program):
     """ANALYSIS ONLY, never a training input: the grasp the program chose, as the tool's
     position and rotation error to it (base frame), and bowl - tool."""
-    from screwhead.progress import rotvec
+    from screwhead.scripted.progress import rotvec
     sn = dict(env.snapshot(), **env.ref)
     R_g, p_g, _, _ = program.choose_grasp(sn)
     return np.concatenate([p_g - sn["p_tool"], sn["R_tool"] @ rotvec(sn["R_tool"].T @ R_g),
@@ -140,13 +140,13 @@ def _worker(remote, task, seed, cpu, teacher_ckpt, horizon, radius, env_kw):
     import torch
     torch.set_num_threads(1)
     sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "tools"))
-    from screwhead.teacher_env import PrivilegedEnv
+    from screwhead.sim.teacher_env import PrivilegedEnv
     if teacher_ckpt != "scripted":
         raise ValueError(f"unknown teacher {teacher_ckpt!r}: only the scripted programs remain")
     env = PrivilegedEnv(task, radius_m=radius, seed=seed, render=True, horizon=horizon, **env_kw)
     program = _scripted_program(env, task, teacher_v_min)
 
-    from screwhead.layouts import relation_holds
+    from screwhead.scripted.layouts import relation_holds
     remote.send(env.language)
     while True:
         cmd, arg = remote.recv()
@@ -196,7 +196,7 @@ def decode_student(out, act_std, gripper_target, gripper_levels=None, gripper_cl
     DAgger collection, evaluation and recording, so they execute the same actions."""
     if gripper_classes:
         # twist regressed; gripper = the most likely of the program apertures
-        from screwhead.gripper_servo import target_to_channel
+        from screwhead.sim.gripper_servo import target_to_channel
         a = np.zeros((len(out), 7), np.float32)
         a[:, :6] = (out[:, :6] * act_std[:6]).clamp(-1, 1).float().cpu().numpy()
         a[:, 6] = target_to_channel(np.asarray(gripper_classes)[out[:, 6:].argmax(-1).cpu().numpy()])
@@ -208,7 +208,7 @@ def decode_student(out, act_std, gripper_target, gripper_levels=None, gripper_cl
         # executed as hold, and the drawer task (which pre-shapes by holding) scored 0/10.
         a[:, 6] = decode_gripper(a[:, 6])
     elif gripper_levels:
-        from screwhead.gripper_servo import snap_channel
+        from screwhead.sim.gripper_servo import snap_channel
         a[:, 6] = snap_channel(a[:, 6], gripper_levels)
     return a
 
@@ -218,20 +218,20 @@ def load_student(ckpt, device):
     import torch
     ck = torch.load(ckpt, map_location="cpu", weights_only=False)
     if ck.get("kind") == "token":
-        from screwhead.token_head import TokenHead
+        from screwhead.student.token_head import TokenHead
         m = TokenHead(chunk=ck["chunk"], state_dim=ck.get("state_dim", 10),
                       legacy_spec_mask=not ck.get("spec_mask_fixed", False), out_dim=ck.get("out_dim", 7))
     else:
-        from screwhead.policy import ScrewHead
+        from screwhead.student.policy import ScrewHead
         m = ScrewHead(chunk=ck["chunk"])
     m.load_state_dict(ck["state_dict"]); m.to(device).eval()
     return m, torch.as_tensor(np.asarray(ck["act_std"]), dtype=torch.float32, device=device), ck
 
 
 def spec_tokens(device):
-    from screwhead.libero import panda_chain
-    from screwhead.policy import MAX_DOF
-    from screwhead.spec import encode
+    from screwhead.sim.libero import panda_chain
+    from screwhead.student.policy import MAX_DOF
+    from screwhead.student.spec import encode
     tok, mask = encode(panda_chain()).padded(MAX_DOF)
     return tok.float().to(device)[None], mask.to(device)[None]
 
@@ -246,7 +246,7 @@ def _revision(path):
 def write_trials(args, tasks, done_eps, has_student):
     """One component-belief trial per episode (see belief.yaml). compatibility_key
     fields go in repro -- the ledger splits slices on repro only."""
-    teacher_rev = _revision(ROOT / "screwhead/scripted_teacher.py")
+    teacher_rev = _revision(ROOT / "screwhead/scripted/scripted_teacher.py")
     if args.teacher_v_min > 0:
         teacher_rev += f"+vmin{args.teacher_v_min:g}"
     randomization = (f"layout{args.layout_radius:g}_xy{args.start_xy:g}_z{args.start_z:g}_yaw{args.start_yaw:g}"
@@ -296,7 +296,7 @@ def _load_driver(args, dev):
         raise SystemExit(f"{args.student}: gripper_target={ck.get('gripper_target', False)} but --gripper-target={args.gripper_target}")
     dino = None
     if ck.get("kind") == "token":
-        from screwhead.dino_features import DinoFeatures
+        from screwhead.student.dino_features import DinoFeatures
         dino = DinoFeatures(dev)
     levels = args.gripper_levels if args.gripper_levels is not None else ck.get("gripper_levels")
     return _Student(model, act_std, ck, dino, use_rate=bool(ck.get("aperture_rate", False)),
@@ -547,7 +547,7 @@ class _Collector:
 def collect(args):
     import torch
     sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT / "tools"))
-    from screwhead.clip_features import clip_encoder
+    from screwhead.student.clip_features import clip_encoder
     dev = args.device
     rng = np.random.default_rng(args.seed)
     enc_img, enc_txt = clip_encoder(dev)
@@ -616,7 +616,7 @@ def train(args):
     import torch
     from torch import nn
     sys.path.insert(0, str(ROOT))
-    from screwhead.policy import ScrewHead
+    from screwhead.student.policy import ScrewHead
     torch.manual_seed(args.seed)
     dev = args.device
     agent, wrist, state, label, task, episode, text = _load_rounds(args)

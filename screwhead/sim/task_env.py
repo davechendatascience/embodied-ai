@@ -1,13 +1,13 @@
 """Any LIBERO task, executed through the same servos as libero_spatial.
 
-PrivilegedEnv (screwhead/teacher_env.py) is tied to one scene: the akita bowl and the
+PrivilegedEnv (screwhead/sim/teacher_env.py) is tied to one scene: the akita bowl and the
 plate are module constants, the layout sampler switches on task index, and progress is
 measured against bowl geometry. This environment takes a task specification instead
-(screwhead/task_spec.py) and reads what it needs from the scene (screwhead/scene.py),
+(screwhead/teacher/task_spec.py) and reads what it needs from the scene (screwhead/sim/scene.py),
 so the other 120 LIBERO tasks are reachable without new per-task code.
 
 What is kept identical to the spatial pipeline, because gate 2 was measured with it (the
-shared parts live in screwhead/sim_arm.py):
+shared parts live in screwhead/sim/sim_arm.py):
   - JOINT_POSITION control at kp=4000 with absolute holds during settling,
   - the arm driven by TwistServo (body twist integrated on SE(3) to a joint reference),
   - the gripper driven by GripperServo from a target aperture,
@@ -45,7 +45,7 @@ class TaskEnv(SimArm):
     def __init__(self, suite: str, task_index: int, horizon: int = 600, seed: int = 0,
                  render: bool = True, execution: Execution | None = None, start: StartNoise | None = None):
         from .scene import Scene
-        from .task_spec import parse
+        from ..teacher.task_spec import parse
         self.suite, self.ti, self.horizon = suite, task_index, horizon
         self.rng = np.random.default_rng(seed)
         self._scene_seed = seed
@@ -94,7 +94,7 @@ class TaskEnv(SimArm):
         return snap
 
     def student_state(self) -> np.ndarray:
-        from .state import tool_state
+        from ..geometry.state import tool_state
         raw = self.raw or self.observe()
         q = torch.tensor(np.asarray(raw["robot0_joint_pos"]), dtype=torch.float64)[None]
         g = raw["robot0_gripper_qpos"]

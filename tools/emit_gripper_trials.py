@@ -38,7 +38,7 @@ SEED = 0
 def make_env(gripper: str):
     from libero.libero import benchmark, get_libero_path
     from libero.libero.envs import OffScreenRenderEnv
-    from screwhead.libero_env import register_ur5e
+    from screwhead.sim.libero_env import register_ur5e
     register_ur5e()
     bm = benchmark.get_benchmark_dict()["libero_spatial"]()
     t = bm.get_task(0)
@@ -124,7 +124,7 @@ def case_finger_fk() -> list[dict]:
     """
     import torch
     torch.set_default_dtype(torch.float64)
-    from screwhead.gripper import load, pad_position
+    from screwhead.analysis.gripper import load, pad_position
     trials = []
     for name, spec in GRIPPERS.items():
         g = load(gripper_asset(spec["mjcf"]))
@@ -182,7 +182,7 @@ def case_loop_closure() -> list[dict]:
 def _softness_tolerance(g, m, d, joints, a: str, b: str) -> float:
     """Propagate each joint's limit violation through d sep / d q (see case_span_derived)."""
     import torch
-    from screwhead.gripper import separation
+    from screwhead.analysis.gripper import separation
     qv, viol = {}, {}
     for j in joints:
         jid = m.joint_name2id(f"gripper0_{j}")
@@ -217,7 +217,7 @@ def case_span_derived() -> list[dict]:
     """
     import torch
     torch.set_default_dtype(torch.float64)
-    from screwhead.gripper import load, pad_gap, separation_bounds
+    from screwhead.analysis.gripper import load, pad_gap, separation_bounds
     trials = []
     for name, spec in GRIPPERS.items():
         g = load(gripper_asset(spec["mjcf"]))
@@ -261,7 +261,7 @@ def case_grasp_infeasible() -> list[dict]:
     """
     import torch
     torch.set_default_dtype(torch.float64)
-    from screwhead.gripper import load, pad_gap
+    from screwhead.analysis.gripper import load, pad_gap
     rng = np.random.default_rng(SEED)
     trials = []
     for name, spec in GRIPPERS.items():
@@ -279,7 +279,7 @@ def case_grasp_infeasible() -> list[dict]:
         # the chain, less the pad thickness the simulator reports. The pad
         # geometry is static, so reading it once is a property of the gripper
         # and not of this episode.
-        from screwhead.gripper import separation_bounds
+        from screwhead.analysis.gripper import separation_bounds
         _, hi_sep = separation_bounds(g, a_tip, b_tip)
         ia = m.body_name2id(f"gripper0_{a_tip}"); ib = m.body_name2id(f"gripper0_{b_tip}")
         sep_now = float(np.linalg.norm(d.xpos[ia] - d.xpos[ib]))

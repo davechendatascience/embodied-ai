@@ -228,7 +228,7 @@ branch.
 
 *As built (Part III):* the policy currently emits the simplest grasp intent — a
 target jaw aperture in metres — and a fixed servo realizes it. The grasp-map and
-force-closure predicates are implemented and verified (`screwhead/grasp.py`), but
+force-closure predicates are implemented and verified (`screwhead/analysis/grasp.py`), but
 not yet in the policy's output.
 
 ---
@@ -261,7 +261,7 @@ not yet in the policy's output.
 
 Commitments, and what changed from the 09-07 proposal:
 
-1. **Embodiment encoder** — as proposed: one token per joint (`screwhead/spec.py`:
+1. **Embodiment encoder** — as proposed: one token per joint (`screwhead/student/spec.py`:
    body-form screw axis with its linear part divided by the arm's reach, joint type,
    limits, index), masked rather than zero-padded. (A mask-polarity bug made the first
    token heads ignore these tokens; fixed, and older checkpoints load in legacy mode.)
@@ -271,10 +271,10 @@ Commitments, and what changed from the 09-07 proposal:
 3. **Decoder** — DLS-IK as proposed, but at *execution*, not inside the training graph.
    Measured: LIBERO's joint-position controller achieves 82% of each commanded step, so
    per-step deltas compound (a demonstration's own labels replayed 0/50). `TwistServo`
-   (`screwhead/servo.py`) integrates the twist on SE(3) into a pose reference, solves IK
+   (`screwhead/sim/servo.py`) integrates the twist on SE(3) into a pose reference, solves IK
    from a joint reference rather than the lagging measurement, and commands an absolute
    target (replay 48/50).
-4. **Gripper decoder** — `GripperServo` (`screwhead/gripper_servo.py`). A lag-compensated
+4. **Gripper decoder** — `GripperServo` (`screwhead/sim/gripper_servo.py`). A lag-compensated
    close/hold/open law is a controller, not an intent; learned as a command it matched
    the teacher on 20–25% of pre-shape frames. The policy names the aperture, the servo
    reaches it, and the student's output is snapped to the apertures the programs use
@@ -296,8 +296,8 @@ thesis is now gated on grounding:
 
 | Piece | What it does | Where |
 |---|---|---|
-| Randomization | object layouts (8 cm) that keep each instruction's spatial relation true; robot start pose ±10 cm / ±5 cm / ±30° / ±10° / null space | `screwhead/layouts.py`, `teacher_env.py` |
-| Teacher | per-task demonstration programs on privileged state; Markov feedback laws, so they label any visited state | `screwhead/scripted_teacher.py` |
+| Randomization | object layouts (8 cm) that keep each instruction's spatial relation true; robot start pose ±10 cm / ±5 cm / ±30° / ±10° / null space | `screwhead/scripted/layouts.py`, `teacher_env.py` |
+| Teacher | per-task demonstration programs on privileged state; Markov feedback laws, so they label any visited state | `screwhead/scripted/scripted_teacher.py` |
 | Distillation | success-filtered teacher data, then DAgger (student drives with β = 0.5, teacher labels) | `tools/distill.py`, `tools/token_data.py` |
 | One execution path | demonstrations, DAgger and evaluation execute through the same servos and the same stored decode | `scripts/token_vla.sh` |
 | Controls | an image-zeroed copy trained on the same data must fail; per-episode trials go to the ledger | `belief.yaml` gate 2 |
@@ -326,7 +326,7 @@ Results so far (seed 555, randomized, VLA driving alone):
 
 The teacher programs emit twists, so they should drive any arm through that arm's own
 `TwistServo`; the gripper servo's aperture range should come from each gripper's finger
-kinematics (`screwhead/gripper.py`) rather than the Panda's 0.08 m. Those two are the
+kinematics (`screwhead/analysis/gripper.py`) rather than the Panda's 0.08 m. Those two are the
 remaining engineering between gate 2 and gate 3.
 
 The two silent URDF failures noted on 09-07 still apply to any new arm: `rpy` is
@@ -341,7 +341,7 @@ programs. Tuning further fits those ten. What is task-specific today, and what r
 | Hand-written today | Replaced by |
 |---|---|
 | One `ProgramConfig` per task (rim sector, pre-shape, posture, approach heights) | A skill library parameterized by measured geometry, sequenced from the task's BDDL goal predicates (`CMP-skill-library`) |
-| Gripper apertures 0 / 26 / 80 mm in the decode | Closed and open from the gripper's own finger FK (`screwhead/gripper.py`); an intermediate hold from the scene's measured clearance |
+| Gripper apertures 0 / 26 / 80 mm in the decode | Closed and open from the gripper's own finger FK (`screwhead/analysis/gripper.py`); an intermediate hold from the scene's measured clearance |
 | `layouts.py` relations switched on task index | Relations read from the instruction's goal predicates, which name the same objects |
 | 5 cm/s approach floor, 4 mm grasp tolerance | Kept as servo constants, but checked per gripper and object rather than assumed |
 

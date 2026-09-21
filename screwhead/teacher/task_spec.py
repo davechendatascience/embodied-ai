@@ -1,7 +1,7 @@
 """A LIBERO task, read rather than hand-written.
 
 The ten libero_spatial programs were written per task, with their constants tuned on
-those tasks (screwhead/scripted_teacher.py). That does not reach 130 tasks, and the
+those tasks (screwhead/scripted/scripted_teacher.py). That does not reach 130 tasks, and the
 held-out splits showed what it costs: a task whose bowl sits on an unseen fixture
 scored 0/20 while table-top tasks transferred (belief.yaml, CTR-held-out-task).
 

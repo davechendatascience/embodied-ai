@@ -22,8 +22,8 @@ import numpy as np
 import torch
 
 from . import contacts
-from .frames import axis_rot
-from .kinematics import fk
+from ..geometry.frames import axis_rot
+from ..geometry.kinematics import fk
 
 START_MIN_TOOL_Z = 0.08       # m above the base: keep a randomised start clear of the table
 START_MIN_SIGMA = 0.02        # a start this close to singular is rejected
@@ -55,7 +55,7 @@ class SimArm:
         from libero.libero.envs import OffScreenRenderEnv
 
         from .gripper_servo import GripperServo
-        from .interface import ActionSpec
+        from ..geometry.interface import ActionSpec
         from .libero_env import JOINT_ACTION_SCALE, build_chain, gripper_geom, register_ur5e
         from .servo import TwistServo
         register_ur5e()
@@ -140,8 +140,8 @@ class SimArm:
 
     def tool_state(self, raw: dict | None = None) -> dict:
         """Tool pose (base frame) and jaw aperture and its rate, from the joint readings."""
-        from .kin_np import NpChain
-        from .kin_np import fk as fk_np
+        from ..geometry.kin_np import NpChain
+        from ..geometry.kin_np import fk as fk_np
         raw = raw or getattr(self, "raw", None) or self.observe()
         T = fk_np(NpChain.of(self.chain), np.asarray(raw["robot0_joint_pos"], float))[0]
         gq, gv = raw["robot0_gripper_qpos"], raw.get("robot0_gripper_qvel", np.zeros(2))
@@ -215,7 +215,7 @@ class SimArm:
         null space of a 7-DoF arm) varies too. A candidate is kept only if Newton
         converged, it is away from singularity, and the arm penetrates nothing.
         """
-        from .ik import sigma_min, solve_ik
+        from ..geometry.ik import sigma_min, solve_ik
         sim = self.env.sim
         idx = self.joint_indexes
         q0 = sim.data.qpos[idx].copy()

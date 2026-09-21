@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 import torch
 
-from screwhead import frames, se3
+from screwhead.geometry import frames, se3
 
 RNG = np.random.default_rng(0)
 TOL = 1e-9

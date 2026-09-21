@@ -37,7 +37,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .frames import rot_angle, rotvec
+from ..geometry.frames import rot_angle, rotvec
 
 
 @dataclass(frozen=True)

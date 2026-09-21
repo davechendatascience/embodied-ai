@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .gripper_servo import A_OPEN
+from ..sim.gripper_servo import A_OPEN
 from .skills import Skills, SkillConfig
 from .task_spec import Step
 

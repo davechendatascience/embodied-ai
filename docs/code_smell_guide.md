@@ -32,7 +32,7 @@ copy (the fingertip bodies `finger_joint{1,2}_tip`, found the hard way) does not
 others.
 
 **Rule:** a computation written a second time gets a name and one home. Contact queries
-live in `screwhead/contacts.py`; reachability scoring in one method; environment plumbing
+live in `screwhead/sim/contacts.py`; reachability scoring in one method; environment plumbing
 shared by both environments in one module. The gate fails on any block of six or more
 similar lines in two files.
 

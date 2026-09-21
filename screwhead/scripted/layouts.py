@@ -25,7 +25,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from . import contacts
+from ..sim import contacts
 
 NAMES = dict(t="akita_black_bowl_1", o="akita_black_bowl_2", cookies="cookies_1",
              ramekin="glazed_rim_porcelain_ramekin_1", plate="plate_1")

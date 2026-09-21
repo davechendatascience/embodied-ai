@@ -37,13 +37,43 @@ BELIEF_REPO = Path.home() / "Documents/GitHub/Theoretically_Driven_LLM_Planning"
 # trials stop being comparable (the ledger's compatibility key reads teacher_revision).
 # Found by following imports from what an episode runs; a hand-kept list missed the
 # action decode (interface.py), the env wrapper and the episode runner itself.
-TEACHER_ENTRY = ["tools/skill_eval.py", "screwhead/skill_teacher.py", "screwhead/task_env.py",
-                 "screwhead/episode_log.py"]
+TEACHER_ENTRY = ["tools/skill_eval.py", "screwhead/teacher/skill_teacher.py", "screwhead/sim/task_env.py",
+                 "screwhead/teacher/episode_log.py"]
+
+
+def _module_file(parts: list[str]) -> str | None:
+    """screwhead/a/b.py or screwhead/a/b/__init__.py for the dotted parts, if it exists."""
+    for cand in ("/".join(parts) + ".py", "/".join(parts) + "/__init__.py"):
+        if (ROOT / cand).exists():
+            return cand
+    return None
+
+
+def _imports(f: str) -> list[str]:
+    """Repo files one file imports, relative imports resolved against its package."""
+    import ast
+    pkg = f.split("/")[:-1]                        # the importing file's package, as path parts
+    out = []
+    for node in ast.walk(ast.parse((ROOT / f).read_text())):
+        if isinstance(node, ast.Import):
+            mods = [a.name.split(".") for a in node.names if a.name.startswith("screwhead")]
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                base = pkg[:len(pkg) - (node.level - 1)]
+            elif (node.module or "").startswith("screwhead"):
+                base = []
+            else:
+                continue
+            head = base + (node.module.split(".") if node.module else [])
+            mods = [head] + [head + [a.name] for a in node.names]   # a name may be a module
+        else:
+            continue
+        out += [m for m in (_module_file(p) for p in mods) if m]
+    return out
 
 
 def teacher_code() -> list[str]:
     """Every file in the static import closure of TEACHER_ENTRY within this repo."""
-    import ast
     seen: set[str] = set()
     todo = list(TEACHER_ENTRY)
     while todo:
@@ -51,17 +81,7 @@ def teacher_code() -> list[str]:
         if f in seen or not (ROOT / f).exists():
             continue
         seen.add(f)
-        for node in ast.walk(ast.parse((ROOT / f).read_text())):
-            if isinstance(node, ast.Import):
-                todo += [f"screwhead/{a.name.split('.', 1)[1]}.py" for a in node.names
-                         if a.name.startswith("screwhead.")]
-            elif isinstance(node, ast.ImportFrom):
-                mod = node.module or ""
-                if node.level == 0 and not (mod == "screwhead" or mod.startswith("screwhead.")):
-                    continue
-                base = mod.removeprefix("screwhead").lstrip(".") if node.level == 0 else mod
-                todo += ([f"screwhead/{base.replace('.', '/')}.py"] if base
-                         else [f"screwhead/{a.name}.py" for a in node.names])
+        todo += _imports(f)
     return sorted(seen)
 
 

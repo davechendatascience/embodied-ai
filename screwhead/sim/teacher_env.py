@@ -31,7 +31,7 @@ import numpy as np
 import torch
 
 from . import contacts
-from .kinematics import fk
+from ..geometry.kinematics import fk
 from .sim_arm import Execution, SimArm
 
 TARGET = "akita_black_bowl_1"
@@ -66,7 +66,7 @@ class PrivilegedEnv(SimArm):
         self.start = dict(xy=start_xy_m, z=start_z_m, yaw=np.deg2rad(start_yaw_deg),
                           tilt=np.deg2rad(start_tilt_deg), null=start_null_rad)
         self.start_offset = None
-        from .progress import PickPlaceGeometry
+        from ..scripted.progress import PickPlaceGeometry
         self.geom = PickPlaceGeometry()
         self.shaping, self.gamma, self.success_bonus = shaping, gamma, success_bonus
         self.rich_obs = rich_obs
@@ -142,7 +142,7 @@ class PrivilegedEnv(SimArm):
 
     def _layout_sampler(self):
         if self.layout is None:
-            from .layouts import LayoutSampler
+            from ..scripted.layouts import LayoutSampler
             self.layout = LayoutSampler(self, radius=self.layout_radius)
         return self.layout
 
@@ -282,7 +282,7 @@ class PrivilegedEnv(SimArm):
 
     def _rich(self, snap: dict, phi: float | None = None, stage: int | None = None) -> np.ndarray:
         """PRIVILEGED progress features: phi/6, stage one-hot, tool->grasp waypoint error."""
-        from .progress import grasp_error
+        from ..scripted.progress import grasp_error
         if phi is None:
             phi, stage, _ = self.progress(snap)
         oh = np.zeros(7); oh[int(stage)] = 1.0
@@ -290,10 +290,10 @@ class PrivilegedEnv(SimArm):
 
     def set_reference(self, snap: dict | None = None) -> None:
         """Episode constants: bowl rest height and the two stage normalisers that depend on layout."""
-        from .progress import reach_distance
+        from ..scripted.progress import reach_distance
         s = snap or self.snapshot(); g = self.geom
         d0_reach, _, _ = reach_distance(dict(s, rest_z=float(s["p_bowl"][2])), g)
-        from .progress import transport_remaining
+        from ..scripted.progress import transport_remaining
         ref0 = dict(s, rest_z=float(s["p_bowl"][2]), d0_reach=float(d0_reach), d0_carry=1.0)
         d0_carry, _ = transport_remaining(ref0, g)       # the whole transport, from grasped at rest
         self.ref = dict(rest_z=float(s["p_bowl"][2]), d0_reach=float(d0_reach), d0_carry=float(d0_carry),
@@ -301,7 +301,7 @@ class PrivilegedEnv(SimArm):
         self.phi = self.progress(s)[0]
 
     def progress(self, snap: dict | None = None):
-        from .progress import progress
+        from ..scripted.progress import progress
         s = dict(snap or self.snapshot(), **self.ref)
         return progress(s, self.geom)
 
@@ -313,7 +313,7 @@ class PrivilegedEnv(SimArm):
     def student_state(self) -> np.ndarray:
         """Tool pose + gripper aperture via tool_state, the student's proprioception.
         No object state, and not the teacher's layout of the same quantities."""
-        from .state import tool_state
+        from ..geometry.state import tool_state
         q = torch.tensor(np.asarray(self.raw["robot0_joint_pos"]), dtype=torch.float64)[None]
         g = self.raw["robot0_gripper_qpos"]
         return tool_state(self.chain, q, torch.tensor([float(g[0] - g[1])], dtype=torch.float64)

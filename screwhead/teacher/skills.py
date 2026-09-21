@@ -24,11 +24,11 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from . import contacts
+from ..sim import contacts
 from .clearing import Clearing
-from .frames import Z, axis_rot, pose, rot_angle, rotvec
+from ..geometry.frames import Z, axis_rot, pose, rot_angle, rotvec
 from .grasp_planner import GraspPlanner
-from .gripper_servo import A_OPEN, target_to_channel
+from ..sim.gripper_servo import A_OPEN, target_to_channel
 from .reach import Reach
 
 MIN_TWIST_DIST = 0.001    # m: nearer than this, the speed floor does not apply

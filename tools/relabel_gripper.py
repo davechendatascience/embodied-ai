@@ -2,7 +2,7 @@
 """Add target-aperture gripper labels (label_gt) to existing token caches.
 
 The saved labels are the program's -1/0/+1 commands. The target it was regulating
-toward is a function of its phase (screwhead/gripper_servo.py:program_target):
+toward is a function of its phase (screwhead/sim/gripper_servo.py:program_target):
 
   DAgger rounds    the distill.py npz stored the phase per frame -- exact.
   teacher shards   no phase was stored. Only the drawer task pre-shapes; every other
@@ -27,8 +27,8 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from screwhead.gripper_servo import A_OPEN, program_target, target_to_channel  # noqa: E402
-from screwhead.scripted_teacher import PROGRAMS  # noqa: E402
+from screwhead.sim.gripper_servo import A_OPEN, program_target, target_to_channel  # noqa: E402
+from screwhead.scripted.scripted_teacher import PROGRAMS  # noqa: E402
 
 
 def from_phases(task, phase, command):

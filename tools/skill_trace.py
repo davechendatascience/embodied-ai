@@ -36,8 +36,8 @@ def main() -> int:
     args = ap.parse_args()
     os.sched_setaffinity(0, {args.cpu})
 
-    from screwhead.skill_teacher import SkillTeacher
-    from screwhead.task_env import TaskEnv
+    from screwhead.teacher.skill_teacher import SkillTeacher
+    from screwhead.sim.task_env import TaskEnv
     env = TaskEnv(args.suite, args.task, horizon=args.horizon,
                   seed=args.seed * 100 + args.task, render=True)
     teacher = SkillTeacher(env)

@@ -25,9 +25,9 @@ from pathlib import Path
 import torch
 from torch import Tensor
 
-from .kinematics import fk
-from .mjcf import from_mjcf, leaf_paths
-from .poe import Chain
+from ..geometry.kinematics import fk
+from ..sim.mjcf import from_mjcf, leaf_paths
+from ..geometry.poe import Chain
 
 # Body origins closer than this give no closing axis (metres).
 _COINCIDENT = 1e-12

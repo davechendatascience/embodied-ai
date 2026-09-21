@@ -18,7 +18,7 @@ from torch import nn
 
 from .dino_features import DIM, GRID
 from .spec import TOKEN_DIM
-from .state import STATE_DIM
+from ..geometry.state import STATE_DIM
 
 
 class TokenHead(nn.Module):
