@@ -39,6 +39,7 @@ class Reach:
     def __init__(self, env, config):
         self.env, self.scene, self.k = env, env.scene, config
         self.last_choice: dict = {}
+        self.last_carry: dict = {}
         self._geom_mask: np.ndarray | None = None
         self._geom_half: np.ndarray | None = None
 
@@ -177,10 +178,21 @@ class Reach:
         clear = self.transit_height(q, target_q, body) - CLEARANCE + hang + CARRY_EXTRA
         lo = float(target_q[2] + CARRY_FLOOR)
         hi = float(min(max(clear, lo), target_q[2] + CAP_ABOVE))
-        hs = list(np.arange(hi, lo - EPS_LEN2, -CARRY_STEP)) or [lo]
+        hs = list(np.arange(hi, lo - EPS_LEN2, -CARRY_STEP))
+        if not hs or hs[-1] > lo + EPS_LEN2:
+            hs.append(lo)                       # the floor is always one of the heights solved
         tool_off = p - q
         stops = [q[:2], (q[:2] + target_q[:2]) / 2, target_q[:2]]      # pick, halfway, drop
-        _th, conv, sig, margin = self.solve([pose(R, np.array([xy[0], xy[1], h]) + tool_off)
-                                             for h in hs for xy in stops])
-        ok = (conv & (sig > MIN_SIGMA) & (margin > MIN_MARGIN)).reshape(len(hs), len(stops)).all(1)
-        return next((float(h) for h, good in zip(hs, ok, strict=True) if good), lo)
+        th, conv, sig, margin = self.solve([pose(R, np.array([xy[0], xy[1], h]) + tool_off)
+                                            for h in hs for xy in stops])
+        n = len(stops)
+        ok = (conv & (sig > MIN_SIGMA) & (margin > MIN_MARGIN)).reshape(len(hs), n).all(1)
+        for i, h in enumerate(hs):              # the highest height reachable at every stop,
+            if ok[i] and all(self.collides(th[i * n + j], body) < 2 for j in range(n)):
+                self.last_carry = dict(verified=True, h=round(float(h), 3))
+                return float(h)                 # with the arm out of the fixtures there
+        # none is: the floor, logged as unverified with its worst stop's conditioning (a
+        # carry this low is the gentlest; one in five carries on libero_spatial lands here)
+        worst = np.where(conv, np.minimum(margin, SIGMA_WEIGHT * sig), -np.inf).reshape(len(hs), n).min(1)
+        self.last_carry = dict(verified=False, h=round(lo, 3), worst=round(float(worst[-1]), 3))
+        return lo

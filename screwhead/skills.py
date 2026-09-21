@@ -420,10 +420,14 @@ class Skills:
         return best
 
     def _carry_height(self, obj: str, region: str, q, target_q, R, p) -> float:
-        key = (obj, region)
+        """Per grasp, not per object: a regrasp holds the object differently, and a height
+        checked for the old grasp's rotation and offset says nothing about the new one."""
+        g = self._grasp_cache.get(obj)
+        key = (obj, region, None if g is None else tuple(np.round(g[1], 4)))
         if key not in self._carry_cache:
             self._carry_cache[key] = self.reach.carry_height(
                 self.scene.object_box(obj), q, target_q, R, p, self.scene.body_id(obj))
+            self.grasp_log.setdefault(obj, {})["carry"] = self.reach.last_carry
         return self._carry_cache[key]
 
     def at_place(self, q: np.ndarray, target_q: np.ndarray) -> bool:
