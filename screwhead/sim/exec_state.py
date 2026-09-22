@@ -12,7 +12,7 @@ period's first substep, and the clock is read only by env.step, which the lean p
 Every restore also copies the model's body poses, which LIBERO re-samples for the fixtures at
 every reset (AXM-libero-resamples-fixtures): a state is restorable into any episode of any
 instance of the task. State a caller keeps between periods -- the verdicts' release watch
-(verdicts.ReleaseWatch.fork), a teacher's episode-start reference -- is the caller's to carry.
+(verdicts.Watch.fork), a teacher's episode-start reference -- is the caller's to carry.
 """
 from __future__ import annotations
 
