@@ -263,6 +263,22 @@ axioms:
       and the same 26 mm target, the aperture after 6 steps was 42.5 mm when the previous
       episode ended open and 28.9 mm when it ended closed.
 
+  - id: AXM-parameters-derived
+    domain: requirement
+    statement: >-
+      A threshold or weight in a design is taken from a declared source -- LIBERO's scorer
+      (read from its objects, or probed through its predicates), the MuJoCo model (geometry,
+      masses, inertias, damping, gains, limits), the bddl (goal and initial conditions), a
+      definition in this file, or a measured distribution named with its measurement -- or it
+      is a free parameter the design shows cannot change its optimum or its verdicts. A number
+      chosen by hand to make a case pass is not admissible.
+    rationale: >-
+      The user's decision (2026-09-22): designs should limit hand-tuned parameters. That day's
+      design pass refuted servo v2-v5 and the RL objective v1-v4 almost entirely on hand-picked
+      bounds and weights (rate by period 3, within 2 periods, <= 40 N m, random 0.02 m/s kicks,
+      seven reward weights), and found the skill teacher's squeeze thresholds tuned to a 0-24
+      substep observation lag.
+
 definitions:
   - id: DEF-reachable-pose
     term: Reachable pose
