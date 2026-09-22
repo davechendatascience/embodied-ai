@@ -79,7 +79,10 @@ $$\min_\theta\; \mathbb{E}_{\xi\sim P}\big[\,T(\pi_\theta; R(\xi))\,\big] .$$
 
 **One network per task.** $\pi_\theta$ is trained separately for each task, on the full
 privileged state (every free object's pose, box and velocities, fixture joints, the execution
-state, the loss's gap vector -- `RLTaskEnv.observe`, 171 dimensions on libero_goal 8). It is the
+state, the loss's gap vector, and each movable body's resting body and face at the episode
+start -- `RLTaskEnv.observe`, 171 dimensions on libero_goal 8). The start's supports are part of
+the state because the disturbance violation is judged against them; without them the label would
+depend on the episode's history (AXM-dagger-needs-markov-labels). It is the
 student's architecture without its two hardest inputs: images are replaced by the state they
 depict, and the language instruction is gone because the task is fixed per network, so there is
 no task-spec ambiguity to resolve. The abstraction each network must learn is only over the
@@ -115,7 +118,9 @@ pieces: the search is the E-step (improve on the policy's plan), fitting $\pi_\t
 searched plans is the M-step. $\lambda$ is not tuned: it is the dual variable of a KL budget
 $\mathrm{KL}(q\,\|\,p) \le \varepsilon$ (as in relative-entropy policy search), and
 $\varepsilon$ is a free parameter that changes how far one iteration moves, not where the
-iterations converge.
+iterations converge. Because plans are ranked lexicographically (3.5), which gives an order and
+not a scalar cost, the update uses weights that depend only on each plan's rank (as CMA-ES does),
+with its step bounded by the KL budget: no trade-off weight between violations and time appears.
 
 ### 3.4 A cost-to-go derived from the loss
 The tool moves at most $v_{\max}$ per step, and the object moves only with the tool while it is
@@ -191,8 +196,11 @@ output -- is measured before $\pi_\theta$'s form is chosen (question Q3).
 2. **Search + learn.** Fit $\pi_\theta$ by regression on the searched (state, action) pairs; search
    again around $\pi_\theta$ under the KL budget; repeat. The searches get cheaper as $\pi_\theta$
    improves.
-3. **Teacher.** $\pi_\theta$, optionally refined by a short search, labels DAgger states for the
-   student through the one execution path.
+3. **Teacher.** $\pi_\theta$, optionally refined by a short search seeded from the state, labels
+   DAgger states for the student through the one execution path. The teacher acts through
+   `Execution(lean=True, anchor=True, scale_lead=True)`; the student's collection, DAgger and
+   evaluation adopt the same options (today's defaults are off), which follows
+   BRN-policies-read-one-forwarded-state: re-validation, then every student dataset recollected.
 
 Reused: `teacher/task_loss.py`, `geometry/box_distance.py`, `teacher/settle.py`, the violation
 checks (to move out of `teacher/rl_env.py`), the execution options (lean period, anchor, uniform
