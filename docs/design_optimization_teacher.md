@@ -68,11 +68,16 @@ are ranked lexicographically by the key
 
 $$\big(\;\mathbb{1}[\text{the rollout records a violation}],\;\; N_{\text{reach}}(U),\;\; \rho_g(s_N) + d(s_N)/2\;\big),$$
 
-where $N_{\text{reach}}$ is the period at which $S^\star$ is entered ($N+1$ if not; a rollout ends
-at its first settled period, so nothing after settling is judged) and the last entry orders
-unfinished plans (section 3.4, 0 once LIBERO accepts); no weight trades one entry against another.
-The verdicts are `teacher/verdicts.py` (BRN-teacher-verdicts): the release watch runs on every
-substep, the disturbance and lost checks at the end of every control period. The first
+where, for a plan that violates, the middle entry is the negated period of its violation (a
+later violation ranks higher), and otherwise $N_{\text{reach}}$, the period at which $S^\star$ is
+entered ($N+1$ if not); a rollout ends at its first decided violation or first settled period, so
+nothing after settling is judged. The last entry orders unfinished plans (section 3.4, 0 once
+LIBERO accepts). No weight trades one entry against another; plans with equal keys share the mean
+of their ranks' weights. The verdicts are `teacher/verdicts.py` (BRN-teacher-verdicts): the
+release watch is carried state -- one continuous watch judges the executed trajectory, every
+rollout runs a fork of it, and a contact loss still open at a rollout's end is undecided and enters
+no entry; the disturbance check is against both the episode start's and the search start's
+references, so undoing a disturbance is not one. The first
 action of the best plan is executed and the search repeats from the new state. The search is
 closed-loop, so it acts on any randomized instance.
 
@@ -127,10 +132,12 @@ searched plans absorbs the improvement, and the KL bound to the $\pi_\theta$-cen
 proximal term the consistency argument (3.10) needs. Every control step's search starts afresh
 from $\pi_\theta(s)$ with a spread set from $s$ alone, and a categorical over snap levels equal to
 $\pi_\theta$'s level probabilities floored so every level keeps positive probability (otherwise
-the KL to the start is infinite and the level can never change). Its generator is seeded by the
-bytes of $s$'s positions, velocities, actuator and execution state -- not MuJoCo's time or
-warm-start, which would make the seed depend on the step count -- so, with $\pi_\theta$ frozen
-before labelling, the label is a function of the current state (AXM-dagger-needs-markov-labels).
+the KL to the start is infinite and the level can never change). Its generator is seeded with one
+fixed constant, recorded with every demonstration (a seed built from the execution state would
+depend on its step counter), and the step counter is not an input, so, with $\pi_\theta$ frozen
+before labelling, the label is a function of the teacher's state (AXM-dagger-needs-markov-labels).
+That state includes the carried release watch -- which objects the robot touches, and each open
+contact loss's age, gap and vertical speed -- because the release verdict depends on it.
 
 ### 3.4 Ordering unfinished plans by the loss
 Plans that neither violate nor settle within the horizon are ordered by
@@ -179,12 +186,14 @@ field's flat regions and traps; their locations (approach, grasp, lift, rim) are
 Any field refinement is justified by a stall-map entry, and nowhere else.
 
 ### 3.8 Smoothness and dimension
-The action sequence is parameterized by knots, linearly interpolated, instead of free per-step
-actions. That cuts the search dimension -- the variance of zeroth-order estimates grows with
+The action sequence is parameterized by segments (section 3.11: one body twist and snap level
+each), instead of free per-step actions. That cuts the search dimension -- the variance of zeroth-order estimates grows with
 dimension (Nesterov & Spokoiny, 2017) -- and a knot spacing near the servo's bandwidth leaves
 little for its rate limiter (2 m/s^2) to smooth. The spacing is a compute parameter (section 6).
-Smoothness is not left to it: a demonstration is kept only if its tool acceleration, measured at
-every substep through `_advance`'s substep hook, satisfies DEF-smooth-motion. (TST-teacher-motion
+Smoothness is not left to it: a demonstration is kept only if, over the episode, its tool
+acceleration read at every executed substep through `_advance`'s substep hook has a 95th
+percentile of at most 2 m/s^2 with no servo re-anchor (DEF-smooth-motion), and its continuous
+watch records no violation. (TST-teacher-motion
 wraps `sim.step` and sees no substeps under the lean period, so it cannot be the instrument.)
 
 ### 3.9 The gripper is discrete
@@ -201,6 +210,34 @@ $\pi_\theta$ is guided policy search (Levine & Koltun, 2013; with Bregman ADMM, 
 same policy, so they do not flip between strategies. Whether the searched solutions vary smoothly
 with $\xi$ at all -- or switch between grasp modes, in which case $\pi_\theta$ needs a discrete mode
 output -- is measured before $\pi_\theta$'s form is chosen (question Q3).
+
+### 3.11 Screw mechanics in the search (BRN-screw-search)
+The teacher already acts through screwhead's interface: a body twist that TwistServo integrates on
+SE(3) and decodes through PoE kinematics and damped least squares. The search adopts the same
+mechanics, where the field is hardest:
+
+- **Screw segments.** Each plan segment is one normalized body twist and one snap level. Because
+  the servo's pose reference integrates the twist exactly ($T_{\text{ref}} \leftarrow
+  T_{\text{ref}}\exp([V]\,dt)$), a segment moves it along exactly one screw once the rate limiter
+  has reached $V$. Rollouts simulate the servo's tracking exactly, so the parameterization only
+  decides where plans are sampled.
+- **Isotropic in se(3).** Spreads are isotropic in the normalized twist, i.e. in se(3) with the
+  length scale $L = v_{\max}/\omega_{\max} = 0.1$ m that robosuite's `osc_pose` declares. No
+  per-axis weight is chosen.
+- **First-order where smooth, sampling across contact.** Before sampling, the mean of the leading
+  segments moves down the gradient of the terminal order's smooth part: $\rho_g$ through the tool
+  point's velocity under a body twist (the body Jacobian) for a free tool; $d$ through the held
+  object's velocity as a rigid attachment of the tool frame (the adjoint map) for a held one. It
+  never differentiates contact dynamics (section 3.1); the samples decide.
+- **Grasp quality from contact wrenches.** Section 3.6's term, the largest wrench ball the contacts
+  resist (*Modern Robotics* Ch. 12 §4.9), comes from the same wrench columns as `settle.py`. It
+  enters the field only where the stall map shows plans stalling between touching and holding.
+- **Embodiment-free plans.** Plans, $\pi_\theta$'s outputs and the verdicts contain no joint-space
+  quantity. $\pi_\theta$'s input does (the execution state), so transferring a teacher to another
+  arm needs that input split into tool-space state plus screwhead's robot spec tokens (Q8).
+
+It must stay a coordinate choice, not rules: no approach direction, pre-grasp pose or grasp bonus
+is written in. Whether (a)-(c) reduce the samples a search needs is Q7.
 
 ## 4. The algorithm
 
@@ -238,7 +275,9 @@ same-instance replays bit-identical on six configurations) and `teacher/verdicts
 | Q3 | Do nearby instances get the same solution? | grasp mode and plan distance on pairs $(\xi, \xi+\delta)$ |
 | Q4 | How does the terminal order compare to the true cost-to-go? | $(\rho_g + d/2)$ at each state against the steps the search then takes |
 | Q5 | What does it cost? | milliseconds per control step on half the CPU |
-| Q6 | Does the settle residual tolerance separate? | NNLS residual / weight at settled vs moving end states, against 1e-6 |
+| Q6 | Does the settle residual tolerance separate? | measured: no residual between 1e-12 and 1e-6 in 1653 samples (TRL-0230) |
+| Q7 | Do screw segments, se(3)-isotropic spreads and the first-order proposal reduce the samples a search needs? | samples to settled success against knot plans with per-axis spreads and no proposal |
+| Q8 | Does a teacher transfer to another arm? | the same verdicts and search through another arm's execution path; $\pi_\theta$ with a tool-space input |
 
 Only measured numbers go into the branch claims (one mechanism per branch).
 
