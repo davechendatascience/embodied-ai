@@ -1294,6 +1294,18 @@ branches:
       BRN-policies-read-forwarded-state. Not claimed: that an optimiser finds the optimum.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-servo-lead-scaled-uniformly
+    subject: CMP-twist-servo
+    claim_type: contract
+    statement: When the IK step would make TwistServo's joint reference lead the measured joints by more than its lead limit max_lag (0.1 rad as SimArm sets it) on some joint, the reference is set to meas + s (theta - meas) with s = max_lag / max|theta - meas| and the pose reference to FK of that reference; such a step is counted as a scale event, and also as a re-anchor when its IK residual exceeds max_pose_err (servo.py:116's re-anchor condition); otherwise the servo computes exactly as servo.py does now (servo.py:122 kept as written). Then, at command time, the joint reference leads the measured joints by at most max_lag per joint, and on a scaled step that lead keeps the direction of theta - meas and the pose reference is exactly FK of the joint reference. On the skill teacher -- libero_spatial 0 and 6 (init 48 included) and libero_goal 0, 7 and 8, two episodes each -- success is no lower than with per-joint clipping.
+    premises:
+    - AXM-servo-tracks-reachable-poses
+    - AXM-one-execution-path
+    derivation_rule: 'Reduced to the clauses measured sound in all three reviews of this branch: lead at command time <= max_lag (up to float rounding); direction of theta - meas kept (cos >= 0.9999999999999997 on 1486 scaled steps); pose reference = FK(ref) to 0.0 mm; non-binding branch bit-identical to the current servo (0 mismatches over 9599 steps); re-anchors counted exactly on the 10 scaled steps with residual > max_pose_err, no trajectory changed by the counting; success 10/10 vs 9/10 with and without the reset fix (24/30 vs 23/30 on 15 more tasks). Consequences measured under stated conditions, kept out of the claim because each held only in the condition measured: pressing on flat_stove_1_burner the stored lead is 30.3-32.2 mm (per-joint clipping 80.5 / 135.0 / 258.3 mm in 3D); with the command reversed it unwinds at 2.4-2.7 mm per period against 2.5 commanded; if the block gives way the arm closes it within 3 periods at <= 0.46 m/s and 15.1 m/s^2, where clipping moves 78-121 mm or jumps 154 mm at up to 0.60 m/s and 24.6 m/s^2.'
+    sufficiency:
+      n_min: 3
+      min_consensus: 0.8
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:
