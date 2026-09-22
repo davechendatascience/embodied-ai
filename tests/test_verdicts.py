@@ -53,9 +53,11 @@ def test_equilibrium_accepted_below_the_pyramid_and_rejected_past_mu(yaw):
 
 def test_basket_placement_verdicts():
     """libero_object 1 (cream cheese into the basket): the basket is not disturbed by the
-    placement, the skill teacher's drop from above the basket is a release violation, and the
-    placement settles after LIBERO's success."""
+    placement, the skill teacher's drop from above the basket is a release violation, the
+    placement settles after LIBERO's success, and a watch forked at every period boundary and
+    run on from a restored state reaches the continuous watch's verdict."""
     pytest.importorskip("libero.libero")
+    from screwhead.sim import exec_state
     from screwhead.sim.gripper_servo import channel_to_target
     from screwhead.sim.sim_arm import Execution
     from screwhead.sim.task_env import TaskEnv
@@ -68,19 +70,30 @@ def test_basket_placement_verdicts():
     te.reset(0)
     v = Verdicts(te, TaskLoss(te))
     start = v.reference()
-    teacher, watch = SkillTeacher(te), v.release_watch()
+    teacher, watch = SkillTeacher(te), v.watch()
     success = settled = None
+    boundaries, actions = [], []
     for t in range(400):
+        boundaries.append((exec_state.save(te), watch.fork()))
         a = teacher.act(te.snapshot())
         lv = int(np.argmin(np.abs(np.asarray(levels) - float(channel_to_target(a[6])))))
-        te.execute(np.r_[np.clip(a[:6], -1, 1), 1.0 - 2.0 * levels[lv] / 0.08], substep=watch.substep)
+        actions.append(np.r_[np.clip(a[:6], -1, 1), 1.0 - 2.0 * levels[lv] / 0.08])
+        te.execute(actions[-1], substep=watch.substep)
+        watch.period_end(te.success())
         assert v.disturbed(start) == "", t
         success = t if success is None and te.success() else success
-        if v.settled():
+        if v.settled(watch):
             settled = t
             break
     assert success is not None and settled is not None and settled >= success
     verdict = watch.finish()
+    for k in range(len(actions) - 12, len(actions)):            # the release happens in these periods
+        st, forked = boundaries[k]
+        exec_state.restore(te, st)
+        for a in actions[k:]:
+            te.execute(a, substep=forked.substep)
+            forked.period_end(te.success())
+        assert forked.finish() == verdict, k
     assert verdict.startswith("release cream_cheese_1")
     assert float(verdict.split("gap ")[1].split(" mm")[0]) > GENTLE_GAP * 1000
     assert v.lost() == ""

@@ -1,16 +1,18 @@
 """Saving and restoring a TaskEnv's whole execution state, so that a rollout from a restored copy
 predicts the executed steps exactly (BRN-execution-state-restore).
 
-The state is what the lean control period (SimArm._advance) and the verdicts read between
-periods: MuJoCo's integration state; the joint controller's ramp (start, goal, k) and the cache
+The state is what the lean control period (SimArm._advance) reads between periods: MuJoCo's
+integration state; the joint controller's ramp (start, goal, k) and the cache
 robosuite refreshes only on its new_update flag (joint_pos, joint_vel, mass matrix -- copied
 with its memory layout, since robosuite's is Fortran-ordered and np.dot rounds differently on a
 C-ordered copy -- and the flag); the twist servo's joint reference, pose reference and
 rate-limiter memory; the gripper's finger target; and the episode's step counter. The
 controller's goal and robosuite's own clock are not saved: set_goal overwrites the goal at a
 period's first substep, and the clock is read only by env.step, which the lean period never calls.
-Restoring into another instance of the same task also copies the model's body poses, which
-LIBERO re-samples for the fixtures at reset (AXM-libero-resamples-fixtures).
+Every restore also copies the model's body poses, which LIBERO re-samples for the fixtures at
+every reset (AXM-libero-resamples-fixtures): a state is restorable into any episode of any
+instance of the task. State a caller keeps between periods -- the verdicts' release watch
+(verdicts.ReleaseWatch.fork), a teacher's episode-start reference -- is the caller's to carry.
 """
 from __future__ import annotations
 
@@ -54,13 +56,12 @@ def save(te) -> ExecState:
     )
 
 
-def restore(te, st: ExecState, other_instance: bool = False) -> None:
-    """Put `st` back into `te` (the instance it was saved from, or -- other_instance -- another
-    instance of the same task), then forward the model and re-read the observation."""
+def restore(te, st: ExecState) -> None:
+    """Put `st` back into `te` (any episode of any instance of the task it was saved from),
+    then forward the model and re-read the observation."""
     m, d = te.scene.raw()
-    if other_instance:
-        m.body_pos[:] = st.body_pos
-        m.body_quat[:] = st.body_quat
+    m.body_pos[:] = st.body_pos
+    m.body_quat[:] = st.body_quat
     mujoco.mj_setState(m, d, st.mj, _INTEGRATION)
     c = te.robot.controller
     ramp = c.interpolator

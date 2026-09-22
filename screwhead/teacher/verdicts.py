@@ -2,21 +2,28 @@
 (BRN-optimization-teacher; the RL environment's checks, corrected after review TRL-0214..0216).
 
 Settled: LIBERO accepts; no robot geom touches a moved object or a goal joint's body; each moved
-free object is in static equilibrium inside its contacts' friction cones (settle.py), with too
-little kinetic energy to tip over an edge of its support or to slide out of LIBERO's acceptance
-set; each goal joint's predicted rest satisfies its predicate.
+free object is in static equilibrium inside its contacts' friction cones (settle.py) -- at the
+period's end, or, when a Watch is given, at any substep of the period (MuJoCo's contact set can
+chatter: a cheese resting in a bowl cycles 2 and 3 contacts every 5 substeps) -- with too little
+kinetic energy to tip over an edge of its support or to slide out of LIBERO's acceptance set;
+each goal joint's predicted rest satisfies its predicate. Settled means the object cannot leave
+acceptance by tipping or sliding; it does not mean motionless (a bowl may still rock flat).
 
 Violations:
   release      -- a moved object loses its last robot contact and does not regain one within the
                   time a free fall takes to cover DEF-gentle-placement's 5 mm gap
                   (sqrt(2 * 0.005 m / g) = 31.9 ms, 16 physics substeps). Such a loss is a release,
-                  and its gap beneath and downward speed, read at the moment of loss, must meet
-                  DEF-gentle-placement. A loss still open when the watch finishes is judged as a
-                  release. The gap is a downward ray against collidable geoms only.
-  disturbance  -- a movable body the goal does not name has a different support -- the body
-                  bearing the largest upward share of its weight through contact forces -- or a
-                  different face down than at the reference; judged when asked (the search asks at
-                  the end of each control period).
+                  and its gap beneath and vertical speed, read at the moment of loss, must meet
+                  DEF-gentle-placement. The Watch carries the contact state and the open losses
+                  across periods; it is part of the state a caller carries and forks for rollouts.
+                  A loss still open is undecided (pending) until the watch finishes, which judges
+                  it. The gap is a downward ray against collidable geoms only.
+  disturbance  -- a movable body the goal does not name has a support -- the body bearing the
+                  largest upward share of its weight through contact forces -- and a face down
+                  that match none of the given references (e.g. the episode start's and the
+                  search's start state's, so undoing a disturbance is not one); judged when asked.
+                  The face is whichever body-frame face points most nearly down, so it changes at
+                  a 45 degree tilt.
   lost         -- a moved object's centre of mass below the arena's support surface.
 """
 from __future__ import annotations
@@ -64,7 +71,7 @@ class Verdicts:
         self._boxes = {n: BoxSet(m, [m.geom(g).id for g in self.lib.get_object(n).contact_geoms]) for n in self.moved}
 
     # -- settled ------------------------------------------------------------------------------
-    def settled(self) -> bool:
+    def settled(self, watch: Watch | None = None) -> bool:
         if not self.env.success():
             return False
         if any(self.robot_touches(b) for b in self.goal_joint_bodies):
@@ -72,7 +79,9 @@ class Verdicts:
         g_mag = float(np.linalg.norm(self.m.opt.gravity))
         for name in self.moved:
             root = self.free[name]
-            if self.robot_touches(root) or not settle.in_equilibrium(self.m, self.d, root):
+            if self.robot_touches(root):
+                return False
+            if not (settle.in_equilibrium(self.m, self.d, root) or (watch is not None and name in watch.supported)):
                 return False
             energy = settle.kinetic_energy(self.m, self.d, root)
             if energy >= settle.tipping_barrier(self.m, self.d, root):
@@ -98,24 +107,18 @@ class Verdicts:
         return False
 
     # -- violations ---------------------------------------------------------------------------
-    def release_watch(self) -> ReleaseWatch:
-        return ReleaseWatch(self)
+    def watch(self) -> Watch:
+        return Watch(self)
 
-    def reference(self, start: dict | None = None) -> dict:
-        """(support, face down) of every unnamed movable body: now, or -- given the episode start's
-        reference -- the start's for each body whose support and face are still the start's and
-        the present one for a body already changed (so a search from a disturbed state judges only
-        the disturbances its own plan causes)."""
-        now = {n: (self.support(n), self.face_down(n)) for n in self.others}
-        if start is None:
-            return now
-        return {n: start[n] if now[n] == start[n] else now[n] for n in self.others}
+    def reference(self) -> dict:
+        """(support, face down) of every unnamed movable body, now."""
+        return {n: (self.support(n), self.face_down(n)) for n in self.others}
 
-    def disturbed(self, reference: dict) -> str:
+    def disturbed(self, *references: dict) -> str:
         for n in self.others:
             now = (self.support(n), self.face_down(n))
-            if now != reference[n]:
-                return f"disturbed {n}: support {reference[n][0]} -> {now[0]}, face {reference[n][1]} -> {now[1]}"
+            if all(now != r[n] for r in references):
+                return f"disturbed {n}: support/face {now} matches none of {[r[n] for r in references]}"
         return ""
 
     def lost(self) -> str:
@@ -194,40 +197,73 @@ class Verdicts:
         return max(tops) if tops else 0.0
 
 
-class ReleaseWatch:
-    """Per-substep release check (the substep hook of SimArm._advance). A contact loss is judged
-    once it has stayed lost for the free-fall time of the gentle gap; finish() judges the rest."""
+class Watch:
+    """What the verdicts carry across substeps and periods: the release check's contact state and
+    open losses, and which moved objects were in equilibrium at some substep of the last period.
+    substep() is SimArm._advance's substep hook (it reads the state at the start of each
+    substep); period_end() reads the period's final, forwarded state; fork() copies the watch
+    for a rollout; pending() is the verdict so far with open losses undecided; finish() judges
+    them."""
 
     def __init__(self, v: Verdicts):
         self.v = v
         self.touching = {n: v.robot_touches(v.free[n]) for n in v.moved}
-        self.open: dict[str, tuple[int, float, float]] = {}       # name -> (substep of loss, gap, falling speed)
+        self.open: dict[str, tuple[int, float, float]] = {}       # name -> (substep of loss, gap, vertical speed)
         self.count = 0
         self.violation = ""
+        self.armed = False                                          # record equilibrium this period
+        self.supported: set[str] = set()                            # in equilibrium at a substep this period
+        self._next: bool | None = None                              # arm the next period (set at period_end)
+
+    def fork(self) -> Watch:
+        w = Watch.__new__(Watch)
+        w.v, w.count, w.violation, w.armed, w._next = self.v, self.count, self.violation, self.armed, self._next
+        w.touching, w.open, w.supported = dict(self.touching), dict(self.open), set(self.supported)
+        return w
 
     def substep(self, _i=None) -> None:
+        if self._next is not None:                                  # a new period: start its record
+            self.armed, self.supported, self._next = self._next, set(), None
         self.count += 1
+        self._read()
+        if self.armed:
+            for n in self.v.moved:
+                if n not in self.supported and not self.touching[n] \
+                        and settle.in_equilibrium(self.v.m, self.v.d, self.v.free[n]):
+                    self.supported.add(n)
+
+    def period_end(self, success: bool) -> None:
+        """After the period's closing forward: read its final state; the period's equilibrium
+        record stays readable by settled() until the next period starts, which records only if
+        LIBERO accepted at this period's end (settled needs it only then)."""
+        self._read()
+        self._next = success
+
+    def pending(self) -> str:
+        return self.violation
+
+    def finish(self) -> str:
+        for n, (_k, gap, speed) in list(self.open.items()):
+            self._judge(n, gap, speed)
+        return self.violation
+
+    def _read(self) -> None:
         if self.violation:
             return
         for n in self.v.moved:
             now = self.v.robot_touches(self.v.free[n])
             if self.touching[n] and not now:
                 mujoco.mj_subtreeVel(self.v.m, self.v.d)
-                falling = -float(self.v.d.subtree_linvel[self.v.free[n]][2])     # the centre of mass's
-                self.open[n] = (self.count, self.v.gap_below(n), falling)
+                speed = abs(float(self.v.d.subtree_linvel[self.v.free[n]][2]))     # the centre of mass's
+                self.open[n] = (self.count, self.v.gap_below(n), speed)
             elif now:
                 self.open.pop(n, None)
             self.touching[n] = now
-        for n, (k, gap, down) in list(self.open.items()):
+        for n, (k, gap, speed) in list(self.open.items()):
             if self.count - k >= self.v.fall_substeps:
-                self._judge(n, gap, down)
+                self._judge(n, gap, speed)
 
-    def finish(self) -> str:
-        for n, (_k, gap, down) in list(self.open.items()):
-            self._judge(n, gap, down)
-        return self.violation
-
-    def _judge(self, n: str, gap: float, down: float) -> None:
+    def _judge(self, n: str, gap: float, speed: float) -> None:
         del self.open[n]
-        if not self.violation and (gap > GENTLE_GAP or down > GENTLE_SPEED):
-            self.violation = f"release {n}: gap {gap * 1000:.1f} mm, falling {down:.3f} m/s"
+        if not self.violation and (gap > GENTLE_GAP or speed > GENTLE_SPEED):
+            self.violation = f"release {n}: gap {gap * 1000:.1f} mm, vertical speed {speed:.3f} m/s"

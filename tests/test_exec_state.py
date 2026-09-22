@@ -58,15 +58,28 @@ def test_restore_repeats_the_rollout(env, lead):
     assert all(np.array_equal(a, b) for a, b in zip(first, again, strict=True))
 
 
-def test_restore_into_another_instance(env):
-    rng = np.random.default_rng(7)
-    env.reset(0)
-    _run(env, _actions(rng, 20))
-    saved = exec_state.save(env)
-    actions = _actions(rng, 15)
-    first = _run(env, actions)
-    other = TaskEnv("libero_goal", 8, seed=1, render=False, execution=LEAN)
-    other.reset(1)
-    exec_state.restore(other, saved, other_instance=True)
-    again = _run(other, actions)
-    assert all(np.array_equal(a, b) for a, b in zip(first, again, strict=True))
+def test_restore_into_another_episode_and_instance():
+    """libero_goal 7 (the stove), where the fixture poses LIBERO re-samples at every reset carry
+    the knob the arm pushes: a state restored after a reset to another init, and into a second
+    instance, repeats the rollout only because the body poses come with it."""
+    from screwhead.teacher.skill_teacher import SkillTeacher
+    te = TaskEnv("libero_goal", 7, seed=0, render=False, execution=LEAN)
+    te.reset(0)
+    teacher = SkillTeacher(te)
+    for _ in range(40):
+        te.execute(teacher.act(te.snapshot()))
+    saved = exec_state.save(te)
+    actions, first = [], []
+    for _ in range(100):                      # the teacher reaches and turns the knob
+        actions.append(teacher.act(te.snapshot()))
+        te.execute(actions[-1])
+        first.append(_integration(te))
+    other = TaskEnv("libero_goal", 7, seed=1, render=False, execution=LEAN)
+    for target, init in ((te, 1), (other, 1)):
+        target.reset(init)
+        assert not np.array_equal(target.scene.raw()[0].body_pos, saved.body_pos)   # the reset moved fixtures
+        exec_state.restore(target, saved)
+        assert np.array_equal(target.scene.raw()[0].body_pos, saved.body_pos)
+        assert np.array_equal(target.scene.raw()[0].body_quat, saved.body_quat)
+        again = _run(target, actions)
+        assert all(np.array_equal(a, b) for a, b in zip(first, again, strict=True))
