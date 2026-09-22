@@ -26,6 +26,10 @@ IGNORE=(
   forward
   # called on sim/joint_ramp.JointRamp by robosuite's JointPositionController (its interpolator API)
   set_goal get_interpolated_goal
+  # SimArm's lean step refreshes robosuite's controller cache and env clock, which robosuite reads
+  joint_pos joint_vel mass_matrix cur_time
+  # task_loss's stub domain: LIBERO's predicate code reads these attributes of the env it is given
+  objects_dict fixtures_dict
 )
 IGNORE_CSV=$(IFS=,; echo "${IGNORE[*]}")
 

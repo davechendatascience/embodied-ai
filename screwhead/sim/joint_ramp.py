@@ -44,3 +44,11 @@ def install(controller, fraction: float, substeps_per_period: int) -> None:
         return
     q = np.asarray(controller.sim.data.qpos[controller.qpos_index], float)
     controller.interpolator = JointRamp(round(fraction * substeps_per_period), q)
+
+
+def restart(controller, fraction: float, substeps_per_period: int) -> None:
+    """A fresh ramp at the joints as they are now, for a placement that moved them."""
+    if fraction <= 0:
+        return
+    q = np.asarray(controller.sim.data.qpos[controller.qpos_index], float)
+    controller.interpolator = JointRamp(round(fraction * substeps_per_period), q)

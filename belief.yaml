@@ -173,7 +173,7 @@ components:
       scaling plateaus
 
   # ---- Gate 2 machinery. The teacher reads the simulator; the student never does.
-  # code: screwhead/sim/servo.py
+  # code: screwhead/sim/servo.py, screwhead/sim/joint_ramp.py (the joint goal ramped across each period)
   - id: CMP-twist-servo
     purpose: Execute a body twist on the simulator's joint-position controller
     inputs: [IFC-expert__ik]
@@ -361,7 +361,8 @@ components:
       what lies outside it. Snap the student's target to the program levels
       (snap_channel) and store the levels in the checkpoint so every rollout decodes alike
 
-  # code: screwhead/teacher/task_loss.py, tools/task_loss_check.py
+  # code: screwhead/teacher/task_loss.py, tools/task_loss_check.py, screwhead/geometry/box_distance.py (exact box-box
+  # separation), screwhead/teacher/settle.py (equilibrium settle), screwhead/teacher/rl_env.py, tools/rl_train.py (PPO)
   - id: CMP-rl-teacher
     purpose: >-
       Train the general teacher from privileged scene state against a task loss derived from

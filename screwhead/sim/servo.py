@@ -61,6 +61,7 @@ class TwistServo:
         self._mid = lim.mean(1)
         self._span = np.maximum(lim[:, 1] - lim[:, 0], 1e-6)
         self.limit_clamps = 0
+        self.scale_lead = False     # scale the whole lead to max_lag rather than clip per joint
 
     def reset(self, theta_measured: np.ndarray) -> None:
         self.ref = np.asarray(theta_measured, np.float64).copy()
@@ -113,6 +114,17 @@ class TwistServo:
             self.limit_clamps += int(bool(clamped.any()))
         T = kin_np.fk(self._np, th)
         e = kin_np.log_se3(kin_np.inverse(T) @ self.T_ref[None])[0]
+        lead = th[0] - meas
+        widest = float(np.max(np.abs(lead)))
+        if self.scale_lead and widest > self.max_lag:
+            # BRN-servo-lead-scaled-uniformly: the whole lead scaled to the limit keeps the IK
+            # step's direction (per-joint clipping bent it: cos 0.65) and the pose reference is
+            # the pose that reference reaches, so it cannot wind up past a blocked arm (clipped,
+            # it ran 71 mm ahead in a free carry and 362 mm into a press)
+            self.ref = meas + lead * (self.max_lag / widest)
+            self.T_ref = kin_np.fk(self._np, self.ref)[0]
+            self.reanchors += int(float(np.linalg.norm(e)) > self.max_pose_err)
+            return np.clip((self.ref - meas) / self.jas, -1.0, 1.0)
         if float(np.linalg.norm(e)) > self.max_pose_err:
             # the pose reference has left what the arm can reach (a limit, a
             # singularity, a collision): re-anchor it rather than let it run away

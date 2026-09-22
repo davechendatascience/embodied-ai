@@ -69,6 +69,7 @@ class TaskEnv(SimArm):
             self._settled[k] = self._settled_init_state(k)
         self._reset_scene(k)
         self.env.set_init_state(self._settled[k])
+        self._anchor()
         if any(v > 0 for v in self.start.values()):
             self._randomize_start()
         self.servo.reset(np.asarray(self.observe()["robot0_joint_pos"]))
