@@ -66,10 +66,13 @@ $$\min_{T,\,u_{0:T-1}} T \quad \text{s.t.}\quad s_{t+1}=F(s_t,u_t),\;\; s_t \not
 It is solved by receding-horizon search: at each step, plans $U$ over a horizon of $N$ steps
 are ranked lexicographically by the key
 
-$$\big(\;\mathbb{1}[\text{the plan causes a violation}],\;\; N_{\text{reach}}(U),\;\; \rho_g(s_N) + d(s_N)/2\;\big),$$
+$$\big(\;\mathbb{1}[\text{the rollout records a violation}],\;\; N_{\text{reach}}(U),\;\; \rho_g(s_N) + d(s_N)/2\;\big),$$
 
-where $N_{\text{reach}}$ is the step at which $S^\star$ is entered ($N$ if not) and the last entry
-orders unfinished plans (section 3.4); no weight trades one entry against another. The first
+where $N_{\text{reach}}$ is the period at which $S^\star$ is entered ($N+1$ if not; a rollout ends
+at its first settled period, so nothing after settling is judged) and the last entry orders
+unfinished plans (section 3.4, 0 once LIBERO accepts); no weight trades one entry against another.
+The verdicts are `teacher/verdicts.py` (BRN-teacher-verdicts): the release watch runs on every
+substep, the disturbance and lost checks at the end of every control period. The first
 action of the best plan is executed and the search repeats from the new state. The search is
 closed-loop, so it acts on any randomized instance.
 
@@ -122,12 +125,18 @@ the start distribution, which is centred on $\pi_\theta$'s plan. That keeps the 
 fit-as-M-step structure: the search improves on the policy's plan, fitting $\pi_\theta$ to the
 searched plans absorbs the improvement, and the KL bound to the $\pi_\theta$-centred start is the
 proximal term the consistency argument (3.10) needs. Every control step's search starts afresh
-from $\pi_\theta(s)$ with a spread set from $s$ alone and a generator seeded by $s$'s bytes, so
-the label is a function of the current state (AXM-dagger-needs-markov-labels).
+from $\pi_\theta(s)$ with a spread set from $s$ alone, and a categorical over snap levels equal to
+$\pi_\theta$'s level probabilities floored so every level keeps positive probability (otherwise
+the KL to the start is infinite and the level can never change). Its generator is seeded by the
+bytes of $s$'s positions, velocities, actuator and execution state -- not MuJoCo's time or
+warm-start, which would make the seed depend on the step count -- so, with $\pi_\theta$ frozen
+before labelling, the label is a function of the current state (AXM-dagger-needs-markov-labels).
 
 ### 3.4 Ordering unfinished plans by the loss
 Plans that neither violate nor settle within the horizon are ordered by
-$\rho_g(s_N) + d(s_N)/2$ at the horizon: $\rho_g$ is the tool point's distance to the nearest
+$\rho_g(s_N) + d(s_N)/2$ at the horizon, taken as 0 once LIBERO accepts (otherwise an accepted but
+unsettled plan would be ordered by $\rho_g$ alone, pulling the tool toward the object that
+settling needs it to leave): $\rho_g$ is the tool point's distance to the nearest
 point of the object's contact boxes (the point-box kernel in `geometry/box_distance.py`; the
 loss's current `reach` measures to the box centre and is not this), $d$ the loss's distance
 without its constant $M$. Only the order is used, so no speed scale enters -- which matters,
@@ -213,11 +222,12 @@ output -- is measured before $\pi_\theta$'s form is chosen (question Q3).
 
 Reused: `teacher/task_loss.py`, `geometry/box_distance.py`, `teacher/settle.py`, the violation
 checks (to move out of `teacher/rl_env.py`), the execution options (lean period, anchor, uniform
-servo lead). Retired: `tools/rl_train.py` and the RL reward in `rl_env.py`. New: saving and
-restoring the whole execution state (BRN-execution-state-restore: the integration state, the
-joint ramp, the servo's ref, T_ref and rate-limiter memory V_prev, the finger target and the
-controller cache, then `mj_forward` and a fresh observation; across instances also the fixture
-poses LIBERO re-samples at reset -- measured bit-identical 10/10 on libero_goal 8).
+servo lead). Retired: `tools/rl_train.py` and the RL reward in `rl_env.py`. Built and measured: `sim/exec_state.py` (BRN-execution-state-restore: the integration
+state, the joint ramp, the controller cache with its memory layout, the servo's ref, T_ref and
+rate-limiter memory, the finger target, the step counter; then `mj_forward`, a cleared snapshot
+cache and a fresh observation; across instances also the body poses LIBERO re-samples -- 609/609
+same-instance replays bit-identical on six configurations) and `teacher/verdicts.py`
+(BRN-teacher-verdicts).
 
 ## 5. Questions measured before any claim
 
@@ -243,8 +253,9 @@ declared sources:
 | acceptance tolerances | LIBERO's predicates (BRN-task-loss-core) |
 | gentle release: 5 mm, 0.05 m/s | DEF-gentle-placement |
 | settled: friction, masses, damping | the MuJoCo model |
-| friction cone | an inscribed 8-edge pyramid: conservative, equilibria needing between 0.924 mu and mu are not accepted |
-| settle residual counted as zero (1e-6 of the weight) | **unsourced**: its separation of equilibria from non-equilibria is measured before use (Q6) |
+| release window: 16 substeps | the free-fall time of the 5 mm gap (DEF-gentle-placement, gravity, timestep) |
+| friction cone | an 8-edge pyramid with faces at 0.854 mu: the inscribed one (0.924 mu) accepted incline states MuJoCo then slid |
+| settle residual counted as zero (1e-6 of the weight), coincident-point guard (1e-9 m) | **numerical, not yet measured** against the verdicts they could change (Q6) |
 | $\epsilon_{\text{req}}$ (if 3.6 is needed) | object mass (MuJoCo model), gravity, the servo's acceleration bound |
 
 The search's own settings are compute parameters: they appear in neither the problem nor any
