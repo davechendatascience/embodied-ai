@@ -63,13 +63,15 @@ satisfied).
 
 $$\min_{T,\,u_{0:T-1}} T \quad \text{s.t.}\quad s_{t+1}=F(s_t,u_t),\;\; s_t \notin V\;\forall t,\;\; s_T \in S^\star,\;\; T \le H = 600 .$$
 
-It is solved by receding-horizon search: at each step, over a horizon of $N$ steps,
+It is solved by receding-horizon search: at each step, plans $U$ over a horizon of $N$ steps
+are ranked lexicographically by the key
 
-$$U^\star = \arg\min_{U}\; \Big[\,N_{\text{reach}}(U) \;+\; h(s_N)\Big]\quad\text{ranked lexicographically after feasibility,}$$
+$$\big(\;\mathbb{1}[\text{the plan causes a violation}],\;\; N_{\text{reach}}(U),\;\; \rho_g(s_N) + d(s_N)/2\;\big),$$
 
-where $N_{\text{reach}}$ is the step at which $S^\star$ is entered ($N$ if not) and $h$ is the
-terminal cost-to-go (section 3.4); the first action is executed and the search repeats from the
-new state. The search is closed-loop, so it acts correctly on any randomized instance.
+where $N_{\text{reach}}$ is the step at which $S^\star$ is entered ($N$ if not) and the last entry
+orders unfinished plans (section 3.4); no weight trades one entry against another. The first
+action of the best plan is executed and the search repeats from the new state. The search is
+closed-loop, so it acts on any randomized instance.
 
 **The abstraction across randomization.** A policy $\pi_\theta(s)$ holds what the searches
 find, so that nearby scenes get nearby actions and any state can be labelled cheaply
@@ -110,37 +112,40 @@ field has few minima, and shrink $\sigma$ as the search converges. $\sigma_0$ co
 AXM-object-geometry-known); it shrinks when the best cost stops improving, so there is no
 schedule to tune.
 
-### 3.3 The search as inference, the policy as its prior
-The optimal sampling distribution under a KL penalty to a prior $p$ is
+### 3.3 The search around the policy
+With a scalar cost $J$, the optimal sampling distribution under a KL penalty to a prior $p$ is
 $q^\star(U) \propto p(U)\,\exp(-J(U)/\lambda)$ (the path-integral / MPPI view; MPC as online
-mirror descent, Wagener et al., 2019). Setting $p = \pi_\theta$ makes one design out of two
-pieces: the search is the E-step (improve on the policy's plan), fitting $\pi_\theta$ to the
-searched plans is the M-step. $\lambda$ is not tuned: it is the dual variable of a KL budget
-$\mathrm{KL}(q\,\|\,p) \le \varepsilon$ (as in relative-entropy policy search), and
-$\varepsilon$ is a free parameter that changes how far one iteration moves, not where the
-iterations converge. Because plans are ranked lexicographically (3.5), which gives an order and
-not a scalar cost, the update uses weights that depend only on each plan's rank (as CMA-ES does),
-with its step bounded by the KL budget: no trade-off weight between violations and time appears.
+mirror descent, Wagener et al., 2019). Our plans are ranked lexicographically (3.5), which gives
+an order, not a scalar, so there is no $J$ for a temperature to act on. The update instead weights
+plans by rank only (as CMA-ES does) and bounds the KL divergence of the updated distribution from
+the start distribution, which is centred on $\pi_\theta$'s plan. That keeps the search-as-E-step,
+fit-as-M-step structure: the search improves on the policy's plan, fitting $\pi_\theta$ to the
+searched plans absorbs the improvement, and the KL bound to the $\pi_\theta$-centred start is the
+proximal term the consistency argument (3.10) needs. Every control step's search starts afresh
+from $\pi_\theta(s)$ with a spread set from $s$ alone and a generator seeded by $s$'s bytes, so
+the label is a function of the current state (AXM-dagger-needs-markov-labels).
 
-### 3.4 A cost-to-go derived from the loss
-The tool moves at most $v_{\max}$ per step, and the object moves only with the tool while it is
-quasi-static. So from $s$, reaching $S^\star$ needs at least $\rho_{\min}(s)$ of tool travel to
-touch the object and $D^\star \ge d(s)/2$ of travel with it (LMA-loss-lower-bounds-steps):
+### 3.4 Ordering unfinished plans by the loss
+Plans that neither violate nor settle within the horizon are ordered by
+$\rho_g(s_N) + d(s_N)/2$ at the horizon: $\rho_g$ is the tool point's distance to the nearest
+point of the object's contact boxes (the point-box kernel in `geometry/box_distance.py`; the
+loss's current `reach` measures to the box centre and is not this), $d$ the loss's distance
+without its constant $M$. Only the order is used, so no speed scale enters -- which matters,
+because the commanded speed bound is per axis (`sim_arm.py`), and the default path moved the
+tool 0.0974 m in one step against a nominal 0.05 m.
 
-$$h(s) = \frac{\rho_{\min}(s) + d(s)/2}{v_{\max}} \quad\text{steps}$$
-
-Here $\rho_{\min}$ is the tool point's distance to the *nearest point* of the object's contact
-boxes (the point-box kernel in `geometry/box_distance.py`), not the loss's current `reach`,
-which measures to the box centre and exceeds $\rho_{\min}$ by up to the box's half-diagonal --
-with it, $h$ would not be a lower bound. $d$ is the loss's distance without its constant $M$.
-
-is a lower bound on the steps to go (admissible, in A*'s sense, *Modern Robotics* Ch. 10 §4.3),
-with no weight chosen by hand: $1/v_{\max}$ = 20 steps per metre. The bound is not claimed when the
-object is reoriented, slides after a push, falls, or is pushed by another body, nor if the
-executed tool overshoots the commanded 0.05 m per step; those are where it is tested.
-Receding-horizon performance bounds (Grüne & Rantzer, 2008) depend on the horizon and on how
-closely the terminal cost approximates the true cost-to-go; measuring $h(s_0)$ against the steps
-the search actually takes gives that gap.
+The form is justified by LMA-loss-lower-bounds-steps: under its conditions -- the object's
+orientation unchanged at acceptance, a static target, the object moving only while the tool
+point is within it and no faster -- both terms are tool travel, and
+$(\rho_g + d/2)/v_{\max}$ lower-bounds the steps to acceptance (admissible in A*'s sense,
+*Modern Robotics* Ch. 10 §4.3; on the lean path saturated commands moved the tool point at most
+0.0425 m per period). Those conditions held for 10.9% of the states of 245 successful
+skill-teacher episodes and for none on libero_spatial or libero_goal: releases and drops,
+squeezes that push the object faster than the tool point, and pivoting rim pinches fall outside.
+So outside that scope the order is a heuristic, not a bound, and it is weakest exactly after a
+release, where the object falls toward its goal without the tool. Receding-horizon performance
+bounds (Grüne & Rantzer, 2008) depend on how closely the terminal term approximates the true
+cost-to-go; Q4 measures that against the steps the search takes.
 
 ### 3.5 Constraints by ranking, not by penalty
 A penalty weight on violations is exact only above the constraint's Lagrange multiplier, which
@@ -164,13 +169,14 @@ logs whether any sampled plan within the horizon decreases $\Phi$. Steps where n
 field's flat regions and traps; their locations (approach, grasp, lift, rim) are the stall map.
 Any field refinement is justified by a stall-map entry, and nowhere else.
 
-### 3.8 Smoothness and dimension from the servo
+### 3.8 Smoothness and dimension
 The action sequence is parameterized by knots, linearly interpolated, instead of free per-step
-actions. Knot spacing is the servo's bandwidth: DEF-smooth-motion bounds tool acceleration at
-2 m/s^2, so a twist change of $\Delta v$ takes at least $\Delta v/(2\,\text{m/s}^2)$, and knots
-closer than that cannot be tracked. This gives smooth demonstrations without a smoothness weight,
-and it cuts the search dimension -- the variance of zeroth-order estimates grows with dimension
-(Nesterov & Spokoiny, 2017).
+actions. That cuts the search dimension -- the variance of zeroth-order estimates grows with
+dimension (Nesterov & Spokoiny, 2017) -- and a knot spacing near the servo's bandwidth leaves
+little for its rate limiter (2 m/s^2) to smooth. The spacing is a compute parameter (section 6).
+Smoothness is not left to it: a demonstration is kept only if its tool acceleration, measured at
+every substep through `_advance`'s substep hook, satisfies DEF-smooth-motion. (TST-teacher-motion
+wraps `sim.step` and sees no substeps under the lean period, so it cannot be the instrument.)
 
 ### 3.9 The gripper is discrete
 The gripper level is categorical, so the plan is mixed-integer. Sampling handles it directly: the
@@ -197,15 +203,21 @@ output -- is measured before $\pi_\theta$'s form is chosen (question Q3).
    again around $\pi_\theta$ under the KL budget; repeat. The searches get cheaper as $\pi_\theta$
    improves.
 3. **Teacher.** $\pi_\theta$, optionally refined by a short search seeded from the state, labels
-   DAgger states for the student through the one execution path. The teacher acts through
-   `Execution(lean=True, anchor=True, scale_lead=True)`; the student's collection, DAgger and
-   evaluation adopt the same options (today's defaults are off), which follows
-   BRN-policies-read-one-forwarded-state: re-validation, then every student dataset recollected.
+   DAgger states for the student. The teacher acts through
+   `Execution(lean=True, anchor=True, scale_lead=True, gripper_mode="target")`, snap levels fixed
+   at 0, 0.026 and 0.08 m, horizon 600, no execution noise. The student's collection, DAgger and
+   evaluation must adopt the same execution -- today they differ in more than the three options
+   (`PrivilegedEnv` defaults to gripper command mode, snap levels are optional in `distill.py`, its
+   horizon defaults to 300, DART noise reaches the gripper channel unsnapped) -- which is a
+   separate obligation following BRN-policies-read-one-forwarded-state.
 
 Reused: `teacher/task_loss.py`, `geometry/box_distance.py`, `teacher/settle.py`, the violation
 checks (to move out of `teacher/rl_env.py`), the execution options (lean period, anchor, uniform
 servo lead). Retired: `tools/rl_train.py` and the RL reward in `rl_env.py`. New: saving and
-restoring the whole execution state (the field list is the one the lean-step review verified).
+restoring the whole execution state (BRN-execution-state-restore: the integration state, the
+joint ramp, the servo's ref, T_ref and rate-limiter memory V_prev, the finger target and the
+controller cache, then `mj_forward` and a fresh observation; across instances also the fixture
+poses LIBERO re-samples at reset -- measured bit-identical 10/10 on libero_goal 8).
 
 ## 5. Questions measured before any claim
 
@@ -214,21 +226,31 @@ restoring the whole execution state (the field list is the one the lean-step rev
 | Q1 | Does search alone reach settled success? | success, steps and wall time on $K$ randomized goal-8 instances |
 | Q2 | Where does it stall? | the stall map (3.7) by stage |
 | Q3 | Do nearby instances get the same solution? | grasp mode and plan distance on pairs $(\xi, \xi+\delta)$ |
-| Q4 | Is $h$ a lower bound, and how loose? | $h(s_0)$ against steps taken; cases where it fails |
+| Q4 | How does the terminal order compare to the true cost-to-go? | $(\rho_g + d/2)$ at each state against the steps the search then takes |
 | Q5 | What does it cost? | milliseconds per control step on half the CPU |
+| Q6 | Does the settle residual tolerance separate? | NNLS residual / weight at settled vs moving end states, against 1e-6 |
 
 Only measured numbers go into the branch claims (one mechanism per branch).
 
 ## 6. Parameters and their sources (AXM-parameters-derived)
 
+The problem -- objective, constraints, target set -- and every verdict take their numbers from
+declared sources:
+
 | parameter | source |
 |---|---|
-| $v_{\max}$ = 0.05 m/step, so $1/v_{\max}$ = 20 steps/m | robosuite `osc_pose.json` via `geometry/interface.py` |
 | $H$ = 600 | LIBERO's evaluation horizon |
-| knot spacing | DEF-smooth-motion's 2 m/s^2 and the twist range |
-| $\sigma_0$ | object-to-goal distance over the horizon (AXM-object-geometry-known) |
-| $\sigma$ schedule | shrink on stalled improvement (no schedule) |
-| $\lambda$ | dual of the KL budget $\varepsilon$ |
-| $\varepsilon$, samples per step $M$, instances $K$ | free: they change convergence speed and cost, not the optimum |
-| horizon $N$ | at least the gripper's measured closing time plus the lift to clear the support; to be measured |
-| $\epsilon_{\text{req}}$ (if 3.6 is needed) | object mass (MuJoCo model), gravity, servo acceleration bound |
+| acceptance tolerances | LIBERO's predicates (BRN-task-loss-core) |
+| gentle release: 5 mm, 0.05 m/s | DEF-gentle-placement |
+| settled: friction, masses, damping | the MuJoCo model |
+| friction cone | an inscribed 8-edge pyramid: conservative, equilibria needing between 0.924 mu and mu are not accepted |
+| settle residual counted as zero (1e-6 of the weight) | **unsourced**: its separation of equilibria from non-equilibria is measured before use (Q6) |
+| $\epsilon_{\text{req}}$ (if 3.6 is needed) | object mass (MuJoCo model), gravity, the servo's acceleration bound |
+
+The search's own settings are compute parameters: they appear in neither the problem nor any
+verdict, they change which plan a finite search finds, and every demonstration records them --
+horizon $N$, knot spacing and count, iterations per step, samples $M$, rank weights, the spread's
+initial value (from the object-to-goal distance) and shrink rule, the categorical update, the KL
+budget $\varepsilon$, instances $K$. The execution layer's constants (acceleration bounds, joint
+step) belong to the execution path the student shares (BRN-execution-bounds-acceleration), not to
+the teacher.
