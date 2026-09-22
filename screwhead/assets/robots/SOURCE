@@ -1,0 +1,4 @@
+Kinematic models the chains are built from (screwhead/sim/mjcf.py reads bodies and joints only).
+Copied unchanged from robosuite 1.4.0, robosuite/models/assets/robots/<name>/robot.xml (MIT, see
+LICENSE-robosuite). The simulator loads robosuite's own copy; SimArm checks at start-up that the
+arm it loaded is byte-identical to the one here, so the two cannot drift apart silently.

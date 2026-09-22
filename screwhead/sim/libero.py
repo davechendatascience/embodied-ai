@@ -37,10 +37,10 @@ import torch
 from .mjcf import from_mjcf
 from ..geometry.poe import Chain
 
-ROBOSUITE_ROBOTS = Path(os.environ.get(
-    "ROBOT_ASSETS",
-    "/home/edge-host/Documents/GitHub/vla_jepa/.venv/lib/python3.12/site-packages/robosuite/models/assets/robots",
-))
+# The robot models the chains are built from, vendored from robosuite 1.4.0 so that no
+# environment reads another's install (both venvs build chains; .venv has no robosuite).
+# SimArm checks at start-up that the arm the simulator loaded is byte-identical.
+ROBOT_MJCF = Path(os.environ.get("ROBOT_ASSETS", Path(__file__).resolve().parents[1] / "assets" / "robots"))
 DATASETS = Path(os.environ.get(
     "LIBERO_DATASETS",
     "/home/edge-host/Documents/GitHub/embodied_ai/third_party/LIBERO/libero/datasets",
@@ -50,7 +50,7 @@ GRIP_SITE_Z = 0.0972          # calibrated over 6079 frames; 0.097 in the XML
 
 def panda_chain(tool_z: float = GRIP_SITE_Z) -> Chain:
     """The arm LIBERO actually demonstrates on, tool frame at the grip site."""
-    base = from_mjcf(ROBOSUITE_ROBOTS / "panda" / "robot.xml", angle="radian", name="panda")
+    base = from_mjcf(ROBOT_MJCF / "panda" / "robot.xml", angle="radian", name="panda")
     off = torch.eye(4, dtype=base.M.dtype)
     off[2, 3] = tool_z
     return base.with_tool(off, name="libero-panda")

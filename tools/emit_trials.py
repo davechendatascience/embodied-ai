@@ -13,7 +13,6 @@ missing measurement is missing; it is never a passing trial.
 from __future__ import annotations
 
 import json
-import os
 import sys
 import xml.etree.ElementTree as ET
 import zlib
@@ -31,10 +30,14 @@ from screwhead.geometry.kinematics import body_jacobian, fk, space_jacobian  # n
 from screwhead.sim.mjcf import from_mjcf  # noqa: E402
 from screwhead.geometry.se3 import adjoint, inverse, log_se3  # noqa: E402
 
-ASSETS = Path(os.environ.get(
-    "ROBOT_ASSETS",
-    "/home/edge-host/Documents/GitHub/vla_jepa/.venv/lib/python3.12/site-packages/robosuite/models/assets/robots",
-))
+
+def robot_assets() -> Path:
+    """The full robot models (meshes included, which MuJoCo needs to compile them) of the
+    robosuite this process imports -- never another environment's install."""
+    import robosuite
+    return Path(robosuite.__file__).parent / "models" / "assets" / "robots"
+
+
 ROBOTS = ("panda", "ur5e", "iiwa", "kinova3", "jaco")
 # Sample count is a CLI argument, not just an env var, because the declared
 # `run` line is what mints a test version. Changing how much a test measures
@@ -70,7 +73,7 @@ def geodesic(Ra: np.ndarray, Rb: np.ndarray) -> float:
 
 def arm(robot: str):
     """Chain with the angle convention robosuite actually compiles under."""
-    return from_mjcf(ASSETS / robot / "robot.xml", name=robot, angle="radian")
+    return from_mjcf(robot_assets() / robot / "robot.xml", name=robot, angle="radian")
 
 
 def regime_pair(chain, k: int, seed: int, near_singular: bool, span: float = 0.15):
@@ -101,7 +104,7 @@ def regime_pair(chain, k: int, seed: int, near_singular: bool, span: float = 0.1
 
 def load(robot: str):
     import mujoco
-    f = ASSETS / robot / "robot.xml"
+    f = robot_assets() / robot / "robot.xml"
     model = mujoco.MjModel.from_xml_path(str(f))
     return model, mujoco.MjData(model), from_mjcf(f, name=robot)
 

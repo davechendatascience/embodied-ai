@@ -33,6 +33,7 @@ depth buffer many calls later.
 
 import os
 import sys
+from pathlib import Path
 
 import numpy as np
 
@@ -198,12 +199,22 @@ def build_chain(mjcf_name: str, tool_z: float):
     transfer failure, which is the opposite of what it is.
     """
     import torch
-    from .libero import ROBOSUITE_ROBOTS
+    from .libero import ROBOT_MJCF
     from .mjcf import from_mjcf
-    base = from_mjcf(ROBOSUITE_ROBOTS / mjcf_name / "robot.xml", angle="radian", name=mjcf_name)
+    base = from_mjcf(ROBOT_MJCF / mjcf_name / "robot.xml", angle="radian", name=mjcf_name)
     off = torch.eye(4, dtype=base.M.dtype)
     off[2, 3] = float(tool_z)
     return base.with_tool(off)
+
+
+def check_loaded_model(loaded_file: str, mjcf_name: str) -> None:
+    """The arm the simulator loaded is the model the chain is built from, byte for byte --
+    the chain drives every servo period, so a different model would execute differently
+    under an unchanged chain (a 0.1 mm link offset changed an episode from 187 to 144 steps)."""
+    from .libero import ROBOT_MJCF
+    ours = ROBOT_MJCF / mjcf_name / "robot.xml"
+    if Path(loaded_file).read_bytes() != ours.read_bytes():
+        raise RuntimeError(f"the simulator's {mjcf_name} model {loaded_file} differs from {ours}")
 
 
 def set_joint_gains(env, kp: float) -> None:

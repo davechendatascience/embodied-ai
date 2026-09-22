@@ -65,7 +65,7 @@ class SimArm:
 
         from .gripper_servo import GripperServo
         from ..geometry.interface import ActionSpec
-        from .libero_env import build_chain, gripper_geom, register_ur5e
+        from .libero_env import build_chain, check_loaded_model, gripper_geom, register_ur5e
         from .servo import TwistServo
         register_ur5e()
         assert ex.gripper_mode in ("command", "target"), ex.gripper_mode
@@ -94,6 +94,7 @@ class SimArm:
         self.env.reset()
         flange, _ = gripper_geom(self.env)
         self.chain = build_chain("panda", flange)
+        check_loaded_model(self.robot.robot_model.file, "panda")
         self.servo = TwistServo(self.chain, self.spec, ex.joint_step, iters=ex.servo_iters, max_lag=ex.joint_step)
         self.servo.max_lin_acc, self.servo.max_ang_acc = ex.max_lin_acc, ex.max_ang_acc
         self.joint_ramp = ex.joint_ramp
