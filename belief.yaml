@@ -361,6 +361,26 @@ components:
       what lies outside it. Snap the student's target to the program levels
       (snap_channel) and store the levels in the checkpoint so every rollout decodes alike
 
+  # code: screwhead/teacher/task_loss.py, tools/task_loss_check.py
+  - id: CMP-rl-teacher
+    purpose: >-
+      Train the general teacher from privileged scene state against a task loss derived from
+      the bddl goal (zero exactly where LIBERO scores success) plus a smoothness cost, instead
+      of hand-writing skills
+    testable_capability: >-
+      A policy trained on a task's loss alone reaches LIBERO's success from that task's init
+      states, smoothly, through the same execution path as the student
+    failure_modes:
+      - {id: FM-loss-disagrees, observable: the loss is zero where LIBERO scores failure or positive where it scores success}
+      - {id: FM-loss-flat, observable: the loss does not change while the state moves toward or away from acceptance (a constant penalty, an unmodelled precondition)}
+      - {id: FM-reward-hacked, observable: the return rises without LIBERO success -- a band edge, a pumped shaping term, a discounted drag}
+      - {id: FM-not-markov, observable: the same observation leads to different next states because execution memory (servo reference, finger target) is hidden}
+      - {id: FM-demo-unclean, observable: a demonstration succeeds mid-fall, still held, or after knocking something over}
+    remediation: >-
+      Gate every loss term by LIBERO's own predicate and measure agreement and ordering on
+      teacher episodes and generated placements; undiscounted shaping; clear execution memory
+      at reset and bound the servo's reference; settle before counting success
+
 interfaces:
   - id: IFC-randomizer__teacher
     producer: CMP-scene-randomizer

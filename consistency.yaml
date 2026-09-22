@@ -17,9 +17,11 @@ axioms:
     domain: environment
     statement: >-
       Success is LIBERO's own predicate evaluated on the simulator state: In(obj, region)
-      is contact AND containment of the object's origin; On(obj, site) is the origin
-      within the site's footprint and height band, plus contact with the site's parent
-      object when it has one; Open/Close/TurnOn/TurnOff compare one joint to a threshold.
+      is containment of the object's origin, plus contact when the region is an object (for
+      a site region -- the basket's contain region, a drawer's -- check_contact is always
+      true, so containment alone); On(obj, site) is the origin within the site's footprint
+      and height band, plus contact with the site's parent object when it has one;
+      Open/Close/TurnOn/TurnOff compare one joint to a threshold.
     rationale: >-
       A reimplemented predicate drifted from the scorer: a box test called In true with
       the can 8 mm above the basket rim while LIBERO scored the episode a failure.
@@ -53,11 +55,13 @@ axioms:
   - id: AXM-panda-gripper-geometry
     domain: physics
     statement: >-
-      The Panda's gripping surfaces are its fingertips, reaching from 5 mm beyond to about
-      12 mm behind the tool point; the palm begins 40 mm behind it. Each finger is a
-      position servo (1000 N/m toward closed, capped at 20 N), so the squeeze on an object
-      scales with how far each finger is held from closed.
-    rationale: Read from the MJCF actuators and measured from the gripper geoms.
+      The Panda's gripping surfaces are its pads, reaching from 4.4 mm past to 11.6 mm
+      behind the tool point; its finger meshes reach 9.3 mm past it and its palm begins
+      31 mm behind it. Each finger is a position servo (1000 N/m toward closed, capped at
+      20 N), so the squeeze on an object scales with how far each finger is held from closed.
+    rationale: >-
+      Measured from the exact collision geometry (sim/scan.py; the earlier 5 mm / 40 mm
+      came from a box helper that mis-sized every mesh) and read from the MJCF actuators.
 
   - id: AXM-libero-resamples-fixtures
     domain: environment
@@ -188,12 +192,76 @@ axioms:
       drive a fixture's joint or push, and it frees its hand only by setting the object down.
     rationale: The Panda in every LIBERO task (robots=["Panda"], gripper_types="PandaGripper").
 
+  - id: AXM-objects-are-light
+    domain: physics
+    statement: >-
+      Every movable object in libero_object, spatial and goal weighs 5.2-31.7 g (the basket
+      136 g): gravity at most 0.31 N, against squeeze forces of 1-20 N at a pad friction of 2.0.
+    rationale: Read from the model's body masses (docs/grasp_mechanics.md).
+
+  - id: AXM-squeeze-is-a-spring
+    domain: physics
+    statement: >-
+      A finger's target cannot pass fully closed, so the squeeze on an object of width w is
+      about 1000 x w/2 N per finger, capped at 20 N: about 1.3 N on a 2.6 mm bowl rim, 20 N on
+      a 40 mm box -- and it falls as a slipping object lets the jaws close.
+    rationale: >-
+      Actuator gain 1000 N/m, forcerange +-20 N, ctrlrange 0..40 mm; measured 4.0 -> 2.1 N as
+      a rim pinch crept from 8.1 to 4.2 mm (libero_spatial 6, episode 0).
+
+  - id: AXM-no-torsional-friction
+    domain: physics
+    statement: >-
+      Pad and object contacts are condim 3: tangential friction (2.0, the larger of the pair)
+      and no torsional or rolling friction, so only the spread of the contact points resists
+      an object pivoting about the jaw axis.
+    rationale: >-
+      Read from the geoms; measured, a bowl pivoted 0.3 -> 16 degrees about a rim pinch over
+      45 steps and fell (libero_spatial 6, episode 0).
+
+  - id: AXM-slip-spikes-are-transient
+    domain: physics
+    statement: >-
+      A held object's velocity relative to the jaws spikes for a step or two during the
+      squeeze (the fingers nudge it) and at the start of a lift (it lags), while a carried
+      object's stays below about 0.01 m/s and 0.2 rad/s.
+    rationale: >-
+      Measured on libero_spatial 6; a holding test on instantaneous relative velocity
+      (0.05 m/s, 1 rad/s) read those spikes as losses.
+
   - id: AXM-reproducible-measurement
     domain: epistemic
     statement: >-
       A measurement is evidence only if the same seed reproduces the same episode, and an
       observer does not change the behaviour it records.
     rationale: Without it, paired comparisons of two teacher versions measure noise.
+
+  - id: AXM-robosuite-controller-cache
+    domain: environment
+    statement: >-
+      robosuite 1.4.0's controllers compute from a cache of the arm's joint position, velocity
+      and mass matrix that update() refreshes (after an mj_forward) only while the controller's
+      new_update flag is set; run_controller sets the flag at its end. env.reset() rebuilds the
+      controller, whose constructor fills the cache at the robot's init_qpos and clears the
+      flag, before set_init_state moves the arm -- so the first control period after a reset
+      computes its joint goal and its PD torque from that stale cache.
+    rationale: >-
+      Read from controllers/base_controller.py and measured by an independent reviewer on
+      TaskEnv libero_goal 8, reset(0): the cached joint position was 0.0165 rad from the state,
+      and a refresh on the first period changed its torque by up to 102 N m.
+
+  - id: AXM-robosuite-gripper-target-persists
+    domain: environment
+    statement: >-
+      robosuite 1.4.0's PandaGripper keeps its finger target (current_action, advanced by
+      0.01 per substep toward the commanded sign) from the moment its model is built; a soft
+      env.reset() sets the finger joint positions but not that target, so the fingers of a new
+      episode are driven from wherever the previous episode's command left it.
+    rationale: >-
+      Read from models/grippers/gripper_model.py (set once) and robots/single_arm.py (reset
+      sets finger qpos only); measured by an independent reviewer: from the same reset state
+      and the same 26 mm target, the aperture after 6 steps was 42.5 mm when the previous
+      episode ended open and 28.9 mm when it ended closed.
 
 definitions:
   - id: DEF-reachable-pose
@@ -392,6 +460,32 @@ lemmas:
       are predicates to be added when a suite needs them, not covered by this ordering.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: LMA-grip-fails-by-contact-not-load
+    statement: >-
+      In these suites a grip fails through its contacts -- a thin pinch squeezed weakly, a
+      pivot nothing resists, a pinch closing on edges or against the support -- not through
+      the object's weight or the arm's accelerations; so grasp choice and grasp checking
+      are about contact geometry, not load.
+    premises: [AXM-objects-are-light, AXM-squeeze-is-a-spring, AXM-no-torsional-friction]
+    derivation_rule: >-
+      Loads are at most 0.31 N of gravity (and ~0.01 N of inertia under the 2 m/s^2 bound)
+      against friction capacity in newtons; what remains are the contact failure modes the
+      other two axioms describe.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: LMA-loss-needs-robust-evidence
+    statement: >-
+      A loss may be declared only on evidence that is not transient -- the fingers no longer
+      touching the object, or the object far from where the jaws hold it -- never on an
+      instantaneous velocity: declaring a loss makes the pick law open the jaws, so a false
+      loss turns a grip into a drop, while a false hold only delays a regrasp.
+    premises: [AXM-slip-spikes-are-transient, AXM-one-gripper, DEF-holding]
+    derivation_rule: >-
+      The error costs are asymmetric; measured, holding judged on instantaneous relative
+      velocity took the teacher from 526 to 511 of 600 (spatial -7, goal -8: false losses
+      mid-squeeze and mid-carry, the jaws opened, the bowl fell from 28 cm).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
   - id: LMA-smooth-in-execution
     statement: >-
       Tool motion is smooth (DEF-smooth-motion) when the execution layer ramps each period's
@@ -566,6 +660,622 @@ branches:
       (to be implemented) evidence: CTR-teacher-reliable -- the 600-episode reference at
       bcf19e9 (523/600) reproduced wherever the old executor had no special case, then
       libero_10 KITCHEN_SCENE4 (bowl into the bottom drawer, close it).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-lean-step-is-env-step
+    subject: CMP-scene-randomizer
+    claim_type: contract
+    statement: >-
+      A lean control period -- for each of the 25 physics substeps: mj_step1; refresh the
+      JointPositionController's inputs (joint_pos, joint_vel, the arm block of the mass matrix)
+      from that state with its new_update flag cleared; on the first substep set_goal(arm
+      command); torques = clip(run_controller(), torque_limits); grip_action(gripper command);
+      write both into data.ctrl; mj_step2 -- leaves the MuJoCo state (qpos, qvel, act,
+      qacc_warmstart, ctrl, time) bit-identical to robosuite's env.step for the same command.
+    premises: [AXM-one-execution-path, AXM-reproducible-measurement]
+    derivation_rule: >-
+      Falsified before implementation by an independent reviewer: it refreshes on every
+      substep, but robosuite's first period after a reset runs on the controller's stale cache
+      (AXM-robosuite-controller-cache), so the two paths differ from period 0 and never
+      re-converge. Superseded by BRN-lean-step-keeps-controller-cache.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-lean-step-keeps-controller-cache
+    subject: CMP-scene-randomizer
+    claim_type: contract
+    statement: >-
+      A lean control period -- for each of the 25 physics substeps: mj_step1; if the
+      JointPositionController's new_update flag is set, refresh its cached joint_pos, joint_vel
+      and arm mass-matrix block from that state and clear the flag (update() without its
+      mj_forward); on the first substep set_goal(arm command); torques =
+      clip(run_controller(), torque_limits); grip_action(gripper command); write both into
+      data.ctrl; mj_step2 -- leaves every MuJoCo integration-state field and the controller's
+      cache, flag and joint ramp bit-identical to robosuite's env.step for the same command,
+      the first period after a reset included. What it skips (the two redundant mj_forward
+      calls per substep, observables, the robot's recent-value buffers, LIBERO's visual-state
+      update, reward) writes nothing the next substep reads.
+    premises: [AXM-one-execution-path, AXM-reproducible-measurement, AXM-robosuite-controller-cache]
+    derivation_rule: >-
+      mj_forward has no effect on the next step beyond what mj_step recomputes (warmstart reads
+      only qacc_warmstart, written in the advance), and mj_step1 + mj_step2 is mj_step for the
+      Euler integrator: 300 substeps from a 37-contact state were bit-identical three ways.
+      Honouring the flag reproduces robosuite's refresh schedule exactly: 60 periods / 1500
+      substeps from TaskEnv libero_goal 8 reset(0), gripper closing, all mjSTATE_INTEGRATION
+      fields and qacc with max difference 0; 2.88x faster (12.05 -> 4.18 ms per period).
+      Implementation: screwhead/sim/sim_arm.py (to be written), held by a test that runs both
+      paths from one saved state.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-task-loss-matches-scorer
+    subject: CMP-rl-teacher
+    claim_type: contract
+    statement: >-
+      A task loss built generically from a bddl's goal conjuncts -- for each conjunct, the
+      distance of the simulator state to the set of states LIBERO's own predicate accepts
+      (object origin to the containment box or on-top band, missing contact as a penalty,
+      joint to its threshold) -- is zero exactly on the states LIBERO's _check_success scores
+      true, and positive elsewhere; no task-specific term enters it.
+    premises: [AXM-bddl-states-goals-not-methods, AXM-libero-scores-final-state,
+               AXM-libero-joint-bands, AXM-object-geometry-known]
+    derivation_rule: >-
+      screwhead/teacher/task_loss.py gates each conjunct by LIBERO's _eval_predicate, the
+      function _check_success conjoins. evidence: tools/task_loss_check.py on 240 teacher
+      episodes (30 tasks x 8) -- final loss 0 iff success 240/240, 0 disagreements over 56,926
+      conjunct-steps (only 210 satisfied states). Independent review: the zero set holds; the
+      distance does not measure closeness -- the constant contact penalty is flat from 1 mm to
+      30 cm above a support and ranks a bowl 5 cm off-centre on the plate worse than one
+      hovering centred 30 cm up; a bowl on top of the closed cabinet reads 5.8 mm from In(bowl,
+      top drawer); thresholds are copied from LIBERO into a table. Superseded by
+      BRN-task-loss-descends-to-scorer.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-task-loss-descends-to-scorer
+    subject: CMP-rl-teacher
+    claim_type: contract
+    statement: >-
+      The task loss sums over the bddl's goal conjuncts a term that is 0 when LIBERO's own
+      predicate accepts the conjunct (the _eval_predicate that _check_success conjoins) and
+      otherwise max(d, MIN_TERM), where d vanishes only on the acceptance set and grows with the
+      displacement from it: (a) the moved object's origin to the predicate's box or band, read
+      from the site's live pose and size or the support's origin; plus (b), where the predicate
+      requires contact and there is none, the smallest separation between the two bodies'
+      collision geometry; plus (c), for an in/on target region carried by an articulated body
+      whose joint is not open, that joint's distance to its open threshold, since the region is
+      reachable only when open. Joint thresholds and directions are read from LIBERO's objects,
+      not a table, and nothing is keyed by task. For placements generated from each task's own
+      goal -- the moved object raised above its target, shifted across it, and an articulated
+      target region closed versus open -- d is ordered as the displacement is.
+    premises: [AXM-bddl-states-goals-not-methods, AXM-libero-scores-final-state,
+               AXM-libero-joint-bands, AXM-object-geometry-known]
+    derivation_rule: >-
+      (to be implemented) Gating keeps the zero set LIBERO's by construction. (b) replaces the
+      constant contact penalty that made the loss flat over a descent: a separation shrinks
+      monotonically as the object is lowered onto its support. (c) is the one precondition the
+      scene imposes on a containment goal that the bddl does not state (libero_goal 3: open the
+      drawer, then In). Named, not covered: a goal that also asks to close the region it fills
+      (libero_10) makes the open precondition and the Close conjunct cancel while the object is
+      outside. evidence: a test built from the reviewer's placements (tests/test_task_loss.py)
+      and tools/task_loss_check.py for the zero set.
+      Independent review falsified it: LIBERO's In ignores the drawer joint and accepted the
+      bowl in the top drawer at q = -0.13 ... -0.09, where is_open is false, so (c) ranked a
+      bowl 4.4 mm from an accepted pose (d 0.051) worse than one 5 cm above an open drawer
+      (0.050); mj_geomDistance on the live LIBERO model returned false zeros for separated
+      parallel faces (wrong at 10-44 of 48 placements by up to 8 cm, and on 74 of 161
+      no-contact rollout steps of libero_goal 4), leaving the loss at MIN_TERM; with native CCD
+      off it reported spurious penetrations beyond a 5 cm distmax and saturated at it. With an
+      exact box-box distance the raise and shift families were ordered by distance to the
+      acceptance set in all 30 tasks. Superseded by BRN-task-loss-exact-separation.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-task-loss-exact-separation
+    subject: CMP-rl-teacher
+    claim_type: contract
+    statement: >-
+      The task loss sums over the bddl's goal conjuncts a term that is 0 when LIBERO's own
+      predicate accepts the conjunct (the _eval_predicate that _check_success conjoins) and
+      otherwise max(d, MIN_TERM), where d is 0 only on the acceptance set and otherwise the sum
+      of (a) the moved object's origin to the predicate's box or band, read from the site's live
+      pose and size or the support's origin; (b), where the predicate requires contact and
+      there is none, the separation between the two bodies' LIBERO contact geoms, computed
+      exactly for boxes (every contact geom in these tasks is one) and continuous at any
+      height; and (c), for an in-region carried by a slide joint, how much further the region
+      must slide out before the part of it past the parent's closed front is as deep as the
+      object's half-extent along the slide, counted only while the object's origin is not
+      already over that exposed part. Joint thresholds and directions are read from LIBERO's
+      objects, nothing is keyed by task, and for placements generated from each task's goal --
+      the moved object raised above its target, shifted across it, and a drawer region at
+      openings from closed to fully open -- d is ordered by the placement's distance to the
+      acceptance set.
+    premises: [AXM-bddl-states-goals-not-methods, AXM-libero-scores-final-state,
+               AXM-libero-joint-bands, AXM-object-geometry-known]
+    derivation_rule: >-
+      (to be implemented) Answers the review of BRN-task-loss-descends-to-scorer: (c) follows
+      what LIBERO accepts (a partly open drawer whose exposed part fits the bowl) rather than
+      is_open; (b) uses an exact box-box distance with bounding-sphere pruning, validated
+      against the reviewer's QP reference (rv2_ccd.py) to within 1 mm, instead of the live
+      model's mj_geomDistance. Thresholds: direction = sign(mean(own range) - mean(other
+      range)), threshold = the end of the own range nearest the other (12 of 12 class
+      predicates); a turn_on probe restores vis_site_names. Named, not covered: d ignores
+      obstacles, so an object resting against a basket, plate or stove wall sits in a local
+      minimum it must rise out of (+0.002 to +0.043 over the basket rim); hinged regions
+      (microwave) and a goal that also closes the region it fills (libero_10). evidence:
+      tests/test_task_loss.py from the reviewer's placements; tools/task_loss_check.py for the
+      zero set on teacher episodes.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-rl-teacher-objective
+    subject: CMP-rl-teacher
+    claim_type: contract
+    statement: >-
+      A teacher policy trained to maximise the undiscounted episodic return of r_t = Phi(s_t)
+      - Phi(s_t+1) + B [success at s_t+1] - lam |a_t - a_t-1|^2, Phi the sum over goal
+      conjuncts of the task loss plus w_r times the reach, observing the arm, tool, jaws, the
+      servo's last commanded twist and per conjunct the moved thing, the acceptance region and
+      the loss's gap vector, and acting through the student's twist + target-aperture
+      interface, (i) has success as its optimum whenever B exceeds the smoothness cost of some
+      successful execution, (ii) can label any state the student reaches because its action is
+      a function of that state, and (iii) yields demonstrations executed through the one
+      execution path from its mean action with no noise.
+    premises: [AXM-libero-scores-final-state, AXM-bddl-states-goals-not-methods,
+               AXM-object-geometry-known, AXM-dagger-needs-markov-labels, AXM-one-execution-path,
+               AXM-velocity-steps-are-jerks]
+    derivation_rule: >-
+      Independent review: (i) sound provided gamma = 1 exactly (critic included) and Phi is
+      computed once per step; (ii) the observation is not Markov -- the servo's pose reference
+      winds up while the arm is blocked (78 mm after 15 steps in contact; a +0.05 m/s command
+      then moved the tool -0.7 mm instead of +26.3 mm) and robosuite's finger target survives
+      a soft reset (AXM-robosuite-gripper-target-persists); obstacles and time to go are
+      unobserved; the reward's a_t-1 is not the executed twist; (iii) success fires mid-fall
+      or still held, disturbing other objects costs nothing, the smoothness penalty reads the
+      requested action rather than the motion, in uneven units, and favours intermediate
+      gripper targets the student's decode cannot reproduce. Superseded by
+      BRN-rl-teacher-markov-objective.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-reset-clears-execution-memory
+    subject: CMP-scene-randomizer
+    claim_type: contract
+    statement: >-
+      Once a reset has placed its init state, the execution layer holds no memory of the
+      previous episode or of the pose before placement: robosuite's finger target is set to
+      the value that holds the fingers' current opening, the joint controller's cache is
+      refreshed from the placed state, and the joint ramp and both servos are anchored at it.
+      An episode's trajectory is then a function of its seed and init state alone, the same
+      whichever episodes ran before it in the process.
+    premises: [AXM-reproducible-measurement, AXM-one-execution-path,
+               AXM-robosuite-controller-cache, AXM-robosuite-gripper-target-persists]
+    derivation_rule: >-
+      (to be implemented, in SimArm so both environments share it) evidence: the same init
+      state run after an episode that ended open and after one that ended closed gives
+      bit-identical trajectories; the first period after a reset no longer runs on the
+      pre-placement cache (0.0165 rad stale, up to 102 N m of torque difference). Changes the
+      execution every demonstration and evaluation uses, so data collected before it is
+      recollected (AXM-one-execution-path).
+      Independent review falsified it as scoped: the settle pass that caches each init state
+      (_settled_init_state, once per process) runs under the previous episode's finger target
+      -- the cached aperture was 77.46 / 71.94 / 77.88 mm after a fresh start / a closed / an
+      open ending, and a fix at the final placement only still diverged by 5.88 mm; the random
+      start teleports the arm after placement (controller cache 0.30 rad stale, the 5-step hold
+      moved the tool 25 mm and ended 2.9 mm off the sampled start); the process RNG makes an
+      episode's start depend on its order (40.1 mm); and a revisit of k cannot catch the settle
+      leak because the settled cache is shared. Superseded by BRN-reset-anchors-execution.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-reset-anchors-execution
+    subject: CMP-scene-randomizer
+    claim_type: contract
+    statement: >-
+      SimArm anchors the execution layer at every placement of the arm -- after each
+      set_init_state (settling an init state, checking a layout's compatibility, placing a
+      layout, placing the episode's init state) and after the random start's IK write, before
+      its hold: robosuite's finger target is set, clipped to its range, to the value whose
+      actuator setpoint is the fingers' current position, and the joint controller's cache is
+      refreshed (update(force=True)). With each episode's random draws taken from a generator
+      seeded by (seed, episode index), an episode's trajectory is a function of (seed, episode
+      index, init state), the same whichever episodes ran before it in the process. Teacher
+      caches that persist across episodes (GripperScan) are outside this claim.
+    premises: [AXM-reproducible-measurement, AXM-one-execution-path,
+               AXM-robosuite-controller-cache, AXM-robosuite-gripper-target-persists]
+    derivation_rule: >-
+      (to be implemented, one SimArm._anchor used by both environments) Reviewer's probe with
+      the anchor after every set_init_state: three histories bit-identical, and a 145-step
+      closed-loop SkillTeacher run bit-identical after another episode; the anchor before the
+      random start's hold made that hold exact (0.0 mm). The finger dead band (frictionloss 1
+      N against kp 1000, +-1 mm per finger) means the anchor holds the placed opening, not the
+      setpoint that produced it. evidence: first visits of an init state after each history
+      (a fresh process, or the settled cache cleared) with start noise on and the closed-loop
+      teacher, compared bit for bit; CTR-teacher-reliable re-certified.
+      Independent review: bit-identical across five histories for TaskEnv (with and without
+      start noise, rendering on), but falsified for PrivilegedEnv's layout mode --
+      _compatible_init_state returns None on an unsettled redraw and reset() recurses, using up
+      episode indices, so the first reset ended on episode index 2 / init 26 in a fresh process
+      and index 1 / init 28 once init 28 had been settled; LayoutSampler.sample restores the
+      state between tries without anchoring; anchoring the fingers at the placed opening moved
+      the pre-shape from 30.3 to 27.8 mm (an open-setpoint anchor is history-free and left
+      libero_goal 8 at 141 / 142 / 145 / 187 steps, as today); skill_eval's repro records carry
+      seed*100+task although split workers use (seed*100+t)*1000+j. Superseded by
+      BRN-reset-anchors-open.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-reset-anchors-open
+    subject: CMP-scene-randomizer
+    claim_type: contract
+    statement: >-
+      SimArm anchors the execution layer at every placement of the arm -- after each
+      set_init_state, after each state restore between layout tries, and after the random
+      start's IK write before its hold: robosuite's finger target is set to fully open (the
+      setpoint every settle pass ends on) and the joint controller's cache is refreshed
+      (update(force=True)). An episode's draws come from a generator seeded by (seed, episode
+      index), and internal redraws (an incompatible or unsettled init state, a rejected layout)
+      from a sub-generator seeded by (seed, episode index, attempt), settling a redrawn init
+      state in place rather than recursing into reset. An episode's trajectory is then a
+      function of (seed, episode index, init state) in both environments, the same whichever
+      episodes ran before it in the process, and every trial's repro record carries the seed
+      and episode index its worker actually used.
+    premises: [AXM-reproducible-measurement, AXM-one-execution-path,
+               AXM-robosuite-controller-cache, AXM-robosuite-gripper-target-persists]
+    derivation_rule: >-
+      (to be implemented, one SimArm._anchor shared by TaskEnv and PrivilegedEnv) Answers the
+      review of BRN-reset-anchors-execution. evidence: first visits of init states after
+      different histories (fresh process, closed- and open-ending episodes, init states settled
+      earlier) in both environments, layout mode included, compared bit for bit; a split
+      skill_eval trial reproduced from its repro record; CTR-teacher-reliable re-certified.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-policies-read-current-state
+    subject: CMP-scene-randomizer
+    claim_type: contract
+    statement: >-
+      Every policy's input for step t -- the teacher's snapshot, the student's state and
+      images, the recorder's frames -- is read from the simulator state at the end of step
+      t-1's last physics substep (observations forced after each step, not robosuite's sampled
+      observables), so each action is chosen from the state it acts on, and reading an
+      observation never changes a trajectory.
+    premises: [AXM-reproducible-measurement, AXM-one-execution-path, AXM-dagger-needs-markov-labels]
+    derivation_rule: >-
+      (to be implemented) Found by the review of BRN-reset-clears-execution-memory: the
+      observation env.step returns lags the simulator by a cycling 0-24 substeps; under the
+      skill teacher the tool position it read was a median 3.95 mm stale (p95 10.5, max 12.0
+      mm), current on 4 of 120 steps; one extra observe() at step 10 changed the closed-loop
+      trajectory from step 11. evidence: lag 0 on every step; an inserted observe() leaves a
+      closed-loop episode bit-identical; CTR-teacher-reliable re-certified.
+      Independent review: sound for trajectory invariance (joint lag 0 on 120/120 steps; extra
+      observe() calls and rendering left episodes bit-identical) -- the lag came from every
+      Observable.update, forced ones included, adding one 2 ms timestep to its sampling timer
+      (robosuite/utils/observables.py:226), 52 ms per 50 ms period; but quantities derived by
+      mj_forward (body poses, contacts, LIBERO's predicates and done, images) still trailed qpos
+      by one substep (hand 0.30 mm median, any body 0.55 mm max), since robosuite never calls
+      forward after the last substep. With current-state observations the skill teacher got
+      worse on libero_goal 8 (one failure at 600 steps, three slow successes that regrasped):
+      its grasp thresholds were tuned against the lagged pose. Superseded by
+      BRN-policies-read-forwarded-state.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-policies-read-forwarded-state
+    subject: CMP-scene-randomizer
+    claim_type: contract
+    statement: >-
+      After each control period the execution core calls mj_forward once and then reads every
+      policy input -- the teacher's snapshot and scene poses, the student's state and images,
+      the recorder's frames, LIBERO's success -- from that forwarded state, with forced
+      observations only (no per-substep sampling) and the same observation reused by the next
+      step's servo. Each action is then chosen from the exact state it acts on, positions and
+      everything derived from them agree to 0 mm, and reading or rendering an observation
+      never changes a trajectory.
+    premises: [AXM-reproducible-measurement, AXM-one-execution-path, AXM-dagger-needs-markov-labels]
+    derivation_rule: >-
+      (to be implemented) The reviewer's lean variant (forced updates only, the post-step
+      observation reused) was bit-identical to the plain path and 6% faster with rendering on
+      (16.6 vs 17.6 ms per step); mj_forward after the step brought the derived-quantity lag to
+      0.000 mm. Adopting it changes what every policy sees: the skill teacher's thresholds are
+      re-validated and CTR-teacher-reliable re-certified under it before any data is collected,
+      and student data is recollected under it (AXM-one-execution-path).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-servo-reference-bounded
+    subject: CMP-twist-servo
+    claim_type: contract
+    statement: >-
+      TwistServo bounds its pose reference as it bounds its joint reference: whenever the joint
+      reference is clamped (the lead limit, a joint limit, or an arm held back by contact), the
+      pose reference is reset to the pose the clamped joint reference reaches, so it never
+      leads the arm by more than the lead limit, and once the obstruction clears a commanded
+      twist moves the tool within one period instead of first unwinding an accumulated lead.
+    premises: [AXM-servo-tracks-reachable-poses, AXM-one-execution-path]
+    derivation_rule: >-
+      (to be implemented) Measured by an independent reviewer: after 15 steps pressing into
+      contact at 0.1 m/s the pose reference sat 78 mm below the tool with 0 re-anchors, and a
+      +0.05 m/s command for 12 steps moved the tool -0.7 mm, against +26.3 mm with the
+      reference re-anchored. The re-anchor test compares the pose reference with the
+      unclamped IK solution (servo.py:114-120) while only the joint reference is clamped
+      (servo.py:122). evidence: that probe re-run, and CTR-teacher-reliable /
+      CTR-teacher-smooth re-certified, since every policy executes through the servo.
+      Independent review falsified it: the lead limit is 0.1 rad per joint, so FK of the
+      clamped reference still left the pose reference 30 mm below a blocked tool, recovery
+      after pressing moved -0.2 mm in 12 periods (a perfect re-anchor +28.5 mm), and per-joint
+      clipping writes a direction error into the reference (2.0 mm over an open-loop +x move).
+      It also found the windup in free motion: libero_spatial 0 episode 0's carry left the
+      reference 71 mm ahead of the tool with 0 re-anchors before joint 4 surged to 1.91 rad/s.
+      Superseded by BRN-servo-lead-scaled-and-unwound.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-servo-lead-scaled-and-unwound
+    subject: CMP-twist-servo
+    claim_type: contract
+    statement: >-
+      TwistServo keeps its references within one period of the arm: (a) when the IK step would
+      make the joint reference lead the measured joints by more than the lead limit (0.1 rad on
+      some joint), the whole lead is scaled down uniformly, ref = meas + s (theta - meas) with
+      s = limit / max|theta - meas|, and the pose reference is set to FK(ref), so the lead keeps
+      its direction and the pose reference is always the pose the joint reference reaches; (b)
+      every step, if the lead is at that limit and the measured joint motion along it over the
+      last period is below a fraction of what the lead commands, the arm is blocked, and both
+      references are re-anchored at the measured joints and the rate limiter's twist is set to
+      the tool's measured twist. Then the joint reference never leads the measurement by more
+      than 0.1 rad per joint at command time, and after an obstruction clears a commanded twist
+      is followed at the commanded rate from the third period.
+    premises: [AXM-servo-tracks-reachable-poses, AXM-one-execution-path]
+    derivation_rule: >-
+      (to be implemented) Uniform scaling kept an open-loop +x move straight (drift 2.0 -> 0.0
+      mm, reviewer's probe); a re-anchor only on binding steps let the lead grow back to 0.065
+      rad between binds (first motion at period 9), hence the every-step blocked test; the
+      rate limiter would otherwise hold the pre-block twist and reverse at 0.1 m/s per period.
+      Scale resets and blocked re-anchors are counted apart from the existing reanchors (which
+      CTR-teacher-smooth requires to be 0). To check: no false blocked trigger when a motion
+      starts from rest; squeezes and the drawer drive (which never bound the clip in the
+      reviewer's episodes) unchanged. evidence: the reviewer's pressing probe re-run,
+      CTR-teacher-reliable and CTR-teacher-smooth re-certified.
+      Independent review falsified the recovery clause: gating the blocked test on the lead
+      being AT the limit let windup below it survive (a 15-step press ended with a 0.033 rad
+      lead, the pose reference 10.6 mm below the tool; the commanded rate came from period 8,
+      9 or later, never 3 unless a re-anchor happened to land one step before), and the
+      detector, one period stale, once drove the tool -2.54 mm against the command. The lead
+      bound held; the teacher was not worse (libero_goal 7: 153 -> 135 steps, substep
+      acceleration max 29.6 -> 7.8 m/s^2). Superseded by BRN-servo-lead-unwound-when-not-followed.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-servo-lead-unwound-when-not-followed
+    subject: CMP-twist-servo
+    claim_type: contract
+    statement: >-
+      TwistServo keeps its references within reach of the arm: (a) when the IK step would make
+      the joint reference lead the measured joints by more than 0.1 rad on some joint, the
+      whole lead is scaled down uniformly and the pose reference is set to FK(ref); (b) when
+      the arm has not followed the stored lead -- measured joint motion over the last period
+      below 0.3 of the stored lead's projection, and that lead larger than two periods of the
+      current step plus 0.01 rad -- tested while the rate limiter is idle, and at once when the
+      stored lead opposes the requested twist, both references are re-anchored at the measured
+      joints, the rate limiter's twist is set to the tool's measured twist, and this period's
+      step is taken from there. Then the joint reference leads the measurement by at most 0.1
+      rad per joint at command time, a motion from rest never triggers (b), and after an
+      obstruction clears or the requested twist reverses, the rate-limited twist is followed
+      within 2 periods.
+    premises: [AXM-servo-tracks-reachable-poses, AXM-one-execution-path]
+    derivation_rule: >-
+      (to be implemented) The reviewer's candidate: on the pressing probe the commanded rate
+      from period 2 (26.3 mm in 12 periods against 28.5 for an ideal re-anchor); a literal
+      clear within +-10% from periods 3-5 at a 0.16-0.27 m/s peak; 0 of 96 false triggers from
+      rest at the teacher's top speeds; the skill teacher identical to v2 (0 unwinds in 6
+      episodes of libero_spatial 0 and libero_goal 0 / 7). Measured ratios at the limit: true
+      blocks 0.009-0.203, free motion from rest 0.222 and up, idle-limiter free motion 0.472 and
+      up -- 0.3 with the idle-limiter guard leaves margins of 0.097 and 0.172. Open in the
+      review: an immediate reversal took periods 3-7 without the opposition test and the
+      measured-twist reset, both now in (b). Scaling discards commanded motion (libero_goal 7
+      descend: 86-92% of steps scaled, s down to 0.29); student and teacher are executed the
+      same way, so a label still means the same execution. Scale events and unwinds are
+      counted apart from reanchors.
+      Independent review falsified the timing: a lead left below the size threshold (0.016 rad
+      after pressing, threshold ~0.022) was never unwound, so the rate came at period 5-6 with
+      0.39 mm against the command (0 of 16 pressing cases within 2 periods); re-anchoring the
+      servo without restarting the joint ramp (which starts from the previous goal) delayed
+      every unwind by a period; and "within 2 periods" is unreachable even in free space, where
+      the tool trails the rate limiter by ~0.6 period and a step from rest reaches +-10% at
+      period 4. Measuring "followed" from joint velocity instead changed nothing. Part (a)
+      alone fixed a current failure: libero_spatial 6 init 48 fails with the present servo
+      (600 steps, 224 re-anchors, substep acceleration max 45.9 m/s^2) and succeeds with
+      uniform scaling (teacher 10/10 vs 9/10). Superseded by BRN-servo-unwinds-on-reversal.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-servo-unwinds-on-reversal
+    subject: CMP-twist-servo
+    claim_type: contract
+    statement: >-
+      TwistServo keeps its references within reach of the arm: (a) when the IK step would make
+      the joint reference lead the measured joints by more than 0.1 rad on some joint, the
+      whole lead is scaled down uniformly and the pose reference is set to FK(ref); (b) the
+      stored lead (previous reference minus measured joints) is unwound -- both references and
+      the joint ramp restarted at the measured joints, the rate limiter's twist set to the
+      tool's measured twist clamped to its per-period change, and this period's step taken from
+      there -- when the arm is not following it (measured joint velocity along it, times the
+      period, below 0.5 of it) and either the request reverses it (cosine between the stored
+      lead and the requested joint step below -0.5, lead above 0.01 rad) or, with the rate
+      limiter idle, it exceeds two periods of the current step plus 0.01 rad. Then the joint
+      reference leads the measurement by at most 0.1 rad per joint at command time; motion from
+      rest, free reversals and the skill teacher's phase switches never trigger (b); after a
+      press the tool reaches the rate-limited twist (+-10%) no later than a free-space step
+      from rest does and never moves against the command by more than 0.1 mm; and after an
+      obstruction clears, the overshoot is bounded by the lead (b) leaves in place.
+    premises: [AXM-servo-tracks-reachable-poses, AXM-one-execution-path]
+    derivation_rule: >-
+      (to be implemented) The reviewer's tested candidate: pressing probe 16/16 at the rate by
+      period 2-3; 0 triggers from rest (48 twists x 2 inits), on free reversals and in 12 teacher
+      episodes; a resisting drawer (damping 400) back to 95/103 steps (an opposition path
+      without a minimum lead had slowed it to 268). Velocity ratio in steady motion 1.1-1.7,
+      negative only in the first period from rest, where the size and cosine gates protect it.
+      Every observed teacher difference comes from (a): libero_goal 7 acceleration p95 3.33 /
+      4.92 -> 1.98 / 1.87, max 29.6 -> 7.8 m/s^2; libero_spatial 6 init 48 fixed. evidence:
+      the pressing, clearing, reversal and from-rest probes (scratchpad servo_v3.py) as a test;
+      CTR-teacher-reliable and CTR-teacher-smooth re-certified.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-rl-teacher-markov-objective
+    subject: CMP-rl-teacher
+    claim_type: contract
+    statement: >-
+      A teacher policy trained at gamma = 1 (critic included) to maximise the episodic return
+      of r_t = Phi(s_t) - Phi(s_t+1) + B [settled(s_t+1)] - lam |W (v(s_t+1) - v(s_t))|^2 -
+      mu [contact(s_t+1)], where Phi is the sum over goal conjuncts of the task loss of
+      BRN-task-loss-descends-to-scorer plus w_r times the reach, computed once per step;
+      settled(s) is LIBERO's success with the jaws off the moved object (or handle) and that
+      object at rest; v(s) is the tool's measured twist, W weighting angular rate by a 0.1 m
+      lever; contact(s) is the robot or the object it holds touching anything the goal does
+      not need; the episode ends when settled or at the horizon. It observes the Markov
+      execution state -- arm joints and velocities, tool pose, jaw aperture and rate, the
+      servo's rate-limited twist and its pose and joint reference errors, robosuite's finger
+      target, time to go -- and the scene's privileged geometry: per conjunct the moved
+      object's or handle's pose and box, the acceptance region and the loss's gap vector, and
+      the pose and box of every other object and fixture. It acts through the student's twist
+      and the student's gripper decode (a target among the decode's snap levels). Then (i)
+      settled success at least smoothness and contact cost is its optimum whenever B exceeds
+      that cost for some settled execution, since the return telescopes to Phi(s_0) + B -
+      costs on success and stays below Phi(s_0) otherwise; (ii) given
+      BRN-reset-anchors-execution, BRN-servo-lead-scaled-and-unwound and
+      BRN-policies-read-current-state, the observation
+      determines the next state's distribution, so a label at any state the student reaches
+      means what the critic assumed; (iii) a demonstration is the mean policy executed through
+      the one execution path, kept only if that mean policy itself reached settled success.
+    premises: [AXM-libero-scores-final-state, AXM-bddl-states-goals-not-methods,
+               AXM-object-geometry-known, AXM-dagger-needs-markov-labels, AXM-one-execution-path,
+               AXM-velocity-steps-are-jerks, AXM-release-is-free-fall]
+    derivation_rule: >-
+      (to be implemented) Each change answers a finding of the review of
+      BRN-rl-teacher-objective: settled success rather than LIBERO's first accepted step (a can
+      counted inside the basket 4 mm below its rim, still in the jaws, or mid-fall); smoothness
+      of the measured motion, a function of (s_t, s_t+1), rather than of the requested action;
+      a contact cost for disturbing what the goal does not name; the snap levels so the
+      student can reproduce the teacher's gripper; the execution fixes so the observation is
+      Markov. Depends on BRN-task-loss-descends-to-scorer, BRN-reset-anchors-execution,
+      BRN-servo-lead-scaled-and-unwound and BRN-policies-read-current-state (staged with it). Not claimed: that an optimiser finds
+      the optimum -- a single-task pilot in component-belief measures that.
+      Independent review falsified it: settled(s) read only the body origin's linear speed, so
+      a wine bottle tilted 23-24 deg on the cabinet edge passed (origin 4.1-4.6 mm/s, centre of
+      mass 19-20 mm/s, 0.37 rad/s) and then tipped over, success False; fixture joint rates,
+      object velocities and the two fingers were unobserved (knob at 0.52 rad, +-0.1 rad/s: on
+      vs off after 20 periods); drops earned the full B (a 10 cm drop onto the rack came to
+      rest with success) because no term sees the released object; a contact indicator sampled
+      once per 50 ms misses disturbances by pushed or released objects; TaskEnv ends episodes
+      at LIBERO's first accepted step; time to go makes the policy non-stationary while the
+      student never sees it; the mean of a categorical gripper head is undefined. Superseded
+      by BRN-rl-teacher-settled-objective.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-rl-teacher-settled-objective
+    subject: CMP-rl-teacher
+    claim_type: contract
+    statement: >-
+      A teacher policy trained at gamma = 1 (critic included; truncation at the horizon
+      bootstrapped by the critic; LIBERO's done ignored; any entropy bonus kept out of the
+      return) to maximise the return of r_t = Phi(s_t) - Phi(s_t+1) + B [settled(s_t+1)] -
+      lam |W (v(s_t+1) - v(s_t))|^2 - rho sum_o [o free] (speed_o(s_t+1) - v_tol)_+^2 - kappa
+      [gripper level changed], where Phi = sum over goal conjuncts of (task loss of
+      BRN-task-loss-exact-separation + w_r reach) + mu Psi, computed once per step; Psi sums
+      each body the goal does not name (free objects by position and a lever-weighted rotation,
+      fixture joints in joint units) over its displacement from the episode's start beyond a
+      tolerance; speed_o is a movable body's centre-of-mass speed plus a lever times its angular
+      speed, o free when no robot geom touches it, and v_tol = sqrt(0.05^2 + 2 g 0.005) m/s, the
+      landing speed of a release that DEF-gentle-placement allows; v(s) is the tool's measured
+      twist; settled(s) holds when LIBERO's success holds, the jaws touch neither the moved
+      object nor the handle, and a privileged rollout from s holding the arm still for 0.75 s
+      keeps success true throughout and ends with every body's centre-of-mass speed, angular
+      speed and joint rate below rest thresholds. The episode ends when settled. The policy
+      observes the execution state (arm joints and velocities, both finger joints, tool pose,
+      the servo's rate-limited twist and reference errors, robosuite's finger target), the pose,
+      box, linear and angular velocity of every free object and each fixture joint's position
+      and rate, per conjunct the acceptance region and the loss's gap vector, and each
+      non-goal body's start pose; no time to go. It acts through the student's twist and a
+      categorical choice among the student's gripper snap levels. Then (i) settled success at
+      least cost is the optimum whenever B exceeds that cost (disturbance mu Psi at the end,
+      smoothness, free motion, gripper changes) for some settled execution, since Phi(s_0) =
+      the loss at the start, Phi >= 0, the task terms vanish on success, and every
+      non-settling trajectory returns below Phi(s_0); (ii) given BRN-reset-anchors-execution,
+      BRN-servo-lead-unwound-when-not-followed and BRN-policies-read-current-state, the observation
+      determines the next state's distribution up to the solver's warmstart (measured 2.6e-5 m
+      over 40 steps); (iii) a demonstration is the policy's mode (twist mean, most probable
+      gripper level) executed through the one execution path, kept only if it reaches settled.
+    premises: [AXM-libero-scores-final-state, AXM-bddl-states-goals-not-methods,
+               AXM-object-geometry-known, AXM-dagger-needs-markov-labels, AXM-one-execution-path,
+               AXM-velocity-steps-are-jerks, AXM-release-is-free-fall, DEF-gentle-placement]
+    derivation_rule: >-
+      (to be implemented) Answers the review of BRN-rl-teacher-markov-objective point by point:
+      the rollout makes settled a function of the full state that catches tipping and rocking
+      (the 23-24 deg bottle must read not settled); the free-motion cost prices drops, bounces
+      and anything knocked into motion without a sampling gap longer than the fall (a 10 cm
+      drop lasts 140 ms, about 3 samples), and costs nothing for a release DEF-gentle-placement
+      allows; Psi prices lasting disturbance as a potential, so it telescopes; velocities and
+      fixture rates are observed; bootstrapping at truncation keeps the policy stationary like
+      the student; the gripper is a categorical over the snap levels with a switching cost, its
+      mode defined. Not claimed: that an optimiser finds the optimum -- a single-task pilot in
+      component-belief measures that.
+      Independent review falsified it: at gamma = 1 with truncation bootstrapped, time is free,
+      so a slower copy of any execution scores better (smoothness fell 7.8-8.0x per halving of
+      speed on one path through the real servo) and no least-cost optimum exists; settled
+      checked only the finger bodies, so a bottle propped by the palm past its 22.72 deg
+      tipping point passed and fell once the arm left, and a +-1e-3 deg band about the balance
+      point passes any finite still-hold; the free-motion term sampled every 50 ms left drops
+      of 1-2 cm unpriced at 9-18 of 25 clock phases; the gripper-change term and the servo's
+      blocked test read unobserved previous values, and finger velocities (read by the gripper
+      servo) were unobserved; the settled rollout disturbed the live episode (5.4e-3 on qpos)
+      unless the controller, servo, ramp and finger target were restored too; goal-named
+      supports (the basket, the plate) could be shoved for free; dead-end states make values
+      unbounded below. Superseded by BRN-rl-teacher-timed-objective.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-rl-teacher-timed-objective
+    subject: CMP-rl-teacher
+    claim_type: contract
+    statement: >-
+      A teacher policy trained at gamma = 1 (critic included; truncation at the horizon
+      bootstrapped; LIBERO's done ignored; entropy kept out of the return) to maximise the return
+      of r_t = Phi(s_t) - Phi(s_t+1) + B [settled(s_t+1)] - c - lam |W (v(s_t+1) - v(s_t))|^2 -
+      rho F_t - kappa |g_t - g_t-1|, terminated with - C_dead at a dead end, where: Phi = sum over
+      goal conjuncts of (task loss of BRN-task-loss-exact-separation + w_r reach) + mu Psi,
+      computed once per step; Psi sums, for every body except the moved object, its displacement
+      from the episode's start in the degrees of freedom no goal conjunct constrains, beyond a
+      tolerance (so a knocked basket or plate is priced); c is a fixed cost per step; F_t
+      accumulates over the period's 2 ms substeps, for every movable body no robot geom touches,
+      (vertical speed - v_tol)_+^2 + (horizontal speed - v_slide)_+^2, and for every fixture
+      joint no robot geom drives, (rate - w_tol)_+^2, with v_tol = sqrt(0.05^2 + 2 g 0.005) m/s
+      the landing speed DEF-gentle-placement allows; g is the gripper level, observed; a dead end
+      is a state from which the moved object cannot be reached (below the table top or outside
+      the arm's workspace); settled(s) holds when LIBERO's success holds, no robot geom touches
+      the moved object or handle, and a rollout from s on a copy of the simulator and of every
+      execution state (controller cache, servo, ramp, finger target, solver warmstart), holding
+      the arm still for 0.75 s under small random impulses on the moved object, keeps success
+      true throughout and ends below rest thresholds. The episode ends when settled. The policy
+      observes the execution state (arm joint positions and velocities, both finger joint
+      positions and velocities, tool pose, the servo's rate-limited twist and reference errors,
+      robosuite's finger target, the last gripper level), the pose, box and velocities of every
+      free object, each fixture joint's position and rate, per conjunct the acceptance region
+      and the loss's gap vector, and every priced body's start pose; no time to go. It acts
+      through the student's twist and a categorical choice among the student's gripper snap
+      levels. Then (i) the objective's optimum is settled success at the least total of time,
+      smoothness, free-motion, gripper and disturbance cost whenever B exceeds that total for
+      some settled execution: every non-settling trajectory returns at most Phi(s_0) - c per
+      step, below any settled return once B is large enough, and slowing an execution by k
+      multiplies its time cost by k while the smoothness saving is bounded, so the optimum is at
+      a finite speed; (ii) given BRN-reset-anchors-open, the servo branch and
+      BRN-policies-read-forwarded-state, the reward is a function of (observation, action, next
+      observation) and the observation determines the next state's distribution up to the
+      solver's warmstart; (iii) a demonstration is the policy's mode executed through the one
+      execution path, kept only if it reaches settled, and the settled check leaves the episode
+      bit-identical to one without it.
+    premises: [AXM-libero-scores-final-state, AXM-bddl-states-goals-not-methods,
+               AXM-object-geometry-known, AXM-dagger-needs-markov-labels, AXM-one-execution-path,
+               AXM-velocity-steps-are-jerks, AXM-release-is-free-fall, DEF-gentle-placement]
+    derivation_rule: >-
+      (to be implemented) Answers the review of BRN-rl-teacher-settled-objective: a time cost
+      restores an optimum (smoothness scales as k^-3 under slowing by k, time as k); dead ends
+      terminate, bounding values; settled excludes every robot geom and perturbs the hold, which
+      shrinks the balance band (width ~ e^-(7/s) T without kicks); the free-motion cost is
+      accumulated at the substep and splits vertical impact from sliding, so DEF-gentle-placement
+      releases cost nothing and 1-2 cm drops cannot hide; the last gripper level and finger
+      velocities are observed; the check runs on copies, held by a bit-identity test; Psi prices
+      goal-named supports in the degrees of freedom the goal leaves free. Rest thresholds from
+      the reviewer's census (30 tasks x 2 inits after a 0.75 s hold: bodies <= 0.54 mm/s, joint
+      rates <= 0.0005) -- 1 mm/s is reachable. Depends on BRN-task-loss-exact-separation,
+      BRN-reset-anchors-open, BRN-servo-unwinds-on-reversal (which reads joint velocity, observed,
+      not the previous period's reading) and
+      BRN-policies-read-forwarded-state. Not claimed: that an optimiser finds the optimum.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 policies:

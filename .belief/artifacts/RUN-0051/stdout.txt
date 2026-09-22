@@ -1,0 +1,317 @@
+[run] libero_object: 20 episodes x 10 tasks
+[run] libero_spatial: 20 episodes x 10 tasks
+[run] libero_goal: 20 episodes x 10 tasks
+
+task                              rate    94% interval  grade     mechanisms
+    goal[ 0]                20/20    [0.85, 1.00]  marginal  
+    goal[ 1]                20/20    [0.85, 1.00]  marginal  
+    goal[ 2]                20/20    [0.85, 1.00]  marginal  
+    goal[ 3]                 0/20    [0.00, 0.15]  broken    pick/never-reached-grasp (after losing it in place_in) x4, articulate/held-but-not-moved x4, relocate/held-but-not-delivered x3, pick/never-reached-grasp x3, place_in/held-but-not-delivered x2, pick/blocked-reaching x2, relocate/reached-but-no-grip x1, place_in/held-but-not-delivered (after losing it in place_in) x1
+    goal[ 4]                19/20    [0.77, 0.99]  marginal  pick/reached-but-no-grip (after losing it in place_on) x1
+    goal[ 5]                 2/20    [0.03, 0.29]  broken    pick/reached-but-no-grip (after losing it in place_on) x11, pick/blocked-reaching (after losing it in place_on) x4, place_on/held-but-not-delivered (after losing it in place_on) x2, pick/never-reached-grasp (after losing it in place_on) x1
+    goal[ 6]                20/20    [0.85, 1.00]  marginal  
+    goal[ 7]                20/20    [0.85, 1.00]  marginal  
+    goal[ 8]                20/20    [0.85, 1.00]  marginal  
+    goal[ 9]                 0/20    [0.00, 0.15]  broken    pick/reached-but-no-grip (after losing it in place_on) x11, pick/blocked-reaching (after losing it in place_on) x3, place_on/held-but-not-delivered (after losing it in place_on) x3, pick/never-reached-grasp (after losing it in place_on) x2, place_on/delivered-but-unscored (after losing it in place_on) x1
+  object[ 0]                20/20    [0.85, 1.00]  marginal  
+  object[ 1]                17/20    [0.65, 0.95]  marginal  pick/never-reached-grasp (after losing it in place_in) x1, pick/blocked-reaching (after losing it in place_in) x1, pick/reached-but-no-grip (after losing it in place_in) x1
+  object[ 2]                20/20    [0.85, 1.00]  marginal  
+  object[ 3]                20/20    [0.85, 1.00]  marginal  
+  object[ 4]                20/20    [0.85, 1.00]  marginal  
+  object[ 5]                20/20    [0.85, 1.00]  marginal  
+  object[ 6]                20/20    [0.85, 1.00]  marginal  
+  object[ 7]                20/20    [0.85, 1.00]  marginal  
+  object[ 8]                20/20    [0.85, 1.00]  marginal  
+  object[ 9]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 0]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 1]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 2]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 3]                18/20    [0.71, 0.97]  marginal  place_on/delivered-but-unscored (after losing it in place_on) x1, pick/blocked-reaching x1
+ spatial[ 4]                17/20    [0.65, 0.95]  marginal  pick/blocked-reaching (after losing it in place_on) x2, pick/never-reached-grasp (after losing it in place_on) x1
+ spatial[ 5]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 6]                17/20    [0.65, 0.95]  marginal  pick/never-reached-grasp (after losing it in place_on) x1, place_on/held-but-not-delivered (after losing it in place_on) x1, pick/reached-but-no-grip (after losing it in place_on) x1
+ spatial[ 7]                17/20    [0.65, 0.95]  marginal  pick/never-reached-grasp (after losing it in place_on) x2, pick/reached-but-no-grip (after losing it in place_on) x1
+ spatial[ 8]                19/20    [0.77, 0.99]  marginal  pick/never-reached-grasp (after losing it in place_on) x1
+ spatial[ 9]                20/20    [0.85, 1.00]  marginal  
+
+overall 526/600 = 0.877  [0.85, 0.90]   reliable 0  marginal 27  broken 3
+
+not reliable, worst first:
+  libero_goal[3] 0/20 lo 0.00: pick/never-reached-grasp (after losing it in place_in) x4, articulate/held-but-not-moved x4, relocate/held-but-not-delivered x3, pick/never-reached-grasp x3, place_in/held-but-not-delivered x2, pick/blocked-reaching x2, relocate/reached-but-no-grip x1, place_in/held-but-not-delivered (after losing it in place_in) x1
+  libero_goal[9] 0/20 lo 0.00: pick/reached-but-no-grip (after losing it in place_on) x11, pick/blocked-reaching (after losing it in place_on) x3, place_on/held-but-not-delivered (after losing it in place_on) x3, pick/never-reached-grasp (after losing it in place_on) x2, place_on/delivered-but-unscored (after losing it in place_on) x1
+  libero_goal[5] 2/20 lo 0.03: pick/reached-but-no-grip (after losing it in place_on) x11, pick/blocked-reaching (after losing it in place_on) x4, place_on/held-but-not-delivered (after losing it in place_on) x2, pick/never-reached-grasp (after losing it in place_on) x1
+  libero_object[1] 17/20 lo 0.65: pick/never-reached-grasp (after losing it in place_in) x1, pick/blocked-reaching (after losing it in place_in) x1, pick/reached-but-no-grip (after losing it in place_in) x1
+  libero_spatial[4] 17/20 lo 0.65: pick/blocked-reaching (after losing it in place_on) x2, pick/never-reached-grasp (after losing it in place_on) x1
+  libero_spatial[6] 17/20 lo 0.65: pick/never-reached-grasp (after losing it in place_on) x1, place_on/held-but-not-delivered (after losing it in place_on) x1, pick/reached-but-no-grip (after losing it in place_on) x1
+  libero_spatial[7] 17/20 lo 0.65: pick/never-reached-grasp (after losing it in place_on) x2, pick/reached-but-no-grip (after losing it in place_on) x1
+  libero_spatial[3] 18/20 lo 0.71: place_on/delivered-but-unscored (after losing it in place_on) x1, pick/blocked-reaching x1
+  libero_goal[4] 19/20 lo 0.77: pick/reached-but-no-grip (after losing it in place_on) x1
+  libero_spatial[8] 19/20 lo 0.77: pick/never-reached-grasp (after losing it in place_on) x1
+  libero_goal[0] 20/20 lo 0.85: -
+  libero_goal[1] 20/20 lo 0.85: -
+  libero_goal[2] 20/20 lo 0.85: -
+  libero_goal[6] 20/20 lo 0.85: -
+  libero_goal[7] 20/20 lo 0.85: -
+  libero_goal[8] 20/20 lo 0.85: -
+  libero_object[0] 20/20 lo 0.85: -
+  libero_object[2] 20/20 lo 0.85: -
+  libero_object[3] 20/20 lo 0.85: -
+  libero_object[4] 20/20 lo 0.85: -
+  libero_object[5] 20/20 lo 0.85: -
+  libero_object[6] 20/20 lo 0.85: -
+  libero_object[7] 20/20 lo 0.85: -
+  libero_object[8] 20/20 lo 0.85: -
+  libero_object[9] 20/20 lo 0.85: -
+  libero_spatial[0] 20/20 lo 0.85: -
+  libero_spatial[1] 20/20 lo 0.85: -
+  libero_spatial[2] 20/20 lo 0.85: -
+  libero_spatial[5] 20/20 lo 0.85: -
+  libero_spatial[9] 20/20 lo 0.85: -
+
+failures by mechanism: pick/reached-but-no-grip (after losing it in place_on) 25, pick/blocked-reaching (after losing it in place_on) 9, pick/never-reached-grasp (after losing it in place_on) 8, place_on/held-but-not-delivered (after losing it in place_on) 6, pick/never-reached-grasp (after losing it in place_in) 5, articulate/held-but-not-moved 4, relocate/held-but-not-delivered 3, pick/never-reached-grasp 3, pick/blocked-reaching 3, place_in/held-but-not-delivered 2, place_on/delivered-but-unscored (after losing it in place_on) 2, relocate/reached-but-no-grip 1, place_in/held-but-not-delivered (after losing it in place_in) 1, pick/blocked-reaching (after losing it in place_in) 1, pick/reached-but-no-grip (after losing it in place_in) 1
+
+600 trials -> /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0051/result.json
+
+==== diagnosis, worst task first ====
+
+### libero_goal[3] 0/20  open the top drawer and put the bowl inside
+  mechanisms: pick/never-reached-grasp (after losing it in place_in) x4, articulate/held-but-not-moved x4, relocate/held-but-not-delivered x3, pick/never-reached-grasp x3, place_in/held-but-not-delivered x2, pick/blocked-reaching x2, relocate/reached-but-no-grip x1, place_in/held-but-not-delivered (after losing it in place_in) x1
+  events in failed episodes: touched fixture wooden_cabinet_#_cabinet_top in articulate x17, grasped akita_black_bowl_# in relocate x16, LOST akita_black_bowl_# in pick x15, LOST akita_black_bowl_# in relocate x10, grasped akita_black_bowl_# in place_in x9, touched fixture wine_rack_#_main in relocate x1, touched fixture flat_stove_#_burner in relocate x1, touched fixture table in relocate x1
+  grasp tiers chosen: handle x19, parts x15, sides x3, forced x2
+  -- ep0 (500 steps) [relocate/reached-but-no-grip]
+     timeline: relocate:up 13 > relocate:over 14 > relocate:down 25 > relocate:descend 8 > relocate:squeeze 6 > relocate:lift 43 > relocate:carry 33 > relocate:lower 55 > relocate:release 1 > articulate:reach 42 > articulate:descend 11 > articulate:squeeze 4 > articulate:drive 27 > pick:leave 12 > pick:up 11 [reanchor 8, clamp 8] > pick:leave 1 > pick:up 4 [reanchor 4, clamp 4] > relocate:up 13 [reanchor 13, clamp 13] > relocate:over 18 [reanchor 17, clamp 11] > relocate:up 19 [reanchor 5] > relocate:over 18 [reanchor 8] > relocate:up 44 [reanchor 43, clamp 19] > relocate:over 39 [reanchor 4] > relocate:down 18 > relocate:descend 8 > relocate:squeeze 3 > relocate:up 10
+     t66 grasped akita_black_bowl_1 in relocate:lift, aperture 8 mm
+     t258 touched fixture wooden_cabinet_1_cabinet_top in articulate:drive, 0 mm from handle, joint -0.011
+     t282 LOST akita_black_bowl_1 in pick:leave: object z -0.014, tool z 0.177, aperture 17 mm
+     t396 touched fixture wine_rack_1_main in relocate:up, 
+     grasp clearing akita_black_bowl_1: decision=move to [0.673, 0.23]
+     grasp akita_black_bowl_1: tier=parts, offered={'parts': 30, 'sides': 280}, via=True, feasible=29, score=0.6707602492168863, approach=[-0.0, -0.0, -1.0], jaw=[0.84, 0.55, 0.0], width_mm=15.4, open_mm=27.4, grasp_above_centre_mm=11.1, transit=0.338, choices=26
+     grasp wooden_cabinet_1_top_region: tier=handle, offered={'handle': 8}, feasible=2, drive_checked=True, score=0.4079690161745171, forced=False, approach=[-0.0, -1.0, -0.0], jaw=[0.0, 0.0, 1.0], width_mm=16.3, handle_geom=wooden_cabinet_1_g18
+     final: in(akita_black_bowl_1, wooden_cabinet_1_top_region) = False | contain: rel [ 0.029  0.256 -0.178] within +-[0.102 0.076 0.03 ] (z floor -0.040)
+  -- ep1 (500 steps) [pick/never-reached-grasp (after losing it in place_in)]
+     timeline: relocate:up 14 > relocate:over 13 > relocate:down 25 > relocate:descend 8 > relocate:squeeze 6 > relocate:lift 43 > relocate:carry 33 > relocate:lower 55 > relocate:release 1 > articulate:reach 42 > articulate:descend 11 > articulate:squeeze 4 > articulate:drive 27 > pick:leave 10 > pick:up 17 > pick:over 8 > pick:down 5 > pick:over 2 > pick:down 16 > pick:descend 16 > pick:squeeze 8 > place_in:lift 51 > place_in:carry 20 > pick:up 3 > pick:down 22 > pick:leave 6 > pick:down 1 > pick:up 22 > pick:over 8 > pick:down 3
+     t66 grasped akita_black_bowl_1 in relocate:lift, aperture 8 mm
+     t258 touched fixture wooden_cabinet_1_cabinet_top in articulate:drive, 0 mm from handle, joint -0.011
+     t282 LOST akita_black_bowl_1 in pick:leave: object z -0.014, tool z 0.177, aperture 17 mm
+     t364 grasped akita_black_bowl_1 in place_in:lift, aperture 8 mm
+     t436 LOST akita_black_bowl_1 in pick:up: object z 0.313, tool z 0.372, aperture 4 mm
+     grasp clearing akita_black_bowl_1: decision=move to [0.664, 0.239]
+     grasp akita_black_bowl_1: tier=parts, offered={'parts': 32, 'sides': 292}, via=True, feasible=17, score=0.7565310772630269, approach=[-0.0, -0.0, -1.0], jaw=[-0.98, -0.21, 0.0], width_mm=18.2, open_mm=30.2, grasp_above_centre_mm=9.9, transit=0.427, choices=11
+     grasp wooden_cabinet_1_top_region: tier=handle, offered={'handle': 8}, feasible=2, drive_checked=True, score=0.40030633404369675, forced=False, approach=[-0.0, -1.0, -0.0], jaw=[0.0, 0.0, 1.0], width_mm=16.3, handle_geom=wooden_cabinet_1_g18
+     final: in(akita_black_bowl_1, wooden_cabinet_1_top_region) = False | contain: rel [ 0.023  0.18  -0.192] within +-[0.102 0.076 0.03 ] (z floor -0.040)
+
+### libero_goal[9] 0/20  put the wine bottle on the rack
+  mechanisms: pick/reached-but-no-grip (after losing it in place_on) x11, pick/blocked-reaching (after losing it in place_on) x3, place_on/held-but-not-delivered (after losing it in place_on) x3, pick/never-reached-grasp (after losing it in place_on) x2, place_on/delivered-but-unscored (after losing it in place_on) x1
+  events in failed episodes: grasped wine_bottle_# in place_on x20, LOST wine_bottle_# in pick x11, touched fixture wine_rack_#_main in pick x4, STALL in place_on x2, STALL in pick x1
+  grasp tiers chosen: faces x16, forced x3, parts x1
+  -- ep0 (500 steps) [pick/reached-but-no-grip (after losing it in place_on)]
+     timeline: pick:up 22 > pick:over 6 > pick:down 25 > pick:descend 8 > pick:squeeze 4 > place_on:lift 1 > pick:squeeze 1 > place_on:lift 74 > place_on:carry 17 > place_on:lower 58 > place_on:release 2 > place_on:retreat 6 > pick:up 4 > pick:over 14 > pick:down 25 > pick:descend 7 > pick:squeeze 6 > place_on:lift 79 > place_on:carry 8 > place_on:lower 63 > place_on:release 3 > place_on:retreat 2 > pick:descend 1 > pick:down 13 > pick:descend 8 > pick:squeeze 10 > place_on:lift 2 > pick:squeeze 3 > place_on:lift 1 > pick:squeeze 3 > place_on:lift 1 > pick:squeeze 1 > place_on:lift 1 > pick:squeeze 3 > place_on:lift 1 > pick:squeeze 5 > place_on:lift 1 > pick:squeeze 2 > place_on:lift 2 > pick:squeeze 7
+     t68 grasped wine_bottle_1 in place_on:lift, aperture 14 mm
+     t280 grasped wine_bottle_1 in place_on:lift, aperture 30 mm
+     t468 grasped wine_bottle_1 in place_on:lift, aperture 27 mm
+     t470 LOST wine_bottle_1 in pick:squeeze: object z 0.046, tool z 0.045, aperture 19 mm
+     t472 grasped wine_bottle_1 in place_on:lift, aperture 11 mm
+     t474 LOST wine_bottle_1 in pick:squeeze: object z 0.046, tool z 0.046, aperture 12 mm
+     t476 grasped wine_bottle_1 in place_on:lift, aperture 11 mm
+     t480 LOST wine_bottle_1 in pick:squeeze: object z 0.046, tool z 0.048, aperture 10 mm
+     t482 grasped wine_bottle_1 in place_on:lift, aperture 8 mm
+     t484 LOST wine_bottle_1 in pick:squeeze: object z 0.046, tool z 0.046, aperture 10 mm
+     grasp wine_bottle_1: tier=faces, offered={'faces': 2, 'parts': 12, 'sides': 54}, via=True, feasible=2, score=0.2914929258696324, approach=[-0.0, -0.0, -1.0], jaw=[-0.97, 0.24, 0.0], width_mm=44.0, open_mm=56.0, grasp_above_centre_mm=21.2, transit=0.441, choices=12, carry={'verified': True, 'h': 0.617}
+     final: on(wine_bottle_1, wine_rack_1_top_region) = False | under: dz -0.108 needs (-0.002, 0.103), |dxy| [0.044 0.147] < [0.101 0.022]; contact with wine_rack_1 True | wine_bottle_1 TIPPED 109 deg
+  -- ep1 (500 steps) [pick/reached-but-no-grip (after losing it in place_on)]
+     timeline: pick:down 5 > pick:descend 32 > pick:squeeze 8 > place_on:lift 1 > pick:squeeze 1 > place_on:lift 74 > place_on:carry 19 > place_on:lower 58 > place_on:release 2 > place_on:retreat 6 > pick:up 4 > pick:over 15 > pick:down 25 > pick:descend 8 > pick:squeeze 10 > place_on:lift 2 > pick:squeeze 7 > place_on:lift 1 > pick:squeeze 5 > place_on ... n:lift 1 > pick:squeeze 5 > place_on:lift 1 > pick:squeeze 5 > place_on:lift 1 > pick:squeeze 5 > place_on:lift 1 > pick:squeeze 5 > place_on:lift 1 > pick:squeeze 5 > place_on:lift 1 > pick:squeeze 4 > place_on:lift 1 > pick:squeeze 5 > place_on:lift 1 > pick:squeeze 5 > place_on:lift 1 > pick:squeeze 5 > place_on:lift 1 > pick:squeeze 2
+     t48 grasped wine_bottle_1 in place_on:lift, aperture 14 mm
+     t268 grasped wine_bottle_1 in place_on:lift, aperture 20 mm
+     t270 LOST wine_bottle_1 in pick:squeeze: object z 0.009, tool z 0.030, aperture 20 mm
+     t307 STALL in place_on:lift: tool still for 30 steps, object 271 mm from target (dz -258)
+     t402 grasped wine_bottle_1 in place_on:lift, aperture 1 mm
+     t404 LOST wine_bottle_1 in pick:squeeze: object z 0.010, tool z 0.032, aperture 1 mm
+     t408 grasped wine_bottle_1 in place_on:lift, aperture 1 mm
+     t410 LOST wine_bottle_1 in pick:squeeze: object z 0.010, tool z 0.032, aperture 1 mm
+     t414 grasped wine_bottle_1 in place_on:lift, aperture 1 mm
+     t416 LOST wine_bottle_1 in pick:squeeze: object z 0.010, tool z 0.031, aperture 1 mm
+     grasp wine_bottle_1: tier=faces, offered={'faces': 2, 'parts': 12, 'sides': 54}, via=True, feasible=2, score=0.31025548520708224, approach=[-0.0, -0.0, -1.0], jaw=[-1.0, 0.0, 0.0], width_mm=41.7, open_mm=53.7, grasp_above_centre_mm=15.4, transit=0.429, choices=6, carry={'verified': True, 'h': 0.567}
+     final: on(wine_bottle_1, wine_rack_1_top_region) = False | under: dz -0.170 needs (-0.002, 0.103), |dxy| [0.003 0.155] < [0.101 0.022]; contact with wine_rack_1 False | wine_bottle_1 TIPPED 90 deg
+
+### libero_goal[5] 2/20  push the plate to the front of the stove
+  mechanisms: pick/reached-but-no-grip (after losing it in place_on) x11, pick/blocked-reaching (after losing it in place_on) x4, place_on/held-but-not-delivered (after losing it in place_on) x2, pick/never-reached-grasp (after losing it in place_on) x1
+  events in failed episodes: STALL in place_on x18, grasped plate_# in place_on x18, LOST plate_# in pick x18, touched fixture table in pick x18, touched fixture wooden_cabinet_#_cabinet_top in pick x12, touched fixture wooden_cabinet_#_base in pick x2, grasped plate_# in pick x2, touched fixture wooden_cabinet_#_cabinet_middle in pick x2
+  grasp tiers chosen: forced x12, parts x6
+  -- ep0 (500 steps) [pick/reached-but-no-grip (after losing it in place_on)]
+     timeline: pick:up 8 > pick:over 25 > pick:down 22 > pick:descend 8 > pick:squeeze 55 > place_on:lift 20 > pick:squeeze 4 > place_on:lift 2 > pick:squeeze 3 > place_on:lift 1 > pick:squeeze 1 > place_on:lift 1 > pick:squeeze 2 > place_on:lift 1 > pick:squeeze 2 > place_on:lift 2 > pick:squeeze 4 > place_on:lift 3 > pick:squeeze 2 > place_on:lift 2 > ...  > pick:over 4 > pick:down 8 [reanchor 4] > pick:up 11 [reanchor 5, clamp 11] > pick:over 3 > pick:up 1 > pick:over 4 [clamp 4] > pick:down 3 > pick:over 7 [reanchor 5, clamp 7] > pick:up 2 > pick:over 7 [clamp 7] > pick:up 1 > pick:over 1 > pick:up 3 > pick:over 31 [reanchor 19, clamp 28] > pick:down 3 > pick:over 5 [reanchor 4, clamp 5]
+     t72 touched fixture table in pick:squeeze, 4 mm from grasp (dz +4)
+     t118 STALL in place_on:lift: tool still for 30 steps, object 260 mm from target (dz -21)
+     t118 grasped plate_1 in place_on:lift, aperture 55 mm
+     t138 LOST plate_1 in pick:squeeze: object z -0.010, tool z -0.000, aperture 54 mm
+     t142 grasped plate_1 in place_on:lift, aperture 48 mm
+     t144 LOST plate_1 in pick:squeeze: object z -0.010, tool z -0.002, aperture 47 mm
+     t152 grasped plate_1 in place_on:lift, aperture 44 mm
+     t154 LOST plate_1 in pick:squeeze: object z -0.010, tool z -0.000, aperture 44 mm
+     t156 grasped plate_1 in place_on:lift, aperture 43 mm
+     t158 LOST plate_1 in pick:squeeze: object z -0.009, tool z 0.002, aperture 41 mm
+     grasp plate_1: tier=forced, offered={'parts': 20, 'sides': 80}, via=True, feasible=0, score=None, approach=[-0.0, -0.0, -1.0], jaw=[-0.19, 0.98, 0.0], width_mm=136.6, open_mm=75.0, grasp_above_centre_mm=-4.6, transit=0.193, choices=4
+     final: on(plate_1, main_table_stove_front_region) = False | under: dz +0.008 needs (0.002, 0.107), |dxy| [0.082 0.237] < [0.04 0.04]; contact with None not checked
+  -- ep1 (500 steps) [pick/reached-but-no-grip (after losing it in place_on)]
+     timeline: pick:up 4 > pick:over 26 > pick:down 19 > pick:descend 8 > pick:squeeze 56 > place_on:lift 18 > pick:squeeze 1 > place_on:lift 1 > pick:squeeze 2 > place_on:lift 1 > pick:squeeze 2 > place_on:lift 2 > pick:squeeze 4 > place_on:lift 3 > pick:squeeze 3 > place_on:lift 1 > pick:squeeze 2 > place_on:lift 1 > pick:squeeze 2 > place_on:lift 2 > ...  > pick:squeeze 1 > place_on:lift 3 > pick:squeeze 1 > pick:down 1 > place_on:lift 1 > pick:down 5 > pick:up 25 > pick:over 12 > pick:down 34 > pick:up 12 [reanchor 8] > pick:down 15 [reanchor 6] > pick:up 38 [reanchor 12, clamp 6] > pick:over 34 > pick:down 44 [reanchor 4] > pick:descend 3 > pick:down 1 > pick:descend 2 > pick:squeeze 52
+     t66 touched fixture table in pick:squeeze, 4 mm from grasp (dz +4)
+     t113 STALL in place_on:lift: tool still for 30 steps, object 253 mm from target (dz -21)
+     t114 grasped plate_1 in place_on:lift, aperture 53 mm
+     t134 LOST plate_1 in pick:squeeze: object z -0.010, tool z -0.001, aperture 52 mm
+     t138 grasped plate_1 in place_on:lift, aperture 51 mm
+     t140 LOST plate_1 in pick:squeeze: object z -0.010, tool z -0.001, aperture 50 mm
+     t144 grasped plate_1 in place_on:lift, aperture 47 mm
+     t148 LOST plate_1 in pick:squeeze: object z -0.009, tool z 0.003, aperture 43 mm
+     t150 grasped plate_1 in place_on:lift, aperture 42 mm
+     t152 LOST plate_1 in pick:squeeze: object z -0.010, tool z -0.000, aperture 41 mm
+     grasp plate_1: tier=forced, offered={'parts': 20, 'sides': 88}, via=True, feasible=0, score=None, approach=[-0.0, -0.0, -1.0], jaw=[-0.66, -0.75, 0.0], width_mm=136.2, open_mm=75.0, grasp_above_centre_mm=-4.5, transit=0.392, choices=4
+     final: on(plate_1, main_table_stove_front_region) = False | under: dz +0.007 needs (0.002, 0.107), |dxy| [0.105 0.218] < [0.04 0.04]; contact with None not checked
+
+### libero_object[1] 17/20  pick up the cream cheese and place it in the basket
+  mechanisms: pick/never-reached-grasp (after losing it in place_in) x1, pick/blocked-reaching (after losing it in place_in) x1, pick/reached-but-no-grip (after losing it in place_in) x1
+  events in failed episodes: LOST cream_cheese_# in pick x3, grasped cream_cheese_# in place_in x3, touched fixture floor in pick x1
+  grasp tiers chosen: forced x3
+  -- ep7 (500 steps) [pick/never-reached-grasp (after losing it in place_in)]
+     timeline: pick:up 15 > pick:over 20 > pick:down 25 > pick:descend 18 > pick:squeeze 4 > place_in:lift 1 > pick:squeeze 4 > place_in:lift 3 > pick:squeeze 1 > place_in:lift 6 > pick:squeeze 1 > pick:up 23 > pick:over 10 > pick:down 369 [reanchor 328, clamp 328]
+     t82 grasped cream_cheese_1 in place_in:lift, aperture 40 mm
+     t84 LOST cream_cheese_1 in pick:squeeze: object z 0.005, tool z 0.018, aperture 40 mm
+     t88 grasped cream_cheese_1 in place_in:lift, aperture 39 mm
+     t90 LOST cream_cheese_1 in pick:squeeze: object z 0.007, tool z 0.018, aperture 38 mm
+     t92 grasped cream_cheese_1 in place_in:lift, aperture 38 mm
+     t98 LOST cream_cheese_1 in pick:up: object z 0.011, tool z 0.036, aperture 20 mm
+     grasp cream_cheese_1: tier=forced, offered={'sides': 4}, via=True, feasible=0, score=None, approach=[-0.01, -0.99, 0.12], jaw=[-0.0, -0.12, -0.99], width_mm=17.9, open_mm=29.9, grasp_above_centre_mm=0.0, transit=0.299, choices=2
+     final: in(cream_cheese_1, basket_1_contain_region) = False | contain: rel [ 0.101 -0.349 -0.057] within +-[0.064 0.06  0.069] (z floor -0.079)
+  -- ep10 (500 steps) [pick/blocked-reaching (after losing it in place_in)]
+     timeline: pick:up 12 > pick:over 20 > pick:down 25 > pick:descend 17 > pick:squeeze 4 > place_in:lift 1 > pick:squeeze 2 > place_in:lift 9 > pick:descend 1 > pick:up 23 > pick:over 7 > pick:down 102 [reanchor 48, clamp 48] > pick:up 51 > pick:over 7 > pick:down 73 [reanchor 19, clamp 20] > pick:up 2 > pick:down 24 [reanchor 24, clamp 24] > pick:up 51 > pick:over 7 > pick:down 62 [reanchor 8, clamp 9]
+     t78 grasped cream_cheese_1 in place_in:lift, aperture 40 mm
+     t80 LOST cream_cheese_1 in pick:squeeze: object z 0.005, tool z 0.018, aperture 39 mm
+     t82 grasped cream_cheese_1 in place_in:lift, aperture 39 mm
+     t90 LOST cream_cheese_1 in pick:descend: object z 0.023, tool z 0.038, aperture 34 mm
+     t498 touched fixture floor in pick:down, 127 mm from grasp (dz +87)
+     grasp cream_cheese_1: tier=forced, offered={'sides': 4}, via=True, feasible=0, score=None, approach=[-0.01, -0.99, -0.13], jaw=[0.0, 0.13, -0.99], width_mm=17.9, open_mm=29.9, grasp_above_centre_mm=0.0, transit=0.323, choices=3
+     final: in(cream_cheese_1, basket_1_contain_region) = False | contain: rel [ 0.26  -0.324 -0.058] within +-[0.073 0.046 0.07 ] (z floor -0.080)
+
+### libero_spatial[4] 17/20  pick up the black bowl in the top drawer of the wooden cabinet and place it on the plate
+  mechanisms: pick/blocked-reaching (after losing it in place_on) x2, pick/never-reached-grasp (after losing it in place_on) x1
+  events in failed episodes: grasped akita_black_bowl_# in place_on x3, LOST akita_black_bowl_# in pick x3, STALL in pick x2, touched fixture wooden_cabinet_#_cabinet_top in pick x1, touched fixture wooden_cabinet_#_base in pick x1
+  grasp tiers chosen: forced x3
+  -- ep0 (500 steps) [pick/blocked-reaching (after losing it in place_on)]
+     timeline: pick:up 12 > pick:over 27 > pick:down 11 > pick:descend 8 > pick:squeeze 6 > place_on:lift 5 > pick:squeeze 1 > place_on:lift 5 > pick:squeeze 3 > place_on:lift 1 > pick:squeeze 7 > place_on:lift 3 > pick:squeeze 1 > place_on:lift 3 > pick:squeeze 2 > place_on:lift 6 > pick:squeeze 2 > place_on:lift 1 > pick:squeeze 5 > place_on:lift 1 >  ... k:over 7 [clamp 7] > pick:down 2 > pick:over 7 [clamp 7] > pick:down 3 > pick:over 3 > pick:down 1 > pick:over 6 [clamp 6] > pick:down 2 > pick:over 7 [clamp 7] > pick:down 2 > pick:over 7 [clamp 7] > pick:down 3 > pick:over 9 [clamp 9] > pick:down 2 > pick:over 7 [clamp 7] > pick:down 3 > pick:over 3 > pick:down 1 > pick:over 4 [clamp 4]
+     t64 grasped akita_black_bowl_1 in place_on:lift, aperture 8 mm
+     t76 LOST akita_black_bowl_1 in pick:squeeze: object z 0.157, tool z 0.210, aperture 4 mm
+     t78 grasped akita_black_bowl_1 in place_on:lift, aperture 5 mm
+     t80 LOST akita_black_bowl_1 in pick:squeeze: object z 0.152, tool z 0.194, aperture 7 mm
+     t86 grasped akita_black_bowl_1 in place_on:lift, aperture 11 mm
+     t94 LOST akita_black_bowl_1 in pick:squeeze: object z 0.154, tool z 0.198, aperture 6 mm
+     t96 grasped akita_black_bowl_1 in place_on:lift, aperture 7 mm
+     t102 LOST akita_black_bowl_1 in pick:squeeze: object z 0.155, tool z 0.209, aperture 4 mm
+     t112 grasped akita_black_bowl_1 in place_on:lift, aperture 11 mm
+     t128 LOST akita_black_bowl_1 in pick:up: object z 0.157, tool z 0.217, aperture 4 mm
+     grasp akita_black_bowl_1: tier=forced, offered={'parts': 32, 'sides': 172}, via=True, feasible=0, score=None, approach=[-0.0, -0.0, -1.0], jaw=[-0.04, 1.0, 0.0], width_mm=17.7, open_mm=29.7, grasp_above_centre_mm=6.0, transit=0.39, choices=12
+     final: on(akita_black_bowl_1, plate_1) = False | dxy 286 mm (< 30), dz +0.160 (>= 0), contact False
+  -- ep13 (500 steps) [pick/never-reached-grasp (after losing it in place_on)]
+     timeline: pick:up 9 > pick:over 23 > pick:down 11 > pick:descend 7 > pick:squeeze 6 > place_on:lift 6 > pick:squeeze 1 > place_on:lift 2 > pick:squeeze 2 > place_on:lift 1 > pick:squeeze 1 > place_on:lift 1 > pick:squeeze 1 > place_on:lift 6 > pick:up 31 > pick:over 13 [clamp 12] > pick:down 379 [reanchor 187, clamp 379]
+     t56 grasped akita_black_bowl_1 in place_on:lift, aperture 8 mm
+     t62 LOST akita_black_bowl_1 in pick:squeeze: object z 0.155, tool z 0.198, aperture 7 mm
+     t64 grasped akita_black_bowl_1 in place_on:lift, aperture 5 mm
+     t66 LOST akita_black_bowl_1 in pick:squeeze: object z 0.156, tool z 0.205, aperture 4 mm
+     t72 grasped akita_black_bowl_1 in place_on:lift, aperture 7 mm
+     t78 LOST akita_black_bowl_1 in pick:up: object z 0.156, tool z 0.209, aperture 6 mm
+     t170 STALL in pick:down: tool still for 30 steps, 121 mm from grasp (dz +111)
+     grasp akita_black_bowl_1: tier=forced, offered={'parts': 22, 'sides': 156}, via=True, feasible=0, score=None, approach=[-0.0, -0.0, -1.0], jaw=[-0.93, -0.38, 0.0], width_mm=18.1, open_mm=30.1, grasp_above_centre_mm=5.6, transit=0.433, choices=3
+     final: on(akita_black_bowl_1, plate_1) = False | dxy 342 mm (< 30), dz +0.160 (>= 0), contact False
+
+### libero_spatial[6] 17/20  pick up the black bowl next to the cookie box and place it on the plate
+  mechanisms: pick/never-reached-grasp (after losing it in place_on) x1, place_on/held-but-not-delivered (after losing it in place_on) x1, pick/reached-but-no-grip (after losing it in place_on) x1
+  events in failed episodes: grasped akita_black_bowl_# in place_on x3, LOST akita_black_bowl_# in pick x3, STALL in pick x2
+  grasp tiers chosen: sides x2, parts x1
+  -- ep0 (500 steps) [pick/never-reached-grasp (after losing it in place_on)]
+     timeline: pick:over 26 > pick:down 11 > pick:descend 8 > pick:squeeze 6 > place_on:lift 30 > place_on:carry 16 > pick:down 18 > pick:descend 3 > pick:up 10 > pick:over 6 > pick:down 12 > pick:up 9 [clamp 9] > pick:over 345 [reanchor 171, clamp 345]
+     t52 grasped akita_black_bowl_1 in place_on:lift, aperture 8 mm
+     t98 LOST akita_black_bowl_1 in pick:down: object z 0.159, tool z 0.212, aperture 4 mm
+     t251 STALL in pick:over: tool still for 30 steps, 351 mm from grasp (dz +332)
+     grasp akita_black_bowl_1: tier=sides, offered={'parts': 12, 'sides': 176}, via=True, feasible=2, score=0.8900634005908006, approach=[0.34, -0.2, -0.92], jaw=[-0.26, 0.92, -0.3], width_mm=18.7, open_mm=30.7, grasp_above_centre_mm=5.8, transit=0.324, choices=10
+     final: on(akita_black_bowl_1, plate_1) = False | dxy 124 mm (< 30), dz +0.006 (>= 0), contact True
+  -- ep4 (500 steps) [place_on/held-but-not-delivered (after losing it in place_on)]
+     timeline: pick:over 24 > pick:down 15 > pick:descend 8 > pick:squeeze 6 > place_on:lift 39 > place_on:carry 8 > pick:up 3 > pick:down 19 > pick:descend 24 > pick:squeeze 7 > place_on:lift 32 > pick:up 6 > pick:over 10 > pick:down 10 > pick:descend 29 > pick:squeeze 7 > place_on:lift 32 > place_on:carry 6 > pick:up 10 > pick:down 11 [clamp 5] > pick:up 14 [clamp 7] > pick:over 3 > pick:up 5 > pick:down 19 [clamp 13] > pick:up 12 > pick:over 8 > pick:down 3 > pick:up 9 > pick:over 6 > pick:down 26 > pick:descend 8 > pick:squeeze 6 > place_on:lift 1 > pick:squeeze 2 > place_on:lift 49 > place_on:carry 16 > place_on:lower 7
+     t54 grasped akita_black_bowl_1 in place_on:lift, aperture 8 mm
+     t100 LOST akita_black_bowl_1 in pick:up: object z 0.222, tool z 0.272, aperture 4 mm
+     t154 grasped akita_black_bowl_1 in place_on:lift, aperture 8 mm
+     t186 LOST akita_black_bowl_1 in pick:up: object z 0.191, tool z 0.238, aperture 4 mm
+     t248 grasped akita_black_bowl_1 in place_on:lift, aperture 8 mm
+     t286 LOST akita_black_bowl_1 in pick:up: object z 0.190, tool z 0.242, aperture 4 mm
+     t428 grasped akita_black_bowl_1 in place_on:lift, aperture 7 mm
+     grasp akita_black_bowl_1: tier=parts, offered={'parts': 16, 'sides': 148}, via=True, feasible=11, score=0.7926079039978309, approach=[-0.0, -0.0, -1.0], jaw=[-0.64, -0.77, 0.0], width_mm=13.2, open_mm=25.2, grasp_above_centre_mm=13.6, transit=0.432, choices=19, carry={'verified': True, 'h': 0.328}
+     final: on(akita_black_bowl_1, plate_1) = False | dxy 11 mm (< 30), dz +0.307 (>= 0), contact False
+
+### libero_spatial[7] 17/20  pick up the black bowl on the stove and place it on the plate
+  mechanisms: pick/never-reached-grasp (after losing it in place_on) x2, pick/reached-but-no-grip (after losing it in place_on) x1
+  events in failed episodes: grasped akita_black_bowl_# in place_on x3, LOST akita_black_bowl_# in pick x3, STALL in pick x3
+  grasp tiers chosen: parts x3
+  -- ep2 (500 steps) [pick/never-reached-grasp (after losing it in place_on)]
+     timeline: pick:up 16 > pick:over 11 > pick:down 25 > pick:descend 8 > pick:squeeze 6 > place_on:lift 11 > place_on:carry 55 > pick:down 2 > place_on:retreat 2 > pick:up 27 > pick:down 1 > pick:up 8 > pick:over 2 > pick:down 10 [clamp 7] > pick:over 316 [reanchor 105, clamp 316]
+     t66 grasped akita_black_bowl_1 in place_on:lift, aperture 8 mm
+     t132 LOST akita_black_bowl_1 in pick:down: object z 0.061, tool z 0.108, aperture 5 mm
+     t222 STALL in pick:over: tool still for 30 steps, 416 mm from grasp (dz +415)
+     grasp akita_black_bowl_1: tier=parts, offered={'parts': 28, 'sides': 296}, via=True, feasible=26, score=0.8616347397455929, approach=[-0.0, -0.0, -1.0], jaw=[-0.69, -0.72, 0.0], width_mm=15.3, open_mm=27.3, grasp_above_centre_mm=10.8, transit=0.439, choices=3
+     final: on(akita_black_bowl_1, plate_1) = False | dxy 31 mm (< 30), dz +0.008 (>= 0), contact True
+  -- ep3 (500 steps) [pick/never-reached-grasp (after losing it in place_on)]
+     timeline: pick:up 16 > pick:over 11 > pick:down 25 > pick:descend 8 > pick:squeeze 6 > place_on:lift 11 > place_on:carry 55 > pick:down 2 > place_on:retreat 2 > pick:up 27 > pick:down 1 > pick:up 8 > pick:over 2 > pick:down 10 [clamp 7] > pick:over 316 [reanchor 105, clamp 316]
+     t66 grasped akita_black_bowl_1 in place_on:lift, aperture 8 mm
+     t132 LOST akita_black_bowl_1 in pick:down: object z 0.061, tool z 0.108, aperture 5 mm
+     t222 STALL in pick:over: tool still for 30 steps, 416 mm from grasp (dz +415)
+     grasp akita_black_bowl_1: tier=parts, offered={'parts': 28, 'sides': 296}, via=True, feasible=26, score=0.861633953687209, approach=[-0.0, -0.0, -1.0], jaw=[-0.69, -0.72, 0.0], width_mm=15.3, open_mm=27.3, grasp_above_centre_mm=10.8, transit=0.439, choices=3
+     final: on(akita_black_bowl_1, plate_1) = False | dxy 31 mm (< 30), dz +0.008 (>= 0), contact True
+
+### libero_spatial[3] 18/20  pick up the black bowl on the cookie box and place it on the plate
+  mechanisms: place_on/delivered-but-unscored (after losing it in place_on) x1, pick/blocked-reaching x1
+  events in failed episodes: grasped akita_black_bowl_# in place_on x1, LOST akita_black_bowl_# in pick x1, touched fixture wooden_cabinet_#_base in pick x1, PUSHED akita_black_bowl_# # mm before any grasp, in pick:up, by ? x1, touched fixture wooden_cabinet_#_cabinet_top in pick x1, touched fixture wooden_cabinet_#_cabinet_middle in pick x1
+  grasp tiers chosen: parts x2
+  -- ep10 (500 steps) [place_on/delivered-but-unscored (after losing it in place_on)]
+     timeline: pick:over 27 > pick:down 13 > pick:descend 7 > pick:squeeze 7 > place_on:lift 32 > place_on:carry 26 > place_on:lower 1 > place_on:retreat 1 > place_on:lower 1 > place_on:retreat 4 > pick:down 13 > pick:descend 21 > pick:squeeze 4 > pick:up 20 > pick:over 9 > pick:down 13 > pick:descend 37 > pick:squeeze 21 > place_on:lift 25 > place_on:retreat 5 > pick:down 9 > pick:descend 7 > pick:squeeze 7 > place_on:lift 23 > pick:down 3 > place_on:retreat 2 > pick:down 9 > pick:descend 34 > pick:squeeze 8 > place_on:lift 48 > place_on:carry 4 > place_on:lower 59
+     t54 grasped akita_black_bowl_1 in place_on:lift, aperture 8 mm
+     t258 grasped akita_black_bowl_1 in place_on:lift, aperture 10 mm
+     t310 grasped akita_black_bowl_1 in place_on:lift, aperture 6 mm
+     t334 LOST akita_black_bowl_1 in pick:down: object z 0.114, tool z 0.169, aperture 4 mm
+     t390 grasped akita_black_bowl_1 in place_on:lift, aperture 9 mm
+     grasp akita_black_bowl_1: tier=parts, offered={'parts': 26, 'sides': 256}, via=True, feasible=15, score=0.8085911185217982, approach=[-0.0, -0.0, -1.0], jaw=[0.89, -0.46, 0.0], width_mm=19.1, open_mm=31.1, grasp_above_centre_mm=10.1, transit=0.388, choices=6, carry={'verified': True, 'h': 0.334}
+     final: on(akita_black_bowl_1, plate_1) = False | dxy 13 mm (< 30), dz +0.051 (>= 0), contact False
+  -- ep18 (500 steps) [pick/blocked-reaching]
+     timeline: pick:over 28 > pick:down 6 > pick:descend 4 > pick:down 4 > pick:up 3 > pick:over 5 [reanchor 5] > pick:up 3 > pick:down 1 > pick:up 187 [reanchor 171, clamp 163] > pick:over 28 [reanchor 28, clamp 28] > pick:up 1 > pick:over 46 [reanchor 26, clamp 46] > pick:up 17 [reanchor 6, clamp 17] > pick:over 2 > pick:up 8 [clamp 8] > pick:over 3 > ...  2 > pick:up 10 [clamp 10] > pick:over 2 > pick:up 12 [reanchor 4, clamp 12] > pick:over 2 > pick:up 11 [clamp 11] > pick:over 2 > pick:up 12 [clamp 12] > pick:over 2 > pick:up 13 [clamp 13] > pick:over 2 > pick:up 12 [reanchor 4, clamp 12] > pick:over 1 > pick:up 4 [clamp 4] > pick:over 2 > pick:up 13 [clamp 13] > pick:over 1 > pick:up 1
+     t56 PUSHED akita_black_bowl_1 80 mm before any grasp, in pick:up, by ?
+     t90 touched fixture wooden_cabinet_1_cabinet_top in pick:up, 232 mm from grasp (dz +138)
+     t156 touched fixture wooden_cabinet_1_base in pick:up, 243 mm from grasp (dz +119)
+     t162 touched fixture wooden_cabinet_1_cabinet_middle in pick:up, 243 mm from grasp (dz +132)
+     grasp akita_black_bowl_1: tier=parts, offered={'parts': 32, 'sides': 304}, via=True, feasible=14, score=0.6869070694662449, approach=[-0.0, -0.0, -1.0], jaw=[-0.99, -0.14, 0.0], width_mm=18.5, open_mm=30.5, grasp_above_centre_mm=5.3, transit=0.418, choices=6
+     final: on(akita_black_bowl_1, plate_1) = False | dxy 268 mm (< 30), dz -0.004 (>= 0), contact False
+
+### libero_goal[4] 19/20  put the bowl on top of the cabinet
+  mechanisms: pick/reached-but-no-grip (after losing it in place_on) x1
+  events in failed episodes: grasped akita_black_bowl_# in place_on x1, LOST akita_black_bowl_# in pick x1
+  grasp tiers chosen: parts x1
+  -- ep6 (500 steps) [pick/reached-but-no-grip (after losing it in place_on)]
+     timeline: pick:up 14 > pick:over 14 > pick:down 25 > pick:descend 8 > pick:squeeze 6 > place_on:lift 46 > place_on:carry 23 > pick:down 10 > pick:up 4 > pick:down 7 > pick:descend 39 > pick:squeeze 4 > pick:down 6 > pick:descend 6 > pick:down 6 > pick:descend 3 > pick:down 7 > pick:up 5 > pick:down 14 > pick:descend 29 > pick:squeeze 8 > place_on:l ...  > pick:squeeze 1 > place_on:lift 2 > pick:squeeze 5 > place_on:lift 1 > pick:squeeze 1 > place_on:lift 1 > pick:squeeze 1 > place_on:lift 4 > pick:squeeze 5 > place_on:lift 4 > pick:squeeze 3 > place_on:lift 3 > pick:squeeze 3 > place_on:lift 3 > pick:squeeze 1 > pick:up 31 > pick:over 6 > pick:down 25 > pick:descend 24 > pick:squeeze 28
+     t68 grasped akita_black_bowl_1 in place_on:lift, aperture 8 mm
+     t136 LOST akita_black_bowl_1 in pick:down: object z 0.291, tool z 0.333, aperture 5 mm
+     t284 grasped akita_black_bowl_1 in place_on:lift, aperture 59 mm
+     t286 LOST akita_black_bowl_1 in pick:squeeze: object z 0.051, tool z 0.049, aperture 59 mm
+     t288 grasped akita_black_bowl_1 in place_on:lift, aperture 59 mm
+     t290 LOST akita_black_bowl_1 in pick:squeeze: object z 0.053, tool z 0.054, aperture 59 mm
+     t296 grasped akita_black_bowl_1 in place_on:lift, aperture 45 mm
+     t300 LOST akita_black_bowl_1 in pick:squeeze: object z 0.052, tool z 0.059, aperture 41 mm
+     t306 grasped akita_black_bowl_1 in place_on:lift, aperture 28 mm
+     t312 LOST akita_black_bowl_1 in pick:down: object z 0.051, tool z 0.059, aperture 25 mm
+     grasp akita_black_bowl_1: tier=parts, offered={'parts': 24, 'sides': 184}, via=True, feasible=13, score=0.8278136898817544, approach=[-0.0, -0.0, -1.0], jaw=[0.99, 0.13, 0.0], width_mm=25.7, open_mm=37.7, grasp_above_centre_mm=0.6, transit=0.424, choices=22
+     final: on(akita_black_bowl_1, wooden_cabinet_1_top_side) = False | under: dz -0.169 needs (-0.004, 0.101), |dxy| [0.024 0.196] < [0.125 0.094]; contact with wooden_cabinet_1 False | akita_black_bowl_1 TIPPED 171 deg
+
+### libero_spatial[8] 19/20  pick up the black bowl next to the plate and place it on the plate
+  mechanisms: pick/never-reached-grasp (after losing it in place_on) x1
+  events in failed episodes: grasped akita_black_bowl_# in place_on x1, STALL in pick x1
+  grasp tiers chosen: sides x1
+  -- ep8 (500 steps) [pick/never-reached-grasp (after losing it in place_on)]
+     timeline: pick:up 4 > pick:over 35 > pick:down 19 > pick:descend 8 > pick:squeeze 6 > place_on:lift 15 > place_on:carry 20 > place_on:lift 8 > place_on:carry 3 > place_on:retreat 3 > pick:up 7 > pick:over 6 > pick:down 6 [clamp 6] > pick:over 3 > pick:down 8 [clamp 8] > pick:descend 349 [reanchor 68, clamp 349]
+     t72 grasped akita_black_bowl_1 in place_on:lift, aperture 8 mm
+     t220 STALL in pick:descend: tool still for 30 steps, 85 mm from grasp (dz +79)
+     grasp akita_black_bowl_1: tier=sides, offered={'parts': 32, 'sides': 288}, via=True, feasible=2, score=0.42120557758448707, approach=[-0.16, 0.18, -0.97], jaw=[-0.98, -0.15, 0.14], width_mm=18.7, open_mm=30.7, grasp_above_centre_mm=9.1, transit=0.232, choices=2
+     final: on(akita_black_bowl_1, plate_1) = False | dxy 35 mm (< 30), dz +0.008 (>= 0), contact True
+
+full record of every failed episode -> /home/edge-host/Documents/GitHub/embodied_ai/runs/evidence/reliability/diagnosis.md
