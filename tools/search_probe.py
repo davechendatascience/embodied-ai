@@ -73,10 +73,11 @@ def main() -> int:
         violation = watch.pending() or v.disturbed(start_ref, previous_ref) or v.lost()
         rows.append(dict(step=t, key=[float(x) for x in report.key], terminal=round(report.terminal, 4),
                          settled_in=report.settled_in, violations=report.violations,
-                         unsettled=report.unsettled,
+                         unsettled=report.unsettled, foresaw=report.foresaw[:40], foresaw_in=report.foresaw_in,
                          phase=phase(v, watch), success=success, seconds=round(time.perf_counter() - tick, 2)))
         if violation:
             outcome, rows[-1]["violation"] = f"violation: {violation}", violation
+            rows[-1]["foreseen"] = report.foresaw_in == 0 and report.foresaw.split(":")[0] == violation.split(":")[0]
             break
         if success and v.settled(watch):
             outcome = "settled"
@@ -89,6 +90,8 @@ def main() -> int:
                    terminal_first=rows[0]["terminal"] if rows else None,
                    terminal_last=rows[-1]["terminal"] if rows else None,
                    terminal_best=min((r["terminal"] for r in rows), default=None),
+                   foreseen=rows[-1].get("foreseen"),
+                   steps_expecting_a_violation=sum(r["foresaw_in"] is not None for r in rows),
                    settings=vars(settings))
     print(json.dumps(summary))
     if args.out:

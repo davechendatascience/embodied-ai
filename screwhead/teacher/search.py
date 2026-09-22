@@ -30,7 +30,12 @@ LEVELS = (0.0, 0.026, 0.08)        # the student's snap levels (tools/distill.py
 class Settings:
     horizon: int = 12              # periods a plan covers
     segments: int = 4              # segments per plan (a plan's periods are split evenly)
-    samples: int = 16              # plans per iteration
+    samples: int = 48              # plans per iteration. Measured against 16 on the two failures the
+    #                                instrumentation traced to states where every sampled plan violated:
+    #                                libero_goal 1 settled in 51 steps instead of releasing the bowl at
+    #                                18.3 mm after 160, with no step ever expecting a violation; on
+    #                                libero_object 2 the knocked soup disappeared and the search reached
+    #                                terminal 0.056 (from 0.223) before failing on a release.
     iters: int = 2                 # distribution updates per control step
     spread: float = 0.35           # initial spread of the twist, in normalized twist coordinates
     shrink: float = 0.6            # spread factor applied when an iteration does not improve the best key
@@ -81,6 +86,8 @@ class Report:
     violations: int
     terminal: float
     unsettled: int = 0             # periods of the chosen plan in which an unnamed body could leave its rest
+    foresaw: str = ""              # the violation the chosen plan's rollout expected, if any
+    foresaw_in: int | None = None  # the period of the rollout it expected it in
     spreads: list[float] = field(default_factory=list)
 
 
@@ -123,7 +130,8 @@ class Search:
         self._mean = plan
         report = Report(key=key, best=plan, settled_in=roll.period if roll.settled else None,
                         violations=sum(r.violated for _, _, _, r in scored), terminal=roll.terminal,
-                        unsettled=roll.unsettled, spreads=spreads)
+                        unsettled=roll.unsettled, foresaw=roll.violation,
+                        foresaw_in=roll.period if roll.violated else None, spreads=spreads)
         return plan.action(0, periods), report
 
     # -- sampling ---------------------------------------------------------------------------
