@@ -74,7 +74,7 @@ def test_basket_placement_verdicts():
     success = settled = None
     boundaries, actions = [], []
     for t in range(400):
-        boundaries.append((exec_state.save(te), watch.fork()))
+        boundaries.append((exec_state.save(te), watch.fork(), watch.violation))
         a = teacher.act(te.snapshot())
         lv = int(np.argmin(np.abs(np.asarray(levels) - float(channel_to_target(a[6])))))
         actions.append(np.r_[np.clip(a[:6], -1, 1), 1.0 - 2.0 * levels[lv] / 0.08])
@@ -87,13 +87,18 @@ def test_basket_placement_verdicts():
             break
     assert success is not None and settled is not None and settled >= success
     verdict = watch.finish()
+    checked = 0
     for k in range(len(actions) - 12, len(actions)):            # the release happens in these periods
-        st, forked = boundaries[k]
+        st, forked, decided = boundaries[k]
+        if decided:                                             # a fork carries no already-decided violation
+            continue
         exec_state.restore(te, st)
         for a in actions[k:]:
             te.execute(a, substep=forked.substep)
             forked.period_end(te.success())
         assert forked.finish() == verdict, k
+        checked += 1
+    assert checked > 0
     assert verdict.startswith("release cream_cheese_1")
     assert float(verdict.split("gap ")[1].split(" mm")[0]) > GENTLE_GAP * 1000
     assert v.lost() == ""

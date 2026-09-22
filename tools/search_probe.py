@@ -49,11 +49,12 @@ def main() -> int:
     ap.add_argument("--samples", type=int, default=16)
     ap.add_argument("--iters", type=int, default=2)
     ap.add_argument("--spread", type=float, default=0.35)
+    ap.add_argument("--key-order", default="plain", choices=["plain", "stability", "tiebreak"])
     ap.add_argument("--out", default="")
     args = ap.parse_args()
 
     settings = Settings(horizon=args.horizon, segments=args.segments, samples=args.samples,
-                        iters=args.iters, spread=args.spread)
+                        iters=args.iters, spread=args.spread, key_order=args.key_order)
     te = TaskEnv(args.suite, args.task, seed=0, render=False,
                  execution=Execution(lean=True, anchor=True, scale_lead=True))
     te.reset(args.init)
@@ -61,23 +62,26 @@ def main() -> int:
     v = Verdicts(te, loss)
     search = Search(te, v, loss, settings)
     watch, start_ref = v.watch(), v.reference()
+    previous_ref = dict(start_ref)
     rows, outcome, t0 = [], "timeout", time.perf_counter()
     for t in range(args.steps):
         tick = time.perf_counter()
-        action, report = search.act(watch, start_ref)
+        action, report = search.act(watch, start_ref, previous_ref)
         te.execute(action, substep=watch.substep)
         success = te.success()
         watch.period_end(success)
-        violation = watch.pending() or v.disturbed(start_ref) or v.lost()
+        violation = watch.pending() or v.disturbed(start_ref, previous_ref) or v.lost()
         rows.append(dict(step=t, key=[float(x) for x in report.key], terminal=round(report.terminal, 4),
                          settled_in=report.settled_in, violations=report.violations,
+                         unsettled=report.unsettled,
                          phase=phase(v, watch), success=success, seconds=round(time.perf_counter() - tick, 2)))
         if violation:
             outcome, rows[-1]["violation"] = f"violation: {violation}", violation
             break
-        if success and v.settled(watch) and not watch.open:
+        if success and v.settled(watch):
             outcome = "settled"
             break
+        previous_ref = v.reference()
     final = watch.finish()
     summary = dict(suite=args.suite, task=args.task, init=args.init, outcome=outcome, steps=len(rows),
                    final_watch=final, seconds=round(time.perf_counter() - t0, 1),

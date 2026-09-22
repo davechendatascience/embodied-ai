@@ -74,6 +74,8 @@ class Verdicts:
     def settled(self, watch: Watch | None = None) -> bool:
         if not self.env.success():
             return False
+        if watch is not None and watch.open:            # a contact loss not yet judged: not settled
+            return False
         if any(self.robot_touches(b) for b in self.goal_joint_bodies):
             return False
         g_mag = float(np.linalg.norm(self.m.opt.gravity))
@@ -115,11 +117,20 @@ class Verdicts:
         return {n: (self.support(n), self.face_down(n)) for n in self.others}
 
     def disturbed(self, *references: dict) -> str:
+        """A movable body the goal does not name rests somewhere none of the references allows."""
         for n in self.others:
             now = (self.support(n), self.face_down(n))
             if all(now != r[n] for r in references):
                 return f"disturbed {n}: support/face {now} matches none of {[r[n] for r in references]}"
         return ""
+
+    def unsettled(self) -> list[str]:
+        """Which unnamed movable bodies carry enough kinetic energy to leave the rest they are in
+        (the tipping barrier settled() uses). Not a verdict: a nudge that settles back breaks
+        nothing, but a search that ranks these lower stops knocking things over before they land."""
+        return [n for n in self.others
+                if settle.kinetic_energy(self.m, self.d, self.free[n])
+                >= settle.tipping_barrier(self.m, self.d, self.free[n])]
 
     def lost(self) -> str:
         for n in self.moved:
@@ -214,16 +225,23 @@ class Watch:
         self.armed = False                                          # record equilibrium this period
         self.supported: set[str] = set()                            # in equilibrium at a substep this period
         self._next: bool | None = None                              # arm the next period (set at period_end)
+        self._read_at_end = False                                   # period_end already read this state
 
     def fork(self) -> Watch:
+        """A copy for a rollout: it carries the contact record and the open losses, but not a
+        violation already decided on the executed trajectory -- a rollout judges what it causes."""
         w = Watch.__new__(Watch)
-        w.v, w.count, w.violation, w.armed, w._next = self.v, self.count, self.violation, self.armed, self._next
+        w.v, w.count, w.armed, w._next, w._read_at_end = self.v, self.count, self.armed, self._next, self._read_at_end
+        w.violation = ""
         w.touching, w.open, w.supported = dict(self.touching), dict(self.open), set(self.supported)
         return w
 
     def substep(self, _i=None) -> None:
         if self._next is not None:                                  # a new period: start its record
             self.armed, self.supported, self._next = self._next, set(), None
+        if self._read_at_end:                                       # period_end already read this state
+            self._read_at_end = False
+            return
         self.count += 1
         self._read()
         if self.armed:
@@ -235,12 +253,25 @@ class Watch:
     def period_end(self, success: bool) -> None:
         """After the period's closing forward: read its final state; the period's equilibrium
         record stays readable by settled() until the next period starts, which records only if
-        LIBERO accepted at this period's end (settled needs it only then)."""
+        LIBERO accepted at this period's end (settled needs it only then). The state read here is
+        the one the next period's first substep would read, so it is counted once, here."""
+        self.count += 1
         self._read()
+        self._read_at_end = True
         self._next = success
 
     def pending(self) -> str:
         return self.violation
+
+    def doomed(self) -> str:
+        """The violation an open loss would become: it was recorded at the moment of loss, so a
+        plan that ends with one has already failed DEF-gentle-placement unless contact returns."""
+        if self.violation:
+            return self.violation
+        for n, (_k, gap, speed) in self.open.items():
+            if gap > GENTLE_GAP or speed > GENTLE_SPEED:
+                return f"release {n} (open): gap {gap * 1000:.1f} mm, vertical speed {speed:.3f} m/s"
+        return ""
 
     def finish(self) -> str:
         for n, (_k, gap, speed) in list(self.open.items()):
@@ -248,8 +279,6 @@ class Watch:
         return self.violation
 
     def _read(self) -> None:
-        if self.violation:
-            return
         for n in self.v.moved:
             now = self.v.robot_touches(self.v.free[n])
             if self.touching[n] and not now:
@@ -261,7 +290,7 @@ class Watch:
             self.touching[n] = now
         for n, (k, gap, speed) in list(self.open.items()):
             if self.count - k >= self.v.fall_substeps:
-                self._judge(n, gap, speed)
+                self._judge(n, gap, speed)   # the first violation is kept; contacts keep being tracked
 
     def _judge(self, n: str, gap: float, speed: float) -> None:
         del self.open[n]

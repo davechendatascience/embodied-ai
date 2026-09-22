@@ -4,7 +4,8 @@ At each control step: sample plans -- sequences of segments, each one normalized
 for the segment's periods and one gripper snap level -- around the mean plan; roll each out from a
 restored copy of the state (exec_state) with a fork of the executed watch (verdicts); rank them
 lexicographically by (the rollout recorded a violation; for a violating plan the negated period of
-its violation, otherwise the settled period or horizon + 1; the terminal order at the end state);
+its violation, otherwise the settled period or horizon + 1; in how many of its periods an unnamed
+body could leave its rest; the terminal order at the end state);
 move the mean toward the better plans with weights that depend only on rank, the step bounded by a
 KL budget to the start distribution; execute the first action of the best plan.
 
@@ -37,6 +38,10 @@ class Settings:
     kl: float = 2.0                # KL budget of one update against the start distribution
     seed: int = 20260923           # fixed: the label is then a function of the state
     gradient_step: float = 0.0     # first-order proposal (BRN-screw-search (c)); 0 = off
+    key_order: str = "plain"       # where stability sits in the key: plain | stability | tiebreak.
+    #                                Measured on libero_goal 8 i0 and libero_object 1 i0: tiebreak is
+    #                                identical to plain (exact ties on the terminal order are vanishing),
+    #                                stability starves progress (object 1 timed out at terminal 0.30).
 
     def periods(self) -> list[int]:
         base, extra = divmod(self.horizon, self.segments)
@@ -64,6 +69,7 @@ class Rollout:
     settled: bool
     terminal: float
     violation: str = ""
+    unsettled: int = 0             # periods in which an unnamed body could leave its rest
 
 
 @dataclass
@@ -74,6 +80,7 @@ class Report:
     settled_in: int | None
     violations: int
     terminal: float
+    unsettled: int = 0             # periods of the chosen plan in which an unnamed body could leave its rest
     spreads: list[float] = field(default_factory=list)
 
 
@@ -87,9 +94,11 @@ class Search:
         self._mean: Plan | None = None
 
     # -- one control step -------------------------------------------------------------------
-    def act(self, watch, start_reference: dict) -> tuple[np.ndarray, Report]:
+    def act(self, watch, start_reference: dict, previous_reference: dict) -> tuple[np.ndarray, Report]:
         """The action to execute from the current state, and what the search found.
-        `start_reference` is the episode start's supports and faces (verdicts.reference())."""
+        `start_reference` is the episode start's supports and faces and `previous_reference` the
+        previous executed period's: a body is disturbed when it matches neither, so undoing a
+        disturbance is not one while a fresh knock from a disturbed state still is."""
         s, periods = self.s, self.s.periods()
         saved = exec_state.save(self.env)
         rng = np.random.default_rng(s.seed)
@@ -100,7 +109,7 @@ class Search:
             plans = self._sample(rng, mean, levels, spread)
             scored = []
             for i, plan in enumerate(plans):
-                roll = self._rollout(saved, watch, plan, periods, start_reference)
+                roll = self._rollout(saved, watch, plan, periods, start_reference, previous_reference)
                 scored.append((self._key(roll), i, plan, roll))
             scored.sort(key=lambda r: (r[0], r[1]))                  # ties: the lowest sample index
             if best is None or scored[0][0] < best[0]:
@@ -114,7 +123,7 @@ class Search:
         self._mean = plan
         report = Report(key=key, best=plan, settled_in=roll.period if roll.settled else None,
                         violations=sum(r.violated for _, _, _, r in scored), terminal=roll.terminal,
-                        spreads=spreads)
+                        unsettled=roll.unsettled, spreads=spreads)
         return plan.action(0, periods), report
 
     # -- sampling ---------------------------------------------------------------------------
@@ -161,24 +170,34 @@ class Search:
         return np.clip(mean + step, -1, 1), counts / counts.sum(axis=1, keepdims=True)
 
     # -- rollouts ---------------------------------------------------------------------------
-    def _rollout(self, saved, watch, plan: Plan, periods: list[int], start_reference: dict) -> Rollout:
+    def _rollout(self, saved, watch, plan: Plan, periods: list[int], start_reference: dict,
+                 previous_reference: dict) -> Rollout:
         exec_state.restore(self.env, saved)
         w = watch.fork()
-        s_ref = self.v.reference()
+        previous, unsettled = previous_reference, 0
         for period in range(self.s.horizon):
             self.env.execute(plan.action(period, periods), substep=w.substep)
             success = self.env.success()
             w.period_end(success)
-            violation = w.pending() or self.v.disturbed(start_reference, s_ref) or self.v.lost()
+            violation = w.pending() or self.v.disturbed(start_reference, previous) or self.v.lost()
+            unsettled += bool(self.v.unsettled())
             if violation:
-                return Rollout(True, period, False, self.terminal_order(), violation)
-            if success and self.v.settled(w) and not w.open:
-                return Rollout(False, period, True, 0.0)
-        return Rollout(False, self.s.horizon + 1, False, self.terminal_order())
+                return Rollout(True, period, False, self.terminal_order(), violation, unsettled)
+            if success and self.v.settled(w):
+                return Rollout(False, period, True, 0.0, "", unsettled)
+            previous = self.v.reference()
+        doomed = w.doomed()          # a loss open at the end has already failed unless contact returns
+        return Rollout(bool(doomed), self.s.horizon if doomed else self.s.horizon + 1, False,
+                       self.terminal_order(), doomed, unsettled)
 
-    @staticmethod
-    def _key(r: Rollout) -> tuple:
-        return (1, -r.period, r.terminal) if r.violated else (0, r.period, r.terminal)
+    def _key(self, r: Rollout) -> tuple:
+        """Violation first, then how soon it settles (how late it violates), then -- where
+        key_order puts it -- in how many of its periods an unnamed body could leave its rest,
+        and the terminal order."""
+        head = (1, -r.period) if r.violated else (0, r.period)
+        tail = {"plain": (r.terminal,), "stability": (r.unsettled, r.terminal),
+                "tiebreak": (r.terminal, r.unsettled)}[self.s.key_order]
+        return head + tail
 
     # -- the terminal order -----------------------------------------------------------------
     def terminal_order(self) -> float:
