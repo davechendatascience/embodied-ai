@@ -82,6 +82,7 @@ def _worker(remote, suite: str, task: int, seed: int, cpu: int, segment: int, ph
     remote.send(("dim", obs.shape[0]))
     policy = None
     ret = 0.0                                          # the running episode's return, across segments
+    track = _Track(env)
     while True:
         msg = remote.recv()
         if msg[0] == "stop":
@@ -102,15 +103,34 @@ def _worker(remote, suite: str, task: int, seed: int, cpu: int, segment: int, ph
             for k, v in (("obs", obs), ("twist", a[0].numpy()), ("grip", int(g[0])), ("logp", float(lp[0])),
                          ("reward", r), ("done", done), ("trunc", info.truncated and not done)):
                 buf[k].append(v)
+            track.step(info)
             if info.truncated and not done:
                 reached[len(buf["obs"]) - 1] = nxt
             if done or info.truncated:
-                episodes.append(dict(ret=ret, steps=env.t, success=info.success, violation=info.violation.split(":")[0]))
+                episodes.append(dict(ret=ret, steps=env.t, success=info.success, violation=info.violation.split(":")[0],
+                                     **track.summary()))
                 ret = 0.0
                 nxt = env.reset(int(rng.integers(len(env.env.init_states))))
+                track = _Track(env)
             obs = nxt
         remote.send(("seg", {k: np.asarray(v) for k, v in buf.items()}, obs, episodes, reached))
     remote.close()
+
+
+class _Track:
+    """One episode's task loss and reach term (m): at the start, the least reached, at the end."""
+    def __init__(self, env):
+        self.start = (env.start_loss, env.start_reach)
+        self.least = list(self.start)
+        self.last = self.start
+
+    def step(self, info) -> None:
+        self.last = (info.loss, info.reach)
+        self.least = [min(self.least[0], info.loss), min(self.least[1], info.reach)]
+
+    def summary(self) -> dict:
+        return dict(loss0=self.start[0], loss_min=self.least[0], loss_end=self.last[0],
+                    reach0=self.start[1], reach_min=self.least[1], reach_end=self.last[1])
 
 
 def _advantages(v: np.ndarray, v_last: float, r: np.ndarray, done: np.ndarray, trunc: np.ndarray,
@@ -158,14 +178,20 @@ def _batch(segs, policy: Policy, norm: RunningNorm, dev, lam: float) -> tuple[di
         norm.update(seg["obs"])
     b = {k: torch.as_tensor(np.concatenate(v), dtype=torch.float32, device=dev) for k, v in batch.items()}
     b["grip"] = b["grip"].long()
-    b["adv"] = (b["adv"] - b["adv"].mean()) / (b["adv"].std() + 1e-8)
+    ret, adv = b["ret"], b["adv"]
+    b["explained_var"] = float(1 - (adv.var() / (ret.var() + 1e-8)))     # ret - v = adv
+    b["adv"] = (adv - adv.mean()) / (adv.std() + 1e-8)
     return b, episodes
 
 
-def _update(policy: Policy, opt, b: dict, args) -> None:
-    """PPO's clipped surrogate, a value loss scaled by the batch's return variance, entropy bonus."""
+def _update(policy: Policy, opt, b: dict, args) -> dict:
+    """PPO's clipped surrogate, a value loss scaled by the batch's return variance, entropy bonus.
+    Returns the minibatch means of the surrogate, the value loss, the approximate KL to the
+    collecting policy, the clipped fraction and the entropy."""
     n = len(b["obs"])
     ret_var = b["ret"].var() + 1.0
+    sums = {k: 0.0 for k in ("policy_loss", "value_loss", "kl", "clip_frac", "entropy")}
+    count = 0
     for _ in range(args.epochs):
         for idx in torch.randperm(n, device=b["obs"].device).split(args.minibatch):
             twist, grip = policy.dist(b["obs"][idx])
@@ -180,9 +206,17 @@ def _update(policy: Policy, opt, b: dict, args) -> None:
             loss.backward()
             nn.utils.clip_grad_norm_(policy.parameters(), 0.5)
             opt.step()
+            with torch.no_grad():
+                log_ratio = lp - b["logp"][idx]
+                for k, v in (("policy_loss", pg), ("value_loss", vf / ret_var), ("entropy", ent),
+                             ("kl", (log_ratio.exp() - 1 - log_ratio).mean()),
+                             ("clip_frac", ((ratio - 1).abs() > args.clip).float().mean())):
+                    sums[k] += float(v)
+            count += 1
+    return {k: round(v / max(count, 1), 4) for k, v in sums.items()}
 
 
-def _summary(it: int, n: int, dt: float, episodes: list, policy: Policy) -> dict:
+def _summary(it: int, n: int, dt: float, episodes: list, policy: Policy, ppo: dict, explained_var: float) -> dict:
     kinds: dict[str, int] = {}
     for e in episodes:
         key = "success" if e["success"] else (e["violation"] or "timeout")
@@ -191,6 +225,9 @@ def _summary(it: int, n: int, dt: float, episodes: list, policy: Policy) -> dict
                 ret=round(float(np.mean([e["ret"] for e in episodes])), 2) if episodes else None,
                 steps_per_episode=round(float(np.mean([e["steps"] for e in episodes])), 1) if episodes else None,
                 success=round(sum(e["success"] for e in episodes) / max(len(episodes), 1), 3),
+                **{f"{k}_mm": round(1000 * float(np.mean([e[k] for e in episodes])), 1) if episodes else None
+                   for k in ("loss0", "loss_min", "loss_end", "reach0", "reach_min", "reach_end")},
+                **ppo, explained_var=round(explained_var, 3),
                 std=[round(float(s), 3) for s in policy.log_std.exp().detach().cpu()])
 
 
@@ -211,6 +248,7 @@ def main() -> int:
     ap.add_argument("--phi-scale", type=float, default=100.0,
                     help="steps of time cost per unit of potential; cancels out of every return")
     ap.add_argument("--out", default="runs/rl/pilot")
+    ap.add_argument("--resume", help="policy.pt to continue from (policy, normaliser, optimiser if saved)")
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -234,21 +272,31 @@ def main() -> int:
     policy = Policy(dim).to(dev)
     opt = torch.optim.Adam(policy.parameters(), lr=args.lr)
     norm = RunningNorm(dim)
+    first = 0
+    if args.resume:
+        ckpt = torch.load(args.resume, map_location=dev, weights_only=False)
+        policy.load_state_dict(ckpt["policy"])
+        norm.mean, norm.m2, norm.n = ckpt["norm_mean"], ckpt["norm_m2"], ckpt["norm_n"]
+        if "opt" in ckpt:
+            opt.load_state_dict(ckpt["opt"])
+        first = ckpt["iter"] + 1
+        print(f"resumed from {args.resume} at iteration {first}", flush=True)
     with open(out / "log.jsonl", "a") as log:
-        for it in range(args.iters):
+        for it in range(first, args.iters):
             t0 = time.perf_counter()
             state = {k: v.detach().cpu() for k, v in policy.state_dict().items()}
             scale = np.sqrt(norm.m2 / norm.n + 1e-8)
             for r in remotes:
                 r.send(("go", state, norm.mean.copy(), scale))
             b, episodes = _batch([r.recv() for r in remotes], policy, norm, dev, args.lam)
-            _update(policy, opt, b, args)
-            row = _summary(it, len(b["obs"]), time.perf_counter() - t0, episodes, policy)
+            ppo = _update(policy, opt, b, args)
+            row = _summary(it, len(b["obs"]), time.perf_counter() - t0, episodes, policy, ppo, b["explained_var"])
             print(json.dumps(row), flush=True)
             log.write(json.dumps(row) + "\n")
             log.flush()
             if it % 20 == 19 or it == args.iters - 1:
-                torch.save(dict(policy=policy.state_dict(), norm_mean=norm.mean, norm_m2=norm.m2, norm_n=norm.n,
+                torch.save(dict(policy=policy.state_dict(), opt=opt.state_dict(), norm_mean=norm.mean, norm_m2=norm.m2,
+                                norm_n=norm.n,
                                 obs_dim=dim, suite=args.suite, task=args.task, iter=it, args=vars(args)),
                            out / "policy.pt")
     for r in remotes:

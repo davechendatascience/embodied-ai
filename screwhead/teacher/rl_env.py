@@ -48,6 +48,8 @@ class StepInfo:
     success: bool = False
     violation: str = ""
     truncated: bool = False
+    loss: float = 0.0          # m: the task loss at the state reached (0 at success)
+    reach: float = 0.0         # m: the tool's distance to what must move (0 once held or satisfied)
 
 
 class RLTaskEnv:
@@ -84,7 +86,8 @@ class RLTaskEnv:
         self.t, self.level = 0, 2
         self.start = {n: self._support_and_face(n) for n in self.others}
         self.start_pose = {n: self._pose(n) for n in self.free}
-        self.phi = self._phi()
+        self.start_loss, self.start_reach = self._potential()
+        self.phi = self.phi_scale * (self.start_loss + self.start_reach)
         return self.observe()
 
     def step(self, twist: np.ndarray, level: int) -> tuple[np.ndarray, float, bool, StepInfo]:
@@ -97,20 +100,24 @@ class RLTaskEnv:
         info = StepInfo()
         info.violation = released.violation or self._scene_violation() or self._reach_violation()
         if info.violation:
+            info.loss, info.reach = self._potential()
             reward, done = -1.0 + self.phi - self.horizon, True
             self.phi = 0.0
         elif self.settled():
             info.success, done = True, True
             reward, self.phi = -1.0 + self.phi, 0.0
         else:
-            phi = self._phi()
+            info.loss, info.reach = self._potential()
+            phi = self.phi_scale * (info.loss + info.reach)
             reward, self.phi, done = -1.0 + self.phi - phi, phi, False
             info.truncated = self.t >= self.horizon
         return self.observe(), float(reward), done, info
 
     # -- potential and settling -------------------------------------------------------------
-    def _phi(self) -> float:
-        return self.phi_scale * float(sum(t.loss + t.reach for t in self.loss.terms()))
+    def _potential(self) -> tuple[float, float]:
+        """The task loss and the reach term, unscaled (m); Phi is their sum times phi_scale."""
+        terms = self.loss.terms()
+        return float(sum(t.loss for t in terms)), float(sum(t.reach for t in terms))
 
     def settled(self) -> bool:
         if not self.env.success():
