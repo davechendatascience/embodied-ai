@@ -67,8 +67,13 @@ axioms:
     domain: environment
     statement: >-
       Every env.reset() re-samples fixture poses from numpy's global RNG and writes them to
-      model.body_pos, which set_init_state does not restore.
-    rationale: Two unseeded resets moved the wooden cabinet 12 mm apart.
+      model.body_pos and model.body_quat of fixture root bodies attached to the world, and to
+      no other model field; set_init_state restores neither.
+    rationale: >-
+      Two unseeded resets moved the wooden cabinet 12 mm apart. Across 30 tasks (libero_goal,
+      spatial and object 0-9), episodes and instances differ only in fixture root bodies'
+      body_pos and body_quat -- all 10 libero_spatial tasks re-sample body_quat too, and
+      libero_object re-samples nothing (TRL-0240).
 
   - id: AXM-handle-shares-body
     domain: environment
@@ -263,6 +268,18 @@ axioms:
       and the same 26 mm target, the aperture after 6 steps was 42.5 mm when the previous
       episode ended open and 28.9 mm when it ended closed.
 
+  - id: AXM-mujoco-integration-state
+    domain: environment
+    statement: >-
+      MuJoCo's mjSTATE_INTEGRATION (mj_getState / mj_setState) holds everything of mjData that
+      mj_step1 and mj_step2 read from one step to the next -- time, qpos, qvel, act,
+      qacc_warmstart, ctrl, qfrc_applied, xfrc_applied, eq_active, mocap poses, userdata,
+      plugin state -- so, for the same model and the same inputs, restoring it reproduces the
+      steps that follow.
+    rationale: >-
+      MuJoCo's documentation of the state-component bits (mjtState); measured across processes
+      and instances with the model's body poses equal (TRL-0217, TRL-0238).
+
   - id: AXM-parameters-derived
     domain: requirement
     statement: >-
@@ -313,6 +330,19 @@ definitions:
       hand empty, uncrowded(o), graspable(o), admits(C, o), accessible(j), a free spot for o,
       and LIBERO's own In, On, Open, Close, TurnOn, TurnOff -- with the parameters the
       affordance table supplies (how a category is moved, held and set down).
+
+  - id: DEF-lean-period-reads
+    term: What a lean control period reads
+    meaning: >-
+      Besides MuJoCo's integration state and the model, SimArm._advance and execute under
+      Execution(lean=True) read, between control periods: the joint ramp's start, goal and k;
+      the joint controller's joint_pos, joint_vel, mass matrix (in its stored memory layout) and
+      new_update flag; the twist servo's ref, T_ref and V_prev; the gripper's current_action;
+      and the command. The controller's goal is overwritten at each period's first substep,
+      robosuite's clock is read only by env.step, and GripperServo carries no state between
+      calls. Audited in the code (SimArm._advance and execute, TwistServo, GripperServo,
+      JointRamp, robosuite's set_goal, run_controller, update and grip_action) by two
+      independent reviews (TRL-0224, TRL-0239).
 
   - id: DEF-plan
     term: Plan
