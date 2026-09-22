@@ -362,7 +362,9 @@ components:
       (snap_channel) and store the levels in the checkpoint so every rollout decodes alike
 
   # code: screwhead/teacher/task_loss.py, tools/task_loss_check.py, screwhead/geometry/box_distance.py (exact box-box
-  # separation), screwhead/teacher/settle.py (equilibrium settle), screwhead/teacher/rl_env.py, tools/rl_train.py (PPO)
+  # separation), screwhead/teacher/settle.py (equilibrium settle), screwhead/teacher/verdicts.py (settled and
+  # violations), screwhead/sim/exec_state.py (exact restore for search rollouts), screwhead/teacher/rl_env.py and
+  # tools/rl_train.py (the abandoned RL pilot, kept for its record)
   - id: CMP-rl-teacher
     purpose: >-
       Train the general teacher from privileged scene state against a task loss derived from

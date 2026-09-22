@@ -21,7 +21,13 @@ import mujoco
 import numpy as np
 from scipy.optimize import nnls
 
-PYRAMID_EDGES = 8          # friction cone approximated from inside: a feasible pyramid is a feasible cone
+PYRAMID_EDGES = 8          # the friction cone approximated from inside: edges at mu cos(pi/8), so the faces
+#                            reach mu cos^2(pi/8) = 0.854 mu and an equilibrium needing more may be rejected.
+#                            Deliberately inside the inscribed pyramid (edges on the cone): MuJoCo's soft
+#                            friction does not hold every Coulomb-feasible state near mu -- on an incline
+#                            (elliptic cone, impratio 20, mu 0.95, 37 slope directions) the inscribed pyramid
+#                            accepted states that then slid, 1 of 19 at 0.99 mu (331 mm in 2 s) and 10 of 18
+#                            at 1.00 mu, while nothing this pyramid accepts slid
 EQUILIBRIUM_TOL = 1e-6     # residual / weight counted as zero
 COINCIDENT = 1e-9          # m: contact points closer than this give no tipping axis
 
