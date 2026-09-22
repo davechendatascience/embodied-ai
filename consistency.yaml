@@ -1306,6 +1306,21 @@ branches:
       n_min: 3
       min_consensus: 0.8
 
+  - id: BRN-task-loss-core
+    subject: CMP-rl-teacher
+    claim_type: contract
+    statement: 'The task loss sums over the bddl''s goal conjuncts a term that is 0 when LIBERO''s own predicate accepts the conjunct (the _eval_predicate that _check_success conjoins) and otherwise d + M, M any positive constant. For an in or on conjunct d = a + b: (a) the moved object''s origin to the predicate''s box or band, read from the site''s live pose and size or the support''s origin; (b), where the predicate requires contact and LIBERO sees none, the exact separation between the two bodies'' LIBERO contact geoms (all boxes in these tasks, with margin and gap 0). For an open, close, turnon or turnoff conjunct d is the joint''s distance to its threshold in the joint coordinate. The tolerances d uses are LIBERO''s own -- joint thresholds and directions read from its objects, the on-top radius, band heights and containment slack found by probing its predicates (the shapes of its tests, box, band frame and disc, follow its code) -- and nothing is keyed by task. For the 30 tasks, each of whose goals has a single conjunct, and excluding an in-region carried by a slide joint: the loss is 0 exactly when LIBERO accepts, and M changes neither that nor how rejected states compare; for in and on conjuncts, d is also 0 on LIBERO''s strict boundaries and where MuJoCo misses a contact between deeply overlapping thin boxes with the origin inside the box or band, d is continuous on rejected states and at most twice as steep as the object''s translation, and d / 2 <= max(a, b) <= D*, where D* is the rigid translation the object needs, at its current orientation, to reach a pose LIBERO accepts; for joint conjuncts, d is continuous, 1-Lipschitz and monotone in the joint coordinate. Not claimed: that d orders placements by D*. Not covered: an in-region carried by a slide joint (libero_goal 3''s drawer); obstacles, which d ignores; goals with several conjuncts, where M adds a step at each conjunct''s acceptance, so its value changes comparisons and needs a declared source.'
+    premises:
+    - AXM-parameters-derived
+    - AXM-bddl-states-goals-not-methods
+    - AXM-libero-scores-final-state
+    - AXM-libero-joint-bands
+    - AXM-object-geometry-known
+    derivation_rule: 'Restated after a confirmation review whose bound measurements all held on the 30 tasks (max(a, b) <= D* to 2e-16 m over 2,100 targeted states and 58,780 LIBERO-checked poses; its premise -- contact implies exact separation <= 0, margin = gap = 0 on all 7 contact pairs -- over 39,875 near-contact states; slope <= 1.9058 over 197,040 pairs; no hidden underestimate in 300 small-d states) and found two scoping faults: M''s invariance holds only for single-conjunct goals (libero_10 task 0''s two conjuncts flip at M = 0.1474), now scoped to the 30 and named for libero_10; the slope and D* clauses hold only for in/on conjuncts, joints getting their own statement (1-Lipschitz, max |dd|/|dq| = 1.0000). The missed-contact zero is scoped to a = 0 (goal 2 had 786/4000 missed-contact samples with d > 0), and the model property margin = gap = 0 is named.'
+    sufficiency:
+      n_min: 3
+      min_consensus: 0.8
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:
