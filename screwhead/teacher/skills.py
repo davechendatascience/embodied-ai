@@ -29,6 +29,7 @@ from .clearing import Clearing
 from ..geometry.frames import Z, axis_rot, pose, rot_angle, rotvec
 from .grasp_planner import GraspPlanner
 from ..sim.gripper_servo import A_OPEN, target_to_channel
+from ..sim.scene import geom_world_box
 from .reach import Reach
 from .refusal import Refusal
 
@@ -62,6 +63,8 @@ class SkillConfig:
     #                                    Held, it reads 0.9-1.4 mm over the width (drawer and knob,
     #                                    278 drive steps); the approach opening is width + 12 mm
     handle_leave_lateral: float = 0.03  # the jaws are still around a handle within this of its axis
+    handle_leave_past: float = 0.01    # the retreat aims this far beyond where it stops, so the
+    #                                    proportional approach does not stall short of it
     handle_short_max: float = 0.008    # squeeze a handle only with the tool point this close to it:
                                        # the object envelope (35 mm short) let the jaws finish
                                        # closing 17 mm in front of the drawer's bar
@@ -523,6 +526,10 @@ class Skills:
         The top drawer's bar is pinched with the jaw axis vertical, so rising first -- the
         next pick's opening move -- hooked it with the lower finger and jolted the drawer
         back past its open margin: the precondition flickered open/shut for 25 steps.
+
+        And no further than that (BRN-leave-handle-along-approach): backing out to 100-150 mm
+        stretched the arm until sigma_min fell 0.108 -> 0.063 and the next motion crossed
+        0.003; the servo re-anchored and the arm swept the bowl set down beside it.
         """
         k, p = self.k, s["p_tool"]
         for region in list(self._handle_cache):
@@ -531,11 +538,22 @@ class Skills:
             p_h = self.scene.d.geom_xpos[a["handle_geom"]] - self.scene.base
             off = p - p_h
             ahead = float(off @ app)                       # 0 at the handle, -approach at the pre-grasp
-            if np.linalg.norm(off - app * ahead) < k.handle_leave_lateral and abs(ahead) < k.approach:
+            clear = self.handle_clearance(a["handle_geom"], app)
+            if np.linalg.norm(off - app * ahead) < k.handle_leave_lateral and abs(ahead) < clear:
                 self.phase = "leave"
-                return self.action(self.twist_to(s["R_tool"], p, s["R_tool"], p_h - app * (k.approach + k.lift_dz)),
+                return self.action(self.twist_to(s["R_tool"], p, s["R_tool"],
+                                                 p_h - app * (clear + k.handle_leave_past)),
                                    min(k.max_grip, w + k.grip_margin))
         return None
+
+    def handle_clearance(self, geom: int, app: np.ndarray) -> float:
+        """How far the tool point must be back from the handle's centre, along the approach,
+        before no part of the handle lies between the jaws: the handle's own half-depth along
+        that axis plus the finger meshes' reach past the tool point (the gripper as scanned).
+        A predicate on where the tool is, not a distance travelled from wherever the grip was."""
+        m, d = self.scene.m, self.scene.d
+        _c, Rg, hl = geom_world_box(m, d, geom, self.scene.base)
+        return float(np.abs(app @ Rg) @ hl) + self.planner.gripper().reach
 
     def handle_width(self, region: str) -> float | None:
         """The width of the handle grasp chosen this episode, if one has been."""
@@ -568,8 +586,13 @@ class Skills:
             # the grasp has to stay usable while the joint moves, not only where it starts:
             # a stove-knob grasp with 1 feasible candidate in 10 turned the knob to 0.35 of
             # its 0.5 and ran the arm into its limits, re-anchoring, every time
-            R, p = cand[0], cand[1]
-            return [pose(*self._joint_motion(a, f * dq, R, p)) for f in (0.5, 1.0)]
+            R, p, app = cand[0], cand[1], cand[3]
+            stations = [pose(*self._joint_motion(a, f * dq, R, p)) for f in (0.5, 1.0)]
+            # and so does the retreat that ends the drive (BRN-leave-handle-along-approach): the
+            # tool backs out along the approach as the motion carried it
+            R1, p1 = self._joint_motion(a, dq, R, p)
+            app1, _ = self._joint_motion(a, dq, app[:, None], np.zeros(3))
+            return stations + [pose(R1, p1 - app1[:, 0] * self.handle_clearance(a["handle_geom"], app1[:, 0]))]
 
         # Reachable along the drive is a filter, not a ranking, and there is no weaker filter to
         # fall back to: a grasp checked only at the start of the motion is a claim about a

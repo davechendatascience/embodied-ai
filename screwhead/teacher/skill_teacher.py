@@ -128,11 +128,10 @@ class SkillTeacher:
         elif step.skill == "articulate" or step.skill == "turn":
             a = self.skills.articulate(step.region, step.mode, s)
         else:
-            # BRN-regression-planner: the skill set is closed. Regression selects among the skills
-            # whose effects entail the goal, so where the goal needs a motion none of them produces
-            # there is nothing to select, and attempting the nearest skill abandons the selection
-            # rule rather than applying it. Measured on libero_goal 5, where a plate must be slid
-            # and the set moves objects by holding them: 14 attempts at pick:over, 3 of 50.
+            # The plan named a skill this teacher does not have. This teacher walks the plan
+            # task_spec builds; it is not the regression planner BRN-regression-planner designs,
+            # which is not implemented. Whatever builds the plan, a step no skill here executes is
+            # refused rather than attempted with some other skill, and recorded as a refusal.
             raise Refusal("skill", step.skill,
                           "no declared skill produces the motion this goal needs")
         self.phase = f"{step.skill}:{self.skills.phase}"

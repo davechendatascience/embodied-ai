@@ -110,6 +110,13 @@ def ingest(trials: list[dict], artifact: str) -> str:
               "outcome": "pass", "metrics": {"refused": bool(t["metrics"].get("refused", False))},
               "conditions": t["conditions"], "repro": t["repro"]}
              for t in trials]
+    # Gentleness from the same episodes, refused or not: an object dropped on its way to a refusal
+    # was still dropped. A trial written before the sweep measured it carries neither metric and
+    # is left out rather than read as gentle.
+    recs += [{"contract_id": "CTR-teacher-gentle", "test_id": "TST-teacher-reliability",
+              "outcome": "pass", "metrics": {k: t["metrics"][k] for k in ("release_gap_mm", "drop_count")},
+              "conditions": t["conditions"], "repro": t["repro"]}
+             for t in trials if {"release_gap_mm", "drop_count"} <= t["metrics"].keys()]
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
         json.dump(recs, f)
     code = ("import json,sys; sys.path.insert(0,'src'); from component_belief import server; "

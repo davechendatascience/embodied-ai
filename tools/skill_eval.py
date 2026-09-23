@@ -58,10 +58,15 @@ def _observe(errors: list, fn, *args):
 def _run_episode(env, teacher, job: Job, ep: int, record: bool):
     """One episode: the row for the report, and frames if recording."""
     from screwhead.teacher.episode_log import EpisodeLog
+    from screwhead.teacher.grip_watch import GripWatch
     from screwhead.teacher.refusal import Refusal
     env.reset()
     errors: list[str] = []
     log = _observe(errors, EpisodeLog, env, teacher)
+    # CTR-teacher-gentle's metrics, kept on their own error list: a failing watch must not
+    # silence the log's diagnosis, nor a failing log the watch
+    watch_errors: list[str] = []
+    watch = _observe(watch_errors, GripWatch, env, teacher)
     frames, done, info, missing = [], False, {}, ""
     phases = collections.Counter()
     refusal = None
@@ -84,6 +89,8 @@ def _run_episode(env, teacher, job: Job, ep: int, record: bool):
         phases[teacher.phase] += 1
         if log is not None and not errors:
             _observe(errors, log.step, s)
+        if watch is not None and not watch_errors:
+            _observe(watch_errors, watch.step)
         if record:
             frames.append(_frame(env, job, teacher.phase) if job.video_px else
                           np.concatenate([im[::-1] for im in env.images()], axis=1))
@@ -98,13 +105,14 @@ def _run_episode(env, teacher, job: Job, ep: int, record: bool):
             diag = _observe(errors, log.summary, missing) or ""
             mechanism = _observe(errors, log.mechanism, missing) or ""
         detail = _observe(errors, log.finish, ok) or detail
-    detail["observer_errors"] = errors
+    detail["observer_errors"] = errors + watch_errors
+    gentle = watch.metrics() if watch is not None and not watch_errors else {}
     track = log.track if log is not None else {}
     forced = {o: g.get("rejected", {}) for o, g in
               (detail.get("grasp") or {}).items() if g.get("forced")}
     row = dict(task=job.task, episode=job.ep_offset + ep, success=ok, steps=env.t,
                refused=refusal is not None, **(refusal.as_row() if refusal else {}),
-               forced_grasp=bool(forced), rejected_by=forced,
+               forced_grasp=bool(forced), rejected_by=forced, **gentle,
                last_phase=teacher.phase, step_index=teacher.step_index, phases=dict(phases),
                language=env.language, diag=diag, mechanism=mechanism, detail=detail,
                **{k: round(float(v), 4) if isinstance(v, float) else v
@@ -269,8 +277,9 @@ def _wave(jobs: list[Job], suite: str) -> list[dict]:
             verdict = ("refused " + r["refused_predicate"] if r.get("refused")
                        else "ok" if r["success"] else "fail")
             print(f"  {suite} task {r['task']} ep {r['episode']}: {verdict} "
-                  f"steps {r['steps']} last {r['last_phase']}" + (f" | {r['diag']}" if r["diag"] else ""),
-                  flush=True)
+                  f"steps {r['steps']} last {r['last_phase']}"
+                  + (f" drops {r['drop_count']}" if r.get("drop_count") else "")
+                  + (f" | {r['diag']}" if r["diag"] else ""), flush=True)
     for p in procs:
         p.join(timeout=10)
     return rows
@@ -308,10 +317,13 @@ def _summarise(rows: list[dict], args, seconds: float) -> None:
         gave_up = [r for r in by[t] if r.get("refused")]
         ok = sum(r["success"] for r in tried)
         fails = collections.Counter(r["last_phase"] for r in tried if not r["success"])
+        # an episode can succeed with the object dropped on to its target: count it apart
+        dropped = sum(bool(r.get("drop_count")) for r in by[t])
         why = collections.Counter(f"{r['refused_predicate']}({r['refused_subject']})" for r in gave_up)
         rate = f"{ok}/{len(tried)}" if tried else "0/0"
         print(f"  task {t}: {rate}  {by[t][0]['language'][:54]!r}"
               + (f"  refused {len(gave_up)}: {dict(why)}" if gave_up else "")
+              + (f"  dropped in {dropped}" if dropped else "")
               + (f"  failures: {dict(fails)}" if fails else ""))
         for r in tried:
             if not r["success"]:
@@ -344,8 +356,9 @@ def _write_trials(rows: list[dict], args) -> None:
     rev = teacher_revision()
     Path(args.trials).parent.mkdir(parents=True, exist_ok=True)
     Path(args.trials).write_text(json.dumps({"trials": [
-        {"metrics": ({"refused": True} if r.get("refused") else
-                     {"success": r["success"], "refused": False}),
+        {"metrics": dict({"refused": True} if r.get("refused") else
+                         {"success": r["success"], "refused": False},
+                         **{k: r[k] for k in ("release_gap_mm", "drop_count") if k in r}),
          "conditions": {"task": r["task"], "suite": args.suite, "last_phase": r["last_phase"],
                         "mechanism": r.get("mechanism", ""),
                         "refused_predicate": r.get("refused_predicate", "")},
