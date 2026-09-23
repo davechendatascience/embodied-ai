@@ -1859,6 +1859,41 @@ branches:
       evidence: CTR-teacher-reliable.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-carry-turns-object-to-fit
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      At every carry and lower step of a place skill, the skill reads the held object's own bounding
+      box (in the object's frame, current pose) and the target region's box (the region site's current
+      pose and size, or, for a region that is an object, that object's box). Its horizontal axes are the
+      box axes whose vertical component is below a declared bound. If the region box does not have
+      exactly two horizontal axes, or the object's box has none, the commanded tool orientation is the
+      current one. Otherwise the skill computes the object's plan extents along the region's two
+      horizontal axes; if they fit (each within the region's extent plus a declared tolerance), the
+      commanded orientation is the current one. If not, with theta a smallest turn about the vertical
+      laying the object's longest horizontal axis (the first in box order among equals) along the
+      region's longer horizontal axis (the first among equals), ties between turns of equal size broken
+      toward the positive turn, the commanded orientation is the current one turned by theta if the
+      object's extents so turned fit, and the current one if not. Claimed: the skill never commands a
+      turn about the vertical at a step at which the object's footprint, as computed, already fits the
+      region, and every turn it commands is that tie-broken smallest aligning turn. Not claimed: that the
+      object ends inside the region, that the turn is executed exactly, that it is collision-free, that
+      the grasp screen checked the turned pose, or that the rule never alternates between turns at
+      successive steps.
+    premises: [AXM-object-geometry-known, AXM-libero-scores-final-state, AXM-grip-fixes-object-in-hand,
+               DEF-skill-contract]
+    derivation_rule: >-
+      AXM-object-geometry-known gives the object's box; AXM-libero-scores-final-state, which has LIBERO
+      evaluate In and On on region sites and support objects in the simulator state, gives the region's
+      live pose and size; AXM-grip-fixes-object-in-hand makes the object turn with the tool. Measured:
+      carried as grasped, libero_90's book (110 x 29 mm) came down across a caddy compartment 56 mm
+      wide (124 long), caught its wall and was lost; LIBERO's humans end with the book along the
+      compartment. With the turn, libero_90 73 0 -> 9, 78 0 -> 4, 81 0 -> 8 of 20 (runs/skill_l90_v3),
+      and every episode of the 30 benchmark tasks and of libero_10 reproduced (runs/skill_v21,
+      runs/skill_l10_v7). A first version read the region's axes 0 and 1 as horizontal; the caddy's
+      regions have their local y vertical, and nothing turned. evidence: CTR-teacher-reliable.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
   - id: BRN-place-done-when-released
     subject: CMP-skill-library
     claim_type: contract

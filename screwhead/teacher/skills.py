@@ -29,7 +29,7 @@ from .clearing import Clearing
 from ..geometry.frames import Z, axis_rot, pose, rot_angle, rotvec, top_down
 from .grasp_planner import GraspPlanner
 from ..sim.gripper_servo import A_OPEN, target_to_channel
-from ..sim.scene import geom_world_box
+from ..sim.scene import VERTICAL_COS, geom_world_box
 from .reach import Reach
 from .refusal import Refusal
 
@@ -95,6 +95,7 @@ class SkillConfig:
     drop_grid: int = 5             # drop points tried across a region, per axis
     drop_ray_height: float = 0.30  # rays cast down from this far above the region top
     drop_clear: float = 0.01       # a hit above the region top by more than this blocks the spot
+    fit_tol: float = 0.005         # m an object's footprint may exceed a region's and still fit it
     drop_margin: float = 0.02      # m around the object's footprint that must be open from above too: at
     #                                0.01 a bowl carried 10 deg tilted and drifting 5-11 mm reached the face
     #                                of the drawer above libero_10 3's
@@ -566,18 +567,51 @@ class Skills:
             slow = self._risen(obj) < k.slow_lift_dz
             return self.action(self.twist_to(R, p, R, p + Z * (carry_z - q[2]),
                                              v_max=k.slow_lift_speed if slow else k.carry_speed), 0.0)
+        R_fit = self._fit_yaw(obj, region, R)
         if over > k.over_xy:
             self.phase = "carry"
             goal = p + np.array([delta[0], delta[1], max(0.0, carry_z - q[2])])
-            return self.action(self.twist_to(R, p, R, goal, v_max=k.carry_speed), 0.0)
+            return self.action(self.twist_to(R, p, R_fit, goal, v_max=k.carry_speed), 0.0)
         if delta[2] < -k.lower_done:
             self.phase = "lower"
             # on to the drop point, not only down: lowered straight, the bowl drifted 13 mm toward
             # the cabinet on its way into libero_10 3's drawer
-            return self.action(self.twist_to(R, p, R, p + delta, v_max=k.lower_speed,
+            return self.action(self.twist_to(R, p, R_fit, p + delta, v_max=k.lower_speed,
                                              v_min=k.lower_speed_min), 0.0)
         self.phase = "release"
         return self.action(np.zeros(6), A_OPEN)
+
+    def _fit_yaw(self, obj: str, region: str, R: np.ndarray) -> np.ndarray:
+        """The tool turned about the vertical so the held object's footprint fits the region's: unturned
+        if it fits as it is or cannot fit either way, else by the smaller turn that lays the object's
+        longest horizontal axis along the region's. Re-derived from the object's pose every step.
+        Carried as grasped, libero_90 73's book (110 x 29 mm) came down crosswise into a 56 x 124 mm
+        caddy compartment, caught its wall and was lost (0 of 20)."""
+        box = self.scene.object_box(obj)
+        R_reg, _p_reg, half = self.region_pose(region)
+        axes = [(2.0 * float(box.half[j]), box.R[:, j]) for j in range(3) if abs(float(box.R[2, j])) < VERTICAL_COS]
+        if not axes:
+            return R
+        # the region's horizontal axes, whichever of its box axes they are: the caddy's compartment
+        # regions have their local y vertical
+        flat = [i for i in range(3) if abs(float(R_reg[2, i])) < VERTICAL_COS]
+        if len(flat) != 2:
+            return R
+        rx, ry = R_reg[:, flat[0]], R_reg[:, flat[1]]
+        room = (2.0 * abs(float(half[flat[0]])), 2.0 * abs(float(half[flat[1]])))
+
+        def fits(yaw):
+            Rz = axis_rot(Z, yaw)
+            ex = sum(length * abs(float((Rz @ v) @ rx)) for length, v in axes)
+            ey = sum(length * abs(float((Rz @ v) @ ry)) for length, v in axes)
+            return ex <= room[0] + self.k.fit_tol and ey <= room[1] + self.k.fit_tol
+        if fits(0.0):
+            return R
+        _l, a = max(axes, key=lambda e: e[0])
+        r = rx if room[0] >= room[1] else ry
+        th = float(np.arctan2(a[0] * r[1] - a[1] * r[0], a[0] * r[0] + a[1] * r[1]))
+        th = min((th, th - np.pi, th + np.pi), key=lambda x: (abs(x), -x))   # a tie goes to the positive turn
+        return axis_rot(Z, th) @ R if fits(th) else R
 
     def _overhang_exit(self, obj: str, q: np.ndarray) -> np.ndarray | None:
         """Where the held object's origin must first move, level, before it rises: None when the
