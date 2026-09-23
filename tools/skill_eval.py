@@ -38,6 +38,7 @@ class Job:
     cpu: int
     ep_offset: int
     horizon: int
+    refuse: bool
     start: dict
     video: str
     max_videos: int
@@ -99,8 +100,11 @@ def _run_episode(env, teacher, job: Job, ep: int, record: bool):
         detail = _observe(errors, log.finish, ok) or detail
     detail["observer_errors"] = errors
     track = log.track if log is not None else {}
+    forced = {o: g.get("rejected", {}) for o, g in
+              (detail.get("grasp") or {}).items() if g.get("forced")}
     row = dict(task=job.task, episode=job.ep_offset + ep, success=ok, steps=env.t,
                refused=refusal is not None, **(refusal.as_row() if refusal else {}),
+               forced_grasp=bool(forced), rejected_by=forced,
                last_phase=teacher.phase, step_index=teacher.step_index, phases=dict(phases),
                language=env.language, diag=diag, mechanism=mechanism, detail=detail,
                **{k: round(float(v), 4) if isinstance(v, float) else v
@@ -153,6 +157,7 @@ def _worker(remote, job_fields: dict) -> None:
     env = TaskEnv(job.suite, job.task, horizon=job.horizon, seed=job.seed, render=True,
                   start=StartNoise(**job.start))
     teacher = SkillTeacher(env)
+    teacher.skills.reach.refuse_when_empty = job.refuse
     videos = 0
     for ep in range(job.episodes):
         record = bool(job.video) and videos < job.max_videos
@@ -186,6 +191,11 @@ def _parse() -> argparse.Namespace:
     ap.add_argument("--start-tilt", type=float, default=0.0)
     ap.add_argument("--start-null", type=float, default=0.0)
     ap.add_argument("--cpus", default=PERF_CORES)
+    ap.add_argument("--refuse", action="store_true",
+                    help="refuse when the reach screen finds nothing, instead of forcing its first "
+                         "candidate (DEF-witness-or-refusal). Off until the screen is calibrated: "
+                         "it is declared conservative, and refusing on it cost 56 successes over "
+                         "1500 episodes, 50 of them on a task the rejected grasp solves 50/50")
     ap.add_argument("--at-once", type=int, default=0,
                     help="processes alive at a time (0: one per core in --cpus)")
     ap.add_argument("--seed", type=int, default=555)
@@ -214,7 +224,8 @@ def _jobs(args) -> list[Job]:
             if n > 0:
                 seed = args.seed * 100 + t if args.split == 1 else (args.seed * 100 + t) * 1000 + j
                 jobs.append(Job(args.suite, t, n, seed, cpus[len(jobs) % len(cpus)], j * per,
-                                args.horizon, start, args.video, args.max_videos, args.video_px))
+                                args.horizon, args.refuse, start, args.video,
+                                args.max_videos, args.video_px))
     return jobs
 
 

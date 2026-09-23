@@ -40,6 +40,14 @@ class Reach:
         self.env, self.scene, self.k = env, env.scene, config
         self.last_choice: dict = {}
         self.last_carry: dict = {}
+        # DEF-witness-or-refusal says a query answers with a candidate satisfying its predicate or
+        # with nothing, and that is what this should do. It is off until the screen is calibrated,
+        # because DEF-reachable-pose calls itself a conservative stand-in and refusing on a
+        # conservative screen refuses work the arm can do: measured over 1500 episodes, turning it
+        # on cost 56 successes, 50 of them libero_goal 6, which the screen rejects 50 times out of
+        # 50 and which the rejected grasp solves 50 times out of 50. Until P(success | the screen
+        # found nothing) is measured and the thresholds moved, forcing loses less than refusing.
+        self.refuse_when_empty = False
         self._geom_mask: np.ndarray | None = None
         self._geom_half: np.ndarray | None = None
         self._geom_centre: np.ndarray | None = None
@@ -90,23 +98,38 @@ class Reach:
         it over -- 1 success in 50. DEF-witness-or-refusal: a query answers with a candidate
         satisfying the predicate it names, or with nothing.
         """
-        Ts, meta = [], []
+        Ts, meta, kind = [], [], []
         for i, (R, p_g, _w, app) in enumerate(cands):
             pre = p_g - app * self.k.approach
             column = [pre + Z * h for h in COLUMN_PROBES]
-            for pt in [p_g, pre, *column] + ([via] if via is not None else []):
+            names = ["grasp", "pre"] + [f"column{h:g}" for h in COLUMN_PROBES] + \
+                    (["via"] if via is not None else [])
+            for pt, nm in zip([p_g, pre, *column] + ([via] if via is not None else []), names,
+                              strict=True):
                 Ts.append(pose(R, pt))
                 meta.append(i)
+                kind.append(nm)
             for T in (extra(cands[i]) if extra is not None else []):
                 Ts.append(T)
                 meta.append(i)
+                kind.append("drive")
         th, conv, sig, margin = self.solve(Ts)
         rated = {i: r for i in range(len(cands))
                  if (r := self._score(cands[i], [j for j, mi in enumerate(meta) if mi == i],
                                       th, conv, sig, margin, allow)) is not None}
         if not rated:
-            self.last_choice = dict(n=len(cands), feasible=0, score=None)
-            return None
+            # Which probe emptied the screen, and on what. _score rejects on exactly two things --
+            # IK failing to converge at some probed pose, or the arm penetrating something -- so
+            # naming the pose and the reason says what to loosen. DEF-reachable-pose calls itself
+            # "a conservative stand-in", and refusing on a conservative screen refuses states the
+            # arm can in fact reach: measured, libero_goal 6 is 50/50 on a grasp this screen
+            # rejects every time.
+            self.last_choice = dict(n=len(cands), feasible=0, score=None, forced=True,
+                                    rejected=self._why_empty(meta, kind, th, conv, allow, cands))
+            if self.refuse_when_empty:
+                self.last_choice["forced"] = False
+                return None
+            return cands[0]
         # touch nothing if anything clean is feasible. Brushing a loose object used to cost
         # only 0.3 of score, so a candidate early in the list that pushed the palm into the
         # wine bottle beside the bowl beat clean ones further down -- the tool was shoved off
@@ -120,6 +143,19 @@ class Reach:
         self.last_choice = dict(n=len(cands), feasible=len(rated), clean=len(clean),
                                 score=float(scores[pick]))
         return cands[pick]
+
+    def _why_empty(self, meta, kind, th, conv, allow, cands) -> dict:
+        """Per probed pose kind, how many candidates it rejected and how -- the calibration datum."""
+        out: dict[str, int] = {}
+        for i in range(len(cands)):
+            sel = [j for j, mi in enumerate(meta) if mi == i]
+            ap = min(self.k.max_grip, cands[i][2] + self.k.grip_margin)
+            for j in sel:
+                if not conv[j]:
+                    out[f"{kind[j]}:no_ik"] = out.get(f"{kind[j]}:no_ik", 0) + 1
+                elif self.collides(th[j], allow, ap) == 2:
+                    out[f"{kind[j]}:collides"] = out.get(f"{kind[j]}:collides", 0) + 1
+        return dict(sorted(out.items(), key=lambda kv: -kv[1])[:6])
 
     def _score(self, cand, sel, th, conv, sig, margin, allow) -> tuple[float, int] | None:
         """(conditioning score, contact grade) of a candidate, or None if unusable."""

@@ -174,12 +174,14 @@ class Skills:
                 used = name
                 break
         if chosen is None:
-            # No tier offered a candidate the arm can reach. There is no best try: a grasp that
-            # fails the screen fails it, and taking one anyway is how libero_goal 9 spent four
-            # hundred steps oscillating at an 11 mm aperture beside a 58.5 mm bottle.
+            # The screen found nothing and is set to refuse. Taking a candidate anyway is how
+            # libero_goal 9 spent four hundred steps oscillating at an 11 mm aperture beside a
+            # 58.5 mm bottle -- but a conservative screen also refuses work the arm can do, so
+            # whether to refuse here is Reach.refuse_when_empty's decision, not this call site's.
             raise Refusal("graspable", obj,
                           f"0 of {sum(len(t) for _, t in tiers)} candidates over "
                           f"{len(tiers)} tiers passed the reach screen")
+        used = used or "forced"
         R_grasp, p_grasp, width, app = chosen
         h = self.reach.reachable_transit(R_grasp, p_grasp - app * self.k.approach, bid)
         self._grasp_cache[obj] = (R_grasp, p_grasp, width, centre, h, app)
@@ -192,6 +194,7 @@ class Skills:
         self.grasp_log[obj] = dict(
             tier=tier, offered={n: len(t) for n, t in tiers}, via=via is not None,
             feasible=choice.get("feasible"), score=choice.get("score"),
+            forced=choice.get("forced", False), rejected=choice.get("rejected", {}),
             approach=[round(float(v), 2) for v in app], jaw=[round(float(v), 2) for v in R_grasp[:, 1]],
             width_mm=round(1000 * float(width), 1),
             open_mm=round(1000 * min(self.k.max_grip, width + self.k.grip_margin), 1),
@@ -573,13 +576,14 @@ class Skills:
         if chosen is None:
             raise Refusal("accessible", region,
                           f"0 of {len(cands)} handle grasps reachable along the joint's motion")
+        drive_checked = not self.reach.last_choice.get("forced", False)
         R_h, _p, w, app = chosen
         self._handle_cache[region] = (R_h, w, app, float(a["qpos"]))
-        choice = dict(self.reach.last_choice, drive_checked=True)
+        choice = dict(self.reach.last_choice, drive_checked=drive_checked)
         self.grasp_log[region] = dict(
             tier="handle", offered={"handle": len(cands)}, feasible=choice.get("feasible"),
-            drive_checked=choice["drive_checked"],
-            score=choice.get("score"),
+            drive_checked=choice["drive_checked"], forced=choice.get("forced", False),
+            rejected=choice.get("rejected", {}), score=choice.get("score"),
             approach=[round(float(v), 2) for v in app], jaw=[round(float(v), 2) for v in R_h[:, 1]],
             width_mm=round(1000 * float(w), 1), handle_geom=self.scene.m.geom_id2name(a["handle_geom"]))
 
