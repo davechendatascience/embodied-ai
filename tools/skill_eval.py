@@ -43,6 +43,7 @@ class Job:
     video: str
     max_videos: int
     video_px: int
+    stride: int = 1      # this job's episodes are ep_offset, ep_offset + stride, ... of one stream
 
 
 def _observe(errors: list, fn, *args):
@@ -110,7 +111,7 @@ def _run_episode(env, teacher, job: Job, ep: int, record: bool):
     track = log.track if log is not None else {}
     forced = {o: g.get("rejected", {}) for o, g in
               (detail.get("grasp") or {}).items() if g.get("forced")}
-    row = dict(task=job.task, episode=job.ep_offset + ep, success=ok, steps=env.t,
+    row = dict(task=job.task, episode=job.ep_offset + ep * job.stride, success=ok, steps=env.t,
                refused=refusal is not None, **(refusal.as_row() if refusal else {}),
                forced_grasp=bool(forced), rejected_by=forced, **gentle,
                last_phase=teacher.phase, step_index=teacher.step_index, phases=dict(phases),
@@ -141,7 +142,7 @@ def _crashed_row(job: Job, ep: int, env, e: Exception) -> dict:
     import traceback
     where = traceback.extract_tb(e.__traceback__)[-1]
     what = f"crash: {type(e).__name__}: {e} at {Path(where.filename).name}:{where.lineno}"
-    return _failed_row(job.task, job.ep_offset + ep, env.t, env.language, what, "crash")
+    return _failed_row(job.task, job.ep_offset + ep * job.stride, env.t, env.language, what, "crash")
 
 
 def _fill_lost(rows: list[dict], jobs: list[Job]) -> list[dict]:
@@ -149,7 +150,7 @@ def _fill_lost(rows: list[dict], jobs: list[Job]) -> list[dict]:
     absence: dropped, it biased the rate toward the episodes that got to finish."""
     have = {(r["task"], r["episode"]) for r in rows}
     return rows + [_failed_row(j.task, ep, 0, "", "lost: the worker died before sending it", "lost")
-                   for j in jobs for ep in range(j.ep_offset, j.ep_offset + j.episodes)
+                   for j in jobs for ep in range(j.ep_offset, j.ep_offset + j.episodes * j.stride, j.stride)
                    if (j.task, ep) not in have]
 
 
@@ -168,6 +169,9 @@ def _worker(remote, job_fields: dict) -> None:
     teacher.skills.reach.refuse_when_empty = job.refuse
     videos = 0
     for ep in range(job.episodes):
+        if job.stride > 1:             # the stream's episodes before this one belong to other workers
+            for _ in range(job.ep_offset if ep == 0 else job.stride - 1):
+                env.skip_episode()
         record = bool(job.video) and videos < job.max_videos
         try:
             row, frames = _run_episode(env, teacher, job, ep, record)
@@ -178,7 +182,7 @@ def _worker(remote, job_fields: dict) -> None:
         if record and frames and not row["success"]:
             import imageio.v2 as imageio
             Path(job.video).mkdir(parents=True, exist_ok=True)
-            imageio.mimsave(Path(job.video) / f"{job.suite}_t{job.task}_ep{job.ep_offset + ep}_fail.mp4", frames,
+            imageio.mimsave(Path(job.video) / f"{job.suite}_t{job.task}_ep{job.ep_offset + ep * job.stride}_fail.mp4", frames,
                             fps=VIDEO_FPS, macro_block_size=1)
             videos += 1
         remote.send(row)
@@ -210,6 +214,10 @@ def _parse() -> argparse.Namespace:
     ap.add_argument("--split", type=int, default=1,
                     help="workers per task, each running a share of the episodes on its own "
                          "seed -- for iterating on one task without waiting on one core")
+    ap.add_argument("--interleave", type=int, default=1,
+                    help="workers per task on the task's one seed, worker j running episodes j, "
+                         "j+N, ...: the same episodes as one worker, episode for episode, N times "
+                         "sooner")
     ap.add_argument("--video", default="")
     ap.add_argument("--max-videos", type=int, default=1)
     ap.add_argument("--video-px", type=int, default=0, help="record at this size, with a caption (0: the 128 px observation cameras)")
@@ -224,10 +232,18 @@ def _jobs(args) -> list[Job]:
     cpus = [int(c) for c in args.cpus.split(",")]
     start = dict(xy_m=args.start_xy, z_m=args.start_z, yaw_deg=args.start_yaw,
                  tilt_deg=args.start_tilt, null_rad=args.start_null)
+    if args.interleave > 1 and args.split > 1:
+        raise SystemExit("--interleave and --split are exclusive")
     per = -(-args.episodes // args.split)
     jobs = []
     for t in tasks:
-        for j in range(args.split):
+        for j in range(args.interleave if args.interleave > 1 else 0):
+            n = len(range(j, args.episodes, args.interleave))
+            if n > 0:
+                jobs.append(Job(args.suite, t, n, args.seed * 100 + t, cpus[len(jobs) % len(cpus)], j,
+                                args.horizon, args.refuse, start, args.video,
+                                args.max_videos, args.video_px, stride=args.interleave))
+        for j in range(args.split if args.interleave <= 1 else 0):
             n = min(per, args.episodes - j * per)
             if n > 0:
                 seed = args.seed * 100 + t if args.split == 1 else (args.seed * 100 + t) * 1000 + j

@@ -79,6 +79,12 @@ class TaskEnv(SimArm):
         self.raw = self.observe()
         return self.raw
 
+    def skip_episode(self) -> None:
+        """Advance the episode stream past one episode without simulating it: an episode's draws
+        depend on its index and its init state alone, so the episodes after it are unchanged."""
+        self.episode += 1
+        self.rng.integers(len(self.init_states))
+
     def step(self, action: np.ndarray):
         """action: 6 normalised body-twist + 1 gripper channel (SimArm.execute)."""
         raw, done = self.execute(action)

@@ -55,14 +55,17 @@ class Execution:
     #                                   goal; a ramped arm trails by a period more, the 0.05 clips
     #                                   saturated, and the tool sank 52 mm below its transit plane and
     #                                   surged at 0.64 m/s against a 0.25 m/s command
-    # Off by default: the certified skill teacher runs without them until its grasp switches are
-    # re-validated (BRN-teacher-switches-dwell); the RL teacher runs with them.
+    # lean and scale_lead are off by default: the certified skill teacher runs without them until
+    # its grasp switches are re-validated (BRN-teacher-switches-dwell); the RL teacher runs with them.
     lean: bool = False                # a control period without env.step's bookkeeping, then one
     #                                   mj_forward and a forced observation of that state
     #                                   (BRN-lean-step-keeps-controller-cache, BRN-policies-read-one-
     #                                   forwarded-state)
-    anchor: bool = False              # reset execution memory at every placement (BRN-reset-anchors-
-    #                                   all-execution)
+    anchor: bool = True               # reset execution memory at every placement (BRN-reset-anchors-
+    #                                   all-execution). Off, robosuite's finger target carried over from
+    #                                   the episode before (half open in a fresh process), the settle
+    #                                   started from it, and 2 of 50 libero_goal 3 episodes changed with
+    #                                   which episodes the process had run first
     scale_lead: bool = False          # scale the servo's whole lead instead of clipping per joint
     #                                   (BRN-servo-lead-scaled-uniformly)
 
