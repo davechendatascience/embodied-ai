@@ -104,10 +104,11 @@ class Report:
 
 
 class Search:
-    def __init__(self, env, verdicts, loss, settings: Settings | None = None, policy=None):
+    def __init__(self, env, verdicts, loss, settings: Settings | None = None, policy=None, pool=None):
         self.env, self.v, self.loss = env, verdicts, loss
         self.s = settings or Settings()
         self.policy = policy
+        self.pool = pool                    # rollouts in parallel processes; None runs them here
         self.m, self.d = env.scene.raw()
         self._boxes: dict[str, BoxSet] = {}
         self._mean: Plan | None = None
@@ -126,10 +127,16 @@ class Search:
         best: tuple[tuple, Plan, Rollout] | None = None
         for _ in range(s.iters):
             plans = self._sample(rng, mean, levels, spread)
-            scored = []
-            for i, plan in enumerate(plans):
-                roll = self._rollout(saved, watch, plan, periods, start_reference, previous_reference)
-                scored.append((self._key(roll), i, plan, roll))
+            if self.pool is not None:
+                # the parent still samples and ranks; a worker only answers for one plan from one
+                # state, which is why a pool of any size chooses the same action
+                answers = self.pool.evaluate(saved, watch, plans, start_reference, previous_reference)
+                scored = [(key, i, plans[i], roll) for i, (key, roll) in enumerate(answers)]
+            else:
+                scored = []
+                for i, plan in enumerate(plans):
+                    roll = self._rollout(saved, watch, plan, periods, start_reference, previous_reference)
+                    scored.append((self._key(roll), i, plan, roll))
             scored.sort(key=lambda r: (r[0], r[1]))                  # ties: the lowest sample index
             if best is None or scored[0][0] < best[0]:
                 best = (scored[0][0], scored[0][2], scored[0][3])

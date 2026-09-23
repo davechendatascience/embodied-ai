@@ -459,6 +459,7 @@ components:
       - screwhead/teacher/verdicts.py       # settled and violations
       - screwhead/sim/exec_state.py         # exact restore for search rollouts
       - screwhead/teacher/search.py         # the receding-horizon search
+      - screwhead/teacher/pool.py           # its rollouts, in parallel processes
       - tools/search_probe.py               # its probe
       - screwhead/teacher/state.py          # what pi_theta reads
       - screwhead/teacher/policy.py         # pi_theta itself, and the features it reads
