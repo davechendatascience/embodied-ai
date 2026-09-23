@@ -27,6 +27,7 @@ CONDITION_BARS = (0.35, 0.20, 0.05)   # take the first candidate clearing the hi
 COLUMN_PROBES = (0.05, 0.10)          # heights above the pre-grasp checked on the way down
 TRANSIT_STEP = 0.05       # crossing heights tried, top down
 CARRY_STEP = 0.03
+LINE_STEP = 0.01          # m between the points of a line tested against the geoms' boxes
 CORRIDOR = 0.08           # obstacles within this of the path's footprint count
 CLEARANCE = 0.05          # cross this far above the tallest of them
 CAP_ABOVE = 0.30          # never cross more than this above the target
@@ -216,12 +217,16 @@ class Reach:
         xmat = d.geom_xmat.reshape(-1, 3, 3)
         pos = d.geom_xpos - self.scene.base + np.einsum("gij,gj->gi", xmat, self._geom_centre)
         tops = pos[:, 2] + (np.abs(xmat[:, 2, :]) * self._geom_half).sum(1)
-        rad = np.linalg.norm(self._geom_half[:, :2], axis=1)
         a, b = np.asarray(p_from[:2], float), np.asarray(p_to[:2], float)
-        ab = b - a
-        L2 = float(ab @ ab)
-        t = np.clip(((pos[:, :2] - a) @ ab) / L2, 0.0, 1.0) if L2 > EPS_LEN2 else np.zeros(len(pos))
-        near = np.linalg.norm(pos[:, :2] - (a + t[:, None] * ab), axis=1) - rad < CORRIDOR
+        # distance in plan from the line to each geom's own box, not to its bounding circle: the
+        # room's walls (world geoms 2.1 m tall, circles 2-3 m wide) were "near" every carry and put
+        # every carry at the cap, the target + 30 cm, where LIBERO's human demos lift 120-160 mm
+        n = max(2, int(np.ceil(float(np.linalg.norm(b - a)) / LINE_STEP)) + 1)
+        line = a + np.linspace(0.0, 1.0, n)[:, None] * (b - a)
+        rel = np.concatenate([line[None, :, :] - pos[:, None, :2], np.zeros((len(pos), n, 1))], axis=2)
+        local = np.einsum("gji,gkj->gki", xmat, rel)
+        out = np.linalg.norm(np.maximum(np.abs(local) - self._geom_half[:, None, :], 0.0), axis=2)
+        near = out.min(1) < CORRIDOR
         keep = near & self._geom_mask & (np.asarray(m.geom_bodyid) != exclude)
         floor = float(p_to[2] + self.k.approach)
         if not keep.any():
