@@ -212,8 +212,8 @@ def fit(args) -> int:
     # labelling time, so it is folded into the first layer rather than carried separately
     with torch.no_grad():
         first = net.trunk[0]
-        first.bias -= first.weight @ (mu / sd)
-        first.weight /= sd
+        first.bias.copy_(first.bias - first.weight @ (mu / sd))
+        first.weight.copy_(first.weight / sd)
 
     env = TaskEnv(meta["suite"], meta["task"], seed=0, render=False,
                   execution=Execution(lean=True, anchor=True, scale_lead=True))

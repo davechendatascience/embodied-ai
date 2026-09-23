@@ -28,7 +28,6 @@ import torch
 from torch import nn
 
 from ..geometry import ik
-from ..geometry.kinematics import body_jacobian
 from .search import LEVELS, Settings
 from .state import TeacherState
 
@@ -100,7 +99,9 @@ class Policy:
         for p in self.net.parameters():
             p.requires_grad_(False)
 
-    def __call__(self, env, verdicts, watch, start_reference: dict) -> tuple[np.ndarray, np.ndarray]:
+    def __call__(self, _env, _verdicts, watch, start_reference: dict) -> tuple[np.ndarray, np.ndarray]:
+        # the search passes the environment and the verdicts it holds; this policy reads the
+        # state through its own Features, which were built against the same pair
         x = torch.from_numpy(self.features.vector(watch, start_reference)).to(self.device)[None]
         with torch.no_grad():
             twist, logits = self.net(x)
