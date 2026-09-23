@@ -470,15 +470,30 @@ definitions:
     term: Skill contract
     meaning: >-
       A skill's preconditions, effects and postcondition, each a predicate on the current state --
-      held(o), hand empty, uncrowded(o), graspable(o), admits(C, o), accessible(j), a free spot
-      for o, and LIBERO's own In, On, Open, Close, TurnOn, TurnOff -- with the parameters the
-      affordance table supplies (how a category is moved, held and set down). Every skill carries
-      the same postcondition: when it ends the arm is disengaged from whatever it acted on --
-      clear of that thing along the axis it approached along, and touching it nowhere.
-      Disengagement belongs to the contract rather than to the body of any one skill, because the
-      planner may follow any skill with any other, and a skill that leaves the arm entangled makes
-      the next skill's preconditions unreadable from the state. A skill may not start while the
-      previous skill's postcondition does not hold.
+      held(o), hand empty, graspable(o), clear_of(o, j), admits(C, o), accessible(j), a free spot for o,
+      and LIBERO's own In, On, Open, Close, TurnOn, TurnOff -- with the parameters the affordance table
+      supplies (how a category is moved, held and set down). clear_of(o, j) is that o would remain
+      graspable were container j at its open target; an object resting on j's moving part travels with
+      it and is not in question. It is computed from the state, with the configuration it describes
+      written, screened and restored, but it describes a configuration the plan will reach rather than
+      the present one, which is why it is a precondition of opening j and not of picking o. A skill that
+      ends by releasing what it grasped -- drive, place, park -- carries a postcondition beside its
+      effect: when it ends, the jaws do not hold that thing, none of it lies between the fingers, and no
+      robot geometry touches it. pick carries none, since it ends holding what it grasped, which is its
+      effect. Disengagement belongs to the contract rather than to the body of any one skill, because
+      the planner may follow any skill with any other, and a skill that leaves the arm entangled makes
+      the next skill's preconditions unreadable from the state. A skill may not start while that
+      postcondition fails for anything an earlier skill in the episode released; within a skill the arm
+      may grasp anything, including what an earlier skill released.
+    rationale: >-
+      uncrowded(o) was a precondition of pick(o), and the test behind it asked whether a container, once
+      opened, would stand over the object -- a question about a configuration the plan would reach, not
+      about grasping the object now. As a precondition of pick it made moving a crowded object clear
+      circular, since that move begins by picking the object, and it read a bowl sitting inside an open
+      drawer as crowded. Where it concerned the present, it duplicated graspable, whose screen already
+      rejects every grasp an open container's moving part blocks. The earlier statement also gave every
+      skill the disengagement postcondition, including pick, whose effect is to hold what it grasped;
+      the postcondition belongs to the skills that let go.
 
   - id: DEF-lean-period-reads
     term: What a lean control period reads
@@ -641,7 +656,9 @@ lemmas:
       with them the skill it ends at is a function of the state and the goal. The goal is fixed for the
       episode, so this meets AXM-dagger-needs-markov-labels: no label depends on the episode's history.
       The achiever rule answers the gap recorded against DEF-plan, which assumed one achiever per
-      predicate while uncrowded has two.
+      predicate. The case that exposed it, uncrowded, has since been replaced by clear_of, which has
+      one; the rule does not depend on which predicate has several, and is kept because nothing in the
+      declarations limits a predicate to one.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: LMA-hand-is-a-precondition
@@ -659,17 +676,39 @@ lemmas:
 
   - id: LMA-geometry-answers-predicates
     statement: >-
-      uncrowded, graspable, admits, accessible and free-spot are computed from the geometry
-      in the current state each step, with no per-episode cache in the test; a failed one is
-      achieved by the skills whose declared effects make it true -- close the container that
-      crowds an object or blocks a joint, move a crowded object or an obstacle clear -- chosen
-      by the predicate, never by a list of tasks. Tests that depend on the held grasp are
-      evaluated once the object is held, on the actual in-hand pose.
-    premises: [AXM-object-geometry-known, AXM-support-scannable, DEF-skill-contract]
+      graspable, clear_of, admits, accessible and free-spot are computed from the geometry at each step.
+      Each reads the current state, and clear_of(o, j) also reads the configuration it is about -- j at
+      its open target -- by writing it, screening and restoring, so it is a function of the state and
+      the plan's fixed target rather than of the episode's history. A failed one is achieved only where
+      a declared skill's effect makes it true: graspable(o), when every grasp is blocked by an open
+      container's moving part and some grasp would pass with that container closed, is achieved by
+      closing it; clear_of(o, j) is achieved by moving o to a free spot where it holds. graspable
+      failing for any other reason -- fixed geometry that is no container's moving part, or an arm that
+      cannot reach -- and admits and accessible have no achiever in scope, and the regression ends at
+      them as a named gap. Achievers are chosen by the predicate, never by a list of tasks. Tests that
+      depend on the held grasp are evaluated once the object is held, on the actual in-hand pose.
+    premises: [AXM-object-geometry-known, AXM-support-scannable, DEF-skill-contract,
+               AXM-mujoco-forward-is-a-function-of-state, AXM-mujoco-integration-state]
     derivation_rule: >-
-      Everything these predicates depend on -- object and fixture geometry and poses, the
-      in-hand pose once held -- is in the state (AXM-object-geometry-known); achievers are
-      found by matching a predicate against declared effects.
+      AXM-object-geometry-known puts every body's collision geometry in the state, and
+      AXM-support-scannable lets a free spot be found by scanning. DEF-skill-contract gives the
+      predicates, and restated it replaces uncrowded with clear_of.
+      AXM-mujoco-forward-is-a-function-of-state licenses reading a configuration the world is not in --
+      j at its open target, or a container closed -- by writing it, forwarding and screening, and
+      AXM-mujoco-integration-state licenses the restore. An earlier statement claimed every failed
+      predicate was achieved by some skill, which was false for graspable and admits, and that the
+      predicates read the current state only, which was false of a crowding test evaluated at a
+      container's open position; both are now stated as they are. It also offered moving a crowded
+      object clear as an achiever, which could not work: the move begins by picking the object, and pick
+      required the predicate being achieved. clear_of is a precondition of opening j rather than of
+      picking o, so moving o to achieve it needs graspable(o), which holds while j is still closed. An
+      object resting on j's moving part is exempt, because a screen that wrote j's joint without moving
+      that object would report a collision the opening never causes -- the case in which a bowl inside a
+      drawer read as crowded and closing the drawer on it was offered as the remedy. graspable blocked
+      by an open container is achieved by closing it because the moving part is fixed geometry to the
+      grasp screen, so no grasp passes while it stands there; the claim is limited to where the closed
+      configuration, written and screened, lets some grasp pass. evidence: CTR-teacher-reliable (tasks
+      with a container to open before an object is placed in it).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: LMA-protected-progress
@@ -1241,9 +1280,10 @@ branches:
       refusal during the carry ends the episode with the refusal recorded beside the scorer's verdict.
       Not claimed: that the carried object clears the fixtures, which this screen tests only of the arm;
       that the stations witness the poses between them.
-    premises: [LMA-whole-path-reachable, DEF-reachable-pose, DEF-witness-or-refusal, DEF-refusal-is-an-outcome,
-               AXM-grip-fixes-object-in-hand, AXM-no-torsional-friction, AXM-rim-pinch-drops-under-smooth-motion,
-               AXM-parameters-derived]
+    premises: [LMA-whole-path-reachable, DEF-reachable-pose, DEF-witness-or-refusal,
+               DEF-refusal-is-an-outcome, AXM-grip-fixes-object-in-hand, AXM-no-torsional-friction,
+               AXM-rim-pinch-drops-under-smooth-motion, AXM-parameters-derived,
+               AXM-libero-scores-final-state, AXM-instruments-do-not-decide]
     derivation_rule: >-
       LMA-whole-path-reachable rules out judging a segment by its endpoints, which is why the claim runs
       over stations and names the columns, and equally why it is a screen over those stations, since the
@@ -1260,7 +1300,10 @@ branches:
       and plans nothing on an offset the object no longer has. DEF-witness-or-refusal permits a query to
       give up early, so the refusal is stated over the candidates examined -- the qualifier this
       branch's sibling already carried and this one lacked. DEF-refusal-is-an-outcome gives a refusal
-      during the carry its bookkeeping. evidence: CTR-teacher-reliable (spatial 6, 14 -> 19/20 paired;
+      during the carry its bookkeeping. AXM-libero-scores-final-state and AXM-instruments-do-not-decide
+      are cited because DEF-refusal-is-an-outcome is a stipulation about bookkeeping and says a branch
+      relying on it cites them itself: they are what make the scorer's verdict the outcome and keep a
+      refusal an annotation beside it. evidence: CTR-teacher-reliable (spatial 6, 14 -> 19/20 paired;
       the per-grasp revision 186 -> 186 paired); CTR-teacher-attempts, where a refusal is counted.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
@@ -1281,9 +1324,12 @@ branches:
       witness among the candidates examined, the skill does not run, and the refusal is recorded beside
       the scorer's verdict. A candidate that fails the stations is not used with its failure recorded as
       a caveat.
-    premises: [LMA-whole-path-reachable, DEF-reachable-pose, DEF-witness-or-refusal, DEF-refusal-is-an-outcome,
-               DEF-skill-contract, AXM-handle-shares-body, AXM-object-geometry-known, AXM-mujoco-integration-state,
-               AXM-mujoco-forward-is-a-function-of-state, AXM-parameters-derived, BRN-drive-tracks-the-handle]
+    premises: [LMA-whole-path-reachable, DEF-reachable-pose, DEF-witness-or-refusal,
+               DEF-refusal-is-an-outcome, DEF-skill-contract, AXM-handle-shares-body,
+               AXM-object-geometry-known, AXM-mujoco-integration-state,
+               AXM-mujoco-forward-is-a-function-of-state, AXM-parameters-derived,
+               BRN-drive-tracks-the-handle, AXM-libero-scores-final-state,
+               AXM-instruments-do-not-decide]
     derivation_rule: >-
       DEF-skill-contract is what accessible(j) means here, and was cited nowhere before; the claim now
       states that sense rather than assuming it. LMA-whole-path-reachable gives the stations.
@@ -1300,7 +1346,10 @@ branches:
       AXM-mujoco-integration-state licenses the restore. AXM-handle-shares-body and
       AXM-object-geometry-known put the handle on the moving body and the fixtures' collision geometry
       in the state. DEF-witness-or-refusal permits a query to give up early, so the refusal is read over
-      the candidates examined. evidence: CTR-teacher-reliable (goal 0/3/7: drive_checked in 60 of 60
+      the candidates examined. AXM-libero-scores-final-state and AXM-instruments-do-not-decide are cited
+      because DEF-refusal-is-an-outcome is a stipulation about bookkeeping and says a branch relying on
+      it cites them itself: they are what make the scorer's verdict the outcome and keep a refusal an
+      annotation beside it. evidence: CTR-teacher-reliable (goal 0/3/7: drive_checked in 60 of 60
       episodes).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
@@ -1353,18 +1402,19 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      The per-task success rates offered as evidence for CTR-teacher-reliable exclude four named ways a
-      rate is made of nothing, and claim no more than that. An episode's trajectory is a function of its
-      seed, its episode index and its initial state, not of the episodes that ran before it in the same
-      process, for the teacher episodes these rates are formed over, which lie outside the classes
-      BRN-reset-anchors-all-execution excludes: GripperScan's once-per-process measurement, EGL
-      rendering, and distill's student-driven, mixed and DART episodes. That whole episodes reproduce is
-      measured by CTR-teacher-deterministic, not derived here. The instruments that form the rates are
-      required to leave each episode's outcome to the scorer, to report a shortfall against the episodes
-      declared rather than rate whatever arrived, and to offer only the trials the run itself wrote.
-      Those three are requirements this branch states; whether a given run meets them is implementation
-      fidelity, measured in component-belief, and is not claimed here. Not claimed: that the rates are
-      valid evidence in any sense beyond these exclusions.
+      The per-task success rates offered as evidence for CTR-teacher-reliable exclude one named way a
+      rate is made of nothing and require three others, and claim no more than that. An episode's
+      trajectory is a function of its seed, its episode index and its initial state, not of the episodes
+      that ran before it in the same process, for the teacher episodes these rates are formed over,
+      which lie outside the classes BRN-reset-anchors-all-execution excludes: GripperScan's
+      once-per-process measurement, EGL rendering, and distill's student-driven, mixed and DART
+      episodes. That whole episodes reproduce is measured by CTR-teacher-deterministic, not derived
+      here. The instruments that form the rates are required to leave each episode's outcome to the
+      scorer, to report a shortfall against the episodes declared rather than rate whatever arrived, and
+      to offer only the trials the run itself wrote. Those three are requirements this branch states;
+      whether a given run meets them is implementation fidelity, measured in component-belief, and is
+      not claimed here. Not claimed: that the rates are valid evidence in any sense beyond these
+      exclusions.
     premises: [AXM-instruments-do-not-decide, AXM-libero-scores-final-state, BRN-reset-anchors-all-execution]
     derivation_rule: >-
       BRN-reset-anchors-all-execution gives the trajectory clause, and the claim now says trajectory
@@ -1420,26 +1470,27 @@ branches:
     premises: [AXM-panda-gripper-geometry, AXM-handle-shares-body, DEF-skill-contract, DEF-holding,
                BRN-drive-tracks-the-handle]
     derivation_rule: >-
-      DEF-skill-contract makes disengagement the planner's obligation and gives its form, a predicate on
-      the current state read at each start. It binds each skill to whatever it acted on and gates the
-      next skill on the previous one's postcondition; the quantifier is over every handle acted on this
-      episode because a handle opened earlier and left enclosed entangles the arm exactly as the last
-      one would, and the predicate is chosen so that quantifying over all of them costs nothing in
-      ordinary motion. An earlier statement put 'the hand holds nothing' and a standing distance from
-      every handle into the predicate, which under this quantifier forbids carrying an object after
-      opening a drawer and forbids reaching into the drawer just opened -- the task this branch exists
-      to serve. What entangles the arm is a handle between the fingers, so the predicate is written
-      about that and nothing else. AXM-panda-gripper-geometry supplies the jaw envelope and the retreat
-      distance: the pads reach 11.6 mm behind the tool point and the finger meshes 9.3 mm past it, so
-      11.6 + 9.3 = 20.9 mm along the approach axis is the least motion that takes a handle gripped at
-      the pads' back edge out of the envelope. BRN-drive-tracks-the-handle supplies that axis as the
-      drive left it, the grasp frame carried by the joint's motion, which for a hinge differs from the
-      axis at the start. The touch clause is on the handle's own geometry rather than its body, because
-      AXM-handle-shares-body says only that contact with the body does not locate a finger on the
-      handle, not that every contact with the body pushes the joint. DEF-holding makes release a
-      precondition of the predicate, which is all the ordering needs; an earlier statement argued it
-      from how a held handle moves under a retreat, which no premise here supports. evidence:
-      CTR-teacher-reliable (goal 3's drawer task is the one this governs).
+      DEF-skill-contract makes disengagement the planner's obligation and gives its form: a skill that
+      releases what it grasped ends with the jaws not holding it, none of it between the fingers and no
+      robot geometry touching it, and no skill may start while that fails for anything an earlier skill
+      in the episode released. For a drive what it grasped is the handle, which is why the touch clause
+      is about the handle rather than the joint's whole body, and the quantifier over every handle acted
+      on this episode is that definition's, not an addition here. An earlier statement put 'the hand
+      holds nothing' and a standing distance from every handle into the predicate, which under this
+      quantifier forbids carrying an object after opening a drawer and forbids reaching into the drawer
+      just opened -- the task this branch exists to serve. What entangles the arm is a handle between
+      the fingers, so the predicate is written about that and nothing else. AXM-panda-gripper-geometry
+      supplies the jaw envelope and the retreat distance: the pads reach 11.6 mm behind the tool point
+      and the finger meshes 9.3 mm past it, so 11.6 + 9.3 = 20.9 mm along the approach axis is the least
+      motion that takes a handle gripped at the pads' back edge out of the envelope.
+      BRN-drive-tracks-the-handle supplies that axis as the drive left it, the grasp frame carried by
+      the joint's motion, which for a hinge differs from the axis at the start. The touch clause is on
+      the handle's own geometry rather than its body, because AXM-handle-shares-body says only that
+      contact with the body does not locate a finger on the handle, not that every contact with the body
+      pushes the joint. DEF-holding makes release a precondition of the predicate, which is all the
+      ordering needs; an earlier statement argued it from how a held handle moves under a retreat, which
+      no premise here supports. evidence: CTR-teacher-reliable (goal 3's drawer task is the one this
+      governs).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-scan-then-place
@@ -1488,45 +1539,51 @@ branches:
     claim_type: contract
     statement: >-
       The skill teacher acts by regression over declared contracts, re-run every control step: pick(o)
-      {hand empty, uncrowded(o), graspable(o)} -> held(o); place(o, R) {held(o), admits(R, o)} ->
-      In/On(o, R); drive(j, mode) {hand empty, accessible(j)} -> the joint's predicate; park(o)
-      {held(o)} -> hand empty, o resting on a free spot; move-clear(o) is pick then park outside what
-      crowds it, each phase re-derived from the state at every step rather than remembered -- the pick
-      phase while o is not held, the park phase while it is. The goals and the affordance table supply
-      the parameters, and the predicates read the state and the plan's fixed targets: a container's open
-      position, an object's destination. The skill set is closed at those five. When the regression
-      reaches a predicate that no declared skill's effect entails, it refuses, naming that predicate,
-      and runs no other skill in its place; the refusal is recorded beside the scorer's verdict. In the
-      current scope this happens for admits(R, o), which drive's effect -- the joint's predicate -- does
-      not entail, and for graspable(o), which nothing achieves because regrasping and reorienting are
-      not covered. Not claimed: that the regression terminates, or selects uniquely, for this table.
-      Scope: the predicates libero_object, spatial and goal and libero_10's put-in-drawer-and-close
-      need; not yet covered: pushing or sliding without a grasp, two objects into one region, enclosed
-      regions, access occlusion, reorienting or regrasping an object.
-    premises: [LMA-regression-selects-an-applicable-skill, DEF-skill-contract, DEF-refusal-is-an-outcome,
-               AXM-bddl-states-goals-not-methods]
+      {hand empty, graspable(o)} -> held(o); place(o, R) {held(o), admits(R, o)} -> In/On(o, R);
+      drive(j, mode) {hand empty, accessible(j), and when opening, clear_of(o, j) for every object o the
+      goal still has to grasp} -> the joint's predicate; park(o) {held(o)} -> hand empty, o resting on a
+      free spot; move-clear(o, j) is pick(o) then park(o) at a free spot where clear_of(o, j) holds, and
+      achieves clear_of(o, j), each phase re-derived from the state at every step rather than remembered
+      -- the pick phase while o is not held, the park phase while it is. The goals and the affordance
+      table supply the parameters, and the predicates read the state and the configurations the plan
+      will reach, as LMA-geometry-answers-predicates says. The skill set is closed at those five. When
+      the regression reaches a predicate that no declared skill's effect entails, it refuses, naming
+      that predicate, and runs no other skill in its place; the refusal is recorded beside the scorer's
+      verdict. In the current scope this happens for admits(R, o), which drive's effect -- the joint's
+      predicate -- does not entail; for accessible(j), which no declared effect entails; and for
+      graspable(o) wherever LMA-geometry-answers-predicates gives it no achiever -- regrasping and
+      reorienting are not covered. Not claimed: that the regression terminates, or selects uniquely, for
+      this table; or what the teacher does when the regression is circular at a state. Scope: the
+      predicates libero_object, spatial and goal and libero_10's put-in-drawer-and-close need; not yet
+      covered: pushing or sliding without a grasp, two objects into one region, enclosed regions, access
+      occlusion, reorienting or regrasping an object.
+    premises: [LMA-regression-selects-an-applicable-skill, LMA-geometry-answers-predicates,
+               DEF-skill-contract, DEF-refusal-is-an-outcome, AXM-bddl-states-goals-not-methods,
+               AXM-libero-scores-final-state, AXM-instruments-do-not-decide]
     derivation_rule: >-
-      DEF-skill-contract gives the table. LMA-regression-selects-an-applicable-skill gives the procedure
-      -- regress from the first unmet goal conjunct through first unmet preconditions to a skill that
-      can run or to a predicate no declared skill achieves, reported as a named gap -- and the refusal
-      is that named gap. The lemma's termination guarantee is conditional on an acyclic achiever
-      relation, and this table is not acyclic: pick needs hand empty, which park achieves, and park
-      needs held, which pick achieves. The branch therefore uses the lemma's procedure and outcome and
-      does not claim its termination; that belongs to the lemma's repair. An earlier statement said the
-      refusal had no instance in scope because every goal conjunct has an achiever, which confused goal
-      conjuncts with the predicates the regression reaches: admits and graspable are reached and have no
-      achiever, so the refusal fires today. AXM-bddl-states-goals-not-methods fixes the goal language.
-      The predicates read the plan's fixed targets as well as the state, because a container's crowding
-      is judged at its open position and a grasp at its destination; the targets come from the goal,
-      which is fixed for the episode, so this does not make a label depend on the episode's history.
-      Three premises an earlier statement cited are no longer cited -- LMA-hand-is-a-precondition,
-      LMA-geometry-answers-predicates and LMA-protected-progress, each refuted -- because the branch no
-      longer claims what they carried: that the hand regresses safely to parking, that every failed
-      predicate has an achiever, and that the executor never alternates. Those claims are not abandoned;
-      they belong to the lemmas, which are refuted and are to be repaired. evidence:
-      CTR-teacher-reliable -- the 600-episode reference at bcf19e9 (523/600) reproduced wherever the old
-      executor had no special case, then libero_10 KITCHEN_SCENE4 (bowl into the bottom drawer, close
-      it); CTR-teacher-attempts, where a refusal is counted.
+      DEF-skill-contract gives the table, and restated it replaces uncrowded with clear_of. That removes
+      the circularity the previous table had: move-clear moved a crowded object clear by picking it, and
+      pick required uncrowded -- the very predicate move-clear existed to achieve -- so it always ended
+      at the lemma's third outcome. clear_of(o, j) is now a precondition of opening j rather than of
+      picking o, and move-clear(o, j) begins with pick(o), which needs only graspable(o); that holds
+      while j is still closed, so achieving clear_of no longer requires itself.
+      LMA-geometry-answers-predicates is cited again for how the geometric predicates are read and which
+      achievers they have. LMA-regression-selects-an-applicable- skill gives the procedure and its three
+      outcomes -- a skill that can run, a predicate no declared skill achieves, or a regression circular
+      at this state -- and the refusal is the second of them. The lemma bounds the descent by not
+      revisiting a predicate rather than by an acyclic achiever relation, but it is DOUBTED on how it
+      binds an achiever's free arguments, so the branch claims neither termination nor unique selection,
+      nor what happens at the third outcome, which is none of the refusals DEF-refusal-is-an-outcome
+      names. move-clear's arguments are bound by the predicate it achieves -- clear_of(o, j) names both
+      -- which is one of the bindings that lemma asks for. AXM-bddl-states-goals-not-methods fixes the
+      goal language. LMA-hand-is-a-precondition and LMA-protected-progress are refuted and are not
+      cited: the branch does not claim that the hand regresses safely to parking or that the executor
+      never alternates, and those belong to the lemmas' repair. AXM-libero-scores-final-state and
+      AXM-instruments-do-not-decide are cited because DEF-refusal-is-an-outcome is a stipulation about
+      bookkeeping and says a branch relying on it cites them itself. evidence: CTR-teacher-reliable --
+      the 600-episode reference at bcf19e9 (523/600) reproduced wherever the old executor had no special
+      case, then libero_10 KITCHEN_SCENE4 (bowl into the bottom drawer, close it); CTR-teacher-attempts,
+      where a refusal is counted.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 policies:
