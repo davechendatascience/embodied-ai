@@ -209,6 +209,38 @@ class Reach:
         mine = np.isin(body, list(ignore)) if ignore else np.zeros(len(body), bool)
         return not bool((near & keep & ~mine & (bottoms > z_from)).any())
 
+    def _footprint_distance(self, pts: np.ndarray) -> np.ndarray:
+        """(geoms x points) plan distance from each point to each geom's box footprint: box
+        footprints, not bounding circles -- a drawer's bottom panel is 22 cm across, and its
+        circle covered the whole bowl beside it."""
+        pos, _rad, _bottoms, _tops, _keep = self._geoms_now()
+        xmat = self.scene.d.geom_xmat.reshape(-1, 3, 3)
+        pts = np.atleast_2d(np.asarray(pts, float))[:, :2]
+        rel = np.concatenate([pts[None, :, :] - pos[:, None, :2], np.zeros((len(pos), len(pts), 1))], axis=2)
+        local = np.einsum("gji,gkj->gki", xmat, rel)
+        return np.linalg.norm(np.maximum(np.abs(local) - self._geom_half[:, None, :], 0.0), axis=2)
+
+    def footprint_clear(self, xy: np.ndarray, radius: float, z_from: float, ignore: set[int]) -> bool:
+        """No geom (the robot's aside, and bodies in `ignore`) whose bottom is above `z_from`
+        comes within `radius` of `xy` in plan."""
+        _pos, _rad, bottoms, _tops, keep = self._geoms_now()
+        body = np.asarray(self.scene.m.geom_bodyid)
+        mine = np.isin(body, list(ignore)) if ignore else np.zeros(len(body), bool)
+        near = self._footprint_distance(np.asarray(xy, float)[None])[:, 0] < radius
+        return not bool((near & keep & ~mine & (bottoms > z_from)).any())
+
+    def band_clear(self, a: np.ndarray, b: np.ndarray, radius: float, z_lo: float, z_hi: float,
+                   ignore: set[int]) -> bool:
+        """A disc of `radius` swept in plan from `a` to `b` meets no geom (the robot's aside, and
+        bodies in `ignore`) that overlaps the height band [z_lo, z_hi]."""
+        _pos, _rad, bottoms, tops, keep = self._geoms_now()
+        n = max(2, int(np.ceil(float(np.linalg.norm(np.asarray(b)[:2] - np.asarray(a)[:2])) / LINE_STEP)) + 1)
+        line = np.asarray(a, float)[:2] + np.linspace(0.0, 1.0, n)[:, None] * (np.asarray(b, float)[:2] - np.asarray(a, float)[:2])
+        body = np.asarray(self.scene.m.geom_bodyid)
+        mine = np.isin(body, list(ignore)) if ignore else np.zeros(len(body), bool)
+        near = self._footprint_distance(line).min(1) < radius
+        return not bool((near & keep & ~mine & (bottoms < z_hi) & (tops > z_lo)).any())
+
     def transit_height(self, p_from: np.ndarray, p_to: np.ndarray, exclude: int) -> float:
         """A height that clears everything standing between here and there: every geom
         whose footprint is within 8 cm of the line, minus the robot and the target, at its

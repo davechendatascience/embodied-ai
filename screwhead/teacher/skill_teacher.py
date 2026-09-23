@@ -14,8 +14,6 @@ from .skills import Skills, SkillConfig
 from .task_spec import Step
 from .refusal import Refusal
 
-OPEN_MARGIN = 0.012       # a container counts as open for filling this far past LIBERO's threshold
-
 
 class SkillTeacher:
     def __init__(self, env, config: SkillConfig | None = None):
@@ -91,7 +89,7 @@ class SkillTeacher:
         # drawer sat 4.7 mm past it, the arm brushed the cabinet on its way out, and the
         # precondition flickered between "open" and "shut" every few steps
         past = (art["qpos"] - art["thresholds"]["open"]) * art["sign"]
-        wide = self.satisfied(("open", step.region)) and past >= OPEN_MARGIN
+        wide = self.satisfied(("open", step.region)) and past >= self.skills.k.open_margin
         return None if wide else step.region
 
     def _goal_for(self, step):

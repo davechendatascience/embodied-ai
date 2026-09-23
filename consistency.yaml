@@ -1708,6 +1708,48 @@ branches:
       CTR-teacher-reliable, CTR-teacher-gentle.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-lift-leaves-overhang
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      The rule governs the control steps of a place skill at which the held object is below its carry
+      height and its origin is farther than the skill's declared over-tolerance (over_xy) from the drop
+      point in plan. At each governed step the skill tests the column over the object's plan footprint
+      as it is at that step (its box in plan, widened by a declared margin) against the object and
+      fixture geoms whose bottom is above the object's top at that step, the held object's own geoms
+      aside, with no upper bound on height; and it examines the whole declared finite set of offsets
+      (directions and distances) at that step. An offset qualifies when its column is clear by the same
+      test and the straight level path to it at the object's current height band meets no object or
+      fixture geom overlapping that band (the held object aside). At a governed step the skill commands
+      a rise only if the column is clear or no offset qualifies; if the column is not clear and some
+      offset qualifies, it commands a level move at the object's current height toward the nearest
+      qualifying offset. Claimed: at no governed step does the skill command a rise while the column
+      over the object's footprint at that step, as tested, is blocked and some offset qualifies. Not
+      claimed: steps that are not governed (including those within over_xy of the drop point below
+      carry height, and anything before the place skill's first step, such as the pick's own initial
+      lift); that the object does not slip; that geometry already touching or below the object's top is
+      caught by the column test; that the level move is free of contact beyond the swept band test; that
+      level moves end within any number of steps; that a rise commanded at a step with a clear column
+      stays clear during that period; or that the arm is screened for the rise at the offset or the
+      carry from it, which BRN-carry-reachable-along-carry re-screens only when the in-hand offset
+      changes.
+    premises: [DEF-skill-contract, AXM-object-geometry-known, AXM-one-gripper,
+               BRN-carry-reachable-along-carry]
+    derivation_rule: >-
+      BRN-carry-reachable-along-carry screens the arm and explicitly not the carried object, so an
+      object picked from under an overhang can be carried into it; this rule adds the object's column.
+      DEF-skill-contract's clear_of lets an object stay beside a container it is to go into when it
+      stays graspable with the container open, which is what puts it under the open container;
+      AXM-one-gripper is why it cannot be held aside while the container opens. AXM-object-geometry-known
+      makes the object and fixture geometry the tests read available at every step, which is why the
+      claim is per step and survives slip without assuming it away. Measured (runs/skill_v15, 50
+      episodes per task, seed 555): libero_goal 3 50 of 50 at 600 steps and 12 within LIBERO's 300
+      (0 before); the level move fired only in libero_goal 3 (17 episodes); every episode of
+      libero_spatial and libero_object reproduced v14. Three verifier passes refuted two statements
+      (a one-time test; a rise rule contradicted by its fallback) and doubted the third's scope, each
+      answered in this statement. evidence: CTR-teacher-reliable.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
   - id: BRN-regression-planner
     subject: CMP-skill-library
     claim_type: contract

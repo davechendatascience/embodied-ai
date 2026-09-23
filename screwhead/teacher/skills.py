@@ -110,6 +110,7 @@ class SkillConfig:
     retreat_speed: float = 0.15
     # articulation
     drive_past_open: float = 0.03  # drive a joint this far past its "open"/"on" threshold
+    open_margin: float = 0.012     # a container counts as open for filling this far past LIBERO's threshold
     drive_past_close: float = 0.01 # and this far past "close"/"off"
     drive_speed: float = 0.12
     # hook (a sliding drawer opened with open jaws from above), measured on LIBERO's 50 human demos
@@ -126,6 +127,11 @@ class SkillConfig:
     #                                followed at a fifth of that -- the jaws were pried open and let go
     drive_lead_slide: float = 0.03 # m a slide drive may lead it (k_lin x this still saturates drive_speed)
     drive_speed_min: float = 0.02
+    # leaving an overhang (BRN-lift-leaves-overhang)
+    exit_margin: float = 0.01       # m added to the object's plan half-extent for its column
+    exit_step: float = 0.02         # m between the distances an exit is looked for at
+    exit_max: float = 0.14          # m: the farthest exit examined
+    exit_directions: int = 16
 
 
 class Skills:
@@ -321,7 +327,14 @@ class Skills:
         if key not in self._clearing:
             a = self.scene.articulation(container)
             dq = self._drive_dq(a, "open")
-            xy = self.clearing.spot(obj, a, dq, R_tool) if self.clearing.crowds(obj, a, dq) else None
+            # clear_of is judged where the plan leaves the container, open by open_margin: at the drive
+            # target, 18 mm further, the rim pinch was lost on all 8 of 8 layouts probed, against 4 of 8
+            dq_plan = float(a["thresholds"]["open"]) + a["sign"] * self.k.open_margin - float(a["qpos"])
+            # clear_of(o, j) (DEF-skill-contract): o stays graspable with j at its open target. The
+            # footprint test alone moved the bowl in every libero_goal 3 episode (~120 steps); LIBERO's
+            # humans open the drawer and pinch the bowl beside it, 20 of 20
+            crowded = self.clearing.crowds(obj, a, dq) and not self._graspable_open(obj, a, dq_plan, container)
+            xy = self.clearing.spot(obj, a, dq, R_tool) if crowded else None
             name = None
             if xy is not None:
                 box = self.scene.object_box(obj)
@@ -332,9 +345,36 @@ class Skills:
                                      np.array([ext[0], ext[1], 0.0]))
             self._clearing[key] = name
             self.grasp_log[f"clearing {obj}"] = dict(      # grasp_log entries are dicts: the report reads them
-                decision="not crowded" if xy is None and not self.clearing.crowds(obj, a, dq)
+                decision="clear of it" if xy is None and not crowded
                 else "crowded, no spot" if xy is None else f"move to {np.round(xy, 3).tolist()}")
         return self._clearing[key]
+
+    def _graspable_open(self, obj: str, a: dict, dq: float, container: str) -> bool:
+        """obj keeps the grasp tier it has now with the container's joint written to its open target;
+        the simulator state is restored whatever the answer. Any tier at all was not enough: with the
+        top drawer open, libero_goal 3's bowl fell from rim pinches to side grasps in 25 of 50
+        episodes, and none of those succeeded (23 of 25 did on a rim pinch)."""
+        via = self.via_for(container)
+        bid = self.scene.body_id(obj)
+
+        def first_tier():
+            for name, t in self.planner.tiers(obj, self.scene.object_box(obj)):
+                if self.reach.choose(t, via, allow=bid) is not None:
+                    return name
+            return None
+
+        now = first_tier()
+        sim = self.env.env.sim
+        qpos, qvel = sim.data.qpos.copy(), sim.data.qvel.copy()
+        try:
+            sim.data.qpos[a["qposadr"]] = float(qpos[a["qposadr"]]) + dq
+            sim.forward()
+            opened = first_tier()
+        finally:
+            sim.data.qpos[:] = qpos
+            sim.data.qvel[:] = qvel
+            sim.forward()
+        return opened is not None and opened == now
 
     def at_spot(self, obj: str, spot: str) -> bool:
         return self.at_place(*self.place_target(obj, spot, inside=False))
@@ -491,6 +531,11 @@ class Skills:
         over = float(np.linalg.norm(delta[:2]))
         carry_z = self._carry_height(obj, region, q, target_q, R, p)
         if over > k.over_xy and q[2] < carry_z - k.plane_band:
+            exit_q = self._overhang_exit(obj, q)
+            if exit_q is not None:                     # BRN-lift-leaves-overhang
+                self.phase = "slide"
+                goal = p + np.array([exit_q[0] - q[0], exit_q[1] - q[1], 0.0])
+                return self.action(self.twist_to(R, p, R, goal, v_max=k.carry_speed), 0.0)
             self.phase = "lift"
             slow = self._risen(obj) < k.slow_lift_dz
             return self.action(self.twist_to(R, p, R, p + Z * (carry_z - q[2]),
@@ -505,6 +550,29 @@ class Skills:
                                              v_min=k.lower_speed_min), 0.0)
         self.phase = "release"
         return self.action(np.zeros(6), A_OPEN)
+
+    def _overhang_exit(self, obj: str, q: np.ndarray) -> np.ndarray | None:
+        """Where the held object's origin must first move, level, before it rises: None when the
+        column over its footprint is clear (BRN-lift-leaves-overhang), or when no examined offset
+        is both clear overhead and reachable by a level move that meets nothing at the object's own
+        height (inside a drawer every such move meets a wall, and the object rises in place)."""
+        k = self.k
+        box = self.scene.object_box(obj)
+        ext = np.abs(box.R) @ box.half
+        c = box.world_centre
+        radius = float(ext[:2].max()) + k.exit_margin
+        top, bottom = float(c[2] + ext[2]), float(c[2] - ext[2])
+        mine = {self.scene.body_id(obj)}
+        if self.reach.footprint_clear(c[:2], radius, top, mine):
+            return None
+        angles = np.linspace(0.0, 2 * np.pi, k.exit_directions, endpoint=False)
+        for dist in np.arange(k.exit_step, k.exit_max + 1e-9, k.exit_step):
+            for th in angles:
+                xy = c[:2] + dist * np.array([np.cos(th), np.sin(th)])
+                if (self.reach.footprint_clear(xy, radius, top, mine)
+                        and self.reach.band_clear(c[:2], xy, radius, bottom, top, mine)):
+                    return q[:2] + (xy - c[:2])
+        return None
 
     def place_target(self, obj: str, region: str, inside: bool,
                      decide: bool = True) -> tuple[np.ndarray, np.ndarray] | None:
