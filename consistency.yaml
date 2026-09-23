@@ -1801,15 +1801,18 @@ branches:
       object is delivered uses the same step's state. The planner selects, at every control step, the
       first plan step in order that is not done, where the pick before a place step is also skipped when
       that place step's object is delivered. So a place step whose object is delivered but whose goal
-      does not hold stays selected, and at such a step the place skill, finding its object delivered,
-      commands the jaws open and a retreat rather than taking the object back; and a later plan step is
-      selected only when every earlier place step is done, which requires its object not held. Claimed,
+      does not hold is not passed over for a later step, and at a step where it is selected the place
+      skill, finding its object delivered, commands the jaws open and a retreat rather than taking the
+      object back; and a later plan step is selected only when every earlier place step is done, which
+      requires its object not held. Claimed,
       for plans in which no later step grasps an object that an earlier place step delivered: no control
       step selects a later plan step while an earlier place step's object is held with its goal
       satisfied; and no control step commands a release on the ground that the object is delivered while
       its origin is more than the declared height above its target height. Not claimed: that LIBERO's predicate still
       holds after the release; that holding is judged without error; anything of plans that re-pick a
-      delivered object; releases commanded on other grounds; or that a delivered object stays delivered.
+      delivered object; releases commanded on other grounds; that a delivered object stays delivered; or
+      DEF-skill-contract's start gate: selection does not wait for a released object to be clear of the
+      fingers and of the robot, so the next skill can start mid-release (a known gap, not implemented).
     premises: [AXM-libero-scores-final-state, DEF-holding, DEF-skill-contract]
     derivation_rule: >-
       AXM-libero-scores-final-state makes a predicate that holds while the object is still in the jaws

@@ -76,7 +76,7 @@ class Scene:
         """The mujoco.MjModel / MjData under robosuite's wrappers, for mujoco.* calls."""
         return getattr(self.m, "_model", self.m), getattr(self.d, "_data", self.d)
 
-    def body_id(self, name: str) -> int:
+    def _root_id(self, name: str) -> int:
         """robosuite names an object's root body `<instance>_main`; the bddl calls it `<instance>`."""
         names = self._body_names()
         for cand in (name, f"{name}_main"):
@@ -84,8 +84,30 @@ class Scene:
                 return self.m.body_name2id(cand)
         raise ValueError(f"no body for {name!r}")
 
+    def body_id(self, name: str) -> int:
+        """The body carrying the object's collision geoms: its root, or, when the root carries none,
+        the one descendant that does. libero_90's new_salad_dressing keeps every geom on a fixed child
+        body; judged by the root, its box was empty (a crash, 20 of 20) and no contact was its own."""
+        root = self._root_id(name)
+        if self._collision_geoms(root):
+            return root
+        kids = [b for b in range(self.m.nbody) if b != root and self._descends(b, root) and self._collision_geoms(b)]
+        return kids[0] if len(kids) == 1 else root
+
+    def _collision_geoms(self, body: int) -> bool:
+        return any(int(self.m.geom_bodyid[g]) == body and (self.m.geom_contype[g] or self.m.geom_conaffinity[g])
+                   for g in range(self.m.ngeom))
+
+    def _descends(self, body: int, root: int) -> bool:
+        while body > 0:
+            body = int(self.m.body_parentid[body])
+            if body == root:
+                return True
+        return False
+
     def body_pose(self, name: str) -> tuple[np.ndarray, np.ndarray]:
-        b = self.body_id(name)
+        """The pose of the object's root body: its origin is what LIBERO's predicates test."""
+        b = self._root_id(name)
         return self.d.body_xmat[b].reshape(3, 3).copy(), self.d.body_xpos[b] - self.base
 
     # -- objects --------------------------------------------------------------------
