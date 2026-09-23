@@ -262,6 +262,23 @@ axioms:
       observer does not change the behaviour it records.
     rationale: Without it, paired comparisons of two teacher versions measure noise.
 
+  - id: AXM-instruments-do-not-decide
+    domain: epistemic
+    statement: >-
+      An instrument never decides an outcome. The outcome of an episode is what the scorer says
+      about the state the episode reached; an instrument's own failure is reported as a failure of
+      the instrument, and is never recorded as a failure of the thing it was watching. A run that
+      does not complete the episodes it declared reports the shortfall rather than presenting the
+      episodes that happened to arrive as though they were the sample it promised. Evidence is
+      bound to the run that produced it: a result written by an earlier run is not evidence about
+      a later one, whatever name it is filed under.
+    rationale: >-
+      Otherwise a crashing logger reads as an unreliable teacher, a worker that dies silently
+      shrinks n while the rate is reported as though it had not, and a stale file is restamped
+      with the current revision -- three ways to publish a number about nothing. AXM-reproducible-
+      measurement asks that observing not change the behaviour; this asks that observing not
+      supply the verdict.
+
   - id: AXM-robosuite-controller-cache
     domain: environment
     statement: >-
@@ -390,13 +407,35 @@ definitions:
       (a) states what the execution layer guarantees, and is the clause a design may cite as
       enforced rather than measured.
 
+  - id: DEF-witness-or-refusal
+    term: Witness or refusal
+    meaning: >-
+      A geometric query the planner asks -- which grasp, which carry height, which touchdown pose,
+      which handle approach -- answers in one of exactly two ways. It returns a candidate together
+      with the predicate that candidate satisfies, or it returns nothing. It never returns its
+      best-scoring failing candidate, and it never widens the predicate to make one pass. A
+      precondition with no witness is a precondition that does not hold: the skill does not run,
+      the planner records which predicate had no witness, and the episode ends unsolved rather
+      than proceeding on a candidate known to fail. This is a property of the answer, not of the
+      search that produced it -- a query may rank its candidates, relax its ordering or give up
+      early, so long as what it hands back either satisfies the predicate it names or is absent.
+      The point is that every caller may then assume the predicate holds of whatever it receives,
+      which is what DEF-reachable-pose and LMA-whole-path-reachable are relied on to give, and
+      which a forced best-effort substitute silently withdraws.
+
   - id: DEF-skill-contract
     term: Skill contract
     meaning: >-
-      A skill's preconditions and effects, each a predicate on the current state -- held(o),
-      hand empty, uncrowded(o), graspable(o), admits(C, o), accessible(j), a free spot for o,
-      and LIBERO's own In, On, Open, Close, TurnOn, TurnOff -- with the parameters the
-      affordance table supplies (how a category is moved, held and set down).
+      A skill's preconditions, effects and postcondition, each a predicate on the current state --
+      held(o), hand empty, uncrowded(o), graspable(o), admits(C, o), accessible(j), a free spot
+      for o, and LIBERO's own In, On, Open, Close, TurnOn, TurnOff -- with the parameters the
+      affordance table supplies (how a category is moved, held and set down). Every skill carries
+      the same postcondition: when it ends the arm is disengaged from whatever it acted on --
+      clear of that thing along the axis it approached along, and touching it nowhere.
+      Disengagement belongs to the contract rather than to the body of any one skill, because the
+      planner may follow any skill with any other, and a skill that leaves the arm entangled makes
+      the next skill's preconditions unreadable from the state. A skill may not start while the
+      previous skill's postcondition does not hold.
 
   - id: DEF-lean-period-reads
     term: What a lean control period reads
