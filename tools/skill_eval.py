@@ -173,6 +173,8 @@ def _parse() -> argparse.Namespace:
     ap.add_argument("--start-tilt", type=float, default=0.0)
     ap.add_argument("--start-null", type=float, default=0.0)
     ap.add_argument("--cpus", default=PERF_CORES)
+    ap.add_argument("--at-once", type=int, default=0,
+                    help="processes alive at a time (0: one per core in --cpus)")
     ap.add_argument("--seed", type=int, default=555)
     ap.add_argument("--split", type=int, default=1,
                     help="workers per task, each running a share of the episodes on its own "
@@ -203,8 +205,23 @@ def _jobs(args) -> list[Job]:
     return jobs
 
 
-def _run(jobs: list[Job], suite: str) -> list[dict]:
-    """Launch one process per job and print rows as they arrive."""
+def _run(jobs: list[Job], suite: str, at_once: int = 0) -> list[dict]:
+    """Run the jobs, at most `at_once` processes alive at a time, printing rows as they arrive.
+
+    Every job is a whole LIBERO environment: a process of its own, above a gigabyte of it, and
+    several threads whatever OMP_NUM_THREADS says. The job list is tasks x split, so a full suite
+    at --split 10 is a hundred of them, which is ten pinned to each core and more memory than the
+    machine has. Launching them all at once froze this machine twice. The default cap is one
+    process per core named in --cpus, which is what the affinity assignment already assumes.
+    """
+    at_once = at_once or len({j.cpu for j in jobs}) or 1
+    rows = []
+    for start in range(0, len(jobs), at_once):
+        rows += _wave(jobs[start:start + at_once], suite)
+    return rows
+
+
+def _wave(jobs: list[Job], suite: str) -> list[dict]:
     ctx = mp.get_context("spawn")
     procs, remotes = [], []
     for job in jobs:
@@ -281,7 +298,7 @@ def main() -> int:
     args = _parse()
     t0 = time.time()
     jobs = _jobs(args)
-    rows = _fill_lost(_run(jobs, args.suite), jobs)
+    rows = _fill_lost(_run(jobs, args.suite, args.at_once), jobs)
     _summarise(rows, args, time.time() - t0)
     if args.trials:
         _write_trials(rows, args)
