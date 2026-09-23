@@ -1788,6 +1788,43 @@ branches:
       evidence: CTR-teacher-reliable.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-front-hook-opens-covered-drawer
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      The first time in an episode that a sliding drawer is to be opened, the skill screens the grasps of
+      its handle bar for reachability along the drive, once, and keeps the outcome for the rest of the
+      episode. If no grasp passed that screen, every later control step of opening that drawer in the
+      episode follows this rule, whatever a later screen would find: at every control step it reads the
+      bar's pose and the joint's opening direction in plan (u), and defines the hook point at a declared
+      height above the bar's centre, the stage point a declared distance in front of the hook point along
+      u, and the drag line through the hook point along u. It commands the jaws open at every step, with
+      the fingers pitched a declared angle below level toward -u (into the cabinet) and the jaw axis
+      along the bar. When the tool is within declared bands of the hook point's height and of the drag
+      line, and no more than a declared distance in front of the hook point along u, it commands motion
+      toward the point on the drag line a declared distance beyond the hook point along u (the drag);
+      when it is within those bands but further in front, up to the stage point, it commands motion
+      toward the hook point (in); otherwise it commands the approach to the stage point. The rule ends
+      when LIBERO's open threshold for the joint holds. Claimed: while opening such a drawer the skill
+      never commands the jaws closed, and at every drag step the commanded target lies on the drag line
+      beyond the hook point along u. Not claimed: that the fingers catch the bar, that the drawer reaches
+      its threshold, that the approach is free of contact, or that the hand is clear of the drawer when
+      the rule ends (a drive that grasped nothing has no retreat here; DEF-skill-contract's release
+      postcondition is not met by this rule).
+    premises: [AXM-handle-shares-body, AXM-libero-joint-bands, DEF-skill-contract]
+    derivation_rule: >-
+      AXM-handle-shares-body makes pulling the bar pull the drawer; AXM-libero-joint-bands gives the
+      threshold that ends the rule. The drag target is the hook point moved along u, so it lies on the
+      drag line by construction, and the jaw command is open throughout the rule, which holds for the
+      whole opening because the no-grasp choice is made once per episode. Measured: libero_90 6's bottom
+      drawer lies under the middle drawer's bar, so the top-down hook's column is blocked, and no side
+      pinch was reachable (0 of 20). LIBERO's humans open it with no grasp in 50 of 50 demos; over 20,
+      at the start of the pull the tool is at the bar along u (-3 mm), 26 mm above its centre, pitched 31
+      deg below level into the cabinet, jaws 80 mm open along the bar. The height was chosen on 4
+      separate episodes (18 mm opened 4 of 4; 0, 6, 12 and 26 mm none); with it, 20 of 20. evidence:
+      CTR-teacher-reliable.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
   - id: BRN-place-done-when-released
     subject: CMP-skill-library
     claim_type: contract

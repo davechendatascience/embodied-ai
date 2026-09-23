@@ -108,7 +108,12 @@ def plan_for(goals: list[tuple], objects: dict[str, str] | None = None) -> list[
                                  goal=tuple(g)))
         else:
             raise ValueError(f"no skill for predicate {pred!r} in {goals}")
-    # open containers, then fill them, then close, then switch (a knob is easier to reach
-    # with an empty gripper, and a closed drawer must stay closed)
-    return opens + places + closes + switches
+    # a container nothing goes into is closed first, before anything is opened: closed after, the arm
+    # pressing libero_90 23's bottom drawer shut pushed the top drawer it had just opened back in
+    # (0 of 20). Then open, fill, close what was filled, and switch last (a knob is easier to reach
+    # with an empty gripper)
+    filled = {g[2] for g in goals if g[0].lower() in PICK_PLACE}
+    first = [c for c in closes if c.region not in filled]
+    last = [c for c in closes if c.region in filled]
+    return first + opens + places + last + switches
 

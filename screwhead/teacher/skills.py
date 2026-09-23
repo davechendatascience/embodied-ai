@@ -133,6 +133,14 @@ class SkillConfig:
     push_close_lead: float = 0.03   # m the tool stands in front of the bar's centre, on the opening side
     push_close_ahead: float = 0.05  # m the press's aim runs ahead of the push point (speed-limited)
     push_close_corridor: float = 0.02   # m off the press line before re-approaching
+    # the front hook, for a drawer whose bar is neither open from above nor graspable (libero_90 6:
+    # the bottom drawer, the middle one's bar over it). LIBERO's humans open it with no grasp in 50 of 50:
+    # jaws open 80 mm along the bar, fingers 31 deg below level into the cabinet, the tool at the bar
+    # 26 mm above its centre (medians of 20 demos), dragged along the opening
+    front_hook_pitch: float = 0.54      # rad below level
+    front_hook_above: float = 0.018     # m above the bar's centre: 18 opened libero_90 6 in 4 of 4; 0, 6, 12 and the humans' 26 in 0 of 4
+    front_hook_stage: float = 0.10      # m in front of the hook point the tool comes down to first
+    front_hook_engage: float = 0.003    # m in front of the hook point at most before the drag starts
     push_close_pitch: float = 0.785     # rad the fingers point from straight down toward the push: down
     #                                     (0), the forearm met the cabinet top 4 cm short of closed; level
     #                                     (pi/2), the push pose was out of reach in 44 of 50
@@ -731,6 +739,8 @@ class Skills:
         if mode == "close" and a["jnt_type"] == 2:
             return self._push_close(a, s)
         R_h, w, app = self._handle_frame(region, a, mode)
+        if mode == "open" and a["jnt_type"] == 2 and self.grasp_log.get(region, {}).get("forced"):
+            return self._front_hook(a, s)          # no feasible grasp of the bar: hook it from the front
         p_h = self.scene.d.geom_xpos[a["handle_geom"]] - self.scene.base
         if self.holding(a["handle_geom"], w):
             return self._drive(a, mode, R, p, R_h, p_h)
@@ -886,6 +896,43 @@ class Skills:
             return self.action(self.twist_to(R, p, R_t, target), A_OPEN)
         self.phase = "hook"
         return self.action(self.twist_to(R, p, R_hook, hook), A_OPEN)
+
+    def _front_hook(self, a: dict, s: dict) -> np.ndarray:
+        """Open a sliding drawer as LIBERO's humans open libero_90 6's bottom drawer: jaws open along
+        the bar, the fingers pitched front_hook_pitch below level into the cabinet so their tips go
+        over and behind the bar, the tool front_hook_above over the bar's centre; come down in front
+        of the drawer, move in level to the bar, then drag along the opening direction, re-aimed
+        from the bar's pose every step. Nothing is grasped."""
+        k = self.k
+        R, p = s["R_tool"], s["p_tool"]
+        c, u, bar, top = self._hook_frame(a)                  # u: the opening direction in plan
+
+        def frame(jaw):
+            z = -u * np.cos(k.front_hook_pitch) - Z * np.sin(k.front_hook_pitch)
+            y = jaw - z * float(jaw @ z)
+            y = y / np.linalg.norm(y)
+            return np.column_stack([np.cross(y, z), y, z])
+        R_f = min((frame(bar), frame(-bar)), key=lambda Rc: rot_angle(R.T @ Rc))
+        hook = c + Z * k.front_hook_above
+        off = p - hook
+        along = float(off @ u)                               # > 0: in front of the hook point
+        lateral = float(np.linalg.norm((off - u * along)[:2]))
+        level = abs(float(off[2])) < k.hook_band
+        aligned = rot_angle(R.T @ R_f) < k.at_rot
+        if level and aligned and lateral < k.hook_corridor and -k.hook_corridor < along < k.front_hook_engage:
+            self.phase = "drag"
+            return self.action(self.twist_to(R, p, R_f, hook + u * k.hook_ahead, v_max=k.drive_speed,
+                                             v_min=k.drive_speed_min), A_OPEN)
+        stage = hook + u * k.front_hook_stage
+        if abs(float(off[2])) < 2 * k.hook_band and lateral < k.hook_corridor and 0.0 < along < k.front_hook_stage + k.hook_corridor:
+            self.phase = "in"                                # level, in front of the bar: move in
+            return self.action(self.twist_to(R, p, R_f, hook), A_OPEN)
+        leg = self.path_to(R, p, R_f, stage, top + k.lift_dz)
+        if leg is not None:
+            self.phase, R_t, target = leg
+            return self.action(self.twist_to(R, p, R_t, target), A_OPEN)
+        self.phase = "front"
+        return self.action(self.twist_to(R, p, R_f, stage), A_OPEN)
 
     def _push_close(self, a: dict, s: dict) -> np.ndarray:
         """Close a sliding drawer by pressing its bar along the closing direction: jaws shut, the

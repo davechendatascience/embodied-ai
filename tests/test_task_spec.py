@@ -41,3 +41,10 @@ def test_fill_then_close_has_no_goalless_open_step():
     assert [s.skill for s in plan] == ["pick", "place_in", "articulate"]
     assert plan[-1].mode == "close" and plan[-1].goal == ("close", "white_cabinet_1_bottom_region")
     assert all(s.goal is not None for s in plan if s.skill == "articulate")
+
+
+def test_a_standalone_close_comes_before_the_opens():
+    """libero_90 23: closed after the top drawer was opened, pressing the bottom drawer shut pushed the
+    top one back in (0 of 20)."""
+    plan = plan_for([("close", "white_cabinet_1_bottom_region"), ("open", "white_cabinet_1_top_region")])
+    assert [(s.skill, s.mode) for s in plan] == [("articulate", "close"), ("articulate", "open")]
