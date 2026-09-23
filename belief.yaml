@@ -217,7 +217,8 @@ components:
       - {id: FM-stale-grasp-cache, observable: a grasp chosen in a previous episode is reused after reset}
     remediation: Per-task ProgramConfig (sector, pre-shape, posture, selection); per-episode grasp cache; clearance, IK, path and sigma-min checks
 
-  # code: screwhead/teacher/skills.py (feedback laws), screwhead/teacher/grasp_planner.py (candidates from geometry), screwhead/teacher/reach.py (IK, conditioning, collision), screwhead/geometry/frames.py, screwhead/teacher/skill_teacher.py, screwhead/sim/scene.py, screwhead/teacher/task_spec.py, screwhead/sim/task_env.py, screwhead/teacher/episode_log.py (per-episode diagnosis), tools/skill_eval.py, tools/skill_trace.py, tools/teacher_report.py, tools/teacher_determinism.py, tools/teacher_motion.py, screwhead/teacher/clearing.py, scripts/skill_sweep.sh
+  # code: screwhead/teacher/skills.py (feedback laws), screwhead/teacher/grasp_planner.py (candidates from geometry),
+  # screwhead/sim/scan.py (the gripper's pads measured from robosuite's geoms, which grasp_planner reads), screwhead/teacher/reach.py (IK, conditioning, collision), screwhead/geometry/frames.py, screwhead/teacher/skill_teacher.py, screwhead/sim/scene.py, screwhead/teacher/task_spec.py, screwhead/sim/task_env.py, screwhead/teacher/episode_log.py (per-episode diagnosis), tools/skill_eval.py, tools/skill_trace.py, tools/teacher_report.py, tools/teacher_determinism.py, tools/teacher_motion.py, screwhead/teacher/clearing.py, scripts/skill_sweep.sh
   - id: CMP-skill-library
     purpose: >-
       Build a task's demonstration program from its goal specification and the scene's
@@ -363,13 +364,14 @@ components:
 
   # code: screwhead/teacher/task_loss.py, tools/task_loss_check.py, screwhead/geometry/box_distance.py (exact box-box
   # separation), screwhead/teacher/settle.py (equilibrium settle), screwhead/teacher/verdicts.py (settled and
-  # violations), screwhead/sim/exec_state.py (exact restore for search rollouts), screwhead/teacher/rl_env.py and
-  # tools/rl_train.py (the abandoned RL pilot, kept for its record)
-  - id: CMP-rl-teacher
+  # violations), screwhead/sim/exec_state.py (exact restore for search rollouts), screwhead/teacher/search.py and
+  # tools/search_probe.py (the receding-horizon search and its probe), screwhead/teacher/state.py (what pi_theta reads)
+  - id: CMP-optimization-teacher
     purpose: >-
-      Train the general teacher from privileged scene state against a task loss derived from
-      the bddl goal (zero exactly where LIBERO scores success) plus a smoothness cost, instead
-      of hand-writing skills
+      Find the general teacher by optimizing action sequences against a task loss derived from
+      the bddl goal (zero exactly where LIBERO scores success), judged by verdicts on the
+      simulated state, instead of hand-writing skills; a per-task network (pi_theta) then learns
+      the searches' solutions
     testable_capability: >-
       A policy trained on a task's loss alone reaches LIBERO's success from that task's init
       states, smoothly, through the same execution path as the student

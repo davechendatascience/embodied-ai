@@ -549,6 +549,34 @@ lemmas:
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 branches:
+  - id: BRN-teacher-policy
+    subject: CMP-optimization-teacher
+    claim_type: contract
+    statement: >-
+      Per task, pi_theta reads the teacher state (screwhead/teacher/state.py: the privileged state
+      with no clock and no step counter; 231 dimensions on libero_goal 7) and screwhead's
+      robot-specification tokens, and emits per plan segment a normalized body twist (6, moment
+      first) and logits over the student's snap levels. Nothing in its output names a joint: the
+      twist is decoded by the same fixed layers the student uses (PoE, damped least-squares IK with
+      null space) and executed through the same TwistServo path, so the teacher is embodiment-free.
+      It is trained by the alternation of BRN-optimization-teacher -- a search records the state it
+      saw and the plan it chose at every control step, pi_theta is regressed onto those plans
+      (squared error on the twist, cross-entropy on the level) over episodes that ended settled and
+      passed the keep-filter, and the next round's searches start from pi_theta's plan -- with its
+      weights frozen before it labels or is searched around. A demonstration is what pi_theta
+      produces, alone or refined by a search around it, executed through the one execution path and
+      kept only if it ends settled and passes the keep-filter.
+    premises: [BRN-optimization-teacher, BRN-screw-search, AXM-one-execution-path,
+               AXM-dagger-needs-markov-labels, AXM-parameters-derived]
+    derivation_rule: >-
+      screwhead/teacher/policy.py (the network), screwhead/teacher/state.py (its input),
+      tools/teacher_train.py (the fit), checkpoints/teacher/SUITE_TASK.pt (the weights, with the
+      state's layout and the search settings beside them). Not claimed: that pi_theta alone reaches
+      settled success, or that a search started from it beats a search from zero (Q9), that
+      regression on settled episodes suffices rather than iterated relabelling, or that it transfers
+      to another arm (Q8).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
   - id: BRN-carry-reachable-along-carry
     subject: CMP-skill-library
     claim_type: contract

@@ -23,12 +23,15 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from screwhead.sim.sim_arm import Execution  # noqa: E402
 from screwhead.sim.task_env import StartNoise, TaskEnv  # noqa: E402
 from screwhead.teacher.search import Search, Settings  # noqa: E402
+from screwhead.teacher.state import TeacherState  # noqa: E402
 from screwhead.teacher.task_loss import TaskLoss  # noqa: E402
 from screwhead.teacher.verdicts import Verdicts  # noqa: E402
 def phase(v: Verdicts, watch) -> str:
@@ -44,7 +47,7 @@ def phase(v: Verdicts, watch) -> str:
     return "approach"
 
 
-def main() -> int:
+def _parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser()
     ap.add_argument("suite")
     ap.add_argument("task", type=int)
@@ -63,7 +66,12 @@ def main() -> int:
     ap.add_argument("--spread", type=float, default=Settings.spread)
     ap.add_argument("--key-order", default="plain", choices=["plain", "stability", "tiebreak"])
     ap.add_argument("--out", default="")
-    args = ap.parse_args()
+    ap.add_argument("--record", default="", help="npz to write the search's (state, action) labels to")
+    return ap
+
+
+def main() -> int:
+    args = _parser().parse_args()
 
     settings = Settings(horizon=args.horizon, segments=args.segments, samples=args.samples,
                         iters=args.iters, spread=args.spread, key_order=args.key_order)
@@ -77,11 +85,16 @@ def main() -> int:
     v = Verdicts(te, loss)
     search = Search(te, v, loss, settings)
     watch, start_ref = v.watch(), v.reference()
+    recorder = Recorder(args.record, te, v) if args.record else None
     previous_ref = dict(start_ref)
     rows, outcome, t0 = [], "timeout", time.perf_counter()
     for t in range(args.steps):
         tick = time.perf_counter()
+        if recorder is not None:
+            recorder.before(watch, start_ref)
         action, report = search.act(watch, start_ref, previous_ref)
+        if recorder is not None:
+            recorder.after(action, report)
         te.execute(action, substep=watch.substep)
         success = te.success()
         watch.period_end(success)
@@ -112,7 +125,36 @@ def main() -> int:
     print(json.dumps(summary))
     if args.out:
         Path(args.out).write_text("\n".join(json.dumps(r) for r in [summary, *rows]))
+    if recorder is not None:
+        recorder.save(args, noise, settings, outcome)
     return 0
+
+
+class Recorder:
+    """The search's solution as pi_theta's training signal: the state it saw and the plan it chose
+    at every control step (BRN-teacher-policy)."""
+
+    def __init__(self, path: str, te, verdicts):
+        self.path, self.te = path, te
+        self.state = TeacherState(te, verdicts)
+        self.states, self.actions, self.plans, self.levels = [], [], [], []
+
+    def before(self, watch, start_reference) -> None:
+        self.states.append(self.state.vector(watch, start_reference))
+
+    def after(self, action, report) -> None:
+        self.actions.append(action.astype(np.float32))
+        self.plans.append(report.best.twist.astype(np.float32))
+        self.levels.append(report.best.level.astype(np.int64))
+
+    def save(self, args, noise, settings, outcome: str) -> None:
+        np.savez_compressed(self.path, state=np.asarray(self.states), action=np.asarray(self.actions),
+                            plan=np.asarray(self.plans), level=np.asarray(self.levels),
+                            settled=outcome == "settled", suite=args.suite, task=args.task,
+                            init=self.te.init_index, seed=args.seed, start_noise=json.dumps(noise.as_dict()),
+                            settings=json.dumps(vars(settings)))
+        print(json.dumps(dict(recorded=self.path, steps=len(self.states), state_dim=int(self.state.dim),
+                              settled=outcome == "settled")))
 
 
 if __name__ == "__main__":

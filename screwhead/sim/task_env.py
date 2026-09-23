@@ -65,6 +65,7 @@ class TaskEnv(SimArm):
     def reset(self, init_index: int | None = None):
         self.episode += 1
         k = int(self.rng.integers(len(self.init_states))) if init_index is None else init_index
+        self.init_index = k                               # which init state this episode drew, for provenance
         if k not in self._settled:
             self._settled[k] = self._settled_init_state(k)
         self._reset_scene(k)
