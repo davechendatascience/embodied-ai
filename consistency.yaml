@@ -776,18 +776,25 @@ lemmas:
 
   - id: LMA-smooth-in-execution
     statement: >-
-      Tool motion is smooth (DEF-smooth-motion) when the execution layer ramps each period's
-      joint goal linearly across the period, bounds how fast the commanded twist changes, and
-      sizes its per-period joint clips for the lag a ramped arm has; and because every
-      policy's action goes through that one layer unchanged, the teacher's label stays a
-      function of the state and the student is executed the same way.
+      When the execution layer ramps each period's joint goal linearly across the period, bounds how
+      fast the commanded twist changes, and sizes its per-period joint clips for the lag a ramped arm
+      has, the in-period step and the step between periods are removed from what is commanded and
+      the reference is not dragged back and re-anchored by the clip; this makes the tool's motion
+      smoother but does not by itself make it smooth in DEF-smooth-motion's sense, whose executed
+      clauses are measured per episode. Because every policy's action goes through that one layer
+      unchanged, the teacher's label stays a function of the state together with the layer's carried
+      state (the previous commanded twist, the ramp, the grip counter), and the student is executed
+      the same way.
     premises: [AXM-stepped-joint-goal-lunges, AXM-robosuite-interpolator-hyperbolic, AXM-one-execution-path,
                DEF-smooth-motion]
     derivation_rule: >-
       A linear ramp removes the in-period step (AXM-stepped-joint-goal-lunges) where robosuite's
       interpolator does not (AXM-robosuite-interpolator-hyperbolic); a bound on the commanded
       twist's change removes the steps between periods; clips sized for a period of extra lag
-      keep the reference from being dragged back and re-anchored.
+      keep the reference from being dragged back and re-anchored. An earlier statement concluded
+      smooth motion from these three, which DEF-smooth-motion's own figures refute: the skill
+      teacher's free-motion acceleration p95 reaches 6.1 m/s^2 at its 90th percentile against a 6
+      m/s^2 bar, and 10 of 16 search episodes carry a free-motion re-anchor.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: LMA-loss-lower-bounds-steps
@@ -1558,11 +1565,13 @@ branches:
     statement: >-
       The execution layer executes every policy's action with its joint goal ramped linearly over
       the whole control period, the commanded twist changing by at most 2 m/s^2 in its linear part
-      and 5 rad/s^2 in its angular part -- and by at most 0.5 m/s^2 in its linear part from the
-      control period in which both finger groups touch one body that is not the robot until the
-      period in which the jaws are commanded open -- and a 0.1 rad per-period joint clip shared by the
-      controller, the servo's lead limit and the settling hold. Whether the jaws hold something is
-      read from the contacts and the period's action alone, the same for every policy.
+      and 5 rad/s^2 in its angular part -- and by at most 0.5 m/s^2 in its linear part in any period in which the jaws are commanded
+      closed and both finger groups touched one body that is not the robot within the last five
+      periods -- and a 0.1 rad per-period joint clip shared by the controller, the servo's lead
+      limit and the settling hold. Whether the jaws hold something is read from the contacts, the
+      period's action and a count of periods since both fingers last touched one body, which the
+      execution layer carries as it carries the previous commanded twist; the rule is the same for
+      every policy.
     premises: [LMA-smooth-in-execution, LMA-grip-fails-by-contact-not-load,
                AXM-rim-pinch-drops-under-smooth-motion, AXM-one-execution-path]
     derivation_rule: >-
@@ -1570,7 +1579,12 @@ branches:
       clip, applied to every policy alike, which AXM-one-execution-path requires of any condition
       the bound depends on: contacts and the action are both inputs every policy's execution has.
       LMA-grip-fails-by-contact-not-load says a pivot nothing resists is driven by the tool's
-      accelerations. The values are measured, not derived, on the same seeds: bounding every
+      accelerations. The count is the layer's own state: read from the contacts alone the condition
+      flickered mid-carry, and latched until the jaws were commanded open it held the bound through
+      the regrasp after a drop with nothing held (a verifier's counterexample); five periods of
+      grace cover the flicker. It is execution state like the previous commanded twist, and
+      BRN-execution-state-restore's saved fields must include it. The values are measured, not
+      derived, on the same seeds: bounding every
       period at 1 m/s^2 took libero_goal 9 from 1 to 50 of 50 but libero_spatial from 478 to 447,
       the approach overrunning its phase switches (spatial 3, 6 and 8 lost 31 episodes), and a
       braking cap in the teacher did not recover them; 0.5 m/s^2 in every period removed most of the
@@ -1601,15 +1615,23 @@ branches:
       three stops -- the entry, halfway to R, and the entry point carried to R -- are reachable poses;
       with no jaw direction passing, the push refuses per DEF-witness-or-refusal, the refusal recorded
       beside the scorer's verdict. The screen answers for those three stops and for nothing between
-      them. Not claimed: that o's orientation is controlled, or that objects other than o stay where
-      they were.
+      them. Scope: dishes whose collision geometry is concave with its floor at the top of what lies
+      about its axis, and whose inner rim radius exceeds the lead plus half the jaws' opening plus
+      the finger's half-width, so that the leading finger lands inside the rim -- the plate's does;
+      a smaller dish needs an opening scaled to it, which is not claimed. When LIBERO's predicate
+      holds the push ends and the next motion is up, clear of the rim. Not claimed: that o reaches R
+      if something blocks it, that o's orientation is controlled, or that objects other than o stay
+      where they were.
     premises: [AXM-category-affordances-declared, AXM-object-geometry-known, AXM-support-scannable,
                AXM-panda-gripper-geometry, DEF-reachable-pose, LMA-whole-path-reachable,
                DEF-witness-or-refusal, DEF-refusal-is-an-outcome, AXM-libero-scores-final-state,
                AXM-instruments-do-not-decide, DEF-skill-contract]
     derivation_rule: >-
-      The affordance table declares the plate moved_by push: it is 137 mm across against the
-      gripper's 75 mm opening, and picked instead it scored 3 of 50 on forced grasps. LIBERO's 50
+      A verifier refuted the earlier statement's "so that the leading finger lies inside o's rim":
+      a fixed fraction of the radius and a fixed opening do not scale, and a 110 mm dish would put
+      the finger on its edge. The scope now states the size condition. The affordance table declares
+      the plate moved_by push: it is 137 mm across against the gripper's 75 mm opening, and picked
+      instead it scored 3 of 50 on forced grasps. LIBERO's 50
       human demonstrations of libero_goal 5, replayed from their recorded states, never close the
       jaws: open about 62 mm, aligned with the motion, the tool point about 7.5 mm above the plate's
       centre -- fingertips on the dish floor -- leading its centre by 0.44 of its radius, moving it
@@ -1624,6 +1646,37 @@ branches:
       the ones the carry is screened at; the claim is limited to them because the lemma denies any
       finite set settles a path. The regression planner's scope listed pushing as not covered; this
       covers the dish case only. evidence: CTR-teacher-reliable (libero_goal 5: 20 of 20).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-hook-opens-sliding-drawer
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      A sliding drawer is opened without grasping its handle when nothing of the scene, the robot
+      aside, lies over the handle bar: the jaws wide open and pointing down, the jaw axis along the
+      opening direction, the tool lowered straight down to a point on the opening side of the bar
+      and above it -- the trailing finger over the bar's rear edge -- and only then dragged along the
+      opening direction at the drive speed, the point re-derived from the bar's pose every control
+      step. It stops when LIBERO's Open holds with the margin the fill needs. Nothing is grasped, so
+      disengagement asks only that the next motion leave upward, which the next skill's first leg
+      does. Where something lies over the bar, the drawer is opened by the pinch drive instead.
+      Not claimed: that the drag cannot slip off the bar; the offsets are measured, not derived.
+    premises: [AXM-object-geometry-known, AXM-panda-gripper-geometry, AXM-handle-shares-body,
+               DEF-skill-contract, AXM-libero-joint-bands, AXM-parameters-derived]
+    derivation_rule: >-
+      LIBERO's 50 human demonstrations of libero_goal 3, replayed from their recorded states, all
+      open the top drawer this way: jaws open 77-80 mm and never commanded closed, pointing straight
+      down, jaw axis along the opening direction, the tool 42 mm on the opening side of the bar and
+      17 mm above its centre, the drawer open by about step 62. The offsets are taken from them
+      (AXM-parameters-derived: a measured distribution); lower or closer settings measured on the
+      teacher, 9-12 mm above and 27-35 mm ahead, engaged the bar in 3 of 30 episodes, and the demos'
+      own setting in 6 of 6, open at a median step 55 against about 290 for the pinch drive after
+      relocating the bowl. Requiring the tool at the hook height before dragging is measured too: at
+      17 mm above it the finger swept over the bar. The middle drawer's bar has the top drawer's bar
+      over it, which is why the condition is stated: its humans approach from the side, and the pinch
+      drive already opens it in 74 steps. AXM-object-geometry-known gives the bar and whatever lies
+      over it; AXM-handle-shares-body puts the bar on the moving body; AXM-libero-joint-bands the
+      threshold. evidence: CTR-teacher-reliable (libero_goal 3 and 0).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-regression-planner
