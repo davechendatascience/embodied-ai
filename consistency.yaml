@@ -1556,16 +1556,74 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      SimArm executes every policy's action with its joint goal ramped linearly over the whole
-      control period (sim/joint_ramp.py), the commanded twist changing by at most 2 m/s^2 and
-      5 rad/s^2 (sim/servo.py), and a 0.1 rad per-period joint clip shared by the controller,
-      the servo's lead limit and the settling hold (Execution.joint_step).
-    premises: [LMA-smooth-in-execution]
+      The execution layer executes every policy's action with its joint goal ramped linearly over
+      the whole control period, the commanded twist changing by at most 2 m/s^2 in its linear part
+      and 5 rad/s^2 in its angular part -- and by at most 0.5 m/s^2 in its linear part from the
+      control period in which both finger groups touch one body that is not the robot until the
+      period in which the jaws are commanded open -- and a 0.1 rad per-period joint clip shared by the
+      controller, the servo's lead limit and the settling hold. Whether the jaws hold something is
+      read from the contacts and the period's action alone, the same for every policy.
+    premises: [LMA-smooth-in-execution, LMA-grip-fails-by-contact-not-load,
+               AXM-rim-pinch-drops-under-smooth-motion, AXM-one-execution-path]
     derivation_rule: >-
-      screwhead/sim/sim_arm.py _open and _gains, screwhead/sim/servo.py _limit,
-      screwhead/sim/joint_ramp.py. evidence: CTR-teacher-smooth (substep acceleration p95
-      median 2.18 m/s^2 against ~12 before; 16 of 20 episodes without re-anchors, RUN-0047),
-      CTR-teacher-reliable (libero_spatial 188/200 against 186).
+      LMA-smooth-in-execution gives the ramp, the bounded change of the commanded twist and the
+      clip, applied to every policy alike, which AXM-one-execution-path requires of any condition
+      the bound depends on: contacts and the action are both inputs every policy's execution has.
+      LMA-grip-fails-by-contact-not-load says a pivot nothing resists is driven by the tool's
+      accelerations. The values are measured, not derived, on the same seeds: bounding every
+      period at 1 m/s^2 took libero_goal 9 from 1 to 50 of 50 but libero_spatial from 478 to 447,
+      the approach overrunning its phase switches (spatial 3, 6 and 8 lost 31 episodes), and a
+      braking cap in the teacher did not recover them; 0.5 m/s^2 in every period removed most of the
+      bowl's mid-carry drops and lost more episodes still. Bounded only while the jaws hold
+      something, 0.5 m/s^2 kept libero_goal 9 at 25 of 25. Read as "the jaws asked narrower than
+      they are" the condition was true of every free close and slowed empty approaches; read from
+      the contacts alone it flickered, and it is latched until the jaws are commanded open. The
+      bound does not stop the mid-carry drops: they persist at 0.5 m/s^2 while holding, and what
+      separates them from the 0.5-everywhere runs that nearly remove them is open. evidence:
+      CTR-teacher-reliable, CTR-teacher-gentle (CTR-teacher-smooth: substep acceleration p95
+      median 2.18 m/s^2 against ~12 before the ramp and the bound, RUN-0047).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-push-cages-a-dish
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      For a goal On(o, R) where o's category is declared moved_by push and R lies on the surface o
+      rests on, the teacher moves o without grasping it. The jaws are held open and aligned with the
+      direction from o's centre to R's centre, the tool points down, and the finger meshes' tips are
+      lowered on to o's floor -- the top of o's collision geometry about its axis -- at a point ahead
+      of o's centre by a fixed fraction of o's plan radius, so that the leading finger lies inside
+      o's rim. The tool then advances toward R at a bounded speed, its aim a fixed distance ahead of
+      that point, the point and the direction re-derived from o's pose at every control step, so the
+      advance is limited by speed and not by where o is. If the tool leaves a corridor about the line
+      through that point -- across it, or more than a bound ahead of it -- it rises clear of the rim
+      and re-enters. It stops when LIBERO's predicate holds. An entry is used only if the tool poses at
+      three stops -- the entry, halfway to R, and the entry point carried to R -- are reachable poses;
+      with no jaw direction passing, the push refuses per DEF-witness-or-refusal, the refusal recorded
+      beside the scorer's verdict. The screen answers for those three stops and for nothing between
+      them. Not claimed: that o's orientation is controlled, or that objects other than o stay where
+      they were.
+    premises: [AXM-category-affordances-declared, AXM-object-geometry-known, AXM-support-scannable,
+               AXM-panda-gripper-geometry, DEF-reachable-pose, LMA-whole-path-reachable,
+               DEF-witness-or-refusal, DEF-refusal-is-an-outcome, AXM-libero-scores-final-state,
+               AXM-instruments-do-not-decide, DEF-skill-contract]
+    derivation_rule: >-
+      The affordance table declares the plate moved_by push: it is 137 mm across against the
+      gripper's 75 mm opening, and picked instead it scored 3 of 50 on forced grasps. LIBERO's 50
+      human demonstrations of libero_goal 5, replayed from their recorded states, never close the
+      jaws: open about 62 mm, aligned with the motion, the tool point about 7.5 mm above the plate's
+      centre -- fingertips on the dish floor -- leading its centre by 0.44 of its radius, moving it
+      about 250 mm in about 80 steps; the fraction, the opening and the speed are taken from them.
+      Three fingertip settings were measured on the teacher: 3 mm above the floor touched the plate
+      on 1-4 of 400 steps and never moved it; 6 mm into it tilted the plate 8-12 degrees and pinned
+      it; on the floor, 24 of 24 moved it 198-218 mm into the region. An aim 10-30 mm ahead of a
+      point that moves with the plate stopped the reference where the stuck plate held it and left
+      the push no force; the human hand advances at a steady rate. AXM-object-geometry-known gives
+      the floor and the rim; AXM-panda-gripper-geometry the fingers' reach below the tool point.
+      LMA-whole-path-reachable is why more than the endpoints is screened, and the three stops are
+      the ones the carry is screened at; the claim is limited to them because the lemma denies any
+      finite set settles a path. The regression planner's scope listed pushing as not covered; this
+      covers the dish case only. evidence: CTR-teacher-reliable (libero_goal 5: 20 of 20).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-regression-planner
