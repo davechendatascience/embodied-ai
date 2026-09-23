@@ -18,7 +18,7 @@ import multiprocessing as mp
 import os
 import sys
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -262,45 +262,46 @@ def _run(jobs: list[Job], suite: str, at_once: int = 0) -> list[dict]:
     several threads whatever OMP_NUM_THREADS says. The job list is tasks x split, so a full suite
     at --split 10 is a hundred of them, which is ten pinned to each core and more memory than the
     machine has. Launching them all at once froze this machine twice. The default cap is one
-    process per core named in --cpus, which is what the affinity assignment already assumes.
+    process per core named in --cpus.
+
+    A rolling pool: a job starts on a core as soon as the one before it there has finished. Run in
+    waves, every wave waited for its slowest task, and a libero_90 sweep kept 3 of 10 cores busy.
     """
-    at_once = at_once or len({j.cpu for j in jobs}) or 1
-    rows = []
-    for start in range(0, len(jobs), at_once):
-        rows += _wave(jobs[start:start + at_once], suite)
-    return rows
-
-
-def _wave(jobs: list[Job], suite: str) -> list[dict]:
+    from multiprocessing.connection import wait
+    cpus = list(dict.fromkeys(j.cpu for j in jobs))
+    at_once = min(at_once or len(cpus), len(cpus)) or 1
     ctx = mp.get_context("spawn")
-    procs, remotes = [], []
-    for job in jobs:
-        a, b = ctx.Pipe()
-        p = ctx.Process(target=_worker, args=(b, asdict(job)), daemon=True)
-        p.start()
-        b.close()
-        procs.append(p)
-        remotes.append(a)
-    rows, open_pipes = [], set(range(len(remotes)))
-    while open_pipes:
-        for i in list(open_pipes):
+    pending, free, live, rows = list(jobs), cpus[:at_once], {}, []
+    while pending or live:
+        while pending and free:
+            job = replace(pending.pop(0), cpu=free.pop(0))
+            a, b = ctx.Pipe()
+            proc = ctx.Process(target=_worker, args=(b, asdict(job)), daemon=True)
+            proc.start()
+            b.close()
+            live[a] = (proc, job.cpu)
+        for conn in wait(list(live)):
             try:
-                r = remotes[i].recv()
+                r = conn.recv()
             except EOFError:
                 r = None
-            if r is None:
-                open_pipes.discard(i)
+            if r is None:                       # the worker is done (or died): free its core
+                proc, cpu = live.pop(conn)
+                proc.join(timeout=10)
+                free.append(cpu)
                 continue
             rows.append(r)
-            verdict = ("refused " + r["refused_predicate"] if r.get("refused")
-                       else "ok" if r["success"] else "fail")
-            print(f"  {suite} task {r['task']} ep {r['episode']}: {verdict} "
-                  f"steps {r['steps']} last {r['last_phase']}"
-                  + (f" drops {r['drop_count']}" if r.get("drop_count") else "")
-                  + (f" | {r['diag']}" if r["diag"] else ""), flush=True)
-    for p in procs:
-        p.join(timeout=10)
+            _print_row(suite, r)
     return rows
+
+
+def _print_row(suite: str, r: dict) -> None:
+    verdict = ("refused " + r["refused_predicate"] if r.get("refused")
+               else "ok" if r["success"] else "fail")
+    print(f"  {suite} task {r['task']} ep {r['episode']}: {verdict} "
+          f"steps {r['steps']} last {r['last_phase']}"
+          + (f" drops {r['drop_count']}" if r.get("drop_count") else "")
+          + (f" | {r['diag']}" if r["diag"] else ""), flush=True)
 
 
 def _print_failure(r: dict, verbose: bool) -> None:
