@@ -23,14 +23,15 @@ most current work is on the demonstrations it learns from.
 
 A geometry-driven demonstration policy (`screwhead/teacher/`) that reads a task's goal from its
 bddl and the scene's geometry from the simulator, and labels any state a student reaches (DAgger).
-Status at v16, 50 episodes per task at seed 555 (`runs/skill_v16`):
+Status at v18, 50 episodes per task at seed 555 (`runs/skill_v18`, `runs/skill_l10_v4`):
 
 | suite | at 600 steps | within LIBERO's step limit |
 |---|---|---|
-| libero_spatial (limit 220) | 499 / 500 | 477 / 500 |
+| libero_spatial (limit 220) | 498 / 500 | 478 / 500 |
 | libero_object (limit 280) | 500 / 500 | 496 / 500 |
 | libero_goal (limit 300) | 500 / 500 | 462 / 500 |
-| all | 1499 / 1500 | 1435 / 1500 |
+| the three | 1498 / 1500 | 1436 / 1500 |
+| libero_10 (limit 520; at 800 steps) | 349 / 500 | 323 / 500 |
 
 The goal is at least 95% on every task within LIBERO's limits. What works and what is missing,
 task by task and against LIBERO's own human demonstrations, is in
@@ -62,6 +63,14 @@ task by task and against LIBERO's own human demonstrations, is in
 Features by date, newest first. Numbers are measured at the stated commit.
 
 - **2026-09-24**
+  - libero_10 182 -> 349 of 500: a container the goal also closes is filled first and then closed
+    (a goal-less open step had the teacher reaching for an open drawer's handle); openness is read
+    from the joint; a place is done only once the object is let go, and a released object counts as
+    delivered only within 3 cm above its target; drop points are open over the whole footprint; the
+    grasp screen probes the arm where it lets go; sliding drawers are closed by pressing the bar, as
+    the humans do (BRN-push-closes-sliding-drawer). Tasks 0 and 7 0 -> 50, 3 0 -> 42.
+  - Human-demo survey over libero_10 and libero_90: 5000 demos, 4985 meeting their goal at the last
+    recorded state.
   - Rim pinches halfway between the palm's depth and the usual one, before the usual (libero_spatial 4
     48 -> 49; 1498 -> 1499 of 1500).
   - libero_goal 3 the humans' way: the drawer is opened first and the bowl picked beside it when it
