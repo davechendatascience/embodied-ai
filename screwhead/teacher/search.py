@@ -25,6 +25,11 @@ from ..sim.gripper_servo import target_to_channel
 
 LEVELS = (0.0, 0.026, 0.08)        # the student's snap levels (tools/distill.py)
 
+# What the servo's rate limiter can complete in one control period, in normalized twist units:
+# its bounds are 5 rad/s^2 and 2 m/s^2 over dt = 0.05 s (BRN-execution-bounds-acceleration), and
+# the normalization is robosuite's osc_pose, 10 rad/s and 1 m/s (BRN-screw-search (b)).
+RATE_ANG, RATE_LIN = 0.025, 0.1
+
 
 @dataclass
 class Settings:
@@ -38,6 +43,7 @@ class Settings:
     #                                terminal 0.056 (from 0.223) before failing on a release.
     iters: int = 2                 # distribution updates per control step
     spread: float = 0.35           # initial spread of the twist, in normalized twist coordinates
+    bound_segments: bool = True    # no segment asks for more change than its periods can absorb
     shrink: float = 0.6            # spread factor applied when an iteration does not improve the best key
     level_floor: float = 0.1       # least probability of every snap level in the start categorical
     kl: float = 2.0                # KL budget of one update against the start distribution
@@ -155,11 +161,35 @@ class Search:
             mean = mean - s.gradient_step * self._gradient()
         return np.clip(mean, -1, 1), probs / probs.sum(axis=1, keepdims=True)
 
+    def _bound(self, twist: np.ndarray) -> np.ndarray:
+        """Hold each segment's twist within reach of the one before it.
+
+        The servo moves the commanded twist toward a request by at most RATE_ANG and RATE_LIN per
+        period, so a segment of p periods can absorb p times that and no more. A plan that jumps
+        further is not executed as written -- the limiter is still ramping when the segment ends,
+        and the arm's response to the ramp is the lunge DEF-smooth-motion (b) measures. The first
+        segment is held against the twist the servo is actually commanding, not against zero.
+        """
+        if not self.s.bound_segments:
+            return twist
+        prev = np.asarray(self.env.servo.V_prev, float) / self.env.scale
+        out = []
+        for k, periods in enumerate(self.s.periods()):
+            d = twist[k] - prev
+            for sl, rate in ((slice(0, 3), RATE_ANG), (slice(3, 6), RATE_LIN)):
+                n, cap = float(np.linalg.norm(d[sl])), rate * periods
+                if n > cap:
+                    d[sl] *= cap / n
+            prev = np.clip(prev + d, -1, 1)
+            out.append(prev.copy())
+        return np.asarray(out)
+
     def _sample(self, rng, mean: np.ndarray, probs: np.ndarray, spread: float) -> list[Plan]:
         n = self.s.segments
-        out = [Plan(np.clip(mean, -1, 1), np.array([int(np.argmax(p)) for p in probs]))]   # the mean plan
+        out = [Plan(self._bound(np.clip(mean, -1, 1)),                                     # the mean plan
+                    np.array([int(np.argmax(p)) for p in probs]))]
         for _ in range(self.s.samples - 1):
-            twist = np.clip(mean + spread * rng.standard_normal((n, 6)), -1, 1)
+            twist = self._bound(np.clip(mean + spread * rng.standard_normal((n, 6)), -1, 1))
             level = np.array([rng.choice(len(LEVELS), p=p) for p in probs])
             out.append(Plan(twist, level))
         return out

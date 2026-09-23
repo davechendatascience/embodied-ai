@@ -111,7 +111,8 @@ def episode(env, settings: Settings, policy, features, init: int | None) -> dict
 
 
 def collect(args) -> int:
-    settings = Settings(samples=args.samples, horizon=args.horizon, segments=args.segments)
+    settings = Settings(samples=args.samples, horizon=args.horizon, segments=args.segments,
+                        bound_segments=args.bound)
     env = TaskEnv(args.suite, args.task, seed=args.seed, render=False,
                   start=STUDENT_NOISE if args.start_noise else StartNoise(),
                   execution=Execution(lean=True, anchor=True, scale_lead=True))
@@ -267,6 +268,9 @@ def main() -> int:
     c.add_argument("--horizon", type=int, default=Settings.horizon)
     c.add_argument("--segments", type=int, default=Settings.segments)
     c.add_argument("--start-noise", action="store_true", default=True)
+    c.add_argument("--bound", action="store_true", default=True,
+                   help="hold each segment's twist within what its periods can absorb")
+    c.add_argument("--no-bound", dest="bound", action="store_false")
     c.add_argument("--no-start-noise", dest="start_noise", action="store_false")
     c.add_argument("--policy", default="", help="checkpoint the search starts from")
     c.add_argument("--out", required=True)

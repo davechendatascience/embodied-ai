@@ -1,0 +1,4 @@
+env HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl taskset -c 5-9,15-19 .venv-libero/bin/python tools/task_loss_check.py --episodes 20 --trials /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0140/result.json
+exit=0
+test=TST-task-loss-agreement@3f889aec
+at=2026-09-23T04:44:04+00:00
