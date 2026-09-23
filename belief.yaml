@@ -407,7 +407,6 @@ components:
       with the reason, or an entry with its reason in the checker's IGNORE list
     code:
       - scripts/smell_check.sh
-      - tools/stamp_files.py                # what ran, what was generated, what still refers to it
       - ruff.toml               # the standard itself is docs/code_smell_guide.md
       - screwhead/__init__.py
       - screwhead/**/__init__.py            # the package layout itself
@@ -1481,6 +1480,10 @@ tests:
     cost: 40.0
 
 priors: []
+
+# Generated, untracked output: the artifacts view stamps what lives under these, so a cache or a
+# checkpoint is dated and sized rather than remembered.
+artifacts: [cache, checkpoints, runs, videos]
 
 policies:
   # Gate 1a. Do not put the decoder in a training graph until it is bounded and
