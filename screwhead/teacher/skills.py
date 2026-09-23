@@ -721,10 +721,13 @@ class Skills:
         return c, u / np.linalg.norm(u), bar, float(c[2] + (np.abs(Rg) @ hl)[2])
 
     def _hookable(self, a: dict) -> bool:
-        """Nothing of the scene over the bar, the robot aside: the top drawer's bar is open from
-        above; the middle drawer's has the top drawer's bar over it."""
+        """Nothing of the scene over the bar where it sits closed, the robot aside: the top drawer's
+        bar is open from above; the middle drawer's has the top drawer's bar over it. Read where the
+        bar is now, the middle drawer's came out from under the top one partway through the pinch
+        drive, the mode flipped to the hook mid-drive, and libero_goal 0 took 99 steps for 74."""
         c, _u, _bar, top = self._hook_frame(a)
-        return self.reach.column_clear(c, self.k.hook_corridor, top, {a["body"]})
+        closed = c - a["axis"] * float(a["qpos"])                 # a slide's bar at q = 0
+        return self.reach.column_clear(closed, self.k.hook_corridor, top, {a["body"]})
 
     def _hook(self, a: dict, s: dict) -> np.ndarray:
         """Open a sliding drawer as LIBERO's human demos of libero_goal 3 all do: jaws wide open,
