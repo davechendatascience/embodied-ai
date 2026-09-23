@@ -15,6 +15,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..geometry.frames import EPS_DIR, EPS_NORM, Z, tool_frame, top_down
+from ..sim import contacts
 from ..sim.scan import GripperScan, support_below
 from ..sim.scene import VERTICAL_COS, geom_world_box
 
@@ -192,6 +193,22 @@ class GraspPlanner:
         gid = np.zeros(1, np.int32)
         dist = float(mujoco.mj_ray(mm, dd, start_base + self.scene.base, direction, None, 1, exclude, gid))
         return int(gid[0]), dist
+
+    def ray_scene(self, start_base: np.ndarray, direction: np.ndarray, exclude: int = -1,
+                  max_skips: int = 8) -> tuple[int, float]:
+        """_ray through the robot's own geoms: a test of the scene must not see the arm over it."""
+        m = self.scene.m
+        v = np.asarray(direction, float)
+        p, travelled = np.asarray(start_base, float).copy(), 0.0
+        for _ in range(max_skips):
+            g, dist = self._ray(p, v, exclude)
+            if g < 0 or dist < 0:
+                return -1, -1.0
+            if not contacts.is_robot(contacts.body_name(m, int(m.geom_bodyid[g]))):
+                return g, travelled + dist
+            step = dist + 1e-4
+            p, travelled = p + v * step, travelled + step
+        return -1, -1.0
 
     def clear_geom(self, p: np.ndarray, app: np.ndarray, geom: int) -> bool:
         """Can the tool come in along `app` and reach this geom?

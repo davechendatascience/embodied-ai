@@ -1753,6 +1753,73 @@ branches:
       answered in this statement. evidence: CTR-teacher-reliable.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-push-closes-sliding-drawer
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      To close a sliding drawer the skill commands the jaws shut at every step and never commands the
+      handle-pinch drive (a squeeze on the bar followed by carrying it along the joint). At every
+      control step it reads the bar's pose and the joint's closing direction in plan (u, re-derived
+      from the joint axis and the bar at that step), and defines the push point as a declared lead in
+      front of the bar's centre along u at the bar's height, and the press line as the line through the
+      push point along the closing direction. When the tool is within a declared corridor of the press
+      line, within a declared height band of the push point, and within a declared range of it along
+      the line, the skill commands motion toward the point on the press line a declared distance beyond
+      the push point in the closing direction, with the fingers pitched a declared angle from straight
+      down toward the closing direction and the jaw axis along the bar; otherwise it commands the
+      approach toward the push point. The rule ends when LIBERO's close threshold for the joint holds.
+      Claimed: at every control step inside those bounds the commanded target lies on the press line,
+      beyond the push point in the closing direction. Not claimed: that the drawer reaches its
+      threshold (contacts, the arm's reach and anything inside the drawer can stop it); that the
+      approach is free of contact; that nothing lies between the fingers when they are commanded shut
+      (a start with the bar between open fingers would grip it); or any condition on how the skill
+      leaves the drawer.
+    premises: [AXM-handle-shares-body, AXM-one-gripper, AXM-libero-joint-bands, DEF-skill-contract]
+    derivation_rule: >-
+      AXM-handle-shares-body makes a press on the bar a press on the drawer; AXM-libero-joint-bands
+      gives the close threshold that ends the rule; AXM-one-gripper is why the hand is empty when a
+      drawer is closed after it is filled. The press target is the push point moved along the closing
+      direction, so it lies on the press line by construction. Measured: LIBERO's humans close
+      libero_10 3's bottom drawer with no grasp in 50 of 50 demos; the teacher's side pinch of its bar
+      stalled against the cabinet (0 of 50); pressing with the fingers straight down, the forearm met
+      the cabinet's top 4 cm short of closed; level, the push pose was out of reach in 44 of 50;
+      pitched 45 degrees, 40 of 50 succeed, all within LIBERO's 520 steps (runs/probe_l10_t3). A first
+      statement ('grasps nothing') was refuted: the jaws are commanded shut whatever lies between them.
+      evidence: CTR-teacher-reliable.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-place-done-when-released
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      At every control step the planner re-evaluates, from that step's state and without latching,
+      whether each place step is done: it is done only when LIBERO's predicate for its goal holds and
+      its object is not held (DEF-holding); the pick before it is skipped on the same condition. A
+      released object that is not held counts as delivered at a step, and is left where it is rather
+      than taken back, only when at that step its origin is within a declared plan distance of the drop
+      point and within declared heights below and above the target height; the release the place skill
+      commands on that ground uses the same step's state. The planner selects, at every control step,
+      the first plan step in order that is neither done nor (for a place step) delivered, so a later plan
+      step is selected only when every earlier place step is, from that step's state, done or delivered,
+      both of which require its object not held. Claimed, for plans in which no later step grasps an
+      object that an earlier place step delivered: no control step selects a later plan step while an
+      earlier place step's object is held with its goal satisfied; and no control step commands a
+      release on the ground that the object is delivered while its origin is more than the declared
+      height above its target. Not claimed: that LIBERO's predicate still holds after the release; that
+      holding is judged without error; anything of plans that re-pick a delivered object; releases
+      commanded on other grounds; or that a delivered object stays delivered.
+    premises: [AXM-libero-scores-final-state, DEF-holding, DEF-skill-contract]
+    derivation_rule: >-
+      AXM-libero-scores-final-state makes a predicate that holds while the object is still in the jaws
+      no achievement: what counts is the state left behind. Measured failures of the looser rules: LIBERO's
+      In held for a soup can still in the jaws over libero_10's basket, the next pick lifted it back out,
+      and the teacher lowered and lifted it for 700 steps (tasks 0 and 7, 0 of 100; 100 of 100 with the
+      rule); with no upper bound on 'delivered', a bowl 8 cm over libero_10 3's drawer counted as
+      delivered on a holding flicker and was let go there. Earlier statements were doubted for not
+      saying that one step's state serves both the check and the release, for leaving 'done' unlatched
+      implicitly, and for not stating the selection rule. evidence: CTR-teacher-reliable.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
   - id: BRN-regression-planner
     subject: CMP-skill-library
     claim_type: contract

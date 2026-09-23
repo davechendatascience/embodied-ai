@@ -86,15 +86,14 @@ def plan_for(goals: list[tuple], objects: dict[str, str] | None = None) -> list[
     suite we cannot yet do is a loud failure rather than a silently empty plan. `objects`
     (instance -> category) lets the affordance table say how each object is moved."""
     opens, places, closes, switches = [], [], [], []
-    close_targets = {g[1] for g in goals if g[0] == "close"}
     for g in goals:
         pred = g[0].lower()
         if pred in PICK_PLACE:
             obj, region = g[1], g[2]
-            # putting something into a container that the same goal asks to close: it has
-            # to be open first, and LIBERO's drawers start closed
-            if region in close_targets:
-                opens.append(Step("articulate", region=region, mode="open"))
+            # a container the object goes into is opened by the pick's precondition when it is
+            # shut (SkillTeacher.current_step). An open step added here had no goal, so it was
+            # never done: with libero_10's bottom drawer already open, the teacher reached for its
+            # handle for 600 steps and never picked the bowl (0 of 20)
             if pred == "on" and moved_by((objects or {}).get(obj)) == "push":
                 places.append(Step("push", obj=obj, region=region, goal=tuple(g)))
                 continue

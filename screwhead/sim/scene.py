@@ -149,11 +149,15 @@ class Scene:
         qadr = int(self.m.jnt_qposadr[jid])
         handle, handle_geom = self._handle(body, axis_local, spec["sign"])
         anchor = self.d.body_xpos[body] + R @ np.asarray(self.m.jnt_pos[jid], float) - self.base
+        lo, hi = (float(v) for v in self.m.jnt_range[jid])
+        stop = lo if spec["sign"] < 0 else hi              # the joint's end in the opening direction
+        open_room = ((stop - float(spec["open"])) * spec["sign"]
+                     if "open" in spec and self.m.jnt_limited[jid] else np.inf)   # a knob has on/off, no open
         return dict(joint=joint, qposadr=qadr, qpos=float(self.d.qpos[qadr]), axis=axis,
                     sign=spec["sign"], thresholds=spec, category=cat, body=body,
                     handle=handle, handle_world=self.d.body_xpos[body] + R @ handle - self.base,
                     handle_geom=handle_geom, anchor=anchor, jnt_type=int(self.m.jnt_type[jid]),
-                    R=R.copy())
+                    R=R.copy(), open_room=open_room)
 
     def _handle(self, body: int, axis_local: np.ndarray, sign: int) -> tuple[np.ndarray, int]:
         """Grasp point on the moving part: the collision geom furthest along the opening

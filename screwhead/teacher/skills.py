@@ -89,9 +89,15 @@ class SkillConfig:
     place_clearance: float = 0.015 # object bottom above the target surface before release
     at_place_xy: float = 0.04      # a released object this close to its target is left there
     at_place_dz: float = 0.03
+    at_place_above: float = 0.03   # ... and no higher than this above it: with no bound, a bowl 8 cm
+    #                                over libero_10 3's drawer counted as delivered the moment a
+    #                                contact made `held` flicker, and was let go there
     drop_grid: int = 5             # drop points tried across a region, per axis
     drop_ray_height: float = 0.30  # rays cast down from this far above the region top
     drop_clear: float = 0.01       # a hit above the region top by more than this blocks the spot
+    drop_margin: float = 0.02      # m around the object's footprint that must be open from above too: at
+    #                                0.01 a bowl carried 10 deg tilted and drifting 5-11 mm reached the face
+    #                                of the drawer above libero_10 3's
     retreat_dz: float = 0.10
     # push (BRN-push-cages-a-dish), each measured on LIBERO's 50 human demos of libero_goal 5
     push_open: float = 0.062        # m the jaws stay open: 62 mm median, never commanded closed
@@ -122,6 +128,14 @@ class SkillConfig:
     hook_corridor: float = 0.015    # m off the hook point, across the pull, before re-entering
     hook_band: float = 0.004        # m of the hook height the tool must be at before it drags: at
     #                                 17 mm off it the finger swept over the bar
+    # closing a drawer by pushing its bar (libero_10 3: LIBERO's humans close the bottom drawer with
+    # no grasp in 50 of 50 demos; the side pinch the teacher reached for stalled against the cabinet)
+    push_close_lead: float = 0.03   # m the tool stands in front of the bar's centre, on the opening side
+    push_close_ahead: float = 0.05  # m the press's aim runs ahead of the push point (speed-limited)
+    push_close_corridor: float = 0.02   # m off the press line before re-approaching
+    push_close_pitch: float = 0.785     # rad the fingers point from straight down toward the push: down
+    #                                     (0), the forearm met the cabinet top 4 cm short of closed; level
+    #                                     (pi/2), the push pose was out of reach in 44 of 50
     drive_lead_rot: float = 0.06   # rad a hinge drive may lead the handle (< at_rot): leading by the
     #                                whole remaining turn spun the tool at w_max while the knob, damped,
     #                                followed at a fifth of that -- the jaws were pried open and let go
@@ -189,9 +203,11 @@ class Skills:
                           self._drop_cache, self._carry_cache, self._spots, self._clearing):
                 cache.clear()
 
-    def grasp_for(self, obj: str, via: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray, float]:
+    def grasp_for(self, obj: str, via: np.ndarray | None = None,
+                  place: tuple[str, bool] | None = None) -> tuple[np.ndarray, np.ndarray, float]:
         """The grasp for an object: shape proposes (grasp_planner), reachability disposes
-        (reach), re-chosen when the object has moved."""
+        (reach), re-chosen when the object has moved. `place` (region, inside): the arm is also
+        screened where it will let go -- the drop point plus the grasp's offset in the hand."""
         self.new_episode_check()
         box = self.scene.object_box(obj)
         centre = box.world_centre
@@ -200,9 +216,10 @@ class Skills:
             return cached[0], cached[1], cached[2]
         bid = self.scene.body_id(obj)
         tiers = self.planner.tiers(obj, box)
+        extra = self._release_probe(obj, *place) if place is not None else None
         chosen, used = None, ""
         for name, tier in tiers:
-            chosen = self.reach.choose(tier, via, allow=bid)
+            chosen = self.reach.choose(tier, via, allow=bid, extra=extra)
             if chosen is not None:
                 used = name
                 break
@@ -215,7 +232,7 @@ class Skills:
                 raise Refusal("graspable", obj,
                               f"0 of {sum(len(t) for _, t in tiers)} candidates over "
                               f"{len(tiers)} tiers passed the reach screen")
-            chosen = self.reach.choose(sum((t for _, t in tiers), []), via, allow=bid, force=True)
+            chosen = self.reach.choose(sum((t for _, t in tiers), []), via, allow=bid, extra=extra, force=True)
             used = "forced"
         R_grasp, p_grasp, width, app = chosen
         h = self.reach.reachable_transit(R_grasp, p_grasp - app * self.k.approach, bid)
@@ -386,11 +403,12 @@ class Skills:
         return np.array([p_reg[0], p_reg[1], p_reg[2] + float(half[2]) + self.k.lift])
 
     # -- pick ------------------------------------------------------------------------------------
-    def pick(self, obj: str, s: dict, via: np.ndarray | None = None) -> np.ndarray:
+    def pick(self, obj: str, s: dict, via: np.ndarray | None = None,
+             place: tuple[str, bool] | None = None) -> np.ndarray:
         """Up, over and down to the pre-grasp, advance along the approach, squeeze, lift."""
         k = self.k
         R, p = s["R_tool"], s["p_tool"]
-        R_g, p_g, width = self.grasp_for(obj, via)
+        R_g, p_g, width = self.grasp_for(obj, via, place)
         app = self.approach_for(obj)
         open_to = min(k.max_grip, width + k.grip_margin)
         if self.held(obj):
@@ -526,7 +544,7 @@ class Skills:
                 self.phase = "settle"
                 return self.retreat(s)
             self.phase = "regrasp"
-            return self.pick(obj, s, via=self.via_for(region))
+            return self.pick(obj, s, via=self.via_for(region), place=(region, inside))
         delta = target_q - q
         over = float(np.linalg.norm(delta[:2]))
         carry_z = self._carry_height(obj, region, q, target_q, R, p)
@@ -546,7 +564,9 @@ class Skills:
             return self.action(self.twist_to(R, p, R, goal, v_max=k.carry_speed), 0.0)
         if delta[2] < -k.lower_done:
             self.phase = "lower"
-            return self.action(self.twist_to(R, p, R, p + Z * delta[2], v_max=k.lower_speed,
+            # on to the drop point, not only down: lowered straight, the bowl drifted 13 mm toward
+            # the cabinet on its way into libero_10 3's drawer
+            return self.action(self.twist_to(R, p, R, p + delta, v_max=k.lower_speed,
                                              v_min=k.lower_speed_min), 0.0)
         self.phase = "release"
         return self.action(np.zeros(6), A_OPEN)
@@ -573,6 +593,26 @@ class Skills:
                         and self.reach.band_clear(c[:2], xy, radius, bottom, top, mine)):
                     return q[:2] + (xy - c[:2])
         return None
+
+    def _release_probe(self, obj: str, region: str, inside: bool):
+        """For a grasp candidate, the tool pose where it will let go: the drop point, computed now
+        and not cached (the container may still be shut), plus the candidate's offset in the hand.
+        Screened like the via: libero_10 3's bowl went into the bottom drawer with the hand's long
+        axis toward the cabinet, the hand met the middle drawer's front, the lower stopped short,
+        and the bowl dropped in tilted and jammed the drawer's close (0 of 50)."""
+        R_reg, p_reg, half = self.region_pose(region)
+        box = self.scene.object_box(obj)
+        q = self.scene.body_pose(obj)[1]
+        half_h = float(np.abs(box.R @ np.diag(box.half)).sum(1)[2])
+        centre_off = float((box.world_centre - q)[2])
+        xy, _d = self._open_point(obj, R_reg, p_reg, half, box)
+        if inside:
+            target = np.array([xy[0], xy[1], p_reg[2] + max(0.0, float(half[2]) - half_h) + self.k.place_clearance])
+        else:
+            target = p_reg + R_reg @ np.array([0.0, 0.0, float(half[2])])
+            target[:2] = xy
+            target[2] += half_h - centre_off + self.k.place_clearance
+        return lambda cand: [pose(cand[0], target + (cand[1] - q))]
 
     def place_target(self, obj: str, region: str, inside: bool,
                      decide: bool = True) -> tuple[np.ndarray, np.ndarray] | None:
@@ -607,25 +647,46 @@ class Skills:
         key = (obj, region)
         if key in self._drop_cache:
             return self._drop_cache[key]
+        best, _best_d = self._open_point(obj, R_reg, p_reg, half, box)
+        self._drop_cache[key] = best
+        return best
+
+    def admits(self, obj: str, region: str) -> bool:
+        """admits(C, o) (DEF-skill-contract): some point of the region, the object's footprint
+        inside it, is open from above -- read from the state now, never cached."""
+        R_reg, p_reg, half = self.region_pose(region)
+        return bool(np.isfinite(self._open_point(obj, R_reg, p_reg, half, self.scene.object_box(obj))[1]))
+
+    def _open_point(self, obj: str, R_reg, p_reg, half, box) -> tuple[np.ndarray, float]:
+        """(the point of the region nearest its centre open from above, its distance from the
+        centre; inf when none is)."""
         k = self.k
         top = float(p_reg[2] + abs(float(half[2])))
         ohw = np.abs(box.R @ np.diag(box.half)).sum(1)[:2]      # object half-footprint
         span = np.maximum(np.abs(np.asarray(half[:2], float)) - ohw, 0.0)
         best, best_d = np.asarray(p_reg[:2], float), np.inf
         exclude = self.scene.body_id(obj)
-        down = np.array([0.0, 0.0, -1.0])
+        # the whole footprint, with a margin, not only its centre: centred where the bottom drawer's
+        # region runs under the cabinet, the bowl's rim came down 4 mm from the cabinet's face, caught
+        # its top, and was let go 9 cm up (libero_10 3)
+        foot = [np.array([sx * (ohw[0] + k.drop_margin), sy * (ohw[1] + k.drop_margin), 0.0])
+                for sx in (-1.0, 0.0, 1.0) for sy in (-1.0, 0.0, 1.0)]
         for fx in np.linspace(-1, 1, k.drop_grid):
             for fy in np.linspace(-1, 1, k.drop_grid):
                 local = np.array([fx * span[0], fy * span[1], 0.0])
-                pt = p_reg + R_reg @ local
-                start = np.array([pt[0], pt[1], top + k.drop_ray_height])
-                _hit, dist = self.planner._ray(start, down, exclude)
-                hit_z = start[2] - dist if dist >= 0 else -np.inf
                 dc = float(np.linalg.norm(local[:2]))
-                if hit_z <= top + k.drop_clear and dc < best_d:
+                if dc >= best_d:
+                    continue
+                pt = p_reg + R_reg @ local
+                if all(self._open_above(pt + off, top, exclude) for off in foot):
                     best, best_d = pt[:2].copy(), dc
-        self._drop_cache[key] = best
-        return best
+        return best, best_d
+
+    def _open_above(self, pt: np.ndarray, top: float, exclude: int) -> bool:
+        """A ray down from above the region's top meets nothing higher than it (the robot aside)."""
+        start = np.array([pt[0], pt[1], top + self.k.drop_ray_height])
+        _hit, dist = self.planner.ray_scene(start, np.array([0.0, 0.0, -1.0]), exclude)
+        return (start[2] - dist if dist >= 0 else -np.inf) <= top + self.k.drop_clear
 
     def _carry_height(self, obj: str, region: str, q, target_q, R, p) -> float:
         """Per grasp, not per object: a regrasp holds the object differently, and a height
@@ -645,7 +706,7 @@ class Skills:
         not scored yet, and the teacher takes the object back.
         """
         d = target_q - q
-        return bool(np.linalg.norm(d[:2]) < self.k.at_place_xy and d[2] < self.k.at_place_dz)
+        return bool(np.linalg.norm(d[:2]) < self.k.at_place_xy and -self.k.at_place_above < d[2] < self.k.at_place_dz)
 
     def retreat(self, s: dict) -> np.ndarray:
         self.phase = "retreat"
@@ -667,6 +728,8 @@ class Skills:
         a = self.scene.articulation(region)
         if mode == "open" and a["jnt_type"] == 2 and self._hookable(a):
             return self._hook(a, s)
+        if mode == "close" and a["jnt_type"] == 2:
+            return self._push_close(a, s)
         R_h, w, app = self._handle_frame(region, a, mode)
         p_h = self.scene.d.geom_xpos[a["handle_geom"]] - self.scene.base
         if self.holding(a["handle_geom"], w):
@@ -823,6 +886,40 @@ class Skills:
             return self.action(self.twist_to(R, p, R_t, target), A_OPEN)
         self.phase = "hook"
         return self.action(self.twist_to(R, p, R_hook, hook), A_OPEN)
+
+    def _push_close(self, a: dict, s: dict) -> np.ndarray:
+        """Close a sliding drawer by pressing its bar along the closing direction: jaws shut, the
+        fingers pitched from straight down toward the push (push_close_pitch), the jaw axis along the bar so
+        both fingers bear on it, the tool point at the bar's height and push_close_lead in front of
+        it; re-aimed from the bar's pose every step. Pointing down instead, the forearm came down on
+        the cabinet's top edge 4 cm short of closed (libero_10 3). Nothing is grasped; the next
+        skill's first move is up."""
+        k = self.k
+        R, p = s["R_tool"], s["p_tool"]
+        c, u, bar, top = self._hook_frame(a)                  # u: the opening direction in plan
+
+        def fist(jaw):
+            z = -u * np.sin(k.push_close_pitch) - Z * np.cos(k.push_close_pitch)
+            y = jaw - z * float(jaw @ z)
+            y = y / np.linalg.norm(y)
+            return np.column_stack([np.cross(y, z), y, z])
+        R_push = min((fist(bar), fist(-bar)), key=lambda Rc: rot_angle(R.T @ Rc))
+        push = c + u * k.push_close_lead
+        off = p - push
+        along = float(off @ u)                               # > 0: still in front of the push point
+        lateral = float(np.linalg.norm((off - u * along)[:2]))
+        level = abs(float(off[2])) < k.hook_band
+        if level and lateral < k.push_close_corridor and -k.push_close_ahead < along < k.push_close_corridor \
+                and rot_angle(R.T @ R_push) < k.at_rot:
+            self.phase = "press"
+            return self.action(self.twist_to(R, p, R_push, push - u * k.push_close_ahead, v_max=k.drive_speed,
+                                             v_min=k.drive_speed_min), 0.0)
+        leg = self.path_to(R, p, R_push, push, top + k.lift_dz)
+        if leg is not None:
+            self.phase, R_t, target = leg
+            return self.action(self.twist_to(R, p, R_t, target), 0.0)
+        self.phase = "front"
+        return self.action(self.twist_to(R, p, R_push, push), 0.0)
 
     def _drive(self, a: dict, mode: str, R, p, R_h, p_h) -> np.ndarray:
         """Carry the held handle along the joint's own motion toward just past its goal, a

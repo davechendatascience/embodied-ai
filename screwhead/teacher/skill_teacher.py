@@ -14,6 +14,8 @@ from .skills import Skills, SkillConfig
 from .task_spec import Step
 from .refusal import Refusal
 
+HANDLE_AWAY = 0.10        # m: the tool this far from a container's handle is not working it
+
 
 class SkillTeacher:
     def __init__(self, env, config: SkillConfig | None = None):
@@ -42,6 +44,12 @@ class SkillTeacher:
         for i, step in enumerate(self.plan):
             if step.skill == "pick":
                 nxt = self.plan[i + 1] if i + 1 < len(self.plan) else None
+                goal = self._goal_for(nxt) if nxt is not None else None
+                # delivered and let go: its container is no longer a precondition. Asked first, a
+                # closing drawer read as shut and the done pick had it opened again, against the
+                # close step, for 500 steps (libero_10 3)
+                if goal is not None and self.satisfied(goal) and not self.skills.held(step.obj):
+                    continue
                 closed = self._closed_container(nxt)
                 if closed is not None:
                     # an object the open container would crowd is moved out of its way
@@ -53,9 +61,6 @@ class SkillTeacher:
                 if closed is not None and not self.skills.held(step.obj):
                     return i, Step("articulate", region=closed, mode="open",
                                    goal=("open", closed))
-                goal = self._goal_for(nxt) if nxt is not None else None
-                if goal is not None and self.satisfied(goal):
-                    continue
                 if nxt is not None and nxt.skill in ("place_in", "place_on"):
                     q, target = self.skills.place_target(nxt.obj, nxt.region,
                                                          nxt.skill == "place_in")
@@ -65,7 +70,11 @@ class SkillTeacher:
                     return i, step
                 continue
             goal = self._goal_for(step)
-            if goal is None or not self.satisfied(goal):
+            # a place is done when its goal holds with the object let go: LIBERO's In held for a can
+            # still in the jaws over libero_10's basket, the next pick lifted it back out, and the
+            # teacher lowered and lifted it for 700 steps (tasks 0 and 7, 0 of 100)
+            if (goal is None or not self.satisfied(goal)
+                    or (step.skill in ("place_in", "place_on") and self.skills.held(step.obj))):
                 return i, step
         return len(self.plan), None
 
@@ -88,8 +97,19 @@ class SkillTeacher:
         # open with room to spare: released the moment LIBERO's threshold was crossed, the
         # drawer sat 4.7 mm past it, the arm brushed the cabinet on its way out, and the
         # precondition flickered between "open" and "shut" every few steps
+        # from the joint and LIBERO's own threshold for it (scene.ARTICULATION): asked of a region,
+        # LIBERO's Open predicate read the microwave's heating region as shut with its door wide
+        # open, and the teacher drove the open door for 600 steps (libero_10 9, 0 of 20)
+        # Open by LIBERO's threshold and admitting the object is enough while the tool is away from
+        # the container's handle: libero_10's bottom drawer starts 3-10 mm past the threshold,
+        # LIBERO's humans put the bowl in as it is (50 of 50), and asked for the 12 mm margin the
+        # teacher reached for its handle for 800 steps. At the handle -- mid-drag -- the margin
+        # stands: stopping the hook at the threshold left libero_goal 3's drawer too little open
+        # for the pick's descent (2 of 50)
         past = (art["qpos"] - art["thresholds"]["open"]) * art["sign"]
-        wide = self.satisfied(("open", step.region)) and past >= self.skills.k.open_margin
+        away = float(np.linalg.norm(self.env.snapshot()["p_tool"] - art["handle_world"])) > HANDLE_AWAY
+        wide = (past >= min(self.skills.k.open_margin, art["open_room"] - 1e-3)
+                or (past >= 0 and away and self.skills.admits(step.obj, step.region)))
         return None if wide else step.region
 
     def _goal_for(self, step):
@@ -114,11 +134,12 @@ class SkillTeacher:
             return self.skills.retreat(s)
         if step.skill == "pick":
             nxt = self.plan[i + 1] if i + 1 < len(self.plan) else None
-            via = (self.skills.via_for(nxt.region)                 # the grasp must also reach
-                   if nxt is not None and nxt.skill in ("place_in", "place_on") else None)
+            placing = nxt is not None and nxt.skill in ("place_in", "place_on")
+            via = self.skills.via_for(nxt.region) if placing else None   # the grasp must also reach
+            place = (nxt.region, nxt.skill == "place_in") if placing else None
             a = self.skills.leave_handle(s)
             if a is None:
-                a = self.skills.pick(step.obj, s, via=via)
+                a = self.skills.pick(step.obj, s, via=via, place=place)
         elif step.skill in ("place_in", "place_on"):
             a = self.skills.place(step.obj, step.region, s, inside=step.skill == "place_in")
         elif step.skill == "push":

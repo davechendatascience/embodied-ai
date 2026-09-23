@@ -30,3 +30,14 @@ def test_an_undeclared_or_missing_category_is_picked():
 def test_in_goals_are_never_pushed():
     plan = plan_for([("in", "plate_1", "basket_1_contain_region")], {"plate_1": "plate"})
     assert [s.skill for s in plan] == ["pick", "place_in"]
+
+
+def test_fill_then_close_has_no_goalless_open_step():
+    """libero_10 3: In(bowl, drawer) and Close(drawer), the drawer already open. A goal-less open step
+    was never done, and the teacher reached for the open drawer's handle for 600 steps."""
+    plan = plan_for([("in", "akita_black_bowl_1", "white_cabinet_1_bottom_region"),
+                     ("close", "white_cabinet_1_bottom_region")],
+                    {"akita_black_bowl_1": "akita_black_bowl"})
+    assert [s.skill for s in plan] == ["pick", "place_in", "articulate"]
+    assert plan[-1].mode == "close" and plan[-1].goal == ("close", "white_cabinet_1_bottom_region")
+    assert all(s.goal is not None for s in plan if s.skill == "articulate")
