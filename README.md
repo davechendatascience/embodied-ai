@@ -23,7 +23,8 @@ most current work is on the demonstrations it learns from.
 
 A geometry-driven demonstration policy (`screwhead/teacher/`) that reads a task's goal from its
 bddl and the scene's geometry from the simulator, and labels any state a student reaches (DAgger).
-Status at v18, 50 episodes per task at seed 555 (`runs/skill_v18`, `runs/skill_l10_v4`):
+Status at v18, 50 episodes per task at seed 555 unless stated (`runs/skill_v18`, `runs/skill_l10_v4`,
+`runs/skill_l90_v1`):
 
 | suite | at 600 steps | within LIBERO's step limit |
 |---|---|---|
@@ -32,6 +33,7 @@ Status at v18, 50 episodes per task at seed 555 (`runs/skill_v18`, `runs/skill_l
 | libero_goal (limit 300) | 500 / 500 | 462 / 500 |
 | the three | 1498 / 1500 | 1436 / 1500 |
 | libero_10 (limit 520; at 800 steps) | 349 / 500 | 323 / 500 |
+| libero_90 (limit 400; 20 per task) | 1346 / 1800 | 1341 / 1800 |
 
 The goal is at least 95% on every task within LIBERO's limits. What works and what is missing,
 task by task and against LIBERO's own human demonstrations, is in
@@ -69,6 +71,8 @@ Features by date, newest first. Numbers are measured at the stated commit.
     delivered only within 3 cm above its target; drop points are open over the whole footprint; the
     grasp screen probes the arm where it lets go; sliding drawers are closed by pressing the bar, as
     the humans do (BRN-push-closes-sliding-drawer). Tasks 0 and 7 0 -> 50, 3 0 -> 42.
+  - First libero_90 baseline: 1346 of 1800 (20 per task); 61 of 90 tasks at 20 of 20, 19 at 0-4.
+  - skill_eval runs a rolling pool instead of waves (a libero_90 sweep had kept 3 of 10 cores busy).
   - Human-demo survey over libero_10 and libero_90: 5000 demos, 4985 meeting their goal at the last
     recorded state.
   - Rim pinches halfway between the palm's depth and the usual one, before the usual (libero_spatial 4
