@@ -25,6 +25,11 @@ MIN_MARGIN = 0.15         # rad from every joint limit
 SIGMA_WEIGHT = 8.0        # sigma is scaled to compete with joint margin in a grasp's score
 CONDITION_BARS = (0.35, 0.20, 0.05)   # take the first candidate clearing the highest bar
 COLUMN_PROBES = (0.05, 0.10)          # heights above the pre-grasp checked on the way down
+APPROACH_PROBE_STEP = 0.02            # m between probes on the approach from the pre-grasp to the
+#                                       grasp. Probed only at its ends, a descent 100 mm long passed
+#                                       the screen while the hand's side wings, which span only 30-70
+#                                       mm above the tool point, went 3.7 mm into a wine-rack bar
+#                                       40-60 mm above the grasp (libero_goal 1 and 3)
 TRANSIT_STEP = 0.05       # crossing heights tried, top down
 CARRY_STEP = 0.03
 LINE_STEP = 0.01          # m between the points of a line tested against the geoms' boxes
@@ -109,10 +114,11 @@ class Reach:
         for i, (R, p_g, _w, app) in enumerate(cands):
             pre = p_g - app * self.k.approach
             column = [pre + Z * h for h in COLUMN_PROBES]
+            along = np.arange(APPROACH_PROBE_STEP, self.k.approach - 1e-9, APPROACH_PROBE_STEP)
             names = ["grasp", "pre"] + [f"column{h:g}" for h in COLUMN_PROBES] + \
-                    (["via"] if via is not None else [])
-            for pt, nm in zip([p_g, pre, *column] + ([via] if via is not None else []), names,
-                              strict=True):
+                    [f"approach{a:g}" for a in along] + (["via"] if via is not None else [])
+            for pt, nm in zip([p_g, pre, *column] + [p_g - app * a for a in along]
+                              + ([via] if via is not None else []), names, strict=True):
                 Ts.append(pose(R, pt))
                 meta.append(i)
                 kind.append(nm)
