@@ -20,7 +20,10 @@ import numpy as np
 from .scene import geom_box
 
 CORNERS = np.array(list(itertools.product((-1.0, 1.0), repeat=3)))
-PROBE = 0.001            # m below an object's bottom the support ray starts
+PROBE = 0.005            # m above an object's bottom the support ray starts. It started 1 mm
+#                          below: a resting object's bottom is flush with its support, the ray
+#                          began inside the table's box and met its underside 49 mm down, and the
+#                          grasp floor never held (the cream cheese's fingertips 4.3 mm into the table)
 
 
 def geom_points(m, d, g: int) -> np.ndarray:
@@ -63,10 +66,10 @@ class GripperScan:
 
 def support_below(scene, ray, obj: str) -> float:
     """Height of the surface under an object's centre (the first thing a downward ray from
-    just under its bottom meets, the object itself excluded)."""
+    just above its bottom meets, the object itself excluded)."""
     box = scene.object_box(obj)
     ext = np.abs(box.R) @ box.half
     c = box.world_centre
-    start = np.array([c[0], c[1], c[2] - ext[2] - PROBE])
+    start = np.array([c[0], c[1], c[2] - ext[2] + PROBE])
     _hit, dist = ray(start, np.array([0.0, 0.0, -1.0]), scene.body_id(obj))
-    return float(start[2] - dist) if dist >= 0 else float(start[2] + PROBE)
+    return float(start[2] - dist) if dist >= 0 else float(start[2] - PROBE)
