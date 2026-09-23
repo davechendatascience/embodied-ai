@@ -674,7 +674,7 @@ branches:
       written into the claim. Measurements stay out: the executable-subset figure is cited to its trial,
       and the evidence for pi_theta itself belongs in component-belief under CMP-optimization-teacher,
       which still has no contract. Files: screwhead/teacher/state.py (the input, built),
-      screwhead/teacher/policy.py and tools/teacher_train.py (the network and the fit, not written yet),
+      screwhead/teacher/policy.py and tools/teacher_train.py (the network and the fit),
       checkpoints/teacher/SUITE_TASK.pt (the weights, with the state's layout and the search settings
       beside them). Not claimed: that pi_theta alone reaches settled success, or that a search started
       from it beats a search from zero (Q9); that regression on kept episodes suffices rather than

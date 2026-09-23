@@ -461,6 +461,8 @@ components:
       - screwhead/teacher/search.py         # the receding-horizon search
       - tools/search_probe.py               # its probe
       - screwhead/teacher/state.py          # what pi_theta reads
+      - screwhead/teacher/policy.py         # pi_theta itself, and the features it reads
+      - tools/teacher_train.py              # the alternation: collect under the keep-filter, fit
       - tests/test_box_distance.py
       - tests/test_task_loss.py
       - tests/test_verdicts.py

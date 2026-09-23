@@ -109,7 +109,7 @@ class Search:
         s, periods = self.s, self.s.periods()
         saved = exec_state.save(self.env)
         rng = np.random.default_rng(s.seed)
-        mean, levels = self._start()
+        mean, levels = self._start(watch, start_reference)
         spread, spreads = s.spread, []
         best: tuple[tuple, Plan, Rollout] | None = None
         for _ in range(s.iters):
@@ -135,12 +135,16 @@ class Search:
         return plan.action(0, periods), report
 
     # -- sampling ---------------------------------------------------------------------------
-    def _start(self) -> tuple[np.ndarray, np.ndarray]:
+    def _start(self, watch, start_reference: dict) -> tuple[np.ndarray, np.ndarray]:
         """The start distribution: the policy's plan, or the previous step's shifted by one
-        period, or zeros; and a categorical over levels with every level above the floor."""
+        period, or zeros; and a categorical over levels with every level above the floor.
+
+        The policy reads the teacher's state, which includes the carried watch and the episode
+        start's reference, so both are handed to it rather than re-derived."""
         n, s = self.s.segments, self.s
         if self.policy is not None:
-            mean, probs = self.policy(self.env, self.v)
+            mean, probs = self.policy(self.env, self.v, watch, start_reference)
+            probs = np.maximum(probs, s.level_floor)
         else:
             mean = np.zeros((n, 6)) if self._mean is None else np.roll(self._mean.twist, -1, axis=0)
             probs = np.full((n, len(LEVELS)), 1.0 / len(LEVELS))

@@ -1,0 +1,4 @@
+env HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl taskset -c 5-9,15-19 .venv-libero/bin/python -m pytest tests/test_verdicts.py -q
+exit=0
+test=TST-verdicts-cases@e91c5e1f
+at=2026-09-23T03:54:56+00:00
