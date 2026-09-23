@@ -422,6 +422,22 @@ definitions:
       (a) states what the execution layer guarantees, and is the clause a design may cite as
       enforced rather than measured.
 
+  - id: DEF-refusal-is-an-outcome
+    term: Refusal is an outcome
+    meaning: >-
+      A refusal ends the episode and is recorded as a refusal, naming the predicate that had no
+      witness. It is not a failure and is not counted as one. The two differ in what they say about
+      the system: a failure is an attempt that went wrong and is evidence about execution, while a
+      refusal is the planner declining to act on a precondition it could not establish and is
+      evidence about coverage. A rate that adds them cannot tell a teacher that does not try from
+      one that tries and botches, and improving either moves the same number in the same direction,
+      so the number stops steering anything. This holds at every level the question is asked: a
+      geometric query with no candidate satisfying its predicate (DEF-witness-or-refusal), a skill
+      whose precondition has no witness, and a goal needing a skill the planner does not have. In
+      each case the honest answer is that there is no answer, delivered promptly. Flailing is worse
+      than refusing twice over -- it spends the horizon, and it disturbs a scene that a later
+      attempt or a human would otherwise find as it was.
+
   - id: DEF-witness-or-refusal
     term: Witness or refusal
     meaning: >-
@@ -1425,19 +1441,29 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      The skill teacher executes by regression over declared contracts, re-run every control
-      step: pick(o) {hand empty, uncrowded(o), graspable(o)} -> held(o); place(o, R) {held(o),
-      admits(R, o)} -> In/On(o, R); drive(j, mode) {hand empty, accessible(j)} -> the joint's
-      predicate; park(o) {held(o)} -> hand empty, o resting on a free spot; move-clear(o) is
-      pick then park outside what crowds it. task_spec reads the goals and affordances.yaml;
-      predicates read the state only. Scope now: the predicates libero_object, spatial and
-      goal and libero_10's put-in-drawer-and-close need; named, not yet covered: two objects
-      into one region, enclosed regions, access occlusion, reorienting or regrasping an object.
+      The skill teacher executes by regression over declared contracts, re-run every control step:
+      pick(o) {hand empty, uncrowded(o), graspable(o)} -> held(o); place(o, R) {held(o), admits(R, o)}
+      -> In/On(o, R); drive(j, mode) {hand empty, accessible(j)} -> the joint's predicate; park(o)
+      {held(o)} -> hand empty, o resting on a free spot; move-clear(o) is pick then park outside what
+      crowds it. The goals and the affordance table supply the parameters; predicates read the state
+      only. The skill set is closed and declared: a goal whose achievement needs a motion no listed
+      skill produces is refused, naming the missing skill, and is not attempted with the nearest skill
+      the set happens to contain. Sliding an object across a surface is such a motion, and no skill here
+      produces it -- the set moves an object by holding it. Scope now: the predicates libero_object,
+      spatial and goal and libero_10's put-in-drawer-and-close need; named, not yet covered: pushing or
+      sliding without a grasp, two objects into one region, enclosed regions, access occlusion,
+      reorienting or regrasping an object.
     premises: [LMA-regression-selects-an-applicable-skill, LMA-hand-is-a-precondition,
-               LMA-geometry-answers-predicates, LMA-protected-progress]
+               LMA-geometry-answers-predicates, LMA-protected-progress, DEF-refusal-is-an-outcome]
     derivation_rule: >-
-      (to be implemented) evidence: CTR-teacher-reliable -- the 600-episode reference at
-      bcf19e9 (523/600) reproduced wherever the old executor had no special case, then
+      The closure clause is what LMA-regression-selects-an-applicable-skill gives when nothing is
+      applicable: regression selects among the skills whose effects entail the goal, and where that set
+      is empty there is nothing to select, so proceeding means abandoning the selection rule rather than
+      applying it. DEF-refusal-is-an-outcome says what to do instead, and why the result is recorded as
+      a refusal rather than a failure. The measured case is a plate that must be slid to a new place:
+      picking it is not a worse way of sliding it but a different act, and attempting the pick spends
+      the horizon and leaves the plate where it was. evidence: CTR-teacher-reliable -- the 600-episode
+      reference at bcf19e9 (523/600) reproduced wherever the old executor had no special case, then
       libero_10 KITCHEN_SCENE4 (bowl into the bottom drawer, close it).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
