@@ -431,7 +431,6 @@ components:
       (snap_channel) and store the levels in the checkpoint so every rollout decodes alike
     code:
       - screwhead/sim/gripper_servo.py
-      - tools/relabel_gripper.py
 
   - id: CMP-optimization-teacher
     purpose: >-

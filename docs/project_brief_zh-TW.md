@@ -75,7 +75,7 @@ DINOv2 的學習曲線（8→60 個 VLA 駕駛回合：19.3→12.4 mm）仍在�
 ## 主要檔案
 
 - `screwhead/`：運動學、IK、`servo.py`（TwistServo）、`teacher_env.py`（特權環境與隨機化）、`layouts.py`（語意保留擺放）、`scripted_teacher.py`（各任務示範程式）、`progress.py`（任務進度幾何）、`dino_features.py`、`token_head.py`、`gripper_servo.py`、`clip_features.py`
-- `tools/`：`distill.py`（線上蒸餾／DAgger 收集與訓練）、`collect_scripted.py`、`token_data.py`、`scripted_eval.py`、`probe_localization.py`、`feature_bakeoff.py`、`relabel_gripper.py`、`emit_trials.py`／`emit_gripper_trials.py`（幾何測試）
+- `tools/`：`distill.py`（線上蒸餾／DAgger 收集與訓練）、`collect_scripted.py`、`token_data.py`、`scripted_eval.py`、`probe_localization.py`、`feature_bakeoff.py`、`emit_trials.py`／`emit_gripper_trials.py`（幾何測試）
 - `belief.yaml`：宣告的元件、契約與測試（由人工 commit 後生效）；每個元件以 `# code:` 列出所屬檔案，沒有元件認領的程式碼會被刪除
 
 ## 經驗法則

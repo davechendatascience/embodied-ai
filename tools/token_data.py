@@ -145,7 +145,8 @@ def _rows(args, sets):
     key = "label_gt" if args.gripper_target else "label"
     for d, s_ in zip(args.data, sets, strict=True):
         if key not in s_["meta"]:
-            raise SystemExit(f"{d}: no {key}; run tools/relabel_gripper.py first")
+            raise SystemExit(f"{d}: no {key}; collect it through the same servo and decode the "
+                             "policy will run under (tools/distill.py collect --gripper-target)")
     return rows, val, np.stack([sets[k]["meta"][key][i] for k, i in rows]).astype(np.float32)
 
 
