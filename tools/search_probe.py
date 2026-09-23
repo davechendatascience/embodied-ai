@@ -112,7 +112,7 @@ def main() -> int:
             break
         previous_ref = v.reference()
     final = watch.finish()
-    summary = dict(suite=args.suite, task=args.task, init=args.init, seed=args.seed,
+    summary = dict(suite=args.suite, task=args.task, init=te.init_index, seed=args.seed,
                    start_noise=noise.as_dict(), outcome=outcome, steps=len(rows),
                    final_watch=final, seconds=round(time.perf_counter() - t0, 1),
                    seconds_per_step=round((time.perf_counter() - t0) / max(len(rows), 1), 2),
