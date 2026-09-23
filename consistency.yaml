@@ -878,9 +878,11 @@ branches:
       handle geom plus the handle's travel to the threshold (r |dtheta| for a hinge, r the handle's
       distance from the joint axis in the model; |dq| for a slide); 0 once LIBERO accepts. A
       demonstration is kept only if it ends settled, its continuous watch finishes with no violation and
-      no disturbance or loss was decided on the executed trajectory, and over the episode its tool
-      acceleration, read at every executed substep through _advance's substep hook, has a 95th
-      percentile of at most 2 m/s^2 with no servo re-anchor in any executed step (DEF-smooth-motion).
+      no disturbance or loss was decided on the executed trajectory, and its executed trajectory
+      satisfies DEF-smooth-motion, read through _advance's substep hook. Both clauses are that
+      definition's and are not restated here: this branch previously carried its own numbers and they
+      drifted from it -- 2 m/s^2 where the definition says 6, and a re-anchor bar over every executed
+      step where the definition bars them in free motion only.
       Then: (1) for states reached under this execution, the label is pi_theta(s) or such a search from
       s -- a function of the teacher's state; labelling states reached under another execution needs the
       student-adoption obligation below; (2) the search's rollouts predict the executed steps exactly
