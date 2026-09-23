@@ -554,27 +554,43 @@ branches:
     claim_type: contract
     statement: >-
       Per task, pi_theta reads the teacher state (screwhead/teacher/state.py: the privileged state
-      with no clock and no step counter; 231 dimensions on libero_goal 7) and screwhead's
-      robot-specification tokens, and emits per plan segment a normalized body twist (6, moment
-      first) and logits over the student's snap levels. Nothing in its output names a joint: the
-      twist is decoded by the same fixed layers the student uses (PoE, damped least-squares IK with
-      null space) and executed through the same TwistServo path, so the teacher is embodiment-free.
-      It is trained by the alternation of BRN-optimization-teacher -- a search records the state it
-      saw and the plan it chose at every control step, pi_theta is regressed onto those plans
-      (squared error on the twist, cross-entropy on the level) over episodes that ended settled and
-      passed the keep-filter, and the next round's searches start from pi_theta's plan -- with its
-      weights frozen before it labels or is searched around. A demonstration is what pi_theta
-      produces, alone or refined by a search around it, executed through the one execution path and
-      kept only if it ends settled and passes the keep-filter.
+      with no clock and no step counter; 231 dimensions on libero_goal 7), screwhead's
+      robot-specification tokens, and the arm's feasibility signals at that state -- the smallest
+      singular value of the body Jacobian and each joint's distance to its limit, both already
+      computed by the decode -- and emits per plan segment a normalized body twist (6, moment
+      first) and logits over the student's snap levels. It is trained by the alternation of
+      BRN-optimization-teacher: a search records the state it saw and the plan it chose, pi_theta
+      is regressed onto those plans (squared error on the twist, cross-entropy on the level) over
+      episodes that ended settled and passed the keep-filter, and the next round's searches start
+      from pi_theta's plan; its weights are frozen before it labels or is searched around.
+      Embodiment-freedom is claimed in this sense and no other: (1) the output carries no
+      joint-space quantity; (2) each arm's singularities and joint limits are handled in the
+      decode, not by the network -- damped least squares bounds a step by ||dtheta|| <= ||e|| /
+      (2 lambda), so a singular direction shrinks the step, and the servo's null-space term
+      (limit_gain 0.5) pushes the redundancy away from the limits; (3) which twists an arm can
+      execute is arm- and state-dependent and is not claimed equal for two arms -- on the Panda
+      the lead limit alone confines them to 7-57% of the +-1 box, state by state (TRL-0232), and a
+      request outside it is scaled, not tracked; (4) a plan that settles on one arm is not claimed
+      to execute on another and pi_theta's weights are not claimed to transfer: what transfers by
+      construction is the objective, the object-centric verdicts, and the search itself, whose
+      rollouts run through the new arm's execution path and so meet its singularities and limits
+      exactly; (5) an infeasible request needs no special handling -- the servo scales it and the
+      keep-filter discards the episode unless it still ends settled with DEF-smooth-motion
+      satisfied and no re-anchor. Before any transfer is attempted, the poses a task needs (grasp,
+      carry, place) are audited for the candidate arm under DEF-reachable-pose, because LIBERO's
+      scenes are laid out for the Panda's workspace and another arm at the same mount may not
+      reach them.
     premises: [BRN-optimization-teacher, BRN-screw-search, AXM-one-execution-path,
-               AXM-dagger-needs-markov-labels, AXM-parameters-derived]
+               AXM-dagger-needs-markov-labels, AXM-parameters-derived, AXM-servo-tracks-reachable-poses,
+               DEF-reachable-pose]
     derivation_rule: >-
       screwhead/teacher/policy.py (the network), screwhead/teacher/state.py (its input),
       tools/teacher_train.py (the fit), checkpoints/teacher/SUITE_TASK.pt (the weights, with the
       state's layout and the search settings beside them). Not claimed: that pi_theta alone reaches
-      settled success, or that a search started from it beats a search from zero (Q9), that
-      regression on settled episodes suffices rather than iterated relabelling, or that it transfers
-      to another arm (Q8).
+      settled success or that a search started from it beats a search from zero (Q9); that
+      regression on settled episodes suffices rather than iterated relabelling; that any arm passes
+      the audit or that the search settles on it (Q8, measured in that order -- audit pass rate per
+      arm and task, then the search's settled rate on that arm, then pi_theta's).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-carry-reachable-along-carry
