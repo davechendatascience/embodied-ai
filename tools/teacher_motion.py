@@ -36,6 +36,8 @@ RELEASE_WINDOW = 10                 # steps: a let-go this soon after a release 
 DROP_GAP = 0.010                    # m: an unmeant let-go below this is a set-down, not a drop
 SEED = 555
 
+from screwhead.sim.contacts import robot_in_contact  # noqa: E402
+
 
 def _support_gap(env, planner, obj: str) -> tuple[float, float]:
     """(gap from the object's bottom to the surface straight below it, object centre z)."""
@@ -48,24 +50,28 @@ def _support_gap(env, planner, obj: str) -> tuple[float, float]:
     return (dist + 0.001 if dist >= 0 else float("nan")), float(c[2])
 
 
-def _record_substeps(env) -> list:
-    """Grip-site positions after every physics substep, from here on."""
+def _record_substeps(env) -> tuple[list, list]:
+    """Grip-site positions after every physics substep, from here on, and whether the robot was
+    touching anything at that substep -- DEF-smooth-motion (b) is a bar on free motion, and an arm
+    pressing on a support accelerates because the world stops it."""
     m, d = env.scene.m, env.scene.d
     sim = env.env.env.sim if hasattr(env.env, "env") else env.env.sim
-    site, track, step = m.site_name2id("gripper0_grip_site"), [], sim.step
+    site, track, contact, step = m.site_name2id("gripper0_grip_site"), [], [], sim.step
 
     def recorded(*a, **k):
         r = step(*a, **k)
         track.append(d.site_xpos[site].copy())
+        contact.append(bool(robot_in_contact(m, d)))
         return r
     sim.step = recorded
-    return track
+    return track, contact
 
 
-def episode(env, teacher, objs: list[str], track: list) -> dict:
+def episode(env, teacher, objs: list[str], track: list, contact: list) -> dict:
     sk = teacher.skills
     env.reset()
     track.clear()
+    contact.clear()
     r0, done, info = env.servo.reanchors, False, {}
     held, last_release, gaps, drops = dict.fromkeys(objs, False), -10**6, [], 0
     while not done:
@@ -85,17 +91,20 @@ def episode(env, teacher, objs: list[str], track: list) -> dict:
         _, _, done, info = env.step(a)
     dt = float(env.scene.m.opt.timestep)
     v = np.diff(np.array(track), axis=0) / dt
-    acc = np.diff(v, axis=0) / dt
-    jerk = np.linalg.norm(np.diff(acc, axis=0) / dt, axis=1)
+    acc = np.linalg.norm(np.diff(v, axis=0) / dt, axis=1)
+    jerk = np.linalg.norm(np.diff(np.diff(v, axis=0) / dt, axis=0) / dt, axis=1)
+    free = ~np.array(contact[2:], dtype=bool)
     return dict(success=bool(info["success"]), steps=env.t,
                 release_gap_mm=round(1000 * max(gaps), 1) if gaps else -1.0, releases=len(gaps),
-                drop_count=drops, acc_p95=round(float(np.percentile(np.linalg.norm(acc, axis=1), 95)), 2),
-                jerk_p95=round(float(np.percentile(jerk, 95)), 1), reanchors=env.servo.reanchors - r0)
+                drop_count=drops, acc_p95=round(float(np.percentile(acc, 95)), 2),
+                acc_p95_free=round(float(np.percentile(acc[free], 95)), 2) if free.any() else -1.0,
+                free_fraction=round(float(free.mean()), 3),
+                jerk_p95=round(float(np.percentile(jerk, 1 * 95)), 1), reanchors=env.servo.reanchors - r0)
 
 
 def main() -> int:
-    from screwhead.teacher.skill_teacher import SkillTeacher
     from screwhead.sim.task_env import StartNoise, TaskEnv
+    from screwhead.teacher.skill_teacher import SkillTeacher
     from teacher_report import teacher_revision
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
@@ -107,11 +116,12 @@ def main() -> int:
                       render=False, start=StartNoise())
         teacher = SkillTeacher(env)
         objs = sorted({st.obj for st in teacher.plan if st.obj})
-        track = _record_substeps(env)
+        track, contact = _record_substeps(env)
         for ep in range(args.episodes):
-            m = episode(env, teacher, objs, track)
+            m = episode(env, teacher, objs, track, contact)
             print(f"{suite} task {task} ep {ep}: {m}", flush=True)
             trials.append({"metrics": {k: m[k] for k in ("release_gap_mm", "drop_count", "acc_p95",
+                                                          "acc_p95_free", "free_fraction",
                                                           "jerk_p95", "reanchors", "success")},
                            "conditions": {"suite": suite, "task": task, "episode": ep},
                            "repro": {"teacher_revision": rev, "task_suite": suite, "task": task,

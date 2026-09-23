@@ -3,7 +3,7 @@
 
   collect  run episodes whose every control step is solved by the search, recording the state it
            saw and the plan it chose, and keep an episode only if it ends settled with no
-           violation, tool acceleration p95 <= 7 m/s^2 and no servo re-anchor (DEF-smooth-motion)
+           violation, free-motion acceleration p95 <= 6 m/s^2 and no servo re-anchor (DEF-smooth-motion)
   fit      regress pi_theta onto the kept plans -- squared error on the twist, cross-entropy on
            the level -- and write the weights with the feature layout and search settings
   round    collect, fit, and collect again starting from the fitted pi_theta
@@ -31,6 +31,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from screwhead.sim.contacts import robot_in_contact  # noqa: E402
 from screwhead.sim.sim_arm import Execution  # noqa: E402
 from screwhead.sim.task_env import StartNoise, TaskEnv  # noqa: E402
 from screwhead.teacher import policy as pi  # noqa: E402
@@ -38,11 +39,11 @@ from screwhead.teacher.search import LEVELS, Search, Settings  # noqa: E402
 from screwhead.teacher.task_loss import TaskLoss  # noqa: E402
 from screwhead.teacher.verdicts import Verdicts  # noqa: E402
 
-SMOOTH_ACC = 7.0        # DEF-smooth-motion (b): the ramped envelope at the physics substep
+SMOOTH_ACC = 6.0        # DEF-smooth-motion (b): the ramped envelope, free motion only
 STUDENT_NOISE = StartNoise(xy_m=0.10, z_m=0.05, yaw_deg=30.0, tilt_deg=10.0, null_rad=0.3)
 
 
-def _executed_track(env, watch) -> tuple[list, callable]:
+def _executed_track(env, watch) -> tuple[list, list, callable]:
     """Grip-site positions after every physics substep of the EXECUTED trajectory.
 
     Execution hands the caller a substep hook, and the carried watch is what the episode passes
@@ -51,13 +52,14 @@ def _executed_track(env, watch) -> tuple[list, callable]:
     is the point, since DEF-smooth-motion is a property of what was executed.
     """
     m, d = env.scene.m, env.scene.d
-    site, track = m.site_name2id("gripper0_grip_site"), []
+    site, track, contact = m.site_name2id("gripper0_grip_site"), [], []
 
     def recorded(i=None) -> None:
         watch.substep(i)
         track.append(d.site_xpos[site].copy())
+        contact.append(bool(robot_in_contact(m, d)))      # (b) is a bar on free motion
 
-    return track, recorded
+    return track, contact, recorded
 
 
 def episode(env, settings: Settings, policy, features, init: int | None) -> dict:
@@ -67,7 +69,7 @@ def episode(env, settings: Settings, policy, features, init: int | None) -> dict
     v = Verdicts(env, loss)
     search = Search(env, v, loss, settings, policy=policy)
     watch, start_ref = v.watch(), v.reference()
-    track, substep = _executed_track(env, watch)
+    track, contact, substep = _executed_track(env, watch)
     previous_ref, reanchors = dict(start_ref), 0
     states, twists, levels = [], [], []
     outcome, t0 = "timeout", time.perf_counter()
@@ -93,14 +95,17 @@ def episode(env, settings: Settings, policy, features, init: int | None) -> dict
 
     final = watch.finish()
     dt = float(env.scene.m.opt.timestep)
-    acc_p95 = float("nan")
+    acc_p95 = acc_p95_free = float("nan")
     if len(track) > 3:
-        acc = np.diff(np.diff(np.array(track), axis=0) / dt, axis=0) / dt
-        acc_p95 = float(np.percentile(np.linalg.norm(acc, axis=1), 95))
+        acc = np.linalg.norm(np.diff(np.diff(np.array(track), axis=0) / dt, axis=0) / dt, axis=1)
+        free = ~np.array(contact[2:], dtype=bool)
+        acc_p95 = float(np.percentile(acc, 95))
+        acc_p95_free = float(np.percentile(acc[free], 95)) if free.any() else float("nan")
     kept = (outcome == "settled" and not final                 # finish() judges the still-open losses
-            and acc_p95 <= SMOOTH_ACC and reanchors == 0)
+            and acc_p95_free <= SMOOTH_ACC and reanchors == 0)
     return dict(init=env.init_index, outcome=outcome, steps=len(states), kept=bool(kept),
-                acc_p95=round(acc_p95, 3), reanchors=int(reanchors), final_watch=final,
+                acc_p95=round(acc_p95, 3), acc_p95_free=round(acc_p95_free, 3),
+                reanchors=int(reanchors), final_watch=final,
                 seconds=round(time.perf_counter() - t0, 1),
                 state=np.asarray(states), twist=np.asarray(twists), level=np.asarray(levels))
 
@@ -128,7 +133,8 @@ def collect(args) -> int:
                             kept=r["kept"], outcome=r["outcome"], init=r["init"],
                             suite=args.suite, task=args.task, seed=args.seed,
                             settings=json.dumps(vars(settings)), state_dim=features.dim)
-        summary = {k: r[k] for k in ("init", "outcome", "steps", "kept", "acc_p95", "reanchors", "seconds")}
+        summary = {k: r[k] for k in ("init", "outcome", "steps", "kept", "acc_p95",
+                                     "acc_p95_free", "reanchors", "seconds")}
         rows.append(summary)
         print(json.dumps({"episode": e, **summary}), flush=True)
 

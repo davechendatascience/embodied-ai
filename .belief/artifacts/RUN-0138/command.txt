@@ -1,0 +1,4 @@
+HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/teacher_motion.py --out /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0138/result.json
+exit=0
+test=TST-teacher-motion@5665877a
+at=2026-09-23T04:31:11+00:00

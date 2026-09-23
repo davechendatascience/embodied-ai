@@ -646,10 +646,10 @@ contracts:
     subject: CMP-twist-servo
     claim_type: capability
     metrics:
-      - {id: acc_p95, unit: m/s^2}
+      - {id: acc_p95_free, unit: m/s^2}      # free motion only, per DEF-smooth-motion (b)
       - {id: reanchors, unit: count}
-    # DEF-smooth-motion (b): the envelope of ramped execution, not the command-side rate limit
-    acceptance: {rule: "acc_p95 <= 7.0 and reanchors == 0", target_rate: 0.9}
+    scores: DEF-smooth-motion
+    acceptance: {rule: "acc_p95_free <= 6.0 and reanchors == 0", target_rate: 0.9}
     exclusions: [episodes that fail for reasons other than motion]
     compatibility_key: [sw_revision]
     evaluable_by: [TST-teacher-motion]
@@ -998,10 +998,10 @@ contracts:
     subject: CMP-skill-library
     claim_type: capability
     metrics:
-      - {id: acc_p95, unit: m/s^2}
+      - {id: acc_p95_free, unit: m/s^2}    # free motion only, per DEF-smooth-motion (b)
       - {id: reanchors, unit: count}
-    # DEF-smooth-motion (b), restated: 7 m/s^2 is the ramped envelope, 2 was the command limit
-    acceptance: {rule: "acc_p95 <= 7.0 and reanchors == 0", target_rate: 0.9}
+    scores: DEF-smooth-motion
+    acceptance: {rule: "acc_p95_free <= 6.0 and reanchors == 0", target_rate: 0.9}
     compatibility_key: [teacher_revision]
     evaluable_by: [TST-teacher-motion]
     sufficiency: {n_min: 20, max_ci_width: 0.3}
@@ -1428,7 +1428,7 @@ tests:
     layer: component
     targets: [CMP-skill-library, CMP-twist-servo]
     run: HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/teacher_motion.py --out $OUT
-    metrics: [release_gap_mm, drop_count, acc_p95, jerk_p95, reanchors, success]
+    metrics: [release_gap_mm, drop_count, acc_p95, acc_p95_free, free_fraction, jerk_p95, reanchors, success]
     capture: [teacher_revision, task_suite, task]
     cost: 10.0
     timeout_s: 3600

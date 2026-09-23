@@ -349,15 +349,19 @@ definitions:
       measured joints by more than max_lag -- so no step change in the commanded velocity reaches
       the arm and no executed step is a counted re-anchor, counted as
       BRN-servo-lead-scaled-uniformly counts it (a scaled step whose IK residual exceeds
-      max_pose_err). (b) EXECUTED, and measured: the tool's acceleration at the 2 ms physics
-      substep has a 95th percentile over the episode of at most 7 m/s^2. That bound is the
-      envelope of ramped execution, not a physical limit of the grasp: it is the 90th percentile
-      of the episode acc_p95 recorded for the skill teacher under the ramp, against 12.1 m/s^2
-      for the same measurement with the joint goal stepped rather than ramped
+      max_pose_err). (b) EXECUTED, and measured over the substeps in which no robot geom touches
+      anything: the tool's acceleration at the 2 ms physics substep has a 95th percentile over
+      those substeps of at most 6 m/s^2. Contact substeps are excluded because an arm pressing a
+      knob or setting an object down accelerates since the world stops it, which is the task and
+      not the motion -- on a settled search episode the free-motion figure is 4.5 m/s^2 against
+      16.5 in contact, and contact is a third of that episode. The bound is the envelope of
+      ramped free motion, not a limit of the grasp: over 20 skill-teacher episodes at this
+      revision the free-motion episode p95 has median 2.9 and 90th percentile 6.1, against
+      12.1 m/s^2 for the same measurement with the joint goal stepped rather than ramped
       (AXM-stepped-joint-goal-lunges); the distribution lives with CTR-teacher-smooth and
-      CTR-servo-keeps-its-reference. It is not claimed that a held object slips above it --
-      LMA-grip-fails-by-contact-not-load says a grip fails through its contacts, not through the
-      object's weight or the arm's accelerations.
+      CTR-servo-keeps-its-reference, which score this clause. It is not claimed that a held object
+      slips above it -- LMA-grip-fails-by-contact-not-load says a grip fails through its contacts,
+      not through the object's weight or the arm's accelerations.
     rationale: >-
       The previous statement set one number, 2 m/s^2, and applied it to the measured response.
       2 m/s^2 is the servo's limit on how fast the COMMANDED twist may change

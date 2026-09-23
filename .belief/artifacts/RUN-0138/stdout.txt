@@ -1,0 +1,24 @@
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+libero_spatial task 0 ep 0: {'success': True, 'steps': 119, 'release_gap_mm': 17.7, 'releases': 1, 'drop_count': 0, 'acc_p95': 2.21, 'acc_p95_free': 2.41, 'free_fraction': 0.645, 'jerk_p95': 79.5, 'reanchors': 0}
+libero_spatial task 0 ep 1: {'success': True, 'steps': 119, 'release_gap_mm': 17.7, 'releases': 1, 'drop_count': 0, 'acc_p95': 2.21, 'acc_p95_free': 2.41, 'free_fraction': 0.645, 'jerk_p95': 79.5, 'reanchors': 0}
+libero_spatial task 0 ep 2: {'success': True, 'steps': 119, 'release_gap_mm': 17.6, 'releases': 1, 'drop_count': 0, 'acc_p95': 2.13, 'acc_p95_free': 2.4, 'free_fraction': 0.645, 'jerk_p95': 85.8, 'reanchors': 0}
+libero_spatial task 0 ep 3: {'success': True, 'steps': 132, 'release_gap_mm': 11.7, 'releases': 1, 'drop_count': 0, 'acc_p95': 6.25, 'acc_p95_free': 3.05, 'free_fraction': 0.583, 'jerk_p95': 236.0, 'reanchors': 0}
+libero_spatial task 0 ep 4: {'success': True, 'steps': 119, 'release_gap_mm': 17.6, 'releases': 1, 'drop_count': 0, 'acc_p95': 2.13, 'acc_p95_free': 2.4, 'free_fraction': 0.645, 'jerk_p95': 85.8, 'reanchors': 0}
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+libero_spatial task 6 ep 0: {'success': False, 'steps': 500, 'release_gap_mm': -1.0, 'releases': 0, 'drop_count': 1, 'acc_p95': 2.41, 'acc_p95_free': 2.45, 'free_fraction': 0.9, 'jerk_p95': 64.3, 'reanchors': 174}
+libero_spatial task 6 ep 1: {'success': True, 'steps': 167, 'release_gap_mm': 19.0, 'releases': 1, 'drop_count': 0, 'acc_p95': 2.03, 'acc_p95_free': 4.83, 'free_fraction': 0.316, 'jerk_p95': 79.2, 'reanchors': 0}
+libero_spatial task 6 ep 2: {'success': True, 'steps': 178, 'release_gap_mm': 20.5, 'releases': 1, 'drop_count': 0, 'acc_p95': 2.06, 'acc_p95_free': 5.87, 'free_fraction': 0.308, 'jerk_p95': 82.6, 'reanchors': 0}
+libero_spatial task 6 ep 3: {'success': True, 'steps': 176, 'release_gap_mm': 20.4, 'releases': 1, 'drop_count': 0, 'acc_p95': 1.97, 'acc_p95_free': 4.29, 'free_fraction': 0.298, 'jerk_p95': 71.0, 'reanchors': 0}
+libero_spatial task 6 ep 4: {'success': False, 'steps': 500, 'release_gap_mm': -1.0, 'releases': 0, 'drop_count': 4, 'acc_p95': 5.44, 'acc_p95_free': 7.91, 'free_fraction': 0.592, 'jerk_p95': 197.1, 'reanchors': 7}
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+libero_spatial task 8 ep 0: {'success': True, 'steps': 153, 'release_gap_mm': -1.0, 'releases': 0, 'drop_count': 1, 'acc_p95': 2.15, 'acc_p95_free': 2.77, 'free_fraction': 0.582, 'jerk_p95': 84.7, 'reanchors': 0}
+libero_spatial task 8 ep 1: {'success': True, 'steps': 107, 'release_gap_mm': 17.8, 'releases': 1, 'drop_count': 0, 'acc_p95': 3.26, 'acc_p95_free': 5.0, 'free_fraction': 0.568, 'jerk_p95': 145.8, 'reanchors': 0}
+libero_spatial task 8 ep 2: {'success': True, 'steps': 104, 'release_gap_mm': 12.1, 'releases': 1, 'drop_count': 0, 'acc_p95': 4.76, 'acc_p95_free': 4.12, 'free_fraction': 0.557, 'jerk_p95': 231.1, 'reanchors': 0}
+libero_spatial task 8 ep 3: {'success': True, 'steps': 108, 'release_gap_mm': 15.9, 'releases': 1, 'drop_count': 0, 'acc_p95': 2.94, 'acc_p95_free': 3.92, 'free_fraction': 0.555, 'jerk_p95': 122.1, 'reanchors': 0}
+libero_spatial task 8 ep 4: {'success': True, 'steps': 143, 'release_gap_mm': -1.0, 'releases': 0, 'drop_count': 2, 'acc_p95': 2.65, 'acc_p95_free': 5.03, 'free_fraction': 0.493, 'jerk_p95': 145.7, 'reanchors': 0}
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+libero_goal task 3 ep 0: {'success': False, 'steps': 800, 'release_gap_mm': 16.2, 'releases': 2, 'drop_count': 0, 'acc_p95': 10.69, 'acc_p95_free': 11.99, 'free_fraction': 0.514, 'jerk_p95': 457.7, 'reanchors': 113}
+libero_goal task 3 ep 1: {'success': True, 'steps': 786, 'release_gap_mm': 104.2, 'releases': 2, 'drop_count': 2, 'acc_p95': 2.07, 'acc_p95_free': 2.6, 'free_fraction': 0.453, 'jerk_p95': 70.6, 'reanchors': 0}
+libero_goal task 3 ep 2: {'success': True, 'steps': 621, 'release_gap_mm': 90.3, 'releases': 2, 'drop_count': 4, 'acc_p95': 1.91, 'acc_p95_free': 2.41, 'free_fraction': 0.435, 'jerk_p95': 71.2, 'reanchors': 0}
+libero_goal task 3 ep 3: {'success': False, 'steps': 800, 'release_gap_mm': -1.0, 'releases': 0, 'drop_count': 7, 'acc_p95': 2.07, 'acc_p95_free': 2.52, 'free_fraction': 0.51, 'jerk_p95': 79.9, 'reanchors': 1}
+libero_goal task 3 ep 4: {'success': False, 'steps': 800, 'release_gap_mm': 4.4, 'releases': 1, 'drop_count': 6, 'acc_p95': 2.02, 'acc_p95_free': 2.46, 'free_fraction': 0.483, 'jerk_p95': 68.4, 'reanchors': 0}
