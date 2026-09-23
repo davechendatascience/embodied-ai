@@ -34,11 +34,12 @@ runs/
 videos/
 *.jsonl
 
-# component-belief MCP. Tracked: .belief/artifacts/ (run_test outputs). NOT tracked
-# yet: the ledger itself (.belief/*.jsonl, 49 MB of evidence) -- the *.jsonl rule
-# above excludes it. The derived belief cache is regenerable from evidence +
-# declarations.
+# component-belief MCP. Tracked: .belief/artifacts/ (run_test outputs) and
+# .belief/stamps.jsonl, the per-path verdicts -- derived, but committed so that what changed its
+# verdict is a diff rather than a memory. NOT tracked: the ledger itself (.belief/*.jsonl, 49 MB
+# of evidence) -- the *.jsonl rule above excludes it -- nor the derived belief cache.
 .belief/cache/
+!.belief/stamps.jsonl
 
 # textbook-index MCP: the concept graph and index are derived from the PDFs in
 # docs/ and rebuilt on first tool call.
