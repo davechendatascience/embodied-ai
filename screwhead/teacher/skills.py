@@ -223,7 +223,7 @@ class Skills:
         if cached is not None and np.linalg.norm(cached[3] - centre) < self.k.regrasp_move:
             return cached[0], cached[1], cached[2]
         bid = self.scene.body_id(obj)
-        tiers = self.planner.tiers(obj, box)
+        tiers = self.planner.tiers(obj, box, self._held_by(obj))
         extra = self._release_probe(obj, *place) if place is not None else None
         chosen, used = None, ""
         for name, tier in tiers:
@@ -383,7 +383,7 @@ class Skills:
         bid = self.scene.body_id(obj)
 
         def first_tier():
-            for name, t in self.planner.tiers(obj, self.scene.object_box(obj)):
+            for name, t in self.planner.tiers(obj, self.scene.object_box(obj), self._held_by(obj)):
                 if self.reach.choose(t, via, allow=bid) is not None:
                     return name
             return None
@@ -601,6 +601,11 @@ class Skills:
                         and self.reach.band_clear(c[:2], xy, radius, bottom, top, mine)):
                     return q[:2] + (xy - c[:2])
         return None
+
+    def _held_by(self, obj: str) -> str | None:
+        from .task_spec import held_by
+        spec = getattr(self.env, "task_spec", None)
+        return held_by((getattr(spec, "objects", {}) or {}).get(obj))
 
     def _release_probe(self, obj: str, region: str, inside: bool):
         """For a grasp candidate, the tool pose where it will let go: the drop point, computed now

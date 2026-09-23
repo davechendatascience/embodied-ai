@@ -34,6 +34,10 @@ FROM_BELOW = 0.3          # an approach with z above this comes from underneath:
 RAY_TOL = 0.03            # a ray may stop this short of the handle on the same body
 RIM_BAND = 0.02           # part geoms whose top is within this of the object's top
 MAX_PARTS = 16
+HANDLE_OUTER = 0.6        # a handle geom's centre is at least this fraction of the farthest geom
+#                           centre's plan distance from the object's origin (pan: 113-259 of 259 mm
+#                           against the dish's 100; moka pot: 42-75 of 75 against the body's 36)
+HANDLE_ALONG = (0.25, 0.5, 0.75)   # points along a long handle geom, from its end nearer the origin
 
 
 def _collides_geom(m, g: int) -> bool:
@@ -63,7 +67,43 @@ class GraspPlanner:
         return self._gripper
 
     # -- tiers --------------------------------------------------------------------------
-    def tiers(self, obj: str, box) -> list[tuple[str, list]]:
+    def handles(self, obj: str, box, floor: float) -> list:
+        """Top-down grasps on an object's handle: the collision geoms lying out from its origin
+        (HANDLE_OUTER), jaws across each geom's thinnest horizontal axis, at points along a long one."""
+        m, d = self.scene.m, self.scene.d
+        bid = self.scene.body_id(obj)
+        _R, q = self.scene.body_pose(obj)
+        geoms = [g for g in self._body_geoms(bid) if _collides_geom(m, g)]
+        if not geoms:
+            return []
+        boxes = {g: geom_world_box(m, d, g, self.scene.base) for g in geoms}
+        dist = {g: float(np.linalg.norm((boxes[g][0] - q)[:2])) for g in geoms}
+        far = max(dist.values())
+        out = []
+        for g in sorted(geoms, key=lambda g: dist[g]):
+            if dist[g] < HANDLE_OUTER * far:
+                continue
+            c, Rg, hl = boxes[g]
+            hw = np.abs(Rg @ np.diag(hl)).sum(1)
+            radial = (c - q)[:2] / max(dist[g], EPS_NORM)
+            horiz = [(2 * float(hl[i]), Rg[:, i]) for i in range(3) if abs(Rg[2, i]) < VERTICAL_COS]
+            fits = [a for a in horiz if a[0] + self.k.grip_margin <= self.k.max_grip]
+            if not fits:
+                continue
+            # the jaws close ACROSS the handle, not along the line back to the object: with a square
+            # section the thinnest axis was a coin toss, the radial one ran the jaw line through the
+            # moka pot's body (105 mm) and the descent stalled 50 mm up (libero_10 2, 9 -> 0 of 20)
+            w, thin = min(fits, key=lambda a: abs(float(a[1][:2] @ radial)))
+            long_len, long_dir = max(horiz, key=lambda a: abs(float(a[1][:2] @ radial)))
+            points = [c]
+            if long_len > 3 * w:                      # a bar: several points along it, nearest end first
+                sgn = -1.0 if float((c - q)[:2] @ long_dir[:2]) > 0 else 1.0
+                points = [c + sgn * long_dir * long_len * (0.5 - f) for f in HANDLE_ALONG]
+            for pt in points:
+                out += self.at(pt, float(hw[2]), thin, w, body=bid, floor=floor)
+        return out
+
+    def tiers(self, obj: str, box, held_by: str | None = None) -> list[tuple[str, list]]:
         """Candidate grasps in order of preference, each tier tried on its own.
 
         A tier that offers nothing FEASIBLE must hand over rather than force: forcing left
@@ -93,7 +133,9 @@ class GraspPlanner:
         if not (faces or parts or sides):
             d0 = box.width_axes()[0][1] if box.width_axes() else np.array([1.0, 0.0, 0.0])
             faces = self.at(box.world_centre, half_h, d0, self.k.max_grip - self.k.grip_margin, floor=floor)
-        return [(n, t) for n, t in (("faces", faces), ("parts", parts), ("sides", sides)) if t]
+        handles = self.handles(obj, box, floor) if held_by == "handle" else []
+        # a category held by its handle is offered the handle first (affordances.yaml held_by)
+        return [(n, t) for n, t in (("handle", handles), ("faces", faces), ("parts", parts), ("sides", sides)) if t]
 
     def at(self, centre: np.ndarray, half_h: float, d: np.ndarray, w: float, body: int = -1,
            floor: float = -np.inf, deep: float = 0.0) -> list:

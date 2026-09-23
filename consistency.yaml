@@ -1794,8 +1794,9 @@ branches:
     statement: >-
       The first time in an episode that a sliding drawer is to be opened, the skill screens the grasps of
       its handle bar for reachability along the drive, once, and keeps the outcome for the rest of the
-      episode. If no grasp passed that screen, every later control step of opening that drawer in the
-      episode follows this rule, whatever a later screen would find: at every control step it reads the
+      episode. If no grasp passed that screen, the control step on which it ran and every later control
+      step of opening that drawer in the episode follow this rule, whatever a later screen would find: at
+      every such step it reads the
       bar's pose and the joint's opening direction in plan (u), and defines the hook point at a declared
       height above the bar's centre, the stage point a declared distance in front of the hook point along
       u, and the drag line through the hook point along u. It commands the jaws open at every step, with
@@ -1811,8 +1812,9 @@ branches:
       its threshold, that the approach is free of contact, or that the hand is clear of the drawer when
       the rule ends (a drive that grasped nothing has no retreat here; DEF-skill-contract's release
       postcondition is not met by this rule).
-    premises: [AXM-handle-shares-body, AXM-libero-joint-bands, DEF-skill-contract]
+    premises: [AXM-handle-shares-body, AXM-libero-joint-bands, AXM-object-geometry-known, DEF-skill-contract]
     derivation_rule: >-
+      AXM-object-geometry-known supplies the bar's pose and the joint's axis at every step;
       AXM-handle-shares-body makes pulling the bar pull the drawer; AXM-libero-joint-bands gives the
       threshold that ends the rule. The drag target is the hook point moved along u, so it lies on the
       drag line by construction, and the jaw command is open throughout the rule, which holds for the
@@ -1823,6 +1825,38 @@ branches:
       deg below level into the cabinet, jaws 80 mm open along the bar. The height was chosen on 4
       separate episodes (18 mm opened 4 of 4; 0, 6, 12 and 26 mm none); with it, 20 of 20. evidence:
       CTR-teacher-reliable.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-handle-tier-for-handled-objects
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      For an object whose category the affordance table declares held_by: handle with evidence tagged
+      measured or declared, the grasp planner offers, as a tier tried before every other, top-down grasps
+      on the object's handle geoms: those collision geoms whose bounding-box centre lies at least a
+      declared fraction of the farthest such centre's plan distance from the object's origin. For each
+      handle geom it considers the horizontal axes of the geom's bounding box (in the geom's current
+      pose) whose extent plus a declared grip margin is at most a declared maximum jaw opening; a geom
+      with no such axis offers no candidate. Otherwise the jaw axis is the considered axis most nearly
+      perpendicular to the plan direction from the object's origin to the geom's centre, and when the
+      box's most nearly radial horizontal axis is longer than three times the chosen axis's extent, the
+      grasp points are spread along that radial axis. For any other category the tiers offered are
+      exactly those offered before. Claimed: no handle candidate is offered for an object whose category
+      is not so declared, and every handle candidate's jaw axis is, among the considered axes of its
+      geom, the one most nearly perpendicular to that geom's radial direction. Not claimed: that the
+      handle tier yields a reachable grasp, that the grasp holds, or that the outlying geoms are the
+      handle in every asset; behaviour when a geom's centre coincides with the object's origin in plan.
+    premises: [AXM-category-affordances-declared, AXM-object-geometry-known, AXM-panda-gripper-geometry,
+               AXM-parameters-derived]
+    derivation_rule: >-
+      AXM-category-affordances-declared is where held_by comes from and why only evidence-backed values
+      gate anything; AXM-object-geometry-known supplies each geom's box and pose; the maximum opening
+      and margin are declared constants, which AXM-parameters-derived admits as a source. Measured:
+      LIBERO's humans hold the frying pan by its handle in 100% of 152 grasps (141-156 mm out, jaws 27-29
+      mm) and the moka pot by its handle (51-58 mm off its axis, jaws 22-23 mm). With the tier, libero_90
+      18, 21 and 41 (pan) 4/5/4 -> 20/20/20 of 20 and libero_10 2 (moka pot) 9 -> 15 of 20. Choosing the
+      thinnest axis instead sent the moka pot's jaw line through its body (105 mm; task 2 0 of 20).
+      evidence: CTR-teacher-reliable.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-place-done-when-released

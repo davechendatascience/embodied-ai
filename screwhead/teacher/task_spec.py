@@ -71,6 +71,14 @@ def moved_by(category: str | None) -> str:
     return (affordances().get(category or "", {}) or {}).get("moved_by", "pick")
 
 
+def held_by(category: str | None) -> str | None:
+    """Where a category is held, when the table declares it with measured or declared evidence (the
+    grasp planner's tier names); an entry backed by nothing is not relied on."""
+    entry = affordances().get(category or "", {}) or {}
+    evidence = entry.get("evidence") or {}
+    return entry.get("held_by") if ("measured" in evidence or "declared" in evidence) else None
+
+
 def parse(path: str | Path, suite: str | None = None) -> TaskSpec:
     from libero.libero.envs.bddl_utils import robosuite_parse_problem
     path = Path(path)

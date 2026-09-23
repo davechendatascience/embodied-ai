@@ -165,6 +165,31 @@ categories:
       declared: the rack holds bottles lying in its cradle (wine_rack asset)
     open: the lay-down motion (turning the bottle horizontal over the cradle) is not a skill yet
 
+  moka_pot:
+    kind: object
+    moved_by: pick
+    held_by: handle
+    rests: upright
+    supports: none
+    evidence:
+      measured: >-
+        LIBERO's humans, libero_10 2 and 8 (155 grasps): the handle, 51-58 mm off the pot's axis and
+        42-43 mm up, jaws 22-23 mm, top-down in 35-63% (tilted 25-30 deg otherwise). The teacher took
+        it across the body at 81 mm, the gripper's limit, and lost it (libero_10 8, 0 of 50)
+    open: the tilted approach the humans mostly use
+
+  chefmate_8_frypan:
+    kind: object
+    moved_by: pick
+    held_by: handle
+    rests: upright
+    supports: none
+    evidence:
+      measured: >-
+        LIBERO's humans, libero_90 18, 40 and 42 (152 grasps): top-down in 100%, on the handle 141-156
+        mm from the pan's origin and 18-20 mm up, jaws 27-29 mm. The teacher lost it in 16-20 of 20
+        episodes on each of five libero_90 tasks
+
   # -- landmarks: named by the scenes, never moved by a goal here ----------------------
   cookies:
     kind: object
