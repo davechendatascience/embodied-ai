@@ -605,53 +605,82 @@ branches:
     claim_type: contract
     statement: >-
       Per task, pi_theta reads the teacher state of BRN-optimization-teacher
-      (screwhead/teacher/state.py: the privileged state with no clock and no step counter; 231
-      dimensions on libero_goal 7), screwhead's robot-specification tokens (one per joint, screw axes
-      with the linear part normalized by the arm's reach), and the arm's feasibility signals at that
-      state -- the smallest singular value of the body Jacobian and each joint's distance to its limit,
-      both already computed by the decode -- and emits, per plan segment, a normalized body twist (6,
+      (screwhead/teacher/state.py: the privileged state, with no clock and no step counter, its
+      dimension fixed per task and recorded with the checkpoint), a per-arm specification (the arm's
+      screw axes, joint limits and reach, declared with the arm), and the arm's feasibility signals at
+      that state -- the smallest singular value of the body Jacobian and each joint's distance to its
+      limit, both computed by the decode -- and emits, per plan segment, a normalized body twist (6,
       moment first) and logits over the student's snap levels. It is trained by the alternation of
-      BRN-optimization-teacher (a search records the state it saw and the plan it chose; pi_theta is
-      regressed onto those plans, squared error on the twist and cross-entropy on the level, over
-      episodes that ended settled and passed the keep-filter; the next round's searches start from
-      pi_theta's plan), with its weights frozen before it labels or is searched around.
-      Embodiment-freedom is claimed only in this sense and no other: (1) pi_theta's output carries no
-      joint-space quantity, so the same network's output is meaningful for any arm; (2) each arm's
-      singularities and joint limits are handled in the decode, not by the network -- damped least
-      squares bounds a step by ||dtheta|| <= ||e|| / (2 lambda), so a singular direction shrinks the
-      step instead of exploding it, and the servo's null-space term (limit_gain 0.5) pushes the
-      redundancy toward mid-range, away from the limits; (3) which twists an arm can actually execute is
-      arm- and state-dependent, and is not claimed to be the same for two arms: on the Panda the servo's
-      lead limit alone confines the executable twists to 7-57% of the +-1 box, state by state
-      (TRL-0232), and a request outside it is scaled, not tracked; (4) a plan that settles on one arm is
-      therefore not claimed to execute on another, and pi_theta's weights are not claimed to transfer --
-      what transfers by construction is the objective (the task loss), the verdicts (object-centric,
-      carrying no joint quantity), and the search itself, whose rollouts run through the new arm's own
-      execution path and so meet its singularities and limits exactly; (5) an infeasible request needs
-      no special handling: it is executed as the servo scales it, and the keep-filter discards the
-      episode unless it still ends settled with DEF-smooth-motion satisfied and no re-anchor. Before any
-      transfer is attempted, the poses each task needs (grasp, carry, place) are audited for the
-      candidate arm under DEF-reachable-pose -- IK converged, smallest singular value at least 0.05,
-      every joint at least 0.15 rad from its limit, no fixture penetration -- because LIBERO's scenes
-      are laid out for the Panda's workspace and another arm at the same mount may not reach them at
-      all. Files: screwhead/teacher/state.py, screwhead/teacher/policy.py, tools/teacher_train.py,
-      checkpoints/teacher/SUITE_TASK.pt. Not claimed: that pi_theta alone reaches settled success or
-      that a search started from it beats a search from zero (Q9); that regression on settled episodes
-      suffices rather than iterated relabelling; that any arm passes the audit or that the search
-      settles on it (Q8, measured in that order: audit pass rate per arm and task, then the search's
-      settled rate on that arm, then pi_theta's). The student is not touched by any of this.
-    premises: [BRN-optimization-teacher, BRN-screw-search, AXM-one-execution-path, AXM-dagger-needs-markov-labels, AXM-parameters-derived, AXM-servo-tracks-reachable-poses, DEF-reachable-pose]
+      BRN-optimization-teacher: a search records the state it saw and the plan it chose; pi_theta is
+      regressed onto those plans (squared error on the twist, cross-entropy on the level) over episodes
+      that passed the keep-filter; the next round's searches start from pi_theta's plan; its weights are
+      frozen before it labels or is searched around. Embodiment-freedom is claimed in this sense and no
+      other. (1) The output carries no robot-joint quantity (BRN-screw-search (e)). It does not follow
+      that one network's output means the same motion on two arms: a normalized twist is interpreted
+      through that arm's declared tool frame and twist normalization, which on the Panda are robosuite's
+      osc_pose scales at the grip site (BRN-screw-search (b)), and the level channel is a
+      gripper-actuator quantity -- the snap levels are finger targets on the Panda's pads
+      (AXM-panda-gripper-geometry) -- so a new arm transfers the output only with its own declared
+      normalization, tool frame and aperture map. (2) Where an arm's singularities and joint limits are
+      met is the decode, not the network: AXM-servo-tracks-reachable-poses gives tracking only where IK
+      converges with room to move, and otherwise the joint reference is clamped and the servo
+      re-anchors. Nothing here claims that limits are avoided along a trajectory, and nothing here rests
+      on a null-space term, which acts only on redundancy and is identically zero for an arm whose
+      Jacobian has no null space at the state. Limits and conditioning are screened per pose, before
+      transfer, by the audit in (4), under DEF-reachable-pose as declared for the body Jacobian in the
+      units screwhead's kinematics uses; another arm's reach makes that threshold a different physical
+      margin, so the convention must be restated with it. (3) Which twists an arm can execute is arm-
+      and state-dependent and is not claimed equal for two arms: on the Panda the servo's lead limit
+      alone confines them to a state-dependent subset of the +-1 box (measured per state, TRL-0232), and
+      a request outside it is scaled, not tracked (BRN-servo-lead-scaled-uniformly). (4) Neither a plan
+      that settles on one arm nor pi_theta's weights are claimed to transfer. What transfers by
+      construction is the objective (BRN-task-loss-core through BRN-optimization-teacher), the
+      object-side verdicts, which carry no robot-joint quantity (BRN-teacher-verdicts, BRN-screw-search
+      (e)), and the search procedure. A search on another arm meets that arm's singularities and limits
+      as its own execution path does -- on the premise that BRN-execution-state-restore holds there,
+      which is measured only on the Panda -- and only once that arm can be instantiated in this
+      execution path at the Panda's mount, with a decode and gripper of its own; no premise here
+      establishes that it can. Before any transfer is attempted, the poses a task needs (grasp, carry,
+      place) are audited for the candidate arm under DEF-reachable-pose, because LIBERO's scenes are
+      laid out for the Panda's workspace and another arm at the same mount may not reach them. (5) An
+      infeasible request is executed as the servo scales it (BRN-servo-lead-scaled-uniformly), and the
+      episode is kept only if it still ends settled and its executed trajectory satisfies
+      DEF-smooth-motion, whose clause 'never abandons its pose reference' is read here as that branch's
+      counted re-anchor -- a scaled step sets the pose reference to FK of the scaled joint reference and
+      counts as a re-anchor exactly when its IK residual exceeds max_pose_err. No keep rate is claimed,
+      and the filter is not claimed to be non-empty.
+    premises: [BRN-optimization-teacher, BRN-screw-search, BRN-teacher-verdicts, BRN-servo-lead-scaled-uniformly, AXM-one-execution-path, AXM-dagger-needs-markov-labels, AXM-parameters-derived, AXM-servo-tracks-reachable-poses, AXM-panda-gripper-geometry, DEF-reachable-pose]
     derivation_rule: >-
-      Restated after the user asked how the embodiment-free claim survives several URDFs' singularities
-      and the poses their workspaces allow (2026-09-23). The vague version claimed transfer by
-      construction; this one claims only that the output carries no joint quantity and that the decode
-      absorbs each arm's singularities and limits, and it states the measured fact that the executable
-      twist set is arm- and state-dependent (7-57% of the box on the Panda). Transfer becomes a
-      measurement with a named order -- reachability audit under DEF-reachable-pose, then the search on
-      that arm, then pi_theta -- rather than an assumption, and infeasible requests are handled by the
-      existing scaling plus the keep-filter. The feasibility signals (Jacobian conditioning, limit
-      margins) enter pi_theta's input so it can learn to stay clear of an arm's singular and limit-bound
-      regions instead of being told to.
+      Restated after TRL-0247 (falsified), TRL-0248 and TRL-0249 (gaps), recorded from the
+      consistency-verifier's declarations-only review; those trials verified the previous statement and
+      no longer count. What changed, fault by fault. The falsified inference in clause (1) -- 'carries
+      no joint quantity, so the same output is meaningful for any arm' -- is gone: joint-freeness is
+      kept as the premise states it, and interpretation is made explicitly arm-relative, including the
+      level channel, whose snap levels are Panda finger targets, so AXM-panda-gripper-geometry is now
+      cited. The falsified clause (2) no longer claims that limits are handled: the null-space mechanism
+      is dropped, since it is identically zero on a non-redundant arm, and the damped-least-squares step
+      bound is dropped with it, since no declaration states the decode's IK method -- that branch is
+      owed and is not assumed here. What remains is what AXM-servo-tracks-reachable-poses declares, plus
+      per-pose screening by the audit, with DEF-reachable-pose's unit dependence named rather than
+      glossed. Clause (4) qualifies the transfer the verifier found unstated: exact restore is premised,
+      not proven, off the Panda, and instantiability at the mount is named as unestablished; the
+      verdicts are cited by id now that BRN-teacher-verdicts is restated and declared. Clause (5) drops
+      'needs no special handling', identifies DEF-smooth-motion's abandonment clause with
+      BRN-servo-lead-scaled-uniformly's counted re-anchor so the two predicates are one by declaration
+      rather than by hope, and states outright that no keep rate is claimed -- the negation probe's
+      point that the clause is cheap stands, and it is better stated cheaply than falsely. Undefined
+      terms are replaced by their content: 'screwhead's robot-specification tokens' by the arm's screw
+      axes, joint limits and reach; the state's dimension is recorded with the checkpoint rather than
+      written into the claim. Measurements stay out: the executable-subset figure is cited to its trial,
+      and the evidence for pi_theta itself belongs in component-belief under CMP-optimization-teacher,
+      which still has no contract. Files: screwhead/teacher/state.py (the input, built),
+      screwhead/teacher/policy.py and tools/teacher_train.py (the network and the fit, not written yet),
+      checkpoints/teacher/SUITE_TASK.pt (the weights, with the state's layout and the search settings
+      beside them). Not claimed: that pi_theta alone reaches settled success, or that a search started
+      from it beats a search from zero (Q9); that regression on kept episodes suffices rather than
+      iterated relabelling; that any arm passes the audit or that the search settles on it (Q8, measured
+      in that order -- audit pass rate per arm and task, then the search's settled rate, then
+      pi_theta's).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-task-loss-core
