@@ -630,6 +630,54 @@ interfaces:
       - the source embodiment is recorded with every twist
 
 contracts:
+  - id: CTR-loss-agrees-with-scorer
+    subject: CMP-optimization-teacher
+    claim_type: capability
+    metrics:
+      - {id: zero_iff_success, unit: bool}
+      - {id: sat_but_far, unit: count}
+      - {id: unsat_but_zero, unit: count}
+    acceptance: {rule: "zero_iff_success == true and sat_but_far == 0 and unsat_but_zero == 0", target_rate: 0.95}
+    exclusions: [libero_goal 3 -- an in-region carried by a slide joint, goals with several conjuncts]
+    compatibility_key: [teacher_revision]
+    evaluable_by: [TST-task-loss-agreement]
+    sufficiency: {n_min: 20, max_ci_width: 0.3}
+
+  - id: CTR-restore-is-exact
+    subject: CMP-optimization-teacher
+    claim_type: capability
+    metrics: [{id: passed, unit: bool}]
+    acceptance: {rule: "passed == true", target_rate: 0.99}
+    exclusions: [rendering and image observations, the non-lean execution path, PrivilegedEnv]
+    compatibility_key: [sw_revision]
+    evaluable_by: [TST-exec-state-replay]
+    sufficiency: {n_min: 3, max_ci_width: 0.6}
+
+  - id: CTR-verdicts-decide
+    subject: CMP-optimization-teacher
+    claim_type: capability
+    metrics: [{id: passed, unit: bool}]
+    acceptance: {rule: "passed == true", target_rate: 0.99}
+    exclusions: [goals with several conjuncts or any-joint predicates, libero_goal 3]
+    compatibility_key: [sw_revision]
+    evaluable_by: [TST-verdicts-cases]
+    sufficiency: {n_min: 3, max_ci_width: 0.6}
+
+  - id: CTR-search-settles
+    subject: CMP-optimization-teacher
+    claim_type: capability
+    metrics:
+      - {id: settled, unit: bool}
+      - {id: steps, unit: count}
+    acceptance: {rule: "settled == true", target_rate: 0.8}
+    exclusions: [libero_goal 3, goals with several conjuncts, layout randomization outside libero_spatial]
+    conditions:
+      - {id: fixed_init, when: "start_noise == false"}
+      - {id: randomized, when: "start_noise == true"}
+    compatibility_key: [teacher_revision, search_settings]
+    evaluable_by: [TST-search-probe]
+    sufficiency: {n_min: 20, max_ci_width: 0.35}
+
   # ---- Gate 1: the conversion is exact. Nothing downstream means anything
   # until this is supported, because a parsing bug presents as a failure to
   # generalise.
@@ -1127,6 +1175,42 @@ contracts:
     sufficiency: {n_min: 200, max_ci_width: 0.05}
 
 tests:
+  - id: TST-task-loss-agreement
+    layer: component
+    targets: [CMP-optimization-teacher]
+    run: env HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl taskset -c 5-9,15-19 .venv-libero/bin/python tools/task_loss_check.py --episodes 20 --trials $OUT
+    metrics: [zero_iff_success, sat_but_far, unsat_but_zero, sat_far_max]
+    capture: [teacher_revision, task_suite, task]
+    cost: 20.0
+    timeout_s: 5400
+
+  - id: TST-exec-state-replay
+    layer: component
+    targets: [CMP-optimization-teacher]
+    run: env HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl taskset -c 5-9,15-19 .venv-libero/bin/python -m pytest tests/test_exec_state.py -q
+    metrics: [passed]
+    capture: [sw_revision]
+    cost: 5.0
+    timeout_s: 3600
+
+  - id: TST-verdicts-cases
+    layer: component
+    targets: [CMP-optimization-teacher]
+    run: env HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl taskset -c 5-9,15-19 .venv-libero/bin/python -m pytest tests/test_verdicts.py -q
+    metrics: [passed]
+    capture: [sw_revision]
+    cost: 5.0
+    timeout_s: 3600
+
+  - id: TST-search-probe
+    layer: component
+    targets: [CMP-optimization-teacher]
+    run: env HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl taskset -c 5-9,15-19 .venv-libero/bin/python tools/search_probe.py libero_goal 7 --init -1 --start-xy 0.10 --start-z 0.05 --start-yaw 30 --start-tilt 10 --start-null 0.3 --steps 200 --trials $OUT
+    metrics: [settled, steps, seconds_per_step, terminal_end]
+    capture: [teacher_revision, search_settings, task_suite, task, init, start_noise]
+    cost: 40.0
+    timeout_s: 7200
+
   - id: TST-poe-fk
     layer: component
     targets: [CMP-poe-conversion]

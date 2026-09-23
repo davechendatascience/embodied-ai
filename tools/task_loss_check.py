@@ -77,6 +77,21 @@ def _worker(remote, suite: str, task: int, episodes: int, seed: int, cpu: int) -
     env.close()
 
 
+def trial_row(r: dict) -> dict:
+    """One episode as component-belief reads it: the agreement counts the contract accepts on,
+    and the conditions it is sliced by."""
+    return {
+        "metrics": {
+            "zero_iff_success": bool(r["final_zero"] == r["success"]),
+            "sat_but_far": int(r["sat_but_far"]),
+            "unsat_but_zero": int(r["unsat_but_zero"]),
+            "sat_far_max": float(r["sat_far_max"]),
+        },
+        "conditions": {"task_suite": r["suite"], "task": r["task"], "episode": r["episode"],
+                       "success": bool(r["success"])},
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--suites", nargs="*", default=list(SUITES))
@@ -84,6 +99,7 @@ def main() -> int:
     ap.add_argument("--episodes", type=int, default=4)
     ap.add_argument("--seed", type=int, default=555)
     ap.add_argument("--out", default="runs/task_loss_check.json")
+    ap.add_argument("--trials", default="", help="write component-belief trial rows here (one per episode)")
     args = ap.parse_args()
     ctx = mp.get_context("spawn")
     jobs = [(s, t) for s in args.suites for t in args.tasks]
@@ -110,6 +126,8 @@ def main() -> int:
             print(json.dumps({k: r[k] for k in r if k != "goals"}), flush=True)
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(rows, indent=1))
+    if args.trials:
+        Path(args.trials).write_text(json.dumps([trial_row(r) for r in rows], indent=1))
     return 0
 
 

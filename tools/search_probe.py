@@ -67,6 +67,7 @@ def _parser() -> argparse.ArgumentParser:
     ap.add_argument("--key-order", default="plain", choices=["plain", "stability", "tiebreak"])
     ap.add_argument("--out", default="")
     ap.add_argument("--record", default="", help="npz to write the search's (state, action) labels to")
+    ap.add_argument("--trials", default="", help="append a component-belief trial row for this episode")
     return ap
 
 
@@ -123,11 +124,29 @@ def main() -> int:
                    steps_expecting_a_violation=sum(r["foresaw_in"] is not None for r in rows),
                    settings=vars(settings))
     print(json.dumps(summary))
+    if args.trials:
+        write_trial(args.trials, summary)
     if args.out:
         Path(args.out).write_text("\n".join(json.dumps(r) for r in [summary, *rows]))
     if recorder is not None:
         recorder.save(args, noise, settings, outcome)
     return 0
+
+
+def write_trial(path: str, summary: dict) -> None:
+    """One episode as component-belief reads it: did the search reach a settled success, in how
+    many control steps, and under which task and initialization. Rows accumulate, so a sweep
+    writing to one path leaves the trials of every episode it ran."""
+    rows = json.loads(Path(path).read_text()) if Path(path).exists() else []
+    rows.append({
+        "metrics": {"settled": summary["outcome"] == "settled", "steps": summary["steps"],
+                    "seconds_per_step": summary["seconds_per_step"],
+                    "terminal_end": summary["terminal_last"]},
+        "conditions": {"task_suite": summary["suite"], "task": summary["task"],
+                       "init": summary["init"], "start_noise": summary["start_noise"]["xy_m"] > 0,
+                       "outcome": summary["outcome"].split(":")[0]},
+    })
+    Path(path).write_text(json.dumps(rows, indent=1))
 
 
 class Recorder:
