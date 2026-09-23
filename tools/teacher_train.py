@@ -32,12 +32,22 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from screwhead.sim.contacts import robot_in_contact  # noqa: E402
+from screwhead.sim.episode_record import Episode  # noqa: E402
 from screwhead.sim.sim_arm import Execution  # noqa: E402
 from screwhead.sim.task_env import StartNoise, TaskEnv  # noqa: E402
 from screwhead.teacher import policy as pi  # noqa: E402
 from screwhead.teacher.search import LEVELS, Search, Settings  # noqa: E402
 from screwhead.teacher.task_loss import TaskLoss  # noqa: E402
 from screwhead.teacher.verdicts import Verdicts  # noqa: E402
+
+def _revision() -> str:
+    import subprocess
+    try:
+        return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
+                              capture_output=True, text=True, timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
 
 SMOOTH_ACC = 6.0        # DEF-smooth-motion (b): the ramped envelope, free motion only
 STUDENT_NOISE = StartNoise(xy_m=0.10, z_m=0.05, yaw_deg=30.0, tilt_deg=10.0, null_rad=0.3)
@@ -71,7 +81,7 @@ def episode(env, settings: Settings, policy, features, init: int | None) -> dict
     watch, start_ref = v.watch(), v.reference()
     track, contact, substep = _executed_track(env, watch)
     previous_ref, reanchors = dict(start_ref), 0
-    states, twists, levels = [], [], []
+    states, twists, levels, executed = [], [], [], []
     outcome, t0 = "timeout", time.perf_counter()
 
     for _ in range(env.horizon):
@@ -79,6 +89,7 @@ def episode(env, settings: Settings, policy, features, init: int | None) -> dict
         action, report = search.act(watch, start_ref, previous_ref)
         twists.append(report.best.twist.astype(np.float32))
         levels.append(report.best.level.astype(np.int64))
+        executed.append(np.asarray(action, float).copy())
         before = env.servo.reanchors                       # the rollouts moved it too; only this step counts
         env.execute(action, substep=substep)
         reanchors += env.servo.reanchors - before
@@ -107,7 +118,8 @@ def episode(env, settings: Settings, policy, features, init: int | None) -> dict
                 acc_p95=round(acc_p95, 3), acc_p95_free=round(acc_p95_free, 3),
                 reanchors=int(reanchors), final_watch=final,
                 seconds=round(time.perf_counter() - t0, 1),
-                state=np.asarray(states), twist=np.asarray(twists), level=np.asarray(levels))
+                state=np.asarray(states), twist=np.asarray(twists), level=np.asarray(levels),
+                executed=np.asarray(executed))
 
 
 def collect(args) -> int:
@@ -136,6 +148,14 @@ def collect(args) -> int:
                             settings=json.dumps(vars(settings)), state_dim=features.dim)
         summary = {k: r[k] for k in ("init", "outcome", "steps", "kept", "acc_p95",
                                      "acc_p95_free", "reanchors", "seconds")}
+        # the episode as the few numbers that play it again: no states, no frames
+        Episode.of(env, r["executed"], suite=args.suite, task=args.task, init=r["init"],
+                   seed=args.seed, noise=STUDENT_NOISE if args.start_noise else StartNoise(),
+                   outcome={k: summary[k] for k in ("outcome", "steps", "kept", "acc_p95_free",
+                                                    "reanchors")} | {"settled": r["outcome"] == "settled"},
+                   provenance={"tool": "tools/teacher_train.py collect", "revision": _revision(),
+                               "settings": vars(settings), "policy": args.policy or "search only"},
+                   ).save(out / f"{name}.episode.json")
         rows.append(summary)
         print(json.dumps({"episode": e, **summary}), flush=True)
 

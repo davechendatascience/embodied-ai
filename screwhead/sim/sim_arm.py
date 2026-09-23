@@ -79,6 +79,7 @@ class SimArm:
         from .servo import TwistServo
         register_ur5e()
         assert ex.gripper_mode in ("command", "target"), ex.gripper_mode
+        self.execution = ex                 # kept whole: an episode record replays through it
         self.kp, self.gripper_mode, self.settle_steps = ex.kp, ex.gripper_mode, ex.settle_steps
         self.gripper_servo = GripperServo()
         self.spec = ActionSpec()
