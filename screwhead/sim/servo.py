@@ -38,6 +38,9 @@ from ..geometry.interface import ActionSpec
 from ..geometry.poe import Chain
 
 
+GRIP_GRACE = 5      # periods without both fingers on one body before the hold counts as lost
+
+
 class TwistServo:
     def __init__(self, chain: Chain, spec: ActionSpec, joint_action_scale: float,
                  lam: float = 0.01, iters: int = 3, max_lag: float = 0.05,
@@ -52,6 +55,7 @@ class TwistServo:
         # 1.0 or 0.5 as well overran phase switches on the approach: spatial 3, 6, 8 lost 31 of 150
         self.max_lin_acc_holding: float | None = None
         self.holding = False
+        self._unpinched = GRIP_GRACE + 1
         self.V_prev = np.zeros(6)                # the twist executed last (moment first)
         self.lam, self.iters, self.max_lag, self.max_pose_err = lam, iters, max_lag, max_pose_err
         self.ref: np.ndarray | None = None
@@ -70,12 +74,16 @@ class TwistServo:
         self.scale_lead = False     # scale the whole lead to max_lag rather than clip per joint
 
     def grip(self, asked_closed: bool, pinched: bool) -> None:
-        """Holding from the period both fingers close on something until the jaws are commanded
-        open: read each period from the contacts alone, it flickers with them mid-carry."""
-        self.holding = asked_closed and (self.holding or pinched)
+        """Holding while the jaws are commanded closed and both fingers touched one body within the
+        last GRIP_GRACE periods. Read each period from the contacts alone, it flickered with them
+        mid-carry; latched until the jaws opened, it held the bound through the regrasp after a
+        drop, with nothing held (a verifier's counterexample, TRL-0331)."""
+        self._unpinched = 0 if pinched else self._unpinched + 1
+        self.holding = asked_closed and self._unpinched <= GRIP_GRACE
 
     def reset(self, theta_measured: np.ndarray) -> None:
         self.holding = False
+        self._unpinched = GRIP_GRACE + 1
         self.ref = np.asarray(theta_measured, np.float64).copy()
         self.T_ref = kin_np.fk(self._np, self.ref)[0]
         self.V_prev = np.zeros(6)

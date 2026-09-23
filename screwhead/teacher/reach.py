@@ -176,6 +176,32 @@ class Reach:
         return min(min(margin[j] for j in sel), SIGMA_WEIGHT * min(sig[j] for j in sel)), touch
 
     # -- how high to cross ------------------------------------------------------------------
+    def _geoms_now(self):
+        """(centres, plan radii, bottoms, tops, keep) of every geom now, base frame; keep masks out
+        the robot's geoms, which a test of the scene must not see (a ray from above the drawer's
+        bar met the hand over it and called the bar covered)."""
+        m, d = self.scene.m, self.scene.d
+        if self._geom_mask is None:
+            self._geom_mask = np.array([not contacts.is_robot(contacts.body_name(m, int(m.geom_bodyid[g])))
+                                        for g in range(m.ngeom)])
+            boxes = [geom_box(m, g) for g in range(m.ngeom)]
+            self._geom_centre = np.stack([b[0] for b in boxes])
+            self._geom_half = np.stack([b[1] for b in boxes])
+        xmat = d.geom_xmat.reshape(-1, 3, 3)
+        pos = d.geom_xpos - self.scene.base + np.einsum("gij,gj->gi", xmat, self._geom_centre)
+        hz = (np.abs(xmat[:, 2, :]) * self._geom_half).sum(1)
+        rad = np.linalg.norm(self._geom_half[:, :2], axis=1)
+        return pos, rad, pos[:, 2] - hz, pos[:, 2] + hz, self._geom_mask
+
+    def column_clear(self, xy: np.ndarray, radius: float, z_from: float, ignore: set[int]) -> bool:
+        """No geom of the scene (the robot's aside, and bodies in `ignore`) lies over a disc of
+        `radius` about `xy` anywhere above `z_from`."""
+        pos, rad, bottoms, _tops, keep = self._geoms_now()
+        near = np.linalg.norm(pos[:, :2] - np.asarray(xy, float)[:2], axis=1) - rad < radius
+        body = np.asarray(self.scene.m.geom_bodyid)
+        mine = np.isin(body, list(ignore)) if ignore else np.zeros(len(body), bool)
+        return not bool((near & keep & ~mine & (bottoms > z_from)).any())
+
     def transit_height(self, p_from: np.ndarray, p_to: np.ndarray, exclude: int) -> float:
         """A height that clears everything standing between here and there: every geom
         whose footprint is within 8 cm of the line, minus the robot and the target, at its

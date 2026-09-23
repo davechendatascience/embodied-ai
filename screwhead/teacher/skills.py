@@ -110,6 +110,15 @@ class SkillConfig:
     drive_past_open: float = 0.03  # drive a joint this far past its "open"/"on" threshold
     drive_past_close: float = 0.01 # and this far past "close"/"off"
     drive_speed: float = 0.12
+    # hook (a sliding drawer opened with open jaws from above), measured on LIBERO's 50 human demos
+    # of libero_goal 3: the tool 42 mm on the opening side of the bar and 17 mm above its centre,
+    # pointing down, the jaws along the opening direction and wide open; never closed
+    hook_lead: float = 0.042
+    hook_above: float = 0.017      # (lower or closer, 9-12 mm and 27-35 mm, never engaged: 3 of 30)
+    hook_ahead: float = 0.05        # m the drag's aim runs ahead of the hook point (speed-limited)
+    hook_corridor: float = 0.015    # m off the hook point, across the pull, before re-entering
+    hook_band: float = 0.004        # m of the hook height the tool must be at before it drags: at
+    #                                 17 mm off it the finger swept over the bar
     drive_lead_rot: float = 0.06   # rad a hinge drive may lead the handle (< at_rot): leading by the
     #                                whole remaining turn spun the tool at w_max while the knob, damped,
     #                                followed at a fifth of that -- the jaws were pried open and let go
@@ -586,6 +595,8 @@ class Skills:
         k = self.k
         R, p = s["R_tool"], s["p_tool"]
         a = self.scene.articulation(region)
+        if mode == "open" and a["jnt_type"] == 2 and self._hookable(a):
+            return self._hook(a, s)
         R_h, w, app = self._handle_frame(region, a, mode)
         p_h = self.scene.d.geom_xpos[a["handle_geom"]] - self.scene.base
         if self.holding(a["handle_geom"], w):
@@ -697,6 +708,48 @@ class Skills:
             rejected=choice.get("rejected", {}), score=choice.get("score"),
             approach=[round(float(v), 2) for v in app], jaw=[round(float(v), 2) for v in R_h[:, 1]],
             width_mm=round(1000 * float(w), 1), handle_geom=self.scene.m.geom_id2name(a["handle_geom"]))
+
+    def _hook_frame(self, a: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+        """(bar centre, opening direction in plan, the bar's long axis, the bar's top) now."""
+        c, Rg, hl = geom_world_box(self.scene.m, self.scene.d, a["handle_geom"], self.scene.base)
+        bar = Rg[:, int(np.argmax(hl))]
+        u = a["axis"] * float(np.sign(self._drive_dq(a, "open")) or 1.0)
+        u = u - bar * float(u @ bar)
+        u = u - Z * float(u @ Z)
+        return c, u / np.linalg.norm(u), bar, float(c[2] + (np.abs(Rg) @ hl)[2])
+
+    def _hookable(self, a: dict) -> bool:
+        """Nothing of the scene over the bar, the robot aside: the top drawer's bar is open from
+        above; the middle drawer's has the top drawer's bar over it."""
+        c, _u, _bar, top = self._hook_frame(a)
+        return self.reach.column_clear(c, self.k.hook_corridor, top, {a["body"]})
+
+    def _hook(self, a: dict, s: dict) -> np.ndarray:
+        """Open a sliding drawer as LIBERO's human demos of libero_goal 3 all do: jaws wide open,
+        pointing down, the tool on the opening side of the bar so the trailing finger stands over
+        its rear edge, dragged along the opening direction at the drive speed, re-aimed from the
+        bar's pose every step. Nothing is grasped, so there is nothing to back out of: the next
+        skill's first move is up."""
+        k = self.k
+        R, p = s["R_tool"], s["p_tool"]
+        c, u, _bar, top = self._hook_frame(a)
+        R_hook = min((top_down(u), top_down(-u)), key=lambda Rc: rot_angle(R.T @ Rc))
+        hook = c + u * k.hook_lead + Z * k.hook_above
+        off = p - hook
+        along = float(off @ u)
+        lateral = float(np.linalg.norm((off - u * along)[:2]))
+        down = abs(float(off[2])) < k.hook_band
+        if down and lateral < k.hook_corridor and -k.hook_corridor < along < k.hook_ahead \
+                and rot_angle(R.T @ R_hook) < k.at_rot:
+            self.phase = "drag"
+            return self.action(self.twist_to(R, p, R_hook, hook + u * k.hook_ahead, v_max=k.drive_speed,
+                                             v_min=k.drive_speed_min), A_OPEN)
+        leg = self.path_to(R, p, R_hook, hook, top + k.lift_dz)
+        if leg is not None:
+            self.phase, R_t, target = leg
+            return self.action(self.twist_to(R, p, R_t, target), A_OPEN)
+        self.phase = "hook"
+        return self.action(self.twist_to(R, p, R_hook, hook), A_OPEN)
 
     def _drive(self, a: dict, mode: str, R, p, R_h, p_h) -> np.ndarray:
         """Carry the held handle along the joint's own motion toward just past its goal, a

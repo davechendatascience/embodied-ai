@@ -111,6 +111,31 @@ Humans: one top-down grasp, the object dropped into the basket from 32-140 mm, 1
 | 8 bowl on plate | 92 | 50 | 174 | 48/50 | 28 | success | drops |
 | 9 bottle on rack | 169, side grasp, wrist turned ~55 deg, laid along the cradle | 1 | 223 | 1/1 | 9 | - | orientation-aware place (object target pose from the region frame), grasp chosen for the release pose |
 
+## Since the survey (2026-09-23, evening)
+
+- **Push (goal 5): 3 -> 50 of 50.** Skills.push does what the human demos do: jaws open 62 mm
+  along the motion, fingertips on the plate's floor 0.44 of its radius ahead of its centre, the
+  hand advancing at 6 cm/s. Three settings of the fingertip height were measured before one moved
+  the plate; an aim tied to the plate's position stalled the push.
+- **The rack (goal 9): 1 -> 50 of 50** with the commanded acceleration bounded at 0.5 m/s^2 while
+  the jaws hold something (2 otherwise). Bounding every period at 1.0 or 0.5 overran the approach's
+  phase switches and cost libero_spatial 31 episodes; a braking cap in the teacher did not help.
+- **The drawer hook (goal 3).** With the humans' measured offsets (42 mm on the opening side of the
+  bar, 17 mm above it, jaws wide, pointing down) the top drawer opens in 6 of 6 at a median step
+  55, against ~290 for relocation plus the pinch drive. Opening first and not relocating then
+  fails differently: the open drawer overhangs the bowl, the grasp screen finds no top-down grasp
+  and falls to side grasps whose descent pushes the drawer shut. The humans find a top-down rim
+  pinch there; the teacher does not yet.
+- **Mid-air drops are open.** They happen in the carry phase. They nearly vanish with 0.5 m/s^2 in
+  every period, but not with 0.5 only while holding, nor with a slow final descent, nor with the
+  tool held still while the jaws close.
+- **Evaluate within LIBERO's limits.** With the hook (runs/skill_v5): 1433/1500 at 600 steps (goal 3
+  9 -> 18), 1258/1500 within 220/280/300. Goal 3 is 0 within 300 in every version so far; 15 tasks
+  are under 48/50 within their limit, nearly all on time: spatial 7 12, spatial 9 24, spatial 6 27,
+  spatial 0 33, spatial 1 34, goal 6 34, goal 4 35, spatial 4 39, object 1 43, spatial 8 44, goal 5
+  45, spatial 3 46, goal 1 and 8 47. Humans move a held object at 0.17-0.23 m/s (median) and lift it
+  120-160 mm; the teacher's caps are 0.12-0.15 m/s and it lifts ~270 mm near tall fixtures.
+
 ## What is missing, by effect
 
 1. Carry without drops (gated acceleration bound; sweep running) -- spatial 1-9, goal 1/3/4/8.
