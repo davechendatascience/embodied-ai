@@ -669,21 +669,27 @@ contracts:
     subject: CMP-optimization-teacher
     claim_type: capability
     metrics: [{id: passed, unit: bool}]
-    acceptance: {rule: "passed == true", target_rate: 0.99}
+    # One trial is one full run of the suite; the cases inside it carry the breadth, the repeats
+    # carry determinism. 0.99 is not certifiable under bb-1 without hundreds of repeats, so the
+    # rate the gate promises is 0.9 and the sample size follows from the model.
+    acceptance: {rule: "passed == true", target_rate: 0.9}
     exclusions: [rendering and image observations, the non-lean execution path, PrivilegedEnv]
     compatibility_key: [sw_revision]
     evaluable_by: [TST-exec-state-replay]
-    sufficiency: {n_min: 3, max_ci_width: 0.6}
+    sufficiency: {n_min: 8, max_ci_width: 0.35}
 
   - id: CTR-verdicts-decide
     subject: CMP-optimization-teacher
     claim_type: capability
     metrics: [{id: passed, unit: bool}]
-    acceptance: {rule: "passed == true", target_rate: 0.99}
+    # One trial is one full run of the suite; the cases inside it carry the breadth, the repeats
+    # carry determinism. 0.99 is not certifiable under bb-1 without hundreds of repeats, so the
+    # rate the gate promises is 0.9 and the sample size follows from the model.
+    acceptance: {rule: "passed == true", target_rate: 0.9}
     exclusions: [goals with several conjuncts or any-joint predicates, libero_goal 3]
     compatibility_key: [sw_revision]
     evaluable_by: [TST-verdicts-cases]
-    sufficiency: {n_min: 3, max_ci_width: 0.6}
+    sufficiency: {n_min: 8, max_ci_width: 0.35}
 
   - id: CTR-search-settles
     subject: CMP-optimization-teacher
