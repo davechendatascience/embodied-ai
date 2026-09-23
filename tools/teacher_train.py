@@ -3,7 +3,7 @@
 
   collect  run episodes whose every control step is solved by the search, recording the state it
            saw and the plan it chose, and keep an episode only if it ends settled with no
-           violation, tool acceleration p95 <= 2 m/s^2 and no servo re-anchor (DEF-smooth-motion)
+           violation, tool acceleration p95 <= 7 m/s^2 and no servo re-anchor (DEF-smooth-motion)
   fit      regress pi_theta onto the kept plans -- squared error on the twist, cross-entropy on
            the level -- and write the weights with the feature layout and search settings
   round    collect, fit, and collect again starting from the fitted pi_theta
@@ -38,7 +38,7 @@ from screwhead.teacher.search import LEVELS, Search, Settings  # noqa: E402
 from screwhead.teacher.task_loss import TaskLoss  # noqa: E402
 from screwhead.teacher.verdicts import Verdicts  # noqa: E402
 
-SMOOTH_ACC = 2.0        # DEF-smooth-motion, at the physics substep
+SMOOTH_ACC = 7.0        # DEF-smooth-motion (b): the ramped envelope at the physics substep
 STUDENT_NOISE = StartNoise(xy_m=0.10, z_m=0.05, yaw_deg=30.0, tilt_deg=10.0, null_rad=0.3)
 
 

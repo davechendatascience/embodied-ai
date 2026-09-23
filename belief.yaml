@@ -648,7 +648,8 @@ contracts:
     metrics:
       - {id: acc_p95, unit: m/s^2}
       - {id: reanchors, unit: count}
-    acceptance: {rule: "acc_p95 <= 2.0 and reanchors == 0", target_rate: 0.9}
+    # DEF-smooth-motion (b): the envelope of ramped execution, not the command-side rate limit
+    acceptance: {rule: "acc_p95 <= 7.0 and reanchors == 0", target_rate: 0.9}
     exclusions: [episodes that fail for reasons other than motion]
     compatibility_key: [sw_revision]
     evaluable_by: [TST-teacher-motion]
@@ -999,7 +1000,8 @@ contracts:
     metrics:
       - {id: acc_p95, unit: m/s^2}
       - {id: reanchors, unit: count}
-    acceptance: {rule: "acc_p95 <= 2.0 and reanchors == 0", target_rate: 0.9}
+    # DEF-smooth-motion (b), restated: 7 m/s^2 is the ramped envelope, 2 was the command limit
+    acceptance: {rule: "acc_p95 <= 7.0 and reanchors == 0", target_rate: 0.9}
     compatibility_key: [teacher_revision]
     evaluable_by: [TST-teacher-motion]
     sufficiency: {n_min: 20, max_ci_width: 0.3}
