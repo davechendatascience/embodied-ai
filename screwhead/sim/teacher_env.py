@@ -53,7 +53,8 @@ class PrivilegedEnv(SimArm):
                  layout_radius: float = 0.0, layout_check=None, layout_tries: int = 20,
                  gripper_mode: str = "command"):
         self.ti, self.radius, self.horizon = task_index, radius_m, horizon
-        self.rng = np.random.default_rng(seed)
+        self.seed = int(seed)          # an episode's draws are seeded from it and the
+        self.rng = np.random.default_rng(seed)   # episode index, never from the stream so far
         self._scene_seed = seed
         # the scripted teacher emits robosuite's -1/0/+1, hence the "command" default here;
         # everything else about execution is SimArm's, shared with TaskEnv

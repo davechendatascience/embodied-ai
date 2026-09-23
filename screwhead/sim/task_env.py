@@ -47,7 +47,8 @@ class TaskEnv(SimArm):
         from .scene import Scene
         from ..teacher.task_spec import parse
         self.suite, self.ti, self.horizon = suite, task_index, horizon
-        self.rng = np.random.default_rng(seed)
+        self.seed = int(seed)          # an episode's draws are seeded from it and the
+        self.rng = np.random.default_rng(seed)   # episode index, never from the stream so far
         self._scene_seed = seed
         self.task_spec = parse(self._open(suite, task_index, render, execution or Execution()), suite)
         self.scene = Scene(self.env.env)

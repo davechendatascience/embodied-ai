@@ -41,7 +41,7 @@ def _frame(env, text: str, note: str) -> np.ndarray:
     return img
 
 
-def film(record: Episode, out_dir: Path) -> Path:
+def film(record: Episode, out_dir: Path, fps: int = 8) -> Path:
     import imageio.v2 as imageio
 
     frames: list[np.ndarray] = []
@@ -59,7 +59,8 @@ def film(record: Episode, out_dir: Path) -> Path:
             f"_{tag.replace(':', '').replace(' ', '_')}")
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{stem}.mp4"
-    imageio.mimsave(path, frames, fps=20, macro_block_size=1)
+    # 20 fps is real time, one frame per control step; slower is for looking at it
+    imageio.mimsave(path, frames, fps=fps, macro_block_size=1)
     print(json.dumps({"video": str(path), "frames": len(frames), **got}), flush=True)
     env.close() if hasattr(env, "close") else None
     return path
@@ -70,13 +71,14 @@ def main() -> int:
     ap.add_argument("records", nargs="+", help="episode record files")
     ap.add_argument("--check", action="store_true", help="replay and compare with what was recorded")
     ap.add_argument("--video", default="", help="directory to write one mp4 per record into")
+    ap.add_argument("--fps", type=int, default=8, help="20 is real time; lower plays it slower")
     args = ap.parse_args()
 
     agreed = 0
     for path in args.records:
         record = Episode.load(path)
         if args.video:
-            film(record, Path(args.video))
+            film(record, Path(args.video), args.fps)
         elif args.check:
             report = record.check()
             agreed += bool(report["agrees"])

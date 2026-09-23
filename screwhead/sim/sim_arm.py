@@ -326,8 +326,13 @@ class SimArm:
         idx = self.joint_indexes
         q0 = sim.data.qpos[idx].copy()
         T0 = fk(self.chain, torch.tensor(q0)[None])[0].numpy()
-        for _ in range(max_rounds):
-            targets, seeds = self._start_candidates(T0, q0, batch)
+        for attempt in range(max_rounds):
+            # BRN-reset-anchors-all-execution: an episode's draws come from a generator seeded by
+            # (seed, episode index), its redraws from (seed, episode, attempt). Drawing from the
+            # shared stream instead made a start pose depend on every reset before it, so the same
+            # episode replayed on its own began somewhere else.
+            rng = np.random.default_rng((self.seed, self.episode, attempt))
+            targets, seeds = self._start_candidates(T0, q0, batch, rng)
             res = solve_ik(self.chain, torch.tensor(np.stack(targets)), torch.tensor(np.stack(seeds)),
                            lam=0.02, max_iters=200, trust=0.2)
             ok = res["converged"] & (sigma_min(self.chain, res["theta"]) > START_MIN_SIGMA)
@@ -343,20 +348,21 @@ class SimArm:
             sim.forward()
         raise RuntimeError(f"{self.label}: no collision-free reachable start pose found")
 
-    def _start_candidates(self, T0: np.ndarray, q0: np.ndarray, batch: int):
+    def _start_candidates(self, T0: np.ndarray, q0: np.ndarray, batch: int, rng=None):
         st = self.start
+        rng = self.rng if rng is None else rng
         targets, seeds = [], []
         for _ in range(batch):
-            dp = np.array([self.rng.uniform(-st["xy"], st["xy"]), self.rng.uniform(-st["xy"], st["xy"]),
-                           self.rng.uniform(-st["z"], st["z"])])
-            yaw = self.rng.uniform(-st["yaw"], st["yaw"])
-            ax = self.rng.normal(size=2)
+            dp = np.array([rng.uniform(-st["xy"], st["xy"]), rng.uniform(-st["xy"], st["xy"]),
+                           rng.uniform(-st["z"], st["z"])])
+            yaw = rng.uniform(-st["yaw"], st["yaw"])
+            ax = rng.normal(size=2)
             ax = np.array([*ax / (np.linalg.norm(ax) + 1e-12), 0.0])
-            tilt = self.rng.uniform(-st["tilt"], st["tilt"])
+            tilt = rng.uniform(-st["tilt"], st["tilt"])
             T = T0.copy()
             T[:3, :3] = axis_rot(np.array([0, 0, 1.0]), yaw) @ axis_rot(ax, tilt) @ T0[:3, :3]
             T[:3, 3] = T0[:3, 3] + dp
             T[2, 3] = max(T[2, 3], START_MIN_TOOL_Z)
             targets.append(T)
-            seeds.append(q0 + self.rng.normal(0, st["null"], size=len(q0)))
+            seeds.append(q0 + rng.normal(0, st["null"], size=len(q0)))
         return targets, seeds

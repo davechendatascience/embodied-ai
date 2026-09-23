@@ -20,13 +20,28 @@ and a backend this module does not know is an error rather than a silent mis-rep
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 SCHEMA = "screwhead.episode/1"
+
+
+def _start_noise(cls, blob: dict[str, Any]):
+    """Rebuild the start noise from a record, reading the displayed form too.
+
+    Records written before the field names were fixed carry as_dict()'s keys, with the angles in
+    radians. They are still replayable, and silently dropping them would lose the demonstrations
+    they describe.
+    """
+    if set(blob) <= {f.name for f in fields(cls)}:
+        return cls(**blob)
+    return cls(xy_m=blob.get("xy", 0.0), z_m=blob.get("z", 0.0),
+               yaw_deg=float(np.rad2deg(blob.get("yaw", 0.0))),
+               tilt_deg=float(np.rad2deg(blob.get("tilt", 0.0))),
+               null_rad=blob.get("null", 0.0))
 
 
 @dataclass
@@ -78,7 +93,10 @@ class Episode:
         return cls(
             task={"backend": "libero", "suite": task.suite, "index": task.task,
                   "init_index": task.init, "language": getattr(env, "language", "")},
-            reset={"seed": task.seed, "start_noise": task.noise.as_dict(), "horizon": env.horizon},
+            # the noise as its own constructor takes it, not as as_dict() displays it: that one
+            # renames the fields and converts to radians, and a record must rebuild the object
+            reset={"seed": task.seed, "start_noise": asdict(task.noise), "horizon": env.horizon,
+                   "episode": int(env.episode)},   # the start pose is drawn from (seed, episode)
             embodiment={"arm": env.chain.name, "joints": env.chain.n,
                         "tool_frame": env.chain.tool_frame, "source": env.chain.source},
             action_space={"kind": "normalized_body_twist+gripper", "moment_first": True,
@@ -103,11 +121,12 @@ class Episode:
         from .sim_arm import Execution
         from .task_env import StartNoise, TaskEnv
 
-        noise = StartNoise(**self.reset["start_noise"])
+        noise = _start_noise(StartNoise, self.reset["start_noise"])
         env = TaskEnv(self.task["suite"], self.task["index"], horizon=self.reset["horizon"],
                       seed=self.reset["seed"], render=render, start=noise,
                       execution=Execution(**self.execution))
         self._refuse_a_different_machine(env)
+        env.episode = int(self.reset.get("episode", 1)) - 1      # reset() counts it back up
         env.reset(self.task["init_index"])
         success = False
         for t, action in enumerate(self.actions):
