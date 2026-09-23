@@ -1798,16 +1798,16 @@ branches:
       delivered at a step only when it is not held and its origin is within a declared plan distance of
       the drop point and within declared heights below and above the target height (the origin height
       the place skill lowers the object to); the release the place skill commands on the ground that the
-      object is delivered uses the same step's state. The pick before a place step is skipped at a step
-      when that place step is done or its object delivered, so while a place step's goal does not hold,
-      a delivered object is left where it is rather than taken back. The planner selects, at every
-      control step, the first plan step in order that is neither done nor delivered (picks skipped as
-      above), so a later plan step is selected only when every earlier place step is, from that step's
-      state, done or delivered, both of which require its object not held. Claimed, for plans in which
-      no later step grasps an object that an earlier place step delivered: no control step selects a
-      later plan step while an earlier place step's object is held with its goal satisfied; and no
-      control step commands a release on the ground that the object is delivered while its origin is
-      more than the declared height above its target height. Not claimed: that LIBERO's predicate still
+      object is delivered uses the same step's state. The planner selects, at every control step, the
+      first plan step in order that is not done, where the pick before a place step is also skipped when
+      that place step's object is delivered. So a place step whose object is delivered but whose goal
+      does not hold stays selected, and at such a step the place skill, finding its object delivered,
+      commands the jaws open and a retreat rather than taking the object back; and a later plan step is
+      selected only when every earlier place step is done, which requires its object not held. Claimed,
+      for plans in which no later step grasps an object that an earlier place step delivered: no control
+      step selects a later plan step while an earlier place step's object is held with its goal
+      satisfied; and no control step commands a release on the ground that the object is delivered while
+      its origin is more than the declared height above its target height. Not claimed: that LIBERO's predicate still
       holds after the release; that holding is judged without error; anything of plans that re-pick a
       delivered object; releases commanded on other grounds; or that a delivered object stays delivered.
     premises: [AXM-libero-scores-final-state, DEF-holding, DEF-skill-contract]
@@ -1820,7 +1820,9 @@ branches:
       delivered on a holding flicker and was let go there. Earlier statements were doubted for not
       saying that one step's state serves both the check and the release, for leaving 'done' unlatched
       implicitly, for not stating the selection rule, and for skipping the pick only when its place
-      step is done (it is also skipped when the object is delivered). evidence: CTR-teacher-reliable.
+      step is done (it is also skipped when the object is delivered), and a statement whose selection
+      rule moved past a delivered place step, which the planner does not do: the place step stays
+      selected and its skill lets go. evidence: CTR-teacher-reliable.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-regression-planner
