@@ -82,3 +82,11 @@ def test_a_release_is_a_release_not_a_drop():
 def test_a_let_go_on_the_support_is_a_set_down():
     down = [(False, 0.0 - k * 0.012, "pick:up") for k in range(3)]
     assert run(carry(5, 0.0) + down, gap=0.002)["drop_count"] == 0
+
+
+def test_a_release_is_measured_when_decided_even_if_held_went_first():
+    # lowered into a basket: the object touches it and held() reads false before the jaws open
+    lower = [(True, 0.05, "place:lower"), (False, 0.03, "place:lower"), (False, 0.03, "place:lower")]
+    rel = [(False, 0.03, "place:release"), (False, 0.03, "place:release"), (False, 0.03, "settle")]
+    m = run(carry(5, 0.05) + lower + rel, gap=0.012)
+    assert m["releases"] == 1 and m["release_gap_mm"] == 12.0 and m["drop_count"] == 0

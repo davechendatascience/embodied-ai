@@ -295,6 +295,7 @@ components:
       - tools/teacher_report.py
       - tools/teacher_determinism.py
       - tools/teacher_motion.py
+      - tools/demo_survey.py              # LIBERO's human demos replayed, per task: the teacher's ground truth
       - screwhead/teacher/clearing.py
       - scripts/skill_sweep.sh
       - screwhead/teacher/affordances.yaml  # per-category affordances, evidence-tagged

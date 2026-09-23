@@ -12,6 +12,11 @@ counts once the object has fallen DROP_FALL below where it was let go, not held 
 DROP_CONFIRM steps (LMA-loss-needs-robust-evidence: never on an instantaneous signal). A real drop
 confirms in one or two steps: 10 mm of free fall takes 45 ms.
 
+A release is measured when the teacher decides to let go -- the first step of a release phase -- for
+every object it held within the last RELEASE_WINDOW steps. Measured at held() going false instead,
+it was never measured on most of libero_object: lowered into the basket, the object touches the
+basket before the jaws open and held() is already false when the release comes (release_gap -1).
+
 An observer: it reads the state and the teacher's phase and changes neither.
 """
 from __future__ import annotations
@@ -45,17 +50,24 @@ class GripWatch:
 
     def reset(self) -> None:
         self.held = dict.fromkeys(self.objs, False)
+        self.last_held = dict.fromkeys(self.objs, -10**6)
         self.last_release = -10**6
+        self.releasing = False
         self.gaps: list[float] = []
         self.drops = 0
         self.pending: dict[str, tuple[int, float]] = {}     # obj -> (step let go, height then)
 
     def step(self) -> None:
         sk, t = self.teacher.skills, self.env.t
-        if self.teacher.phase.endswith("release"):
+        releasing = self.teacher.phase.endswith("release")
+        if releasing:
             self.last_release = t
         for o in self.objs:
             h = sk.held(o)
+            if h:
+                self.last_held[o] = t
+            if releasing and not self.releasing and t - self.last_held[o] <= RELEASE_WINDOW:
+                self.gaps.append(support_gap(sk.scene, sk.planner, o))
             z = float(sk.scene.object_box(o).world_centre[2])
             if o in self.pending:
                 t0, z0 = self.pending[o]
@@ -64,13 +76,11 @@ class GripWatch:
                 elif z0 - z >= DROP_FALL:
                     self.drops += 1
                     del self.pending[o]
-            if self.held[o] and not h:
-                gap = support_gap(sk.scene, sk.planner, o)
-                if t - self.last_release <= RELEASE_WINDOW:
-                    self.gaps.append(gap)
-                elif gap > DROP_GAP:
+            if self.held[o] and not h and t - self.last_release > RELEASE_WINDOW:
+                if support_gap(sk.scene, sk.planner, o) > DROP_GAP:
                     self.pending[o] = (t, z)
             self.held[o] = h
+        self.releasing = releasing
 
     def metrics(self) -> dict:
         """release_gap_mm is -1 when nothing was let go on purpose: the ledger's rules cannot
