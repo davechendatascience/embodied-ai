@@ -2,7 +2,8 @@
 # here; scripts/smell_check.sh runs this together with the dead-code and duplication checks.
 line-length = 110
 target-version = "py311"
-extend-exclude = ["third_party", ".venv", ".venv-libero", ".venv-pw", "runs", "cache", "checkpoints"]
+extend-exclude = ["third_party", ".venv", ".venv-libero", ".venv-pw", "runs", "cache",
+                  "checkpoints", ".belief", ".stamps"]   # ledgers, not project code
 
 [lint]
 select = [
