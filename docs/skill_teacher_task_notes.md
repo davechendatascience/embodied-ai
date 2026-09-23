@@ -136,6 +136,37 @@ Humans: one top-down grasp, the object dropped into the basket from 32-140 mm, 1
   45, spatial 3 46, goal 1 and 8 47. Humans move a held object at 0.17-0.23 m/s (median) and lift it
   120-160 mm; the teacher's caps are 0.12-0.15 m/s and it lifts ~270 mm near tall fixtures.
 
+## 2026-09-24
+
+Status (50 episodes per task, seed 555): libero_spatial/object/goal 1498/1500 at 600 steps, 1436
+within LIBERO's limits (`runs/skill_v18`); libero_10 349/500 at 800 steps, 323 within 520
+(`runs/skill_l10_v4`).
+
+- **Goal 6 (cream cheese in the bowl) was the support ray, not the squeeze.** The ray under an object
+  started 1 mm below its bottom, inside the table's box, and met the table's underside 49 mm down;
+  the grasp floor never held and the fingertips went 4.3 mm into the table. Within 300: 36 -> 50.
+- **Goal 3 the humans' way.** LIBERO's humans open the top drawer first (q -0.144..-0.160 by step
+  40-60 in 20 of 20 demos) and pinch the bowl on the side away from the drawer, the hand's length
+  clear of it, its top 124-153 mm up against the drawer's 142. The teacher now keeps the bowl in
+  place when it keeps its rim pinch with the drawer where the plan leaves it (clear_of), and moves
+  a held object level out from under an overhang before it rises. 17 of 50 episodes skip the
+  relocation; within 300: 0 -> 12. The other 33 layouts have no rim pinch with the drawer open.
+- **Arm behaviour.** Per-joint clipping of the servo's lead tilted a fast descent 18.6 deg, ran the
+  elbow into its stop and stalled the arm for 550 steps (libero_spatial 3): the lead is now scaled
+  uniformly. Probing the approach only at its ends let the hand's side wings, 30-70 mm above the
+  tool point, pass into a wine-rack bar: probed every 2 cm now.
+- **Reproducibility.** robosuite's finger target survived resets, so an episode depended on the
+  episodes its process ran before (2 of 50 on goal 3 changed with order); the reset anchor is on by
+  default and `skill_eval --interleave` reproduces one-worker runs episode for episode.
+- **libero_10, from the human demos.** Basket tasks: the lying soup can is taken top-down across its
+  body and dropped from 75-97 mm; the teacher's failure was not the drop but a place counted done
+  while the can was still in the jaws (0 -> 50 on tasks 0 and 7). Bottom drawer (3): the humans put
+  the bowl into the already-open drawer and push it shut with no grasp; the teacher now presses the
+  bar with shut jaws pitched 45 deg (0 -> 42). Moka pots (2, 8): the humans hold the handle (22 mm
+  jaws, 51-58 mm off the pot's axis); the teacher grasps across the body at 81 mm and loses it
+  (24 and 0 of 50). Microwave (9): the humans insert the mug from the front at 45 deg; a top-down
+  place sets it on the microwave's roof (0 of 50). Both need a new skill.
+
 ## What is missing, by effect
 
 1. Carry without drops (gated acceleration bound; sweep running) -- spatial 1-9, goal 1/3/4/8.
