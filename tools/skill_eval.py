@@ -315,9 +315,15 @@ def _summarise(rows: list[dict], args, seconds: float) -> None:
 
 
 def _write_trials(rows: list[dict], args) -> None:
+    """Write the trials, with refusals kept out of the reliability rate.
+
+    A refused episode carries no `success` key at all -- not false, absent. The ledger excludes a
+    trial missing a rule's metric rather than failing it, and that exclusion is the whole mechanism
+    keeping refusals out of CTR-teacher-reliable; they are counted by CTR-teacher-attempts instead.
+    Writing success: false here would look like completing a record, and would quietly fold
+    coverage back into reliability. The assertion below is there because that edit is tempting.
+    """
     Path(args.trials).parent.mkdir(parents=True, exist_ok=True)
-    # A refused episode carries no `success` metric at all, so it cannot enter a rate whose rule
-    # reads success == true. It carries `refused`, which is what a coverage contract reads.
     Path(args.trials).write_text(json.dumps({"trials": [
         {"metrics": ({"refused": True} if r.get("refused") else
                      {"success": r["success"], "refused": False}),
@@ -328,6 +334,10 @@ def _write_trials(rows: list[dict], args) -> None:
          "repro": {"seed": args.seed * 100 + r["task"], "task": r["task"], "task_suite": args.suite,
                    "episode": r["episode"], "horizon": args.horizon,
                    "teacher_revision": "skill_teacher"}} for r in rows]}, indent=1))
+    written = json.loads(Path(args.trials).read_text())["trials"]
+    leaked = [t for t in written if t["metrics"].get("refused") and "success" in t["metrics"]]
+    assert not leaked, (f"{len(leaked)} refused trials carry a success metric; they would be "
+                        "scored as failures against CTR-teacher-reliable instead of excluded")
     print("->", args.trials)
 
 

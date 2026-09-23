@@ -1034,7 +1034,12 @@ contracts:
     sufficiency: {n_min: 20, max_ci_width: 0.3}
 
   # Reliability is over the episodes the teacher attempted. A refused episode carries no
-  # `success` metric at all, so it cannot enter this rate: DEF-refusal-is-an-outcome separates
+  # `success` metric AT ALL -- not false, absent -- which is what keeps it out of this rate: a
+  # trial missing a rule's metric is excluded rather than failed (component-belief model.py, and
+  # the header note above). Do not "complete" a refused trial by writing success: false. It reads
+  # like a missing field and is not one; adding it would fold coverage back into reliability,
+  # drop this rate across every suite at once, and leave nothing saying why. CTR-teacher-attempts
+  # is where a refusal is counted. So it cannot enter this rate: DEF-refusal-is-an-outcome separates
   # an attempt that went wrong, which is evidence about execution, from a precondition the
   # planner could not establish, which is evidence about coverage and is CTR-teacher-attempts'
   # business. A rate that added them could not tell a teacher that does not try from one that
