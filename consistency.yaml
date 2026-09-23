@@ -347,9 +347,17 @@ definitions:
       2 m/s^2 in the linear part, 5 rad/s^2 in the angular, per control period), each period's
       joint goal is ramped linearly across the period, and the joint reference never leads the
       measured joints by more than max_lag -- so no step change in the commanded velocity reaches
-      the arm and no executed step is a counted re-anchor, counted as
-      BRN-servo-lead-scaled-uniformly counts it (a scaled step whose IK residual exceeds
-      max_pose_err). (b) EXECUTED, and measured over the substeps in which no robot geom touches
+      the arm, and no executed step in which no robot geom touches anything is a counted
+      re-anchor, counted as BRN-servo-lead-scaled-uniformly counts it (a scaled step whose IK
+      residual exceeds max_pose_err). Contact steps are excluded for the reason clause (b)
+      excludes contact substeps, and on the same kind of evidence: a counted re-anchor is a
+      tracking error, and an arm that presses a knob or carries an object accumulates one because
+      the world resists the reference, not because the command was rough. Measured by replaying
+      16 search episodes of libero_spatial (1826 executed steps, 924 re-anchors): 0.083 re-anchors
+      per free-motion step against 0.597 per contact step, 7.2x, with 97.1% of all re-anchors
+      falling on contact steps while contact is 82.3% of the steps. The distinction decides the
+      keep-filter rather than decorating it -- under the clause as first written none of those 16
+      episodes is keepable, and restricted to free motion 6 of 16 are. (b) EXECUTED, and measured over the substeps in which no robot geom touches
       anything: the tool's acceleration at the 2 ms physics substep has a 95th percentile over
       those substeps of at most 6 m/s^2. Contact substeps are excluded because an arm pressing a
       knob or setting an object down accelerates since the world stops it, which is the task and

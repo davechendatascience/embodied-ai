@@ -54,23 +54,31 @@ SMOOTH_ACC = 6.0        # DEF-smooth-motion (b): the ramped envelope, free motio
 STUDENT_NOISE = StartNoise(xy_m=0.10, z_m=0.05, yaw_deg=30.0, tilt_deg=10.0, null_rad=0.3)
 
 
-def _executed_track(env, watch) -> tuple[list, list, callable]:
+def _executed_track(env, watch) -> tuple[list, list, list, callable]:
     """Grip-site positions after every physics substep of the EXECUTED trajectory.
 
     Execution hands the caller a substep hook, and the carried watch is what the episode passes
     to it; the recorder wraps that one. The search's rollouts drive forks of the watch through
     their own hooks and restore afterwards, so nothing they simulate reaches this track -- which
     is the point, since DEF-smooth-motion is a property of what was executed.
+
+    `touched` carries one flag per executed step rather than per substep: both clauses of
+    DEF-smooth-motion are bars on free motion, but (b) is measured per substep and (a) counts
+    re-anchors, which the servo counts once per step. A step counts as contact if the robot
+    touched anything at any substep of it.
     """
     m, d = env.scene.m, env.scene.d
     site, track, contact = m.site_name2id("gripper0_grip_site"), [], []
+    touched = [False]
 
     def recorded(i=None) -> None:
         watch.substep(i)
         track.append(d.site_xpos[site].copy())
-        contact.append(bool(robot_in_contact(m, d)))      # (b) is a bar on free motion
+        here = bool(robot_in_contact(m, d))
+        contact.append(here)                              # (b) is a bar on free motion
+        touched[-1] = touched[-1] or here                 # and so is (a), per step
 
-    return track, contact, recorded
+    return track, contact, touched, recorded
 
 
 def episode(env, settings: Settings, policy, features, init: int | None, pool=None) -> dict:
@@ -80,8 +88,8 @@ def episode(env, settings: Settings, policy, features, init: int | None, pool=No
     v = Verdicts(env, loss)
     search = Search(env, v, loss, settings, policy=policy, pool=pool)
     watch, start_ref = v.watch(), v.reference()
-    track, contact, substep = _executed_track(env, watch)
-    previous_ref, reanchors = dict(start_ref), 0
+    track, contact, touched, substep = _executed_track(env, watch)
+    previous_ref, reanchors, free_reanchors = dict(start_ref), 0, 0
     states, twists, levels, executed = [], [], [], []
     outcome, t0 = "timeout", time.perf_counter()
 
@@ -92,8 +100,11 @@ def episode(env, settings: Settings, policy, features, init: int | None, pool=No
         levels.append(report.best.level.astype(np.int64))
         executed.append(np.asarray(action, float).copy())
         before = env.servo.reanchors                       # the rollouts moved it too; only this step counts
+        touched.append(False)
         env.execute(action, substep=substep)
-        reanchors += env.servo.reanchors - before
+        here = env.servo.reanchors - before
+        reanchors += here
+        free_reanchors += here * (not touched[-1])         # clause (a) counts free-motion steps
         success = env.success()
         watch.period_end(success)
         violation = watch.pending() or v.disturbed(start_ref, previous_ref) or v.lost()
@@ -114,10 +125,10 @@ def episode(env, settings: Settings, policy, features, init: int | None, pool=No
         acc_p95 = float(np.percentile(acc, 95))
         acc_p95_free = float(np.percentile(acc[free], 95)) if free.any() else float("nan")
     kept = (outcome == "settled" and not final                 # finish() judges the still-open losses
-            and acc_p95_free <= SMOOTH_ACC and reanchors == 0)
+            and acc_p95_free <= SMOOTH_ACC and free_reanchors == 0)
     return dict(init=env.init_index, outcome=outcome, steps=len(states), kept=bool(kept),
                 acc_p95=round(acc_p95, 3), acc_p95_free=round(acc_p95_free, 3),
-                reanchors=int(reanchors), final_watch=final,
+                reanchors=int(reanchors), free_reanchors=int(free_reanchors), final_watch=final,
                 seconds=round(time.perf_counter() - t0, 1),
                 state=np.asarray(states), twist=np.asarray(twists), level=np.asarray(levels),
                 executed=np.asarray(executed))
@@ -168,13 +179,14 @@ def _episodes(args, env, settings, policy, features, out: Path, pool) -> list[di
                             suite=args.suite, task=args.task, seed=args.seed,
                             settings=json.dumps(vars(settings)), state_dim=features.dim)
         summary = {k: r[k] for k in ("init", "outcome", "steps", "kept", "acc_p95",
-                                     "acc_p95_free", "reanchors", "seconds")}
+                                     "acc_p95_free", "reanchors", "free_reanchors", "seconds")}
         # the episode as the few numbers that play it again: no states, no frames
         Episode.of(env, r["executed"],
                    TaskRef(args.suite, args.task, r["init"], args.seed,
                            STUDENT_NOISE if args.start_noise else StartNoise()),
                    outcome={k: summary[k] for k in ("outcome", "steps", "kept", "acc_p95_free",
-                                                    "reanchors")} | {"settled": r["outcome"] == "settled"},
+                                                    "reanchors", "free_reanchors")}
+                           | {"settled": r["outcome"] == "settled"},
                    provenance={"tool": "tools/teacher_train.py collect", "revision": _revision(),
                                "settings": vars(settings), "policy": args.policy or "search only"},
                    ).save(out / f"{name}.episode.json")
