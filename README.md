@@ -23,14 +23,14 @@ most current work is on the demonstrations it learns from.
 
 A geometry-driven demonstration policy (`screwhead/teacher/`) that reads a task's goal from its
 bddl and the scene's geometry from the simulator, and labels any state a student reaches (DAgger).
-Status at commit `85e65e9`, 50 episodes per task at seed 555 (`runs/skill_v4`):
+Status at commit `4d7b8fd`, 50 episodes per task at seed 555 (`runs/skill_v5`):
 
 | suite | at 600 steps | within LIBERO's step limit |
 |---|---|---|
-| libero_spatial (limit 220) | 478 / 500 | 357 / 500 |
+| libero_spatial (limit 220) | 479 / 500 | 357 / 500 |
 | libero_object (limit 280) | 496 / 500 | 493 / 500 |
-| libero_goal (limit 300) | 449 / 500 | 408 / 500 |
-| all | 1423 / 1500 | 1258 / 1500 |
+| libero_goal (limit 300) | 458 / 500 | 408 / 500 |
+| all | 1433 / 1500 | 1258 / 1500 |
 
 The goal is at least 95% on every task within LIBERO's limits. What works and what is missing,
 task by task and against LIBERO's own human demonstrations, is in
@@ -62,6 +62,8 @@ task by task and against LIBERO's own human demonstrations, is in
 Features by date, newest first. Numbers are measured at the stated commit.
 
 - **2026-09-23**
+  - Drawer hook: the top drawer is opened with open jaws from above, as the human demos do
+    (opens in ~55 steps instead of ~290; libero_goal 3: 9 -> 18 of 50).
   - Push skill: a dish is pushed with open jaws caging its rim, as LIBERO's human demos do
     (libero_goal 5: 3 -> 50 of 50).
   - Execution bounds the commanded acceleration at 0.5 m/s^2 while the jaws hold something, 2
