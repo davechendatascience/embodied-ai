@@ -359,7 +359,13 @@ definitions:
       keep-filter rather than decorating it -- under the clause as first written none of those 16
       episodes is keepable, and restricted to free motion 6 of 16 are. (b) EXECUTED, and measured over the substeps in which no robot geom touches
       anything: the tool's acceleration at the 2 ms physics substep has a 95th percentile over
-      those substeps of at most 6 m/s^2. Contact substeps are excluded because an arm pressing a
+      those substeps of at most 6 m/s^2. The acceleration at a substep is a second difference over
+      three samples, and it counts as free motion only if all three are free: labelling it by the
+      last sample alone admits the difference taken across the end of a contact, which is where the
+      largest acceleration of the episode sits. That is not a detail -- replaying 16 spatial
+      episodes, the last-sample mask fails this clause on 5 of them at 7.1 to 20.5 m/s^2 while the
+      three-sample mask passes all 16, at a p95 between 2.4 and 5.2. Contact substeps are excluded
+      because an arm pressing a
       knob or setting an object down accelerates since the world stops it, which is the task and
       not the motion -- on a settled search episode the free-motion figure is 4.5 m/s^2 against
       16.5 in contact, and contact is a third of that episode. The bound is the envelope of

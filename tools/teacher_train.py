@@ -121,7 +121,13 @@ def episode(env, settings: Settings, policy, features, init: int | None, pool=No
     acc_p95 = acc_p95_free = float("nan")
     if len(track) > 3:
         acc = np.linalg.norm(np.diff(np.diff(np.array(track), axis=0) / dt, axis=0) / dt, axis=1)
-        free = ~np.array(contact[2:], dtype=bool)
+        # A second difference spans three samples, so it is free motion only when all three are.
+        # Labelling it by the last sample alone counted the substep where the arm stops being
+        # resisted -- the largest acceleration in the episode -- as free motion: measured by
+        # replaying 16 spatial episodes, that mask fails clause (b) on 5 of 16 at 7 to 21 m/s^2,
+        # and the three-sample mask passes all 16 at a p95 of 2.4 to 5.2.
+        c = np.asarray(contact, dtype=bool)
+        free = ~(c[:-2] | c[1:-1] | c[2:])
         acc_p95 = float(np.percentile(acc, 95))
         acc_p95_free = float(np.percentile(acc[free], 95)) if free.any() else float("nan")
     kept = (outcome == "settled" and not final                 # finish() judges the still-open losses
