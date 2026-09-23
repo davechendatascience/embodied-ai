@@ -62,6 +62,11 @@ class Reach:
         margin = np.minimum(th - c.limits[:, 0], c.limits[:, 1] - th).min(1)
         return th, res["converged"], sigma_min(c, th), margin
 
+    def all_reachable(self, Ts: list[np.ndarray]) -> bool:
+        """Every pose converges with DEF-reachable-pose's conditioning and joint margin."""
+        _th, conv, sig, margin = self.solve(Ts)
+        return bool((conv & (sig > MIN_SIGMA) & (margin > MIN_MARGIN)).all())
+
     def collides(self, theta: np.ndarray, allow: int = -1, aperture: float | None = None) -> int:
         """0 clear, 1 the arm brushes something loose, 2 it is inside something fixed --
         found by putting the configuration in the simulator, looking, and restoring it.

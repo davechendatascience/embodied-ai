@@ -46,6 +46,12 @@ class TwistServo:
         # m/s^2 and rad/s^2 the commanded twist may change by (set by the env); None: unbounded
         self.max_lin_acc: float | None = None
         self.max_ang_acc: float | None = None
+        # the linear bound while the jaws hold something (grip()); None: the same bound as always.
+        # A rim-pinched bowl pivots about the pinch with nothing resisting it; carried under 2 m/s^2
+        # the rack's bottle scored 1 of 50, under 0.5 while held 25 of 25. Bounding free motion at
+        # 1.0 or 0.5 as well overran phase switches on the approach: spatial 3, 6, 8 lost 31 of 150
+        self.max_lin_acc_holding: float | None = None
+        self.holding = False
         self.V_prev = np.zeros(6)                # the twist executed last (moment first)
         self.lam, self.iters, self.max_lag, self.max_pose_err = lam, iters, max_lag, max_pose_err
         self.ref: np.ndarray | None = None
@@ -63,7 +69,13 @@ class TwistServo:
         self.limit_clamps = 0
         self.scale_lead = False     # scale the whole lead to max_lag rather than clip per joint
 
+    def grip(self, asked_closed: bool, pinched: bool) -> None:
+        """Holding from the period both fingers close on something until the jaws are commanded
+        open: read each period from the contacts alone, it flickers with them mid-carry."""
+        self.holding = asked_closed and (self.holding or pinched)
+
     def reset(self, theta_measured: np.ndarray) -> None:
+        self.holding = False
         self.ref = np.asarray(theta_measured, np.float64).copy()
         self.T_ref = kin_np.fk(self._np, self.ref)[0]
         self.V_prev = np.zeros(6)
@@ -71,7 +83,9 @@ class TwistServo:
     def _limit(self, V: np.ndarray) -> np.ndarray:
         """V moved toward the request by at most the acceleration bounds times dt."""
         dV = V - self.V_prev
-        for sl, a_max in ((slice(0, 3), self.max_ang_acc), (slice(3, 6), self.max_lin_acc)):
+        lin = (self.max_lin_acc_holding if self.holding and self.max_lin_acc_holding is not None
+               else self.max_lin_acc)
+        for sl, a_max in ((slice(0, 3), self.max_ang_acc), (slice(3, 6), lin)):
             if a_max is None:
                 continue
             n, cap = float(np.linalg.norm(dV[sl])), a_max * self.spec.dt

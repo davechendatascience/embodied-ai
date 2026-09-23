@@ -301,6 +301,7 @@ components:
       - screwhead/teacher/affordances.yaml  # per-category affordances, evidence-tagged
       - tests/test_affordances.py           # holds every bddl category to a declared affordance
       - tests/test_grip_watch.py            # holds grip_watch's drop/release definition to scripted histories
+      - tests/test_task_spec.py             # a push category is planned as a push, everything else picked
       - tests/test_frames.py
 
   - id: CMP-vision-encoder

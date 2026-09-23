@@ -14,6 +14,7 @@ a bounding box. So a task is a goal to satisfy, and a plan is the skills that sa
 
   In(object, region)      -> pick(object), place_in(region)
   On(object, target)      -> pick(object), place_on(target)
+                             push(object, target) for a category declared moved_by push
   Open(region) / Close    -> articulate(region, open|close)   (drawer, door)
   TurnOn / TurnOff(thing) -> turn(thing, on|off)              (stove knob)
 
@@ -24,7 +25,10 @@ consistent with those two rules is acceptable.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
+
+AFFORDANCES = Path(__file__).with_name("affordances.yaml")
 
 PICK_PLACE = {"in", "on"}
 ARTICULATE = {"open", "close"}
@@ -35,7 +39,7 @@ SWITCH = {"turnon", "turnoff"}
 class Step:
     """One skill invocation. `obj` is a body name, `region` a site name, both as the
     simulator knows them (the bddl region key IS the site name after robosuite's prefix)."""
-    skill: str                  # pick | place_in | place_on | articulate | turn | relocate
+    skill: str                  # pick | place_in | place_on | push | articulate | turn | relocate
     obj: str | None = None
     region: str | None = None
     mode: str | None = None     # open/close for articulate, on/off for turn
@@ -52,7 +56,19 @@ class TaskSpec:
 
     @property
     def plan(self) -> list[Step]:
-        return plan_for(self.goals)
+        return plan_for(self.goals, self.objects)
+
+
+@lru_cache(maxsize=1)
+def affordances() -> dict:
+    """screwhead/teacher/affordances.yaml's categories (AXM-category-affordances-declared)."""
+    import yaml
+    return yaml.safe_load(AFFORDANCES.read_text())["categories"]
+
+
+def moved_by(category: str | None) -> str:
+    """How a category is moved: pick unless the table declares otherwise."""
+    return (affordances().get(category or "", {}) or {}).get("moved_by", "pick")
 
 
 def parse(path: str | Path, suite: str | None = None) -> TaskSpec:
@@ -65,9 +81,10 @@ def parse(path: str | Path, suite: str | None = None) -> TaskSpec:
                     goals=[tuple(g) for g in p["goal_state"]], objects=objects, fixtures=fixtures)
 
 
-def plan_for(goals: list[tuple]) -> list[Step]:
+def plan_for(goals: list[tuple], objects: dict[str, str] | None = None) -> list[Step]:
     """Goal conjunction -> skill sequence. Raises on a predicate we cannot satisfy, so a
-    suite we cannot yet do is a loud failure rather than a silently empty plan."""
+    suite we cannot yet do is a loud failure rather than a silently empty plan. `objects`
+    (instance -> category) lets the affordance table say how each object is moved."""
     opens, places, closes, switches = [], [], [], []
     close_targets = {g[1] for g in goals if g[0] == "close"}
     for g in goals:
@@ -78,6 +95,9 @@ def plan_for(goals: list[tuple]) -> list[Step]:
             # to be open first, and LIBERO's drawers start closed
             if region in close_targets:
                 opens.append(Step("articulate", region=region, mode="open"))
+            if pred == "on" and moved_by((objects or {}).get(obj)) == "push":
+                places.append(Step("push", obj=obj, region=region, goal=tuple(g)))
+                continue
             places.append(Step("pick", obj=obj))
             places.append(Step("place_in" if pred == "in" else "place_on", obj=obj, region=region,
                                goal=tuple(g)))

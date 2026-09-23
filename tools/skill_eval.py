@@ -337,7 +337,7 @@ def _summarise(rows: list[dict], args, seconds: float) -> None:
           + f"   ({seconds:.0f}s)")
 
 
-def _write_trials(rows: list[dict], args) -> None:
+def _write_trials(rows: list[dict], args, rev: str) -> None:
     """Write the trials, with refusals kept out of the reliability rate.
 
     A refused episode carries no `success` key at all -- not false, absent. The ledger excludes a
@@ -346,14 +346,11 @@ def _write_trials(rows: list[dict], args) -> None:
     Writing success: false here would look like completing a record, and would quietly fold
     coverage back into reliability. The assertion below is there because that edit is tempting.
     """
-    # Stamp the teacher that actually ran. This used to write the constant "skill_teacher", which
-    # pools every revision into one slice -- the compatibility key reads teacher_revision, so a
-    # constant makes a change to the teacher invisible and averages it with the teacher it
-    # replaced. teacher_code() walks the import closure, so a new file in the teacher enters the
-    # hash by itself.
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from teacher_report import teacher_revision
-    rev = teacher_revision()
+    # Stamp the teacher that actually ran: `rev` is hashed when the run starts (main). This used to
+    # write the constant "skill_teacher", which pools every revision into one slice -- the
+    # compatibility key reads teacher_revision, so a constant makes a change to the teacher
+    # invisible and averages it with the teacher it replaced. teacher_code() walks the import
+    # closure, so a new file in the teacher enters the hash by itself.
     Path(args.trials).parent.mkdir(parents=True, exist_ok=True)
     Path(args.trials).write_text(json.dumps({"trials": [
         {"metrics": dict({"refused": True} if r.get("refused") else
@@ -375,12 +372,17 @@ def _write_trials(rows: list[dict], args) -> None:
 
 def main() -> int:
     args = _parse()
+    # Hashed before anything runs: hashed when the trials were written, a file edited during a
+    # 20-minute sweep stamped the episodes of the code that ran with the code that had not
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from teacher_report import teacher_revision
+    rev = teacher_revision()
     t0 = time.time()
     jobs = _jobs(args)
     rows = _fill_lost(_run(jobs, args.suite, args.at_once), jobs)
     _summarise(rows, args, time.time() - t0)
     if args.trials:
-        _write_trials(rows, args)
+        _write_trials(rows, args, rev)
     return 0
 
 

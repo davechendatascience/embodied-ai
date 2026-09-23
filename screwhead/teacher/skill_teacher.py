@@ -123,6 +123,8 @@ class SkillTeacher:
                 a = self.skills.pick(step.obj, s, via=via)
         elif step.skill in ("place_in", "place_on"):
             a = self.skills.place(step.obj, step.region, s, inside=step.skill == "place_in")
+        elif step.skill == "push":
+            a = self.skills.push(step.obj, step.region, s)
         elif step.skill == "relocate":                 # place picks it up first (regrasp)
             a = self.skills.place(step.obj, step.region, s, inside=False)
         elif step.skill == "articulate" or step.skill == "turn":

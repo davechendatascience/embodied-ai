@@ -30,6 +30,7 @@ START_MIN_SIGMA = 0.02        # a start this close to singular is rejected
 CAMERA_PX = 128
 SEED_MOD = 2**32 - 1          # numpy's legacy seed range
 REST_SPEED = 0.005            # m/s: the scene is at rest when no free object moves faster
+HOLD_BAND = 0.003             # m: jaws asked this much narrower than they are are driven closed
 INITIAL_SETTLE = 10           # control steps held after loading an initial state
 SETTLE_CHUNK = 5              # then in chunks of this many, until at rest
 SETTLE_ROUNDS = 10            # at most this many chunks
@@ -45,6 +46,8 @@ class Execution:
     hard_reset: bool = False
     max_lin_acc: float = 2.0          # m/s^2 the commanded twist may change by (servo.py)
     max_ang_acc: float = 5.0          # rad/s^2
+    max_lin_acc_holding: float | None = 0.5   # m/s^2 while the jaws hold something (servo.grip):
+    #                                   the rack's bottle 1 of 50 at 2.0, 25 of 25 at 0.5 while held
     joint_ramp: float = 1.0           # fraction of each control period the joint goal is ramped over
     #                                   (joint_ramp.py); 0 steps it, as LIBERO does
     joint_step: float = 0.1           # rad the joint goal may move per period: robosuite's output_max
@@ -108,6 +111,7 @@ class SimArm:
         check_loaded_model(self.robot.robot_model.file, "panda")
         self.servo = TwistServo(self.chain, self.spec, ex.joint_step, iters=ex.servo_iters, max_lag=ex.joint_step)
         self.servo.max_lin_acc, self.servo.max_ang_acc = ex.max_lin_acc, ex.max_ang_acc
+        self.servo.max_lin_acc_holding = ex.max_lin_acc_holding
         self.servo.scale_lead = ex.scale_lead
         self.joint_ramp = ex.joint_ramp
         self.lean, self.anchoring = ex.lean, ex.anchor
@@ -153,10 +157,20 @@ class SimArm:
         a = np.clip(np.asarray(action, np.float64), -1, 1)
         o = self.observe()
         cmd = np.zeros(self.env.env.action_dim)
+        gq, gv = o["robot0_gripper_qpos"], o.get("robot0_gripper_qvel", np.zeros(2))
+        # holding (the servo's latch): from the period both fingers touch one body that is not the
+        # robot until the jaws are commanded open -- read from contacts and this period's action,
+        # the same whatever policy acts. "Asked narrower than the jaws are" alone is true of every
+        # free close (80 mm down to a 30 mm pre-grasp), and bounding those overran the approach.
+        from . import contacts
+        from .gripper_servo import channel_to_target
+        if self.gripper_mode == "target":
+            asked = float(channel_to_target(a[6])) < float(gq[0] - gq[1]) - HOLD_BAND
+        else:
+            asked = float(a[6]) > 0.0
+        self.servo.grip(asked, contacts.pinched(self.env.sim.model, self.env.sim.data))
         cmd[:7] = self.servo.command(np.asarray(o["robot0_joint_pos"]), a[:6] * self.scale)
         if self.gripper_mode == "target":
-            from .gripper_servo import channel_to_target
-            gq, gv = o["robot0_gripper_qpos"], o.get("robot0_gripper_qvel", np.zeros(2))
             cmd[-1] = self.gripper_servo.command(float(channel_to_target(a[6])),
                                                  float(gq[0] - gq[1]), float(gv[0] - gv[1]))
         else:

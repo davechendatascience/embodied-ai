@@ -26,7 +26,7 @@ import numpy as np
 
 from ..sim import contacts
 from .clearing import Clearing
-from ..geometry.frames import Z, axis_rot, pose, rot_angle, rotvec
+from ..geometry.frames import Z, axis_rot, pose, rot_angle, rotvec, top_down
 from .grasp_planner import GraspPlanner
 from ..sim.gripper_servo import A_OPEN, target_to_channel
 from ..sim.scene import geom_world_box
@@ -92,6 +92,19 @@ class SkillConfig:
     drop_ray_height: float = 0.30  # rays cast down from this far above the region top
     drop_clear: float = 0.01       # a hit above the region top by more than this blocks the spot
     retreat_dz: float = 0.10
+    # push (BRN-push-cages-a-dish), each measured on LIBERO's 50 human demos of libero_goal 5
+    push_open: float = 0.062        # m the jaws stay open: 62 mm median, never commanded closed
+    push_lead: float = 0.44         # tool point ahead of the dish's centre, x its plan radius
+    push_floor: float = 0.0         # m the fingertips ride above the dish's floor -- on it, as the human
+    #                                 hand does (fingertips 1.7 mm below its top): 3 mm above, they touched
+    #                                 the plate on 1-4 steps of 400 and never moved it; 6 mm below the
+    #                                 floor tilted the plate 8-12 degrees and pinned it to the table
+    push_speed: float = 0.06        # m/s: ~250 mm in ~80 steps
+    push_ahead: float = 0.08        # m the aim runs ahead of the held point: aimed 10-30 mm ahead,
+    #                                 the reference stopped where the stuck plate held it, and the
+    #                                 push had no force left; the human hand moves at a steady rate
+    push_corridor: float = 0.015    # m off the held point, across the push, before re-entering
+    push_slip: float = 0.04         # m ahead of the held point before the fingers count as out of it
     retreat_speed: float = 0.15
     # articulation
     drive_past_open: float = 0.03  # drive a joint this far past its "open"/"on" threshold
@@ -377,6 +390,75 @@ class Skills:
         if below:
             return "up", R, np.array([p[0], p[1], safe_h])
         return "over", R_goal, np.array([start[0], start[1], safe_h])
+
+    # -- push ------------------------------------------------------------------------------------
+    def push(self, obj: str, region: str, s: dict) -> np.ndarray:
+        """Move a dish without grasping it (BRN-push-cages-a-dish): jaws open and aligned with the
+        motion, fingertips inside its rim ahead of its centre, dragged toward the region.
+
+        As LIBERO's human demos of libero_goal 5 do it, all 50: the leading finger bears on the
+        inside of the leading rim, so the rim cages the dish and re-aiming from its pose every
+        step is enough. Picked instead, the 137 mm plate scored 3 of 50 on forced grasps.
+        """
+        k = self.k
+        R, p = s["R_tool"], s["p_tool"]
+        box = self.scene.object_box(obj)
+        ext = np.abs(box.R) @ box.half
+        c = box.world_centre
+        bottom, top = float(c[2] - ext[2]), float(c[2] + ext[2])
+        _R_reg, p_reg, _half = self.region_pose(region)
+        d = (p_reg - c)[:2]
+        if np.linalg.norm(d) < 1e-6:
+            self.phase = "hold"
+            return self.action(np.zeros(6), k.push_open)
+        u = np.r_[d / np.linalg.norm(d), 0.0]
+        reach = self.planner.gripper().reach
+        radius = float(max(ext[0], ext[1]))
+        z_push = self._dish_floor(obj, c, radius) + k.push_floor + reach
+        held = np.r_[c[:2] + u[:2] * k.push_lead * radius, z_push]
+        # the jaws along the motion, one finger leading: of the two frames that do it, the one the
+        # wrist is nearer to now -- a function of the state, and no half turn of the wrist
+        frames = sorted((top_down(u), top_down(-u)), key=lambda Rc: rot_angle(R.T @ Rc))
+        R_push = frames[0]
+        off = (p - held)[:2]
+        along = float(off @ u[:2])
+        lateral = float(np.linalg.norm(off - u[:2] * along))
+        inside = p[2] - reach < top and lateral < k.push_corridor and along < k.push_slip
+        if inside and rot_angle(R.T @ R_push) < k.at_rot:
+            self.phase = "push"
+            aim = held + u * k.push_ahead
+            return self.action(self.twist_to(R, p, R_push, aim, v_max=k.push_speed), k.push_open)
+        # enter -- only through a push the arm can hold: the entry, halfway and the end are
+        # reachable poses (DEF-reachable-pose), the three stops a carry is screened at
+        end = np.r_[p_reg[:2] + u[:2] * k.push_lead * radius, z_push]
+        stops = [held, (held + end) / 2, end]
+        passing = [Rc for Rc in frames if self.reach.all_reachable([pose(Rc, x) for x in stops])]
+        if passing:
+            R_push = passing[0]
+        elif self.reach.refuse_when_empty:
+            raise Refusal("reachable", obj, "no push entry whose entry, halfway and end poses "
+                          "are reachable, for either jaw direction")
+        leg = self.path_to(R, p, R_push, np.r_[held[:2], z_push], top + k.lift_dz)
+        if leg is not None:
+            self.phase, R_t, target = leg
+            return self.action(self.twist_to(R, p, R_t, target), k.push_open)
+        self.phase = "enter"
+        return self.action(self.twist_to(R, p, R_push, held), k.push_open)
+
+    def _dish_floor(self, obj: str, c: np.ndarray, radius: float) -> float:
+        """Height of a dish's floor: the top of its collision geoms near its axis (the plate's
+        floor disc tops out 8.6 mm above its bottom, its rim rises to 19)."""
+        m, d = self.scene.m, self.scene.d
+        bid = self.scene.body_id(obj)
+        tops = []
+        for g in range(m.ngeom):
+            if int(m.geom_bodyid[g]) != bid or not (m.geom_contype[g] or m.geom_conaffinity[g]):
+                continue
+            cc, Rg, hl = geom_world_box(m, d, g, self.scene.base)
+            if np.linalg.norm((cc - c)[:2]) < 0.2 * radius:
+                tops.append(float(cc[2] + (np.abs(Rg) @ hl)[2]))
+        box = self.scene.object_box(obj)
+        return max(tops) if tops else float(c[2] - (np.abs(box.R) @ box.half)[2])
 
     # -- place -----------------------------------------------------------------------------------
     def place(self, obj: str, region: str, s: dict, inside: bool) -> np.ndarray:

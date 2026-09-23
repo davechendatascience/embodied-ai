@@ -55,7 +55,9 @@ class GripWatch:
         self.releasing = False
         self.gaps: list[float] = []
         self.drops = 0
-        self.pending: dict[str, tuple[int, float]] = {}     # obj -> (step let go, height then)
+        self.pending: dict[str, tuple[int, float, str]] = {}   # obj -> (step let go, height, phase)
+        self.drop_phases: list[str] = []      # the phase the object was last held in, per drop
+        self.prev_phase = ""
 
     def step(self) -> None:
         sk, t = self.teacher.skills, self.env.t
@@ -70,20 +72,22 @@ class GripWatch:
                 self.gaps.append(support_gap(sk.scene, sk.planner, o))
             z = float(sk.scene.object_box(o).world_centre[2])
             if o in self.pending:
-                t0, z0 = self.pending[o]
+                t0, z0, ph = self.pending[o]
                 if h or t - t0 > DROP_CONFIRM:
                     del self.pending[o]                        # held again, or never fell: a flicker
                 elif z0 - z >= DROP_FALL:
                     self.drops += 1
+                    self.drop_phases.append(ph)
                     del self.pending[o]
             if self.held[o] and not h and t - self.last_release > RELEASE_WINDOW:
                 if support_gap(sk.scene, sk.planner, o) > DROP_GAP:
-                    self.pending[o] = (t, z)
+                    self.pending[o] = (t, z, self.prev_phase)
             self.held[o] = h
         self.releasing = releasing
+        self.prev_phase = self.teacher.phase
 
     def metrics(self) -> dict:
         """release_gap_mm is -1 when nothing was let go on purpose: the ledger's rules cannot
         compare a missing value."""
         return dict(release_gap_mm=round(1000 * max(self.gaps), 1) if self.gaps else -1.0,
-                    releases=len(self.gaps), drop_count=self.drops)
+                    releases=len(self.gaps), drop_count=self.drops, drop_phases=list(self.drop_phases))

@@ -58,6 +58,22 @@ def robot_contacts(m, d, penetrating: bool = True) -> Iterator[int]:
             yield b2 if r1 else b1
 
 
+def pinched(m, d) -> bool:
+    """Both finger groups touch one body that is not the robot: something is between the jaws.
+    Read from the contacts alone, so it is the same whatever policy is acting."""
+    left, right = set(), set()
+    for b1, b2 in _pairs(m, d, False):
+        for a, b in ((b1, b2), (b2, b1)):
+            na = body_name(m, a)
+            if is_robot(body_name(m, b)):
+                continue
+            if any(k in na for k in LEFT_FINGER):
+                left.add(b)
+            elif any(k in na for k in RIGHT_FINGER):
+                right.add(b)
+    return bool(left & right)
+
+
 def robot_in_contact(m, d) -> bool:
     """True if any robot geom penetrates something that is not the robot."""
     return next(robot_contacts(m, d), None) is not None

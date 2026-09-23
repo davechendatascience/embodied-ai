@@ -12,7 +12,8 @@
 #   declared  -- a fact read from the task or the asset, with where
 #   open      -- not known yet; the teacher must not rely on it
 #
-# Not yet read by the teacher. tests/test_affordances.py keeps it covering every category
+# moved_by is read by task_spec (a push category gets a push step); the other fields are not
+# yet read by the teacher. tests/test_affordances.py keeps it covering every category
 # the three suites name.
 #
 # Fields
@@ -49,8 +50,10 @@ categories:
         libero_goal 5 "push the plate to the front of the stove"; the plate is 137 mm across,
         beyond the gripper's 75 mm opening
       measured: >-
-        picked instead: forced grasp in 14 of 20 episodes, 2 of 20 succeeded
-    open: the push itself (contact point, direction, how far) is not a skill yet
+        picked instead: forced grasp in 14 of 20 episodes, 2 of 20 succeeded. LIBERO's 50 human
+        demos of libero_goal 5 push it with the jaws open 62 mm and never closed, aligned with the
+        motion, fingertips 15 mm above its bottom, the tool 0.44 of its radius ahead of its centre
+        (tools/demo_survey.py); Skills.push does the same
 
   butter:
     kind: object
