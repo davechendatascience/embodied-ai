@@ -634,6 +634,29 @@ interfaces:
       - the source embodiment is recorded with every twist
 
 contracts:
+  - id: CTR-policy-matches-the-search
+    subject: CMP-optimization-teacher
+    claim_type: capability
+    metrics:
+      - {id: twist_rmse, unit: normalized}
+      - {id: level_acc, unit: fraction}
+    # 0.35 is the spread the search samples at (screwhead/teacher/search.py Settings.spread): a
+    # pi_theta whose error is inside that hands the search a plan within one sample of its own
+    # choice, which is what "start from pi_theta" is for. 0.9 on the level is a declared bar, not
+    # a derived one -- the channel changes only at a grasp and a release, so below it a fit is
+    # missing a transition rather than being slightly wrong.
+    acceptance: {rule: "twist_rmse <= 0.35 and level_acc >= 0.9", target_rate: 0.8}
+    exclusions:
+      - whether a search started from pi_theta settles more often than one from zero (Q9), which
+        needs two collections to compare and is the capability this proxies for
+      - episodes the keep-filter rejected, which are not fitted on
+    conditions:
+      - {id: round0, when: "round == 0"}
+      - {id: later_rounds, when: "round > 0"}
+    compatibility_key: [teacher_revision, search_settings]
+    evaluable_by: [TST-teacher-fit]
+    sufficiency: {n_min: 8, max_ci_width: 0.35}
+
   - id: CTR-execution-reproducible
     subject: CMP-scene-randomizer
     claim_type: capability
@@ -1209,6 +1232,16 @@ contracts:
     sufficiency: {n_min: 200, max_ci_width: 0.05}
 
 tests:
+  - id: TST-teacher-fit
+    layer: component
+    targets: [CMP-optimization-teacher]
+    run: env HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl taskset -c 5-9,15-19 .venv-libero/bin/python tools/teacher_train.py fit runs/teacher/spatial_r0 --out checkpoints/teacher/libero_spatial.pt --trials $OUT
+    reads: [runs/teacher/spatial_r0]
+    metrics: [twist_rmse, level_acc, frames]
+    capture: [teacher_revision, search_settings, task_suite, task, round]
+    cost: 5.0
+    timeout_s: 3600
+
   - id: TST-task-loss-agreement
     layer: component
     targets: [CMP-optimization-teacher]

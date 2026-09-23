@@ -236,6 +236,27 @@ def fit(args) -> int:
         print(json.dumps({"epoch": epoch, "val_loss": round(v_loss, 5), "level_acc": round(acc, 4)}), flush=True)
 
     net.load_state_dict(best_state)
+
+    # one trial per held-out episode: a fit is judged by whether pi_theta would hand the search
+    # the plan the search chose, episode by episode, not by an average over frames
+    if args.trials:
+        rows = []
+        net.eval()
+        for episode_index in sorted(set(ep[val])):
+            mask = np.flatnonzero(val & (ep == episode_index))
+            with torch.no_grad():
+                twist, logits = net(xt[torch.tensor(mask, device=dev)])
+            target = tw[torch.tensor(mask, device=dev)]
+            rmse = float(torch.sqrt(((twist - target) ** 2).mean()))
+            acc = float((logits.argmax(-1) == lv[torch.tensor(mask, device=dev)]).float().mean())
+            rows.append({"metrics": {"twist_rmse": round(rmse, 5), "level_acc": round(acc, 5),
+                                     "frames": int(len(mask))},
+                         "conditions": {"task_suite": meta["suite"], "task": meta["task"],
+                                        "episode": int(episode_index), "round": args.round}})
+        Path(args.trials).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.trials).write_text(json.dumps(rows, indent=1))
+        print(json.dumps({"trials": args.trials, "held_out_episodes": len(rows)}))
+
     # the normalization belongs with the weights: the features are standardized the same way at
     # labelling time, so it is folded into the first layer rather than carried separately
     with torch.no_grad():
@@ -271,7 +292,8 @@ def rounds(args) -> int:
         collect(collect_args)
         ckpt = str(base / f"pi_theta_r{r}.pt")
         fit(argparse.Namespace(data=str(data), out=ckpt, epochs=args.epochs, batch=256, lr=3e-4,
-                               seed=args.seed, round=r, cpu=args.cpu))
+                               seed=args.seed, round=r, cpu=args.cpu,
+                               trials=str(base / f"fit_r{r}.trials.json")))
         print(json.dumps({"round": r, "data": str(data), "checkpoint": ckpt}), flush=True)
     return 0
 
@@ -306,6 +328,8 @@ def main() -> int:
     f.add_argument("--seed", type=int, default=0)
     f.add_argument("--round", type=int, default=0)
     f.add_argument("--cpu", action="store_true")
+    f.add_argument("--trials", default="", help="write one CTR-policy-matches-the-search row per "
+                                                "held-out episode here")
     f.set_defaults(func=fit)
 
     r = sub.add_parser("round")
