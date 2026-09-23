@@ -32,7 +32,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from screwhead.sim.contacts import robot_in_contact  # noqa: E402
-from screwhead.sim.episode_record import Episode  # noqa: E402
+from screwhead.sim.episode_record import Episode, TaskRef  # noqa: E402
 from screwhead.sim.sim_arm import Execution  # noqa: E402
 from screwhead.sim.task_env import StartNoise, TaskEnv  # noqa: E402
 from screwhead.teacher import policy as pi  # noqa: E402
@@ -149,8 +149,9 @@ def collect(args) -> int:
         summary = {k: r[k] for k in ("init", "outcome", "steps", "kept", "acc_p95",
                                      "acc_p95_free", "reanchors", "seconds")}
         # the episode as the few numbers that play it again: no states, no frames
-        Episode.of(env, r["executed"], suite=args.suite, task=args.task, init=r["init"],
-                   seed=args.seed, noise=STUDENT_NOISE if args.start_noise else StartNoise(),
+        Episode.of(env, r["executed"],
+                   TaskRef(args.suite, args.task, r["init"], args.seed,
+                           STUDENT_NOISE if args.start_noise else StartNoise()),
                    outcome={k: summary[k] for k in ("outcome", "steps", "kept", "acc_p95_free",
                                                     "reanchors")} | {"settled": r["outcome"] == "settled"},
                    provenance={"tool": "tools/teacher_train.py collect", "revision": _revision(),

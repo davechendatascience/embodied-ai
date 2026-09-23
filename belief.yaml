@@ -407,6 +407,7 @@ components:
       with the reason, or an entry with its reason in the checker's IGNORE list
     code:
       - scripts/smell_check.sh
+      - tools/stamp_files.py                # what ran, what was generated, what still refers to it
       - ruff.toml               # the standard itself is docs/code_smell_guide.md
       - screwhead/__init__.py
       - screwhead/**/__init__.py            # the package layout itself
@@ -463,6 +464,8 @@ components:
       - screwhead/teacher/state.py          # what pi_theta reads
       - screwhead/teacher/policy.py         # pi_theta itself, and the features it reads
       - tools/teacher_train.py              # the alternation: collect under the keep-filter, fit
+      - screwhead/sim/episode_record.py     # an episode as the numbers that replay it
+      - tools/replay_episode.py             # replays a record, and films it
       - tests/test_box_distance.py
       - tests/test_task_loss.py
       - tests/test_verdicts.py

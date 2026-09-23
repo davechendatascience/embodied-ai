@@ -48,3 +48,4 @@ kuzu_concept_db*
 # read through the textbook-index MCP from a local path; docs/*.md reference it
 # by section rather than reproducing it.
 docs/*.pdf
+.stamps/

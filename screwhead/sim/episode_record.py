@@ -30,6 +30,18 @@ SCHEMA = "screwhead.episode/1"
 
 
 @dataclass
+class TaskRef:
+    """What identifies the episode's starting point: the task, the initial state it was reset to,
+    and the randomization the reset drew under."""
+
+    suite: str
+    task: int
+    init: int
+    seed: int
+    noise: Any
+
+
+@dataclass
 class Episode:
     task: dict[str, Any]              # backend, and what identifies the task and its initial state
     reset: dict[str, Any]             # seed, start-pose noise, horizon: what reset was called with
@@ -59,14 +71,14 @@ class Episode:
         return cls(**blob)
 
     @classmethod
-    def of(cls, env, actions, *, suite: str, task: int, init: int, seed: int, noise,
-           outcome: dict[str, Any], provenance: dict[str, Any]) -> Episode:
+    def of(cls, env, actions, task: TaskRef, outcome: dict[str, Any],
+           provenance: dict[str, Any]) -> Episode:
         """The record of an episode just executed in `env`, from the environment's own settings."""
         ex, spec = env.execution, env.spec
         return cls(
-            task={"backend": "libero", "suite": suite, "index": task, "init_index": init,
-                  "language": getattr(env, "language", "")},
-            reset={"seed": seed, "start_noise": noise.as_dict(), "horizon": env.horizon},
+            task={"backend": "libero", "suite": task.suite, "index": task.task,
+                  "init_index": task.init, "language": getattr(env, "language", "")},
+            reset={"seed": task.seed, "start_noise": task.noise.as_dict(), "horizon": env.horizon},
             embodiment={"arm": env.chain.name, "joints": env.chain.n,
                         "tool_frame": env.chain.tool_frame, "source": env.chain.source},
             action_space={"kind": "normalized_body_twist+gripper", "moment_first": True,
@@ -95,6 +107,7 @@ class Episode:
         env = TaskEnv(self.task["suite"], self.task["index"], horizon=self.reset["horizon"],
                       seed=self.reset["seed"], render=render, start=noise,
                       execution=Execution(**self.execution))
+        self._refuse_a_different_machine(env)
         env.reset(self.task["init_index"])
         success = False
         for t, action in enumerate(self.actions):
@@ -103,6 +116,26 @@ class Episode:
             if on_step is not None:
                 on_step(t, env, success)
         return env, {"steps": len(self.actions), "success": bool(success), "init": env.init_index}
+
+    def _refuse_a_different_machine(self, env) -> None:
+        """The actions are normalized body twists, so what they mean depends on the arm they are
+        read on: the same numbers denote different motions under a different tool frame or a
+        different normalization. Replaying them elsewhere is a thing worth doing deliberately,
+        never by accident."""
+        if self.schema != SCHEMA:
+            raise SystemExit(f"record schema {self.schema!r}, this build replays {SCHEMA!r}")
+        arm, want = env.chain, self.embodiment
+        if (arm.name, arm.n, arm.tool_frame) != (want["arm"], want["joints"], want["tool_frame"]):
+            raise SystemExit(
+                f"recorded on {want['arm']} ({want['joints']} joints, tool {want['tool_frame']}), "
+                f"replaying on {arm.name} ({arm.n}, {arm.tool_frame}): the twists would denote "
+                "different motions. Retarget the record rather than replaying it as written.")
+        space, spec = self.action_space, env.spec
+        here = (spec.control_hz, spec.pos_scale, spec.rot_scale)
+        there = (space["control_hz"], space["pos_scale"], space["rot_scale"])
+        if here != there:
+            raise SystemExit(f"recorded under normalization {there}, this environment uses {here}: "
+                             "a normalized twist means a different speed under each.")
 
     def check(self) -> dict[str, Any]:
         """Replay and compare with what was recorded, so the record is evidence and not a claim."""
