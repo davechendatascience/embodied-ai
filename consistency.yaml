@@ -1288,6 +1288,7 @@ branches:
       lasting a step or two; its speed figure bounds a held object's motion relative to the jaws, which
       decouples from the aperture exactly where it would matter -- a handle sliding along the pad plane
       moves while the aperture does not -- so it is not used for the rate.
+      evidence: CTR-teacher-reliable (goal 0, 14 -> 20/20 paired; the geom revision 20/0/20 unchanged).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-reliability-evidence-valid
@@ -1376,6 +1377,7 @@ branches:
       of it; the datum and the sign are stated because from the grasp point instead the same number
       leaves no margin at all. DEF-holding is why releasing comes first, and the two joint cases are
       given separately because the earlier statement offered one reason that holds only for a slide.
+      evidence: CTR-teacher-reliable (goal 3's drawer task is the one this governs).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-scan-then-place
