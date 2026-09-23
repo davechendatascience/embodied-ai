@@ -97,10 +97,19 @@ def teacher_revision() -> str:
 def ingest(trials: list[dict], artifact: str) -> str:
     """Hand the trials to component-belief, run from ITS environment, not this one."""
     import tempfile
+    # Two contracts, from the same episodes, kept apart on purpose. An attempted episode feeds
+    # reliability with its success; every episode feeds coverage with whether it was refused. A
+    # refused episode carries no success metric at all and must not be given one here -- the
+    # ledger excludes a trial missing a rule's metric rather than failing it, and that exclusion
+    # is what keeps a refusal out of the success rate.
     recs = [{"contract_id": "CTR-teacher-reliable", "test_id": "TST-teacher-reliability",
              "outcome": "pass", "metrics": {"success": bool(t["metrics"]["success"])},
-             "conditions": t["conditions"],
-             "repro": t["repro"]} for t in trials]
+             "conditions": t["conditions"], "repro": t["repro"]}
+            for t in trials if "success" in t["metrics"]]
+    recs += [{"contract_id": "CTR-teacher-attempts", "test_id": "TST-teacher-reliability",
+              "outcome": "pass", "metrics": {"refused": bool(t["metrics"].get("refused", False))},
+              "conditions": t["conditions"], "repro": t["repro"]}
+             for t in trials]
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
         json.dump(recs, f)
     code = ("import json,sys; sys.path.insert(0,'src'); from component_belief import server; "
@@ -116,7 +125,7 @@ def ingest(trials: list[dict], artifact: str) -> str:
 
 SUITE_TASKS = {"libero_object": 10, "libero_spatial": 10, "libero_goal": 10,
                "libero_10": 10, "libero_90": 90}
-RELIABLE_LO = 0.90        # the contract's bar (CTR-teacher-reliable), on the lower bound
+RELIABLE_LO = 0.95        # the contract's bar (CTR-teacher-reliable), on the lower bound
 MARGINAL_LO = 0.50
 Z94 = 1.881               # normal quantile for a two-sided 94% interval
 TIMELINE_MAX = 700        # characters of a timeline shown before it is elided

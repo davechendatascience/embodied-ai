@@ -323,6 +323,14 @@ def _write_trials(rows: list[dict], args) -> None:
     Writing success: false here would look like completing a record, and would quietly fold
     coverage back into reliability. The assertion below is there because that edit is tempting.
     """
+    # Stamp the teacher that actually ran. This used to write the constant "skill_teacher", which
+    # pools every revision into one slice -- the compatibility key reads teacher_revision, so a
+    # constant makes a change to the teacher invisible and averages it with the teacher it
+    # replaced. teacher_code() walks the import closure, so a new file in the teacher enters the
+    # hash by itself.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from teacher_report import teacher_revision
+    rev = teacher_revision()
     Path(args.trials).parent.mkdir(parents=True, exist_ok=True)
     Path(args.trials).write_text(json.dumps({"trials": [
         {"metrics": ({"refused": True} if r.get("refused") else
@@ -333,7 +341,7 @@ def _write_trials(rows: list[dict], args) -> None:
          "detail": dict(r.get("detail", {}), episode=r["episode"], steps=r["steps"], language=r["language"]),
          "repro": {"seed": args.seed * 100 + r["task"], "task": r["task"], "task_suite": args.suite,
                    "episode": r["episode"], "horizon": args.horizon,
-                   "teacher_revision": "skill_teacher"}} for r in rows]}, indent=1))
+                   "teacher_revision": rev}} for r in rows]}, indent=1))
     written = json.loads(Path(args.trials).read_text())["trials"]
     leaked = [t for t in written if t["metrics"].get("refused") and "success" in t["metrics"]]
     assert not leaked, (f"{len(leaked)} refused trials carry a success metric; they would be "
