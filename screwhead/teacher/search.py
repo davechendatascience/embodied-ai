@@ -43,7 +43,13 @@ class Settings:
     #                                terminal 0.056 (from 0.223) before failing on a release.
     iters: int = 2                 # distribution updates per control step
     spread: float = 0.35           # initial spread of the twist, in normalized twist coordinates
-    bound_segments: bool = True    # no segment asks for more change than its periods can absorb
+    bound_segments: bool = False   # hold each segment within what its periods can absorb. Off by
+    #                                default on a measurement: with it on, libero_goal 7 had not
+    #                                finished one episode in eight minutes, against 77-168 s
+    #                                unbounded, so the arm approaches too gradually to settle
+    #                                within the horizon. Kept because the effect on the executed
+    #                                acceleration is worth measuring in a lighter form -- bounding
+    #                                the first segment only, or allowing several periods' change.
     shrink: float = 0.6            # spread factor applied when an iteration does not improve the best key
     level_floor: float = 0.1       # least probability of every snap level in the start categorical
     kl: float = 2.0                # KL budget of one update against the start distribution
