@@ -36,6 +36,7 @@ from screwhead.sim.episode_record import Episode, TaskRef  # noqa: E402
 from screwhead.sim.sim_arm import Execution  # noqa: E402
 from screwhead.sim.task_env import StartNoise, TaskEnv  # noqa: E402
 from screwhead.teacher import policy as pi  # noqa: E402
+from screwhead.teacher.pool import RolloutPool  # noqa: E402
 from screwhead.teacher.search import LEVELS, Search, Settings  # noqa: E402
 from screwhead.teacher.task_loss import TaskLoss  # noqa: E402
 from screwhead.teacher.verdicts import Verdicts  # noqa: E402
@@ -72,12 +73,12 @@ def _executed_track(env, watch) -> tuple[list, list, callable]:
     return track, contact, recorded
 
 
-def episode(env, settings: Settings, policy, features, init: int | None) -> dict:
+def episode(env, settings: Settings, policy, features, init: int | None, pool=None) -> dict:
     """One episode driven entirely by the search, with the labels it produced."""
     env.reset(init)
     loss = TaskLoss(env)
     v = Verdicts(env, loss)
-    search = Search(env, v, loss, settings, policy=policy)
+    search = Search(env, v, loss, settings, policy=policy, pool=pool)
     watch, start_ref = v.watch(), v.reference()
     track, contact, substep = _executed_track(env, watch)
     previous_ref, reanchors = dict(start_ref), 0
@@ -125,9 +126,10 @@ def episode(env, settings: Settings, policy, features, init: int | None) -> dict
 def collect(args) -> int:
     settings = Settings(samples=args.samples, horizon=args.horizon, segments=args.segments,
                         bound_segments=args.bound)
+    execution = Execution(lean=True, anchor=True, scale_lead=True)
     env = TaskEnv(args.suite, args.task, seed=args.seed, render=False,
                   start=STUDENT_NOISE if args.start_noise else StartNoise(),
-                  execution=Execution(lean=True, anchor=True, scale_lead=True))
+                  execution=execution)
     loss = TaskLoss(env)
     features = pi.Features(env, Verdicts(env, loss))
     policy = None
@@ -139,8 +141,27 @@ def collect(args) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     rows = []
+    pool = None
+    if args.pool > 0:
+        # One pool for the whole task: a worker's environment is built once and every rollout
+        # restores the parent's state over it, model body poses included, so the reset the worker
+        # happened to start from does not survive into any rollout. Measured on libero_spatial 0:
+        # a pool built at a different init chooses the same action as the serial search.
+        pool = RolloutPool(args.suite, args.task, execution, settings,
+                           STUDENT_NOISE if args.start_noise else StartNoise(),
+                           max(args.init, 0), workers=args.pool)
+    try:
+        rows = _episodes(args, env, settings, policy, features, out, pool)
+    finally:
+        if pool is not None:
+            pool.close()
+    return _report(args, rows)
+
+
+def _episodes(args, env, settings, policy, features, out: Path, pool) -> list[dict]:
+    rows = []
     for e in range(args.episodes):
-        r = episode(env, settings, policy, features, None if args.init < 0 else args.init)
+        r = episode(env, settings, policy, features, None if args.init < 0 else args.init, pool)
         name = f"{args.suite}_{args.task}_s{args.seed}_e{e}"
         np.savez_compressed(out / f"{name}.npz", state=r["state"], twist=r["twist"], level=r["level"],
                             kept=r["kept"], outcome=r["outcome"], init=r["init"],
@@ -159,7 +180,11 @@ def collect(args) -> int:
                    ).save(out / f"{name}.episode.json")
         rows.append(summary)
         print(json.dumps({"episode": e, **summary}), flush=True)
+    return rows
 
+
+def _report(args, rows: list[dict]) -> int:
+    out = Path(args.out)
     if args.trials:
         p = Path(args.trials)
         prior = json.loads(p.read_text()) if p.exists() else []
@@ -169,9 +194,8 @@ def collect(args) -> int:
             "conditions": {"task_suite": args.suite, "task": args.task, "init": r["init"],
                            "start_noise": bool(args.start_noise)},
         } for r in rows], indent=1))
-    kept = sum(r["kept"] for r in rows)
     print(json.dumps({"episodes": len(rows), "settled": sum(r["outcome"] == "settled" for r in rows),
-                      "kept": kept, "out": str(out)}))
+                      "kept": sum(r["kept"] for r in rows), "out": str(out)}))
     return 0
 
 
@@ -316,6 +340,8 @@ def main() -> int:
     c.add_argument("--no-bound", dest="bound", action="store_false")
     c.add_argument("--no-start-noise", dest="start_noise", action="store_false")
     c.add_argument("--policy", default="", help="checkpoint the search starts from")
+    c.add_argument("--pool", type=int, default=0,
+                   help="evaluate a step's rollouts in this many worker processes (0: in process)")
     c.add_argument("--out", required=True)
     c.add_argument("--trials", default="", help="append CTR-search-settles trial rows here")
     c.set_defaults(func=collect)

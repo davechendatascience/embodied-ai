@@ -25,7 +25,6 @@ from typing import Any
 
 import numpy as np
 
-from ..sim import exec_state
 from .search import Plan, Rollout, Search, Settings
 
 
@@ -164,8 +163,3 @@ class RolloutPool:
 
     def __exit__(self, *_exc) -> None:
         self.close()
-
-
-def saved_state(env):
-    """The state a control step's plans all start from."""
-    return exec_state.save(env)
