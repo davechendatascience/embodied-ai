@@ -82,7 +82,8 @@ class Reach:
         return grade
 
     # -- choosing a grasp -------------------------------------------------------------------
-    def choose(self, cands: list, via: np.ndarray | None, allow: int = -1, extra=None):
+    def choose(self, cands: list, via: np.ndarray | None, allow: int = -1, extra=None,
+               force: bool = False):
         """The candidate grasp the arm can use, or None when there is no such candidate.
 
         Reachable at the grasp, down the column above it, and (when known) at the place pose the
@@ -124,12 +125,14 @@ class Reach:
             # "a conservative stand-in", and refusing on a conservative screen refuses states the
             # arm can in fact reach: measured, libero_goal 6 is 50/50 on a grasp this screen
             # rejects every time.
-            self.last_choice = dict(n=len(cands), feasible=0, score=None, forced=True,
+            self.last_choice = dict(n=len(cands), feasible=0, score=None, forced=force,
                                     rejected=self._why_empty(meta, kind, th, conv, allow, cands))
-            if self.refuse_when_empty:
-                self.last_choice["forced"] = False
-                return None
-            return cands[0]
+            # Forcing is the caller's last resort, never a tier's: asked tier by tier, an empty
+            # tier must answer None so the caller moves on to the next one. Forcing here on every
+            # call made the first tier force its own first candidate and hid feasible grasps in
+            # later tiers -- which changed libero_spatial 4 from 41 to 45 and 6 from 44 to 42 at
+            # the same seed while "forcing restored" was claimed and not measured.
+            return cands[0] if force else None
         # touch nothing if anything clean is feasible. Brushing a loose object used to cost
         # only 0.3 of score, so a candidate early in the list that pushed the palm into the
         # wine bottle beside the bowl beat clean ones further down -- the tool was shoved off

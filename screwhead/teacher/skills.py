@@ -174,14 +174,16 @@ class Skills:
                 used = name
                 break
         if chosen is None:
-            # The screen found nothing and is set to refuse. Taking a candidate anyway is how
-            # libero_goal 9 spent four hundred steps oscillating at an 11 mm aperture beside a
-            # 58.5 mm bottle -- but a conservative screen also refuses work the arm can do, so
-            # whether to refuse here is Reach.refuse_when_empty's decision, not this call site's.
-            raise Refusal("graspable", obj,
-                          f"0 of {sum(len(t) for _, t in tiers)} candidates over "
-                          f"{len(tiers)} tiers passed the reach screen")
-        used = used or "forced"
+            # Every tier came up empty. Refusing is what DEF-witness-or-refusal asks, and it is off
+            # until the screen is calibrated, because the screen is conservative and a forced grasp
+            # it rejected solves libero_goal 6 fifty times out of fifty. Off, this is the behaviour
+            # the teacher had before refusal existed: the best try over every tier at once.
+            if self.reach.refuse_when_empty:
+                raise Refusal("graspable", obj,
+                              f"0 of {sum(len(t) for _, t in tiers)} candidates over "
+                              f"{len(tiers)} tiers passed the reach screen")
+            chosen = self.reach.choose(sum((t for _, t in tiers), []), via, allow=bid, force=True)
+            used = "forced"
         R_grasp, p_grasp, width, app = chosen
         h = self.reach.reachable_transit(R_grasp, p_grasp - app * self.k.approach, bid)
         self._grasp_cache[obj] = (R_grasp, p_grasp, width, centre, h, app)
@@ -573,10 +575,14 @@ class Skills:
         # fall back to: a grasp checked only at the start of the motion is a claim about a
         # different configuration of the world, and a logged caveat is not a witness.
         chosen = self.reach.choose(cands, None, allow=a["body"], extra=along_the_motion)
+        drive_checked = chosen is not None
         if chosen is None:
-            raise Refusal("accessible", region,
-                          f"0 of {len(cands)} handle grasps reachable along the joint's motion")
-        drive_checked = not self.reach.last_choice.get("forced", False)
+            if self.reach.refuse_when_empty:
+                raise Refusal("accessible", region,
+                              f"0 of {len(cands)} handle grasps reachable along the joint's motion")
+            # the pre-refusal fallback: ranked among grasps reachable at the start of the drive,
+            # forcing only if none is reachable even there
+            chosen = self.reach.choose(cands, None, allow=a["body"], force=True)
         R_h, _p, w, app = chosen
         self._handle_cache[region] = (R_h, w, app, float(a["qpos"]))
         choice = dict(self.reach.last_choice, drive_checked=drive_checked)
