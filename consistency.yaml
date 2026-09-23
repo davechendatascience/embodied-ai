@@ -1151,16 +1151,27 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      Reach.carry_height returns the highest height at which the tool is a reachable pose,
-      with the arm out of the fixtures, over the pick point, the midpoint and the drop point,
-      for the grasp the object is held by now; when no height is, it returns the floor and
-      the carry is logged as unverified.
-    premises: [LMA-whole-path-reachable, DEF-reachable-pose]
+      A carry is planned only at a height the arm can hold along the whole carry: at every station
+      declared with the plan -- over the pick point, over the drop point, and the stations between
+      them, including the column the object rises through and the column it is lowered through --
+      the tool is a reachable pose with the arm clear of the fixtures, for the grasp the object is
+      held by at that moment. Finitely many stations are a screen and not a proof, so the stations
+      are declared with the plan and the claim is that the declared stations pass, not that every
+      pose along the carry does. When no height passes every station the query refuses: there is no
+      carry at this grasp, the skill does not run, and the planner records the carry as the
+      precondition that had no witness. No height is returned for a carry that failed the screen,
+      and the screen is not widened until one passes. A height established for one grasp is not
+      evidence about another, so a regrasp discards it.
+    premises: [LMA-whole-path-reachable, DEF-reachable-pose, DEF-witness-or-refusal]
     derivation_rule: >-
-      screwhead/teacher/reach.py carry_height solves every height tried, the floor included, at the
-      three stops and screens each accepted one with collides(); Skills caches it per grasp.
-      Three stops sample the path, which LMA-whole-path-reachable says endpoints cannot
-      replace; the lift and lowering columns are not sampled.
+      LMA-whole-path-reachable rules out judging a segment by its endpoints, which is why the claim
+      is over declared stations rather than the pick and drop points alone, and why it names the
+      two columns rather than leaving them implied. DEF-reachable-pose supplies what each station
+      must satisfy. DEF-witness-or-refusal supplies the half the previous statement of this branch
+      lacked: that statement licensed returning the floor when no height passed, so a caller could
+      receive a height failing the very predicate the height was asked for. The grasp qualifier
+      follows from the claim's subject -- it is about this arm holding this object in this pose, and
+      a regrasp changes the pose, so the earlier argument has no subject left.
       evidence: CTR-teacher-reliable (spatial 6, 14 -> 19/20 paired; the per-grasp revision 186 -> 186 paired).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
@@ -1168,14 +1179,25 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      A handle grasp is chosen among candidates that converge, outside the fixtures, at the
-      start, halfway through and at the end of the joint's motion whenever any candidate
-      does; otherwise from the start of the motion alone, logged as drive_checked false.
-    premises: [LMA-whole-path-reachable]
+      A handle grasp is used only if it is a reachable pose with the arm clear of the fixtures at
+      every station declared with the plan -- the start of the joint's motion, its end, and the
+      stations between them -- each station evaluated with the joint at the position that station
+      denotes rather than at the position it held before the motion began. When no candidate passes
+      every station the query refuses: the joint is not accessible by any grasp this planner knows,
+      the skill does not run, and the planner records which predicate had no witness. A candidate
+      that fails the stations is not used with its failure recorded as a caveat, and no ordering
+      among candidates ever places one that fails the predicate above one that satisfies it.
+    premises: [LMA-whole-path-reachable, DEF-reachable-pose, DEF-witness-or-refusal]
     derivation_rule: >-
-      screwhead/teacher/skills.py _choose_handle calls Reach.choose(extra=joint-motion poses,
-      strict=True) and falls back to the non-strict start-only choice only on None.
-      Choose's conditioning bars are a ranking, not DEF-reachable-pose's thresholds.
+      LMA-whole-path-reachable gives the stations: the start pose alone cannot stand for the motion.
+      DEF-reachable-pose gives what a station demands, and is a threshold rather than a score, so a
+      ranking may order the candidates that pass it but may not substitute for it -- which is the
+      force of the last sentence. DEF-witness-or-refusal removes the escape the previous statement
+      wrote in for itself, that a grasp checked only at the start may be used so long as the gap is
+      logged; a logged caveat is not a witness, and the caller cannot tell the difference from the
+      grasp it receives. That each station is evaluated at its own joint position is not a detail of
+      how the check is run but part of what is being claimed: a station evaluated at some other
+      joint position is a claim about a different configuration of the world.
       evidence: CTR-teacher-reliable (goal 0/3/7: drive_checked in 60 of 60 episodes).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
@@ -1183,14 +1205,24 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      Skills.holding is true iff both finger groups touch the handle geom and the aperture
-      lies between half the handle's width and its width plus 4 mm -- below the approach
-      opening (width plus 12 mm) and its servo band of 3 mm.
-    premises: [LMA-holding-is-geometric]
+      The jaws hold a handle when both finger groups touch the handle's own geometry -- not merely
+      some geometry of the body the handle belongs to -- and the aperture has been stopped by the
+      handle: the fingers were commanded closed and came to rest wider than they were commanded.
+      The aperture window that witnesses holding is separated from the opening the approach uses by
+      more than the band within which the gripper holds its commanded target, so that jaws at their
+      approach opening never witness holding, whether they are closing toward that opening or
+      reopening from it. Holding is claimed from neither contact alone nor aperture alone.
+    premises: [LMA-holding-is-geometric, DEF-holding, AXM-handle-shares-body]
     derivation_rule: >-
-      screwhead/teacher/skills.py holding(geom, width) with contacts.finger_sides_on_geom. Held, the
-      aperture measured 0.9-1.4 mm over the width with the fingers on the handle geom on
-      every one of 278 drive steps (drawer and knob).
+      AXM-handle-shares-body is what makes the geometry qualifier necessary rather than pedantic:
+      the handle and the face it sits on are one body, so a test at body granularity cannot tell a
+      grip on the handle from a palm laid on the drawer front, and LMA-holding-is-geometric rules
+      that test out by name. DEF-holding asks for an aperture the object stopped, which is a claim
+      about the relation between what was commanded and what was reached, not about the aperture's
+      value -- so the operative form is commanded-closed-yet-resting-wider. The separation clause
+      follows from the same definition read against its own failure mode: if the witnessing window
+      reaches the approach opening, then jaws that have closed on nothing satisfy it while merely
+      passing through, and an aperture held within a band makes a shared endpoint a shared interval.
       evidence: CTR-teacher-reliable (goal 0, 14 -> 20/20 paired; the geom/4 mm revision 20/0/20 unchanged).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
@@ -1198,18 +1230,25 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      The per-task success rates tools/teacher_report.py produces are valid evidence for
-      CTR-teacher-reliable: reproducible per seed, unaffected by the diagnostics, and
-      scored by LIBERO's own predicates.
+      The per-task success rates offered as evidence for CTR-teacher-reliable are valid evidence.
+      Each episode's outcome is the scorer's verdict on the state that episode reached and nothing
+      else, so a failure of the instruments is recorded as a failure of the instruments and never
+      as a failure of the teacher. The same seed and initial state reproduce the same episode. A run
+      reports the episodes it completed against the episodes it declared, so a rate is never formed
+      over whatever happened to arrive. The trials a run offers are the trials that run wrote, so no
+      earlier run's result is presented under a later run's revision.
     premises: [LMA-seed-fixtures-per-init-state, LMA-observers-read-only, LMA-caches-reset-per-episode,
-               AXM-libero-scores-final-state]
+               AXM-libero-scores-final-state, AXM-instruments-do-not-decide, AXM-reproducible-measurement]
     derivation_rule: >-
-      TaskEnv seeds each reset; EpisodeLog reads decisions without making them and runs
-      behind its own guard in skill_eval (its exceptions are reported, never scored); Skills
-      clears its caches on a new episode; success is LIBERO's _check_success via
-      info['success']. Evidence integrity: collect deletes a previous run's trials and fails
-      on a non-zero exit, episodes a dead worker never sent are failed rows, and
-      teacher_revision hashes the import closure of what an episode runs.
+      AXM-libero-scores-final-state fixes what an outcome is, and AXM-instruments-do-not-decide
+      forbids anything else from supplying one -- together they give the first clause, which the
+      previous statement assumed without citing anything that could establish it, and which the
+      verifier named as the missing premise. LMA-seed-fixtures-per-init-state and
+      AXM-reproducible-measurement give reproducibility. LMA-observers-read-only keeps the
+      diagnostics from making a decision, and LMA-caches-reset-per-episode keeps one episode from
+      deciding the next. The completeness and binding clauses are the remaining two readings of
+      AXM-instruments-do-not-decide: a sample silently shrunk and a result filed under a revision
+      that did not produce it are both instruments supplying a verdict.
       evidence: CTR-teacher-deterministic (same seed, same timeline, run twice).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
@@ -1235,15 +1274,21 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      While the arm is free and within the approach distance of a handle it drove, it backs
-      out along that handle's approach axis before any other motion.
-    premises: [AXM-panda-gripper-geometry, AXM-handle-shares-body]
+      While the arm is free and within the approach distance of a handle it drove, it backs out
+      along that handle's approach axis before any other motion. This binds the planner and not one
+      skill's body: it is DEF-skill-contract's disengagement postcondition read on a handle, so no
+      skill of any kind -- another drive, a pick, a place -- may begin while the arm is still inside
+      the approach corridor of a handle it acted on.
+    premises: [AXM-panda-gripper-geometry, AXM-handle-shares-body, DEF-skill-contract]
     derivation_rule: >-
-      screwhead/teacher/skill_teacher.py calls Skills.leave_handle before pick. The jaws surround the
-      handle along the jaw axis, so any first motion with a component along it (rising, for a vertical
-      pinch) pushes a finger into the handle; along the approach axis they clear it. evidence: traced on
-      goal 3 -- the drawer stays at -0.159 through the pick. evidence: CTR-teacher-reliable (goal 3's
-      drawer task is the one this governs).
+      AXM-panda-gripper-geometry gives jaws that surround the handle along the jaw axis, so a first
+      motion with any component along that axis drives a finger into the handle, while the approach
+      axis is by construction the direction along which they came clear; AXM-handle-shares-body
+      makes that collision a push on the joint rather than a harmless touch. DEF-skill-contract's
+      postcondition is what makes this a property of the planner: the previous statement asserted
+      the retreat without saying whose obligation it was, which left it satisfiable by any single
+      skill performing it while the planner remained free to schedule a different skill next.
+      evidence: CTR-teacher-reliable (goal 3's drawer task is the one this governs).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-scan-then-place
