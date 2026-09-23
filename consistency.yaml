@@ -1681,6 +1681,33 @@ branches:
       threshold. evidence: CTR-teacher-reliable (libero_goal 3 and 0).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-rim-pinch-as-deep-as-the-palm
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Top-down pinches on a thin wall of an object -- grasp sites on its wall segments rather than
+      across its body -- are offered at two depths, the deeper first: as deep below the wall's top as
+      the palm allows (the palm's offset behind the tool point less a declared margin), and at the
+      depth a grasp across a body would take. Neither goes lower than the object's floor margin and
+      the support's clearance allow. The reach screen takes the first it can witness, so the deep
+      pinch is used where the arm can reach it and the usual depth where it cannot. Grasps across a
+      body keep their depth. Not claimed: that the pinch cannot be lost, only that of the positions
+      the palm allows the deep one spreads the pads furthest up the wall.
+    premises: [AXM-no-torsional-friction, AXM-panda-gripper-geometry, LMA-grip-fails-by-contact-not-load,
+               AXM-object-geometry-known]
+    derivation_rule: >-
+      AXM-no-torsional-friction leaves only the spread of the contact points to resist an object
+      pivoting about the jaw axis, and LMA-grip-fails-by-contact-not-load says such a pivot is how a
+      rim pinch fails; of the depths the palm permits (AXM-panda-gripper-geometry: the palm begins
+      31 mm behind the tool point), the deepest spreads the pads furthest up the wall. Measured:
+      LIBERO's humans pinch the bowl with the pads 36 mm apart up its wall (libero_spatial 7), the
+      teacher at 20 mm below the rim with them 20 mm apart; at the palm's depth the mid-carry drops
+      went 12 -> 1 (spatial 6), 14 -> 4 (spatial 7) and 12 -> 5 (goal 3) episodes of 20. Offered
+      alone, the deep pinch left a bowl inside the top drawer with no reachable grasp (spatial 4,
+      49 -> 8 of 50); offered first with the usual depth after it, 49 of 50. evidence:
+      CTR-teacher-reliable, CTR-teacher-gentle.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
   - id: BRN-regression-planner
     subject: CMP-skill-library
     claim_type: contract
