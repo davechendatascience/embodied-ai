@@ -57,15 +57,25 @@ def _observe(errors: list, fn, *args):
 def _run_episode(env, teacher, job: Job, ep: int, record: bool):
     """One episode: the row for the report, and frames if recording."""
     from screwhead.teacher.episode_log import EpisodeLog
+    from screwhead.teacher.refusal import Refusal
     env.reset()
     errors: list[str] = []
     log = _observe(errors, EpisodeLog, env, teacher)
     frames, done, info, missing = [], False, {}, ""
     phases = collections.Counter()
+    refusal = None
     while not done:
         s = env.snapshot()
         try:
             a = teacher.act(s)
+        except Refusal as r:
+            # DEF-refusal-is-an-outcome: a precondition with no witness ends the episode here,
+            # naming the predicate. Running on to the horizon spends it and disturbs a scene a
+            # later attempt would otherwise find as it was -- libero_goal 9 tipped the bottle over
+            # in the four hundred steps after its grasp screen had already scored feasible 0.
+            refusal = r
+            teacher.phase = f"refused:{r.predicate}"
+            break
         except NotImplementedError as e:          # a skill this suite needs and we lack:
             missing = str(e).split("(")[0].strip()   # report it, do not kill the worker
             teacher.phase = f"unimplemented:{missing}"
@@ -77,7 +87,9 @@ def _run_episode(env, teacher, job: Job, ep: int, record: bool):
             frames.append(_frame(env, job, teacher.phase) if job.video_px else
                           np.concatenate([im[::-1] for im in env.images()], axis=1))
         _, _, done, info = env.step(a)
-    ok = bool(info["success"])
+    # A refusal on the first step leaves info empty -- the loop broke before env.step ran -- so
+    # the refusal is checked first and the scorer is never asked about an episode nobody attempted.
+    ok = refusal is None and bool(info.get("success"))
     diag = mechanism = ""
     detail = dict(timeline="", events=[], grasp={}, final=[])
     if log is not None and not errors:
@@ -88,6 +100,7 @@ def _run_episode(env, teacher, job: Job, ep: int, record: bool):
     detail["observer_errors"] = errors
     track = log.track if log is not None else {}
     row = dict(task=job.task, episode=job.ep_offset + ep, success=ok, steps=env.t,
+               refused=refusal is not None, **(refusal.as_row() if refusal else {}),
                last_phase=teacher.phase, step_index=teacher.step_index, phases=dict(phases),
                language=env.language, diag=diag, mechanism=mechanism, detail=detail,
                **{k: round(float(v), 4) if isinstance(v, float) else v
@@ -242,7 +255,9 @@ def _wave(jobs: list[Job], suite: str) -> list[dict]:
                 open_pipes.discard(i)
                 continue
             rows.append(r)
-            print(f"  {suite} task {r['task']} ep {r['episode']}: {'ok' if r['success'] else 'fail'} "
+            verdict = ("refused " + r["refused_predicate"] if r.get("refused")
+                       else "ok" if r["success"] else "fail")
+            print(f"  {suite} task {r['task']} ep {r['episode']}: {verdict} "
                   f"steps {r['steps']} last {r['last_phase']}" + (f" | {r['diag']}" if r["diag"] else ""),
                   flush=True)
     for p in procs:
@@ -265,28 +280,50 @@ def _print_failure(r: dict, verbose: bool) -> None:
 
 
 def _summarise(rows: list[dict], args, seconds: float) -> None:
+    """Report attempts and refusals apart.
+
+    DEF-refusal-is-an-outcome: a rate that adds them cannot tell a teacher that does not try from
+    one that tries and botches, and improving either moves the same number the same way. So the
+    rate is over episodes the teacher attempted, and refusals are counted beside it with the
+    predicate that had no witness -- a failure is evidence about execution, a refusal about
+    coverage, and they are fixed by different work.
+    """
     by = collections.defaultdict(list)
     for r in rows:
         by[r["task"]].append(r)
     print()
     for t in sorted(by):
-        ok = sum(r["success"] for r in by[t])
-        fails = collections.Counter(r["last_phase"] for r in by[t] if not r["success"])
-        print(f"  task {t}: {ok}/{len(by[t])}  {by[t][0]['language'][:54]!r}"
+        tried = [r for r in by[t] if not r.get("refused")]
+        gave_up = [r for r in by[t] if r.get("refused")]
+        ok = sum(r["success"] for r in tried)
+        fails = collections.Counter(r["last_phase"] for r in tried if not r["success"])
+        why = collections.Counter(f"{r['refused_predicate']}({r['refused_subject']})" for r in gave_up)
+        rate = f"{ok}/{len(tried)}" if tried else "0/0"
+        print(f"  task {t}: {rate}  {by[t][0]['language'][:54]!r}"
+              + (f"  refused {len(gave_up)}: {dict(why)}" if gave_up else "")
               + (f"  failures: {dict(fails)}" if fails else ""))
-        for r in by[t]:
+        for r in tried:
             if not r["success"]:
                 _print_failure(r, args.verbose)
-    ok = sum(r["success"] for r in rows)
-    print(f"{args.suite}: {ok}/{len(rows)} = {ok / max(len(rows), 1):.2f}   ({seconds:.0f}s)")
+    tried = [r for r in rows if not r.get("refused")]
+    gave_up = len(rows) - len(tried)
+    ok = sum(r["success"] for r in tried)
+    rate = ok / len(tried) if tried else float("nan")
+    print(f"{args.suite}: {ok}/{len(tried)} attempted = {rate:.2f}"
+          + (f", {gave_up}/{len(rows)} refused" if gave_up else "")
+          + f"   ({seconds:.0f}s)")
 
 
 def _write_trials(rows: list[dict], args) -> None:
     Path(args.trials).parent.mkdir(parents=True, exist_ok=True)
+    # A refused episode carries no `success` metric at all, so it cannot enter a rate whose rule
+    # reads success == true. It carries `refused`, which is what a coverage contract reads.
     Path(args.trials).write_text(json.dumps({"trials": [
-        {"metrics": {"success": r["success"]},
+        {"metrics": ({"refused": True} if r.get("refused") else
+                     {"success": r["success"], "refused": False}),
          "conditions": {"task": r["task"], "suite": args.suite, "last_phase": r["last_phase"],
-                        "mechanism": r.get("mechanism", "")},
+                        "mechanism": r.get("mechanism", ""),
+                        "refused_predicate": r.get("refused_predicate", "")},
          "detail": dict(r.get("detail", {}), episode=r["episode"], steps=r["steps"], language=r["language"]),
          "repro": {"seed": args.seed * 100 + r["task"], "task": r["task"], "task_suite": args.suite,
                    "episode": r["episode"], "horizon": args.horizon,

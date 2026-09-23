@@ -74,15 +74,21 @@ class Reach:
         return grade
 
     # -- choosing a grasp -------------------------------------------------------------------
-    def choose(self, cands: list, via: np.ndarray | None, allow: int = -1, strict: bool = False,
-               extra=None):
-        """The candidate grasp the arm can use: reachable at the grasp, down the column
-        above it, and (when known) at the place pose the same grasp must reach.
+    def choose(self, cands: list, via: np.ndarray | None, allow: int = -1, extra=None):
+        """The candidate grasp the arm can use, or None when there is no such candidate.
 
-        Shape proposes in list order (narrow faces first), conditioning decides how far
-        down that list to look: the first merely-feasible candidate put the arm where the
-        damped solve clamps on a limit, the best-conditioned one ignored the shape.
+        Reachable at the grasp, down the column above it, and (when known) at the place pose the
+        same grasp must reach. Shape proposes in list order (narrow faces first), conditioning
+        decides how far down that list to look: the first merely-feasible candidate put the arm
+        where the damped solve clamps on a limit, the best-conditioned one ignored the shape.
         `extra(cand)` adds whole poses the candidate must also reach (the end of a drive).
+
+        None means none: this used to return cands[0] when nothing passed, so a caller received a
+        grasp that failed the very screen it asked for and could not tell. Measured on libero_goal
+        9, the forced grasp was taken on a 58.5 mm bottle with feasible 0, and the jaws then
+        oscillated between held and lost at an 11 mm aperture for four hundred steps before tipping
+        it over -- 1 success in 50. DEF-witness-or-refusal: a query answers with a candidate
+        satisfying the predicate it names, or with nothing.
         """
         Ts, meta = [], []
         for i, (R, p_g, _w, app) in enumerate(cands):
@@ -99,10 +105,8 @@ class Reach:
                  if (r := self._score(cands[i], [j for j, mi in enumerate(meta) if mi == i],
                                       th, conv, sig, margin, allow)) is not None}
         if not rated:
-            if strict:
-                return None
-            self.last_choice = dict(n=len(cands), feasible=0, score=None, forced=True)
-            return cands[0]
+            self.last_choice = dict(n=len(cands), feasible=0, score=None)
+            return None
         # touch nothing if anything clean is feasible. Brushing a loose object used to cost
         # only 0.3 of score, so a candidate early in the list that pushed the palm into the
         # wine bottle beside the bowl beat clean ones further down -- the tool was shoved off
@@ -114,7 +118,7 @@ class Reach:
         if pick is None:
             pick = max(scores, key=scores.get)
         self.last_choice = dict(n=len(cands), feasible=len(rated), clean=len(clean),
-                                score=float(scores[pick]), forced=False)
+                                score=float(scores[pick]))
         return cands[pick]
 
     def _score(self, cand, sel, th, conv, sig, margin, allow) -> tuple[float, int] | None:

@@ -12,6 +12,7 @@ import numpy as np
 from ..sim.gripper_servo import A_OPEN
 from .skills import Skills, SkillConfig
 from .task_spec import Step
+from .refusal import Refusal
 
 OPEN_MARGIN = 0.012       # a container counts as open for filling this far past LIBERO's threshold
 
@@ -127,6 +128,12 @@ class SkillTeacher:
         elif step.skill == "articulate" or step.skill == "turn":
             a = self.skills.articulate(step.region, step.mode, s)
         else:
-            raise NotImplementedError(f"skill {step.skill!r}")
+            # BRN-regression-planner: the skill set is closed. Regression selects among the skills
+            # whose effects entail the goal, so where the goal needs a motion none of them produces
+            # there is nothing to select, and attempting the nearest skill abandons the selection
+            # rule rather than applying it. Measured on libero_goal 5, where a plate must be slid
+            # and the set moves objects by holding them: 14 attempts at pick:over, 3 of 50.
+            raise Refusal("skill", step.skill,
+                          "no declared skill produces the motion this goal needs")
         self.phase = f"{step.skill}:{self.skills.phase}"
         return a

@@ -1464,7 +1464,9 @@ branches:
       picking it is not a worse way of sliding it but a different act, and attempting the pick spends
       the horizon and leaves the plate where it was. evidence: CTR-teacher-reliable -- the 600-episode
       reference at bcf19e9 (523/600) reproduced wherever the old executor had no special case, then
-      libero_10 KITCHEN_SCENE4 (bowl into the bottom drawer, close it).
+      libero_10 KITCHEN_SCENE4 (bowl into the bottom drawer, close it); and CTR-teacher-attempts,
+      which is where a refusal is counted and the only place the closure clause can read as anything
+      but a lower reliability.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 policies:

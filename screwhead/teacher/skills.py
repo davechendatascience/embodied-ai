@@ -30,6 +30,7 @@ from ..geometry.frames import Z, axis_rot, pose, rot_angle, rotvec
 from .grasp_planner import GraspPlanner
 from ..sim.gripper_servo import A_OPEN, target_to_channel
 from .reach import Reach
+from .refusal import Refusal
 
 MIN_TWIST_DIST = 0.001    # m: nearer than this, the speed floor does not apply
 
@@ -166,14 +167,19 @@ class Skills:
             return cached[0], cached[1], cached[2]
         bid = self.scene.body_id(obj)
         tiers = self.planner.tiers(obj, box)
-        chosen, used = None, "forced"
+        chosen, used = None, ""
         for name, tier in tiers:
-            chosen = self.reach.choose(tier, via, allow=bid, strict=True)
+            chosen = self.reach.choose(tier, via, allow=bid)
             if chosen is not None:
                 used = name
                 break
-        if chosen is None:                      # nothing feasible anywhere: take the best try
-            chosen = self.reach.choose(sum((t for _, t in tiers), []), via, allow=bid)
+        if chosen is None:
+            # No tier offered a candidate the arm can reach. There is no best try: a grasp that
+            # fails the screen fails it, and taking one anyway is how libero_goal 9 spent four
+            # hundred steps oscillating at an 11 mm aperture beside a 58.5 mm bottle.
+            raise Refusal("graspable", obj,
+                          f"0 of {sum(len(t) for _, t in tiers)} candidates over "
+                          f"{len(tiers)} tiers passed the reach screen")
         R_grasp, p_grasp, width, app = chosen
         h = self.reach.reachable_transit(R_grasp, p_grasp - app * self.k.approach, bid)
         self._grasp_cache[obj] = (R_grasp, p_grasp, width, centre, h, app)
@@ -560,19 +566,20 @@ class Skills:
             R, p = cand[0], cand[1]
             return [pose(*self._joint_motion(a, f * dq, R, p)) for f in (0.5, 1.0)]
 
-        # reachable along the drive is a filter, not a ranking: only when no candidate is
-        # does the choice fall back to the start of the drive alone, and says so in the log
-        chosen = self.reach.choose(cands, None, allow=a["body"], extra=along_the_motion, strict=True)
-        drive_checked = chosen is not None
+        # Reachable along the drive is a filter, not a ranking, and there is no weaker filter to
+        # fall back to: a grasp checked only at the start of the motion is a claim about a
+        # different configuration of the world, and a logged caveat is not a witness.
+        chosen = self.reach.choose(cands, None, allow=a["body"], extra=along_the_motion)
         if chosen is None:
-            chosen = self.reach.choose(cands, None, allow=a["body"])
+            raise Refusal("accessible", region,
+                          f"0 of {len(cands)} handle grasps reachable along the joint's motion")
         R_h, _p, w, app = chosen
         self._handle_cache[region] = (R_h, w, app, float(a["qpos"]))
-        choice = dict(self.reach.last_choice, drive_checked=drive_checked)
+        choice = dict(self.reach.last_choice, drive_checked=True)
         self.grasp_log[region] = dict(
             tier="handle", offered={"handle": len(cands)}, feasible=choice.get("feasible"),
             drive_checked=choice["drive_checked"],
-            score=choice.get("score"), forced=choice.get("forced"),
+            score=choice.get("score"),
             approach=[round(float(v), 2) for v in app], jaw=[round(float(v), 2) for v in R_h[:, 1]],
             width_mm=round(1000 * float(w), 1), handle_geom=self.scene.m.geom_id2name(a["handle_geom"]))
 

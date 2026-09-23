@@ -282,6 +282,7 @@ components:
       - screwhead/teacher/grasp_planner.py  # candidates from geometry
       - screwhead/sim/scan.py               # the gripper's pads measured from robosuite's geoms, which grasp_planner reads
       - screwhead/teacher/reach.py          # IK, conditioning, collision
+      - screwhead/teacher/refusal.py        # the answer the planner does not have
       - screwhead/geometry/frames.py
       - screwhead/teacher/skill_teacher.py
       - screwhead/sim/scene.py
@@ -1032,15 +1033,40 @@ contracts:
     evaluable_by: [TST-teacher-motion]
     sufficiency: {n_min: 20, max_ci_width: 0.3}
 
+  # Reliability is over the episodes the teacher attempted. A refused episode carries no
+  # `success` metric at all, so it cannot enter this rate: DEF-refusal-is-an-outcome separates
+  # an attempt that went wrong, which is evidence about execution, from a precondition the
+  # planner could not establish, which is evidence about coverage and is CTR-teacher-attempts'
+  # business. A rate that added them could not tell a teacher that does not try from one that
+  # tries and botches, and improving either would move it the same way.
+  #
+  # target_rate is 0.95 because that is the bar the project is held to; it was 0.9, so every
+  # slice measured before 2026-09-23 was scored against a question nobody was asking. n_min is
+  # 100 because at 20 no result can clear 0.95 -- a perfect 20/20 has a posterior lower bound of
+  # 0.883 under the Beta-binomial this ledger uses, which is why almost every slice read
+  # contested. At 100 a true 0.99 clears it; a true 0.98 needs 200.
   - id: CTR-teacher-reliable
     subject: CMP-skill-library
     claim_type: capability
     metrics:
       - {id: success, unit: bool}
-    acceptance: {rule: "success == true", target_rate: 0.9}
+    acceptance: {rule: "success == true", target_rate: 0.95}
     compatibility_key: [task_suite, task, teacher_revision]
     evaluable_by: [TST-teacher-reliability]
-    sufficiency: {n_min: 20, max_ci_width: 0.25}
+    sufficiency: {n_min: 100, max_ci_width: 0.25}
+
+  # Coverage, kept apart from reliability so that neither hides the other. A teacher that refuses
+  # everything reads perfectly reliable here and fails this; one that attempts everything badly
+  # reads the other way round. Both numbers are wanted.
+  - id: CTR-teacher-attempts
+    subject: CMP-skill-library
+    claim_type: capability
+    metrics:
+      - {id: refused, unit: bool}
+    acceptance: {rule: "refused == false", target_rate: 0.95}
+    compatibility_key: [task_suite, task, teacher_revision]
+    evaluable_by: [TST-teacher-reliability]
+    sufficiency: {n_min: 100, max_ci_width: 0.25}
 
   # ---- Gate 3: the premise. If the padded-vector baseline transfers fine,
   # there is nothing to fix and the project has no reason to exist.
