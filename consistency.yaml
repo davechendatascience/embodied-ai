@@ -23,6 +23,16 @@
 # planned (a design declared before anything is built). Axioms, definitions and lemmas carry
 # no subject: they are the shared ground the components' designs are built on.
 
+# The components these designs govern, in the order they appear below. belief.yaml owns each one
+# -- its purpose, code paths and contracts -- so this list is an import, and every branch's
+# subject must be one of them. `status(view="coverage")` shows both files side by side.
+
+components:
+  - {id: CMP-optimization-teacher, note: the general teacher -- task loss, verdicts, exact restore, the search, pi_theta}
+  - {id: CMP-scene-randomizer, note: resets, layouts and what a policy reads -- one execution core, two environments}
+  - {id: CMP-twist-servo, note: the twist servo and the joint ramp every policy's action goes through}
+  - {id: CMP-skill-library, note: the hand-written skill teacher that still drives the student's demonstrations}
+
 axioms:
   - id: AXM-libero-scores-final-state
     domain: environment
