@@ -24,8 +24,10 @@ from ..sim.scene import geom_world_box
 CROWD_XY = 0.03        # m: an open footprint this close to an object, in plan, crowds it
 HAND_BAND = 0.15       # m: container parts this far above the object's top are in the hand's way
 CLEAR_XY = 0.08        # m: a moved object keeps this far from the open footprint, in plan
-SPOT_RADII = (0.10, 0.14, 0.18, 0.22, 0.26)
-SPOT_ANGLES = 16
+SPOT_RADII = tuple(np.round(np.arange(0.08, 0.301, 0.02), 3))
+SPOT_ANGLES = 32       # 5 radii x 16 angles left 1-2 free spots on crowded tables, none the arm was
+#                        comfortable at, in 7 of 50 libero_goal 3 layouts: the bowl was then picked
+#                        under the open drawer and lost. 12 x 32 found 10-15, best scores 0.86-0.94
 SURFACE_TOL = 0.005    # m: every footprint ray lands within this of the surface it stood on
 RAY_START = 0.15       # m above the surface the footprint rays start (below the arm at its start)
 SPOT_MARGIN = 0.03     # m added to the object's half-extents for its footprint rays
