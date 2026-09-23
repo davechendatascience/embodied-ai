@@ -779,8 +779,9 @@ lemmas:
       When the execution layer ramps each period's joint goal linearly across the period, bounds how
       fast the commanded twist changes, and sizes its per-period joint clips for the lag a ramped arm
       has, the in-period step and the step between periods are removed from what is commanded and
-      the reference is not dragged back and re-anchored by the clip; this makes the tool's motion
-      smoother but does not by itself make it smooth in DEF-smooth-motion's sense, whose executed
+      the reference is not dragged back and re-anchored by the clip for the lag alone -- near a
+      singularity a bounded twist can still ask a joint for more than the clip allows, and the
+      reference is then re-anchored; this makes the tool's motion smoother but does not by itself make it smooth in DEF-smooth-motion's sense, whose executed
       clauses are measured per episode. Because every policy's action goes through that one layer
       unchanged, the teacher's label stays a function of the state together with the layer's carried
       state (the previous commanded twist, the ramp, the grip counter), and the student is executed
@@ -1581,8 +1582,9 @@ branches:
       LMA-grip-fails-by-contact-not-load says a pivot nothing resists is driven by the tool's
       accelerations. The count is the layer's own state: read from the contacts alone the condition
       flickered mid-carry, and latched until the jaws were commanded open it held the bound through
-      the regrasp after a drop with nothing held (a verifier's counterexample); five periods of
-      grace cover the flicker. It is execution state like the previous commanded twist, and
+      the regrasp after a drop with nothing held (a verifier's counterexample). Five periods of grace
+      is chosen, not measured against the flicker's own distribution; with it, no episode outside
+      libero_goal 3's changed over 1500 against the latch. It is execution state like the previous commanded twist, and
       BRN-execution-state-restore's saved fields must include it. The values are measured, not
       derived, on the same seeds: bounding every
       period at 1 m/s^2 took libero_goal 9 from 1 to 50 of 50 but libero_spatial from 478 to 447,
@@ -1591,8 +1593,8 @@ branches:
       bowl's mid-carry drops and lost more episodes still. Bounded only while the jaws hold
       something, 0.5 m/s^2 kept libero_goal 9 at 25 of 25. Read as "the jaws asked narrower than
       they are" the condition was true of every free close and slowed empty approaches; read from
-      the contacts alone it flickered, and it is latched until the jaws are commanded open. The
-      bound does not stop the mid-carry drops: they persist at 0.5 m/s^2 while holding, and what
+      the contacts alone it flickered, which the count's grace covers. The bound does not stop the
+      mid-carry drops: they persist at 0.5 m/s^2 while holding, and what
       separates them from the 0.5-everywhere runs that nearly remove them is open. evidence:
       CTR-teacher-reliable, CTR-teacher-gentle (CTR-teacher-smooth: substep acceleration p95
       median 2.18 m/s^2 against ~12 before the ramp and the bound, RUN-0047).
@@ -1615,13 +1617,12 @@ branches:
       three stops -- the entry, halfway to R, and the entry point carried to R -- are reachable poses;
       with no jaw direction passing, the push refuses per DEF-witness-or-refusal, the refusal recorded
       beside the scorer's verdict. The screen answers for those three stops and for nothing between
-      them. Scope: dishes whose collision geometry is concave with its floor at the top of what lies
-      about its axis, and whose inner rim radius exceeds the lead plus half the jaws' opening plus
-      the finger's half-width, so that the leading finger lands inside the rim -- the plate's does;
-      a smaller dish needs an opening scaled to it, which is not claimed. When LIBERO's predicate
-      holds the push ends and the next motion is up, clear of the rim. Not claimed: that o reaches R
-      if something blocks it, that o's orientation is controlled, or that objects other than o stay
-      where they were.
+      them. Scope: the dish it was measured on, LIBERO's plate, whose floor is level out past the
+      leading finger and whose inner rim lies beyond the lead plus half the jaws' opening; another
+      dish is covered only once the same holds of it, which is not claimed. When LIBERO's predicate
+      holds, what follows the push leaves upward before anything else, the teacher's retreat or the
+      next skill's first leg. Not claimed: that o reaches R if something blocks it, that o's
+      orientation is controlled, or that objects other than o stay where they were.
     premises: [AXM-category-affordances-declared, AXM-object-geometry-known, AXM-support-scannable,
                AXM-panda-gripper-geometry, DEF-reachable-pose, LMA-whole-path-reachable,
                DEF-witness-or-refusal, DEF-refusal-is-an-outcome, AXM-libero-scores-final-state,
@@ -1652,15 +1653,16 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      A sliding drawer is opened without grasping its handle when nothing of the scene, the robot
-      aside, lies over the handle bar: the jaws wide open and pointing down, the jaw axis along the
-      opening direction, the tool lowered straight down to a point on the opening side of the bar
-      and above it -- the trailing finger over the bar's rear edge -- and only then dragged along the
-      opening direction at the drive speed, the point re-derived from the bar's pose every control
-      step. It stops when LIBERO's Open holds with the margin the fill needs. Nothing is grasped, so
-      disengagement asks only that the next motion leave upward, which the next skill's first leg
-      does. Where something lies over the bar, the drawer is opened by the pinch drive instead.
-      Not claimed: that the drag cannot slip off the bar; the offsets are measured, not derived.
+      The wooden cabinet's top drawer -- the bar the offsets were measured on, 15 x 16 mm across and
+      89 mm long, with nothing of the scene over it -- is opened without grasping its handle: the jaws
+      wide open and pointing down, the jaw axis along the opening direction, the measured tool
+      lowered straight down to a point on the opening side of the bar and above it, and only when the
+      measured tool is within 4 mm of that height is it dragged along the opening direction at the
+      drive speed, the point re-derived from the bar's pose every control step. It stops when LIBERO's
+      Open holds past its threshold by the fill's margin. What follows leaves upward before anything
+      else, the next skill's first leg. Any other drawer, and this one when something lies over its
+      bar, is opened by the pinch drive. Not claimed: that the drag cannot slip or stall -- a stalled
+      drag re-enters, and nothing bounds how often -- or that the offsets fit another bar.
     premises: [AXM-object-geometry-known, AXM-panda-gripper-geometry, AXM-handle-shares-body,
                DEF-skill-contract, AXM-libero-joint-bands, AXM-parameters-derived]
     derivation_rule: >-
