@@ -23,14 +23,14 @@ most current work is on the demonstrations it learns from.
 
 A geometry-driven demonstration policy (`screwhead/teacher/`) that reads a task's goal from its
 bddl and the scene's geometry from the simulator, and labels any state a student reaches (DAgger).
-Status at commit `4d7b8fd`, 50 episodes per task at seed 555 (`runs/skill_v5`):
+Status at commit `d6c04a6`, 50 episodes per task at seed 555 (`runs/skill_v6`):
 
 | suite | at 600 steps | within LIBERO's step limit |
 |---|---|---|
-| libero_spatial (limit 220) | 479 / 500 | 357 / 500 |
-| libero_object (limit 280) | 496 / 500 | 493 / 500 |
-| libero_goal (limit 300) | 458 / 500 | 408 / 500 |
-| all | 1433 / 1500 | 1258 / 1500 |
+| libero_spatial (limit 220) | 486 / 500 | 415 / 500 |
+| libero_object (limit 280) | 499 / 500 | 499 / 500 |
+| libero_goal (limit 300) | 481 / 500 | 429 / 500 |
+| all | 1466 / 1500 | 1343 / 1500 |
 
 The goal is at least 95% on every task within LIBERO's limits. What works and what is missing,
 task by task and against LIBERO's own human demonstrations, is in
@@ -62,6 +62,8 @@ task by task and against LIBERO's own human demonstrations, is in
 Features by date, newest first. Numbers are measured at the stated commit.
 
 - **2026-09-23**
+  - Carry and crossing heights clear what actually stands near the path: the room's walls had
+    put every carry at the cap (1433 -> 1466 of 1500; within LIBERO's limits 1258 -> 1343).
   - Drawer hook: the top drawer is opened with open jaws from above, as the human demos do
     (opens in ~55 steps instead of ~290; libero_goal 3: 9 -> 18 of 50).
   - Push skill: a dish is pushed with open jaws caging its rim, as LIBERO's human demos do
