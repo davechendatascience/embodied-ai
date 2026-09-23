@@ -1195,59 +1195,67 @@ branches:
       A handle grasp is used only if it is a reachable pose with the arm clear of the fixtures at every
       station declared with the plan -- the start of the joint's motion, its end, and the stations
       between them. Evaluating a station means placing the joint at the position that station denotes,
-      screening there, and restoring the joint: the claim is about the arm's reach at each configuration
-      the motion passes through, so a station screened at the joint's pre-motion position is a claim
-      about a different world and does not count. When no candidate passes every station the query
-      refuses: the joint is not accessible by any grasp this planner knows, the skill does not run, and
-      the planner records which predicate had no witness. A candidate that fails the stations is not
-      used with its failure recorded as a caveat.
+      screening there, and restoring the state: the claim is about the arm's reach at the configurations
+      the stations name, so a station screened at the joint's pre-motion position is a claim about a
+      different world and does not count. Finitely many stations cannot witness that the arm reaches
+      every configuration the motion passes through, and LMA-whole-path-reachable is the reason none
+      could; the screen is what is claimed, and the stations are part of the claim. When no candidate
+      passes every station the query refuses: the joint is not accessible by any grasp this planner
+      knows, the skill does not run, and the planner records which predicate had no witness. A candidate
+      that fails the stations is not used with its failure recorded as a caveat. Not claimed: that the
+      arm reaches the configurations lying between the declared stations.
     premises: [LMA-whole-path-reachable, DEF-reachable-pose, DEF-witness-or-refusal, AXM-handle-shares-body,
-               AXM-object-geometry-known]
+               AXM-object-geometry-known, AXM-mujoco-integration-state]
     derivation_rule: >-
-      LMA-whole-path-reachable gives the stations: the start pose cannot stand for the motion.
-      DEF-reachable-pose gives what a station demands. AXM-handle-shares-body puts the handle on the
-      body the joint moves, so the grasp pose at a station is the handle pose at that joint position,
-      which is what makes the counterfactual evaluation necessary rather than fussy;
-      AXM-object-geometry-known puts the fixture's collision geometry in the state, so the screen at
-      that configuration is computable at all. DEF-witness-or-refusal removes the escape the previous
-      statement wrote for itself -- that a grasp checked only at the start may be used so long as the
-      gap is logged -- since a logged caveat is not a witness and the caller cannot tell the difference
-      from the grasp it receives. The previous restatement also forbade any ordering that ranks a
-      failing candidate above a passing one; that is dropped, because DEF-witness-or-refusal exempts the
-      search by name and two such queries are indistinguishable in what they answer. evidence:
-      CTR-teacher-reliable (goal 0/3/7: drive_checked in 60 of 60 episodes).
+      LMA-whole-path-reachable gives the stations, since the start pose cannot stand for the motion, and
+      it is equally the reason the claim is stated as a screen: that lemma denies any finite set of
+      stations settles the motion, so a claim over the whole continuum would assert more than the
+      stations deliver. DEF-reachable-pose gives what a station demands. AXM-handle-shares-body puts the
+      handle on the body the joint moves, so the grasp pose at a station is the handle pose at that
+      joint position, which is what makes evaluating at the station's own position necessary rather than
+      fussy; AXM-object-geometry-known puts the fixture's collision geometry in the state, so the screen
+      there is computable. AXM-mujoco-integration-state is what licenses screening at a configuration
+      the world is not in: the integration state holds everything the next step reads, so setting the
+      joint, screening and restoring leaves the steps that follow as they would have been, and the
+      screen costs the episode nothing. DEF-witness-or-refusal removes the escape an earlier statement
+      wrote for itself -- that a grasp checked only at the start may be used so long as the gap is
+      logged -- since a logged caveat is not a witness and the caller cannot tell the difference from
+      the grasp it receives. evidence: CTR-teacher-reliable (goal 0/3/7: drive_checked in 60 of 60
+      episodes).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-handle-holding-by-aperture
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      The jaws hold a handle when both finger groups touch the handle's own geometry -- not merely some
-      geometry of the body the handle belongs to -- and the aperture has been stopped by the handle:
-      with the finger target at rest against its closing limit, the measured aperture is wider than that
-      target and has ceased to change. Both conditions are required; neither contact alone nor aperture
-      alone witnesses holding. Jaws that are still travelling toward their target do not witness it,
-      however narrow they have become, and jaws resting at a target they reached do not witness it
-      however much they touch.
+      The jaws hold a handle when each finger group's closing force is balanced by a contact with the
+      handle's own geometry -- not with some other geometry of the body the handle belongs to -- and the
+      aperture has been stopped there: with the finger target at rest against its closing limit, the
+      measured aperture is wider than that target and is changing more slowly than a carried object
+      moves relative to the jaws, over a window longer than a transient spike. Both conditions are
+      required, and the first is about what stops the jaws rather than about what they touch. The
+      distinction is not pedantry: the pads span a depth, so jaws resting on another feature of the same
+      body can sit wider than their target while merely grazing the handle, and a test asking only what
+      is touched and how wide the jaws are cannot tell that from a grip.
     premises: [LMA-holding-is-geometric, DEF-holding, AXM-handle-shares-body, AXM-panda-gripper-geometry,
-               AXM-robosuite-gripper-target-persists, AXM-squeeze-is-a-spring]
+               AXM-robosuite-gripper-target-persists, AXM-squeeze-is-a-spring, AXM-slip-spikes-are-transient]
     derivation_rule: >-
-      AXM-handle-shares-body makes the geometry qualifier necessary rather than pedantic: the handle and
-      the face it sits on are one body, so a body-level test cannot tell a grip on the handle from a
-      palm laid on the drawer front, and LMA-holding-is-geometric rules that test out by name.
-      DEF-holding asks for an aperture the object stopped, which is a relation between what was
-      commanded and what was reached rather than a value, so the operative form is target-at-its-limit
-      yet resting wider. AXM-robosuite-gripper-target-persists is what forces 'at rest against its
-      closing limit' rather than 'commanded closed': the target advances toward the commanded sign a
-      step at a time, so a sign reading would let jaws merely still ramping toward closed pass while
-      nothing has stopped them. AXM-squeeze-is-a-spring is what makes resting wider than the target
-      evidence of an external force at all. The previous restatement added a clause separating a
-      witnessing window from the approach opening; it is dropped, because it named two quantities
-      declared nowhere -- the planner's approach opening and the gripper's aperture tracking band --
-      which AXM-parameters-derived forbids, and because a command-versus-rest relation excludes the
-      approach opening by construction: jaws sitting at a target they reached are not wider than it.
-      evidence: CTR-teacher-reliable (goal 0, 14 -> 20/20 paired; the geom/4 mm revision 20/0/20
-      unchanged).
+      AXM-handle-shares-body makes the geometry qualifier necessary: the handle and the face it sits on
+      are one body, so a body-level test cannot tell a grip on the handle from a palm laid on the drawer
+      front, and LMA-holding-is-geometric rules that test out by name. AXM-panda-gripper-geometry gives
+      the pads a depth -- 4.4 mm past to 11.6 mm behind the tool point -- which is why touching the
+      handle's geometry is not enough on its own: within that span the jaws can be stopped by one
+      feature of the body while grazing another, so the claim asks which contact balances the closing
+      force. AXM-squeeze-is-a-spring makes resting wider than the target evidence of a reaction force at
+      all, and the attribution clause says whose. DEF-holding asks for an aperture the object stopped, a
+      relation between what was commanded and what was reached rather than a value, which is why the
+      form is target-at-its-limit yet resting wider; AXM-robosuite-gripper-target-persists forces 'at
+      rest against its closing limit' over 'commanded closed', since the target advances a step at a
+      time and a sign reading would pass jaws still travelling. AXM-slip-spikes-are-transient supplies
+      both quantities the rest criterion needs instead of leaving them to be chosen: a spike lasts a
+      step or two, so the window is longer than that, and a carried object stays below about 0.01 m/s
+      relative to the jaws, so slower than that is rest. evidence: CTR-teacher-reliable (goal 0, 14 ->
+      20/20 paired; the geom/4 mm revision 20/0/20 unchanged).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-reliability-evidence-valid
@@ -1306,28 +1314,32 @@ branches:
     claim_type: contract
     statement: >-
       A skill may not start while the disengagement postcondition of the skill that last acted on a
-      handle is undischarged. That postcondition is discharged by a motion that carries the tool point
-      away from the handle along that handle's approach axis, with no component across it, by at least
-      the depth of the pads along that axis -- far enough that no finger geometry remains between the
-      jaws' closing path and the handle. It is discharged once and does not stand: a later skill may
-      approach the same handle again, and approaching is not a violation of a postcondition already met.
-      Until it is discharged the arm makes no other motion. Free here means the hand holds nothing and
-      no robot geometry touches the body that handle belongs to.
+      handle fails. That postcondition is a predicate on the current state, read whenever a skill would
+      start: the hand holds nothing, no robot geometry touches the body the handle belongs to, and the
+      tool point stands away from the handle along that handle's approach axis by at least the pads'
+      back-edge offset plus the finger meshes' reach past the tool point. The retreat is what carries
+      the arm there -- released first, then moved along the approach axis with no component across it,
+      and no other motion until the predicate holds. Releasing precedes retreating because while the
+      jaws still hold the handle the handle travels with them and no separation accumulates. Approaching
+      that same handle again in a later skill is not a violation: the predicate is read at the moment a
+      skill would start, not maintained between skills.
     premises: [AXM-panda-gripper-geometry, AXM-handle-shares-body, DEF-skill-contract, DEF-holding]
     derivation_rule: >-
-      DEF-skill-contract's postcondition is what makes this the planner's obligation rather than one
-      skill's habit: the planner may follow any skill with any other, so a retreat performed inside one
-      skill's body leaves the next skill free to start from an entangled state.
-      AXM-panda-gripper-geometry gives jaws that surround the handle along the jaw axis, so a motion
-      with any component across the approach axis drives a finger into the handle, and it supplies the
-      pad depth, which is why the distance is derived rather than chosen. AXM-handle-shares-body makes
-      that collision a push on the joint rather than a harmless touch, and fixes what 'touching the
-      handle' must mean for the free condition. The discharge-once reading is required, not stylistic:
-      the previous restatement made the exclusion standing, which forbids the close drive in a
-      put-in-drawer-and-close task -- approaching the handle is other motion, and the arm is free and
-      within the approach distance of a handle it drove -- so it blocked a task inside
-      BRN-regression-planner's declared scope. evidence: CTR-teacher-reliable (goal 3's drawer task is
-      the one this governs).
+      DEF-skill-contract makes this the planner's obligation rather than one skill's habit -- the
+      planner may follow any skill with any other, so a retreat performed inside one skill's body leaves
+      the next free to start entangled -- and it supplies the form: a predicate on the current state
+      read at each start, not an event discharged once and thereafter assumed.
+      AXM-panda-gripper-geometry supplies the distance rather than anyone choosing it, and the
+      composition matters: the pads reach 11.6 mm behind the tool point while the finger meshes reach
+      9.3 mm past it, so a handle gripped at the pads' back edge sits 4.4 mm past the tool point after a
+      retreat of the pad depth alone and is still inside the meshes. The least distance clearing every
+      part of the finger is 11.6 + 9.3 = 20.9 mm. The same axiom gives jaws that surround the handle
+      along the jaw axis, so any component across the approach axis drives a finger into it, and
+      AXM-handle-shares-body makes that a push on the joint rather than a harmless touch while fixing
+      what touching the handle means in the first clause. DEF-holding is what makes the release clause
+      necessary rather than tidy: while the jaws hold, the handle is carried with them, so retreating
+      without releasing never grows the separation and the predicate could never be met. evidence:
+      CTR-teacher-reliable (goal 3's drawer task is the one this governs).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-scan-then-place
