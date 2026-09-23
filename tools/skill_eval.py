@@ -163,7 +163,9 @@ def _worker(remote, job_fields: dict) -> None:
     sys.path.insert(0, str(ROOT))
     from screwhead.teacher.skill_teacher import SkillTeacher
     from screwhead.sim.task_env import StartNoise, TaskEnv
-    env = TaskEnv(job.suite, job.task, horizon=job.horizon, seed=job.seed, render=True,
+    # cameras only for video: the teacher reads no image, trajectories are identical either way, and
+    # ten workers rendering every step held the GPU at 33-39% and the box at 93-95 C
+    env = TaskEnv(job.suite, job.task, horizon=job.horizon, seed=job.seed, render=bool(job.video),
                   start=StartNoise(**job.start))
     teacher = SkillTeacher(env)
     teacher.skills.reach.refuse_when_empty = job.refuse
