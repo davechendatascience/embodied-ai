@@ -34,6 +34,8 @@ from collections import defaultdict
 import mujoco
 import numpy as np
 
+_NO_CONTACTS = np.zeros((0, 2), int)
+
 from ..geometry.box_distance import BoxSet
 from ..sim import contacts
 from . import settle
@@ -66,6 +68,9 @@ class Verdicts:
         self.fall_substeps = math.ceil(math.sqrt(2 * GENTLE_GAP / float(np.linalg.norm(m.opt.gravity)))
                                        / float(m.opt.timestep))
         self.floor = self._arena_surface()
+        self._robot_mask = np.zeros(m.nbody, bool)
+        self._robot_mask[list(self.robot)] = True
+        self._masks: dict[int, np.ndarray] = {}      # body-id masks, one per subtree, built once
         self._subtrees = {root: settle.subtree_bodies(m, root)
                           for root in set(self.free.values()) | set(self.goal_joint_bodies)}
         self._boxes = {n: BoxSet(m, [m.geom(g).id for g in self.lib.get_object(n).contact_geoms]) for n in self.moved}
@@ -99,14 +104,27 @@ class Verdicts:
                     return False
         return True
 
+    def mask(self, root: int) -> np.ndarray:
+        """A body-id mask for a subtree, built once. Contact queries run once per physics substep
+        of every rollout, so they are array indexing rather than a Python loop over contacts."""
+        m = self._masks.get(root)
+        if m is None:
+            m = np.zeros(self.m.nbody, bool)
+            m[list(self._subtrees.get(root) or settle.subtree_bodies(self.m, root))] = True
+            self._masks[root] = m
+        return m
+
+    def contact_bodies(self) -> np.ndarray:
+        """The two body ids of every current contact, as an (ncon, 2) array."""
+        n = self.d.ncon
+        return self.m.geom_bodyid[self.d.contact.geom[:n]] if n else _NO_CONTACTS
+
     def robot_touches(self, root: int) -> bool:
-        bodies = self._subtrees.get(root) or settle.subtree_bodies(self.m, root)
-        for i in range(self.d.ncon):
-            c = self.d.contact[i]
-            b1, b2 = int(self.m.geom_bodyid[c.geom1]), int(self.m.geom_bodyid[c.geom2])
-            if (b1 in bodies and b2 in self.robot) or (b2 in bodies and b1 in self.robot):
-                return True
-        return False
+        b = self.contact_bodies()
+        if not len(b):
+            return False
+        obj, rob = self.mask(root)[b], self._robot_mask[b]
+        return bool(np.any((obj[:, 0] & rob[:, 1]) | (obj[:, 1] & rob[:, 0])))
 
     # -- violations ---------------------------------------------------------------------------
     def watch(self) -> Watch:
@@ -143,18 +161,21 @@ class Verdicts:
         """The root body bearing the largest upward share of the object's weight through contact
         forces; -1 when nothing pushes it up."""
         root = self.free[name]
-        bodies = self._subtrees[root]
+        b = self.contact_bodies()
+        if not len(b):
+            return -1
+        inside = self.mask(root)[b]
+        touching = np.flatnonzero(inside[:, 0] != inside[:, 1])   # exactly one side is the object
         share: dict[int, float] = defaultdict(float)
         f = np.zeros(6)
-        for i in range(self.d.ncon):
+        for i in touching:                                        # only the contacts that matter
+            i = int(i)
             c = self.d.contact[i]
-            b1, b2 = int(self.m.geom_bodyid[c.geom1]), int(self.m.geom_bodyid[c.geom2])
-            if (b1 in bodies) == (b2 in bodies):
-                continue
             mujoco.mj_contactForce(self.m, self.d, i, f)
             on_geom2 = np.asarray(c.frame, float).reshape(3, 3).T @ f[:3]     # the force geom1 puts on geom2
-            up = float(on_geom2[2]) if b2 in bodies else -float(on_geom2[2])
-            share[self._root(b1 if b2 in bodies else b2)] += up
+            second_is_object = bool(inside[i, 1])
+            up = float(on_geom2[2]) if second_is_object else -float(on_geom2[2])
+            share[self._root(int(b[i, 0] if second_is_object else b[i, 1]))] += up
         best = max(share, key=share.get, default=-1)
         return best if best >= 0 and share[best] > 0 else -1
 

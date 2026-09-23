@@ -47,14 +47,19 @@ def _is_under(m, b: int, root: int) -> bool:
 def contacts_on(m, d, bodies: set[int]):
     """(position, force-direction frame rows (n, t1, t2) oriented so n pushes on the object,
     friction coefficient) for each contact of the object with anything else."""
+    n = d.ncon
+    if not n:
+        return []
+    b = m.geom_bodyid[d.contact.geom[:n]]           # (ncon, 2) body ids, in one pass
+    mask = np.zeros(m.nbody, bool)
+    mask[list(bodies)] = True
+    inside = mask[b]
     out = []
-    for i in range(d.ncon):
+    for i in np.flatnonzero(inside[:, 0] != inside[:, 1]):   # exactly one side is the object
+        i = int(i)
         c = d.contact[i]
-        b1, b2 = int(m.geom_bodyid[c.geom1]), int(m.geom_bodyid[c.geom2])
-        if (b1 in bodies) == (b2 in bodies):
-            continue
         frame = np.asarray(c.frame, float).reshape(3, 3)
-        if b1 in bodies:                    # the normal points from geom1 to geom2: reverse it
+        if inside[i, 0]:                    # the normal points from geom1 to geom2: reverse it
             frame = -frame
         out.append((np.asarray(c.pos, float).copy(), frame, float(c.friction[0])))
     return out
@@ -101,35 +106,47 @@ def tipping_barrier(m, d, root: int) -> float:
     com = np.asarray(d.subtree_com[root], float)
     g = float(np.linalg.norm(m.opt.gravity))
     mass = float(m.body_subtreemass[root])
-    rise = np.inf
-    for a, b in _hull_edges(pts):
-        u = b - a
-        if np.linalg.norm(u) < COINCIDENT:
-            continue
-        u /= np.linalg.norm(u)
-        r = com - a - ((com - a) @ u) * u                     # axis to centre of mass, perpendicular
-        rise = min(rise, float(np.linalg.norm(r)) * float(np.sqrt(max(1.0 - u[2] ** 2, 0.0))) - float(r[2]))
-    return mass * g * max(rise, 0.0) if np.isfinite(rise) else 0.0
+    edges = _hull_edges(pts)
+    if not edges:
+        return 0.0
+    a = np.array([e[0] for e in edges])                       # (k, 3) edge starts
+    u = np.array([e[1] - e[0] for e in edges])                # (k, 3) edge directions
+    length = np.linalg.norm(u, axis=1)
+    keep = length >= COINCIDENT
+    if not keep.any():
+        return 0.0
+    a, u = a[keep], u[keep] / length[keep, None]
+    w = com - a                                               # (k, 3) edge start to centre of mass
+    r = w - (np.einsum("ij,ij->i", w, u))[:, None] * u        # perpendicular from the axis
+    rise = float(np.min(np.linalg.norm(r, axis=1) * np.sqrt(np.maximum(1.0 - u[:, 2] ** 2, 0.0)) - r[:, 2]))
+    return mass * g * max(rise, 0.0)
 
 
 def _hull_edges(pts: np.ndarray) -> list[tuple[np.ndarray, np.ndarray]]:
-    """Edges of the horizontal convex hull of 3D points (monotone chain on x, y)."""
-    order = sorted(range(len(pts)), key=lambda i: (pts[i][0], pts[i][1]))
+    """Edges of the horizontal convex hull of 3D points (monotone chain on x, y).
 
-    def turn(o, a, b):
-        return (pts[a][0] - pts[o][0]) * (pts[b][1] - pts[o][1]) - (pts[a][1] - pts[o][1]) * (pts[b][0] - pts[o][0])
-    lower, upper = [], []
-    for i in order:
-        while len(lower) >= 2 and turn(lower[-2], lower[-1], i) <= 0:
+    Plain floats rather than numpy rows: the hull runs once per object per physics substep of
+    every rollout, over a handful of contacts, and at that size numpy's scalar indexing costs more
+    than the arithmetic it does.
+    """
+    xy = sorted((float(p[0]), float(p[1]), i) for i, p in enumerate(pts))
+
+    def turn(o, a, b) -> float:
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    lower: list[tuple[float, float, int]] = []
+    upper: list[tuple[float, float, int]] = []
+    for q in xy:
+        while len(lower) >= 2 and turn(lower[-2], lower[-1], q) <= 0:
             lower.pop()
-        lower.append(i)
-    for i in reversed(order):
-        while len(upper) >= 2 and turn(upper[-2], upper[-1], i) <= 0:
+        lower.append(q)
+    for q in reversed(xy):
+        while len(upper) >= 2 and turn(upper[-2], upper[-1], q) <= 0:
             upper.pop()
-        upper.append(i)
-    hull = lower[:-1] + upper[:-1]
+        upper.append(q)
+    hull = [q[2] for q in lower[:-1]] + [q[2] for q in upper[:-1]]
     if len(hull) < 2:
-        hull = [order[0], order[-1]]
+        hull = [xy[0][2], xy[-1][2]]
     return [(pts[hull[k]], pts[hull[(k + 1) % len(hull)]]) for k in range(len(hull))
             if not (len(hull) == 2 and k == 1)]
 
