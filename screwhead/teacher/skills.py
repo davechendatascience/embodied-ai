@@ -76,13 +76,14 @@ class SkillConfig:
     # lift, carry, place
     lift: float = 0.12             # carry height above the support, for the grasp's via point
     lift_dz: float = 0.05          # a pick lifts this far before the place takes over
-    lift_speed: float = 0.12
+    lift_speed: float = 0.15       # (0.12 before the carry heights were fixed; LIBERO's humans carry at 0.17-0.23)
     slow_lift_dz: float = 0.02     # the first 2 cm of any lift slowly, so friction takes the
     slow_lift_speed: float = 0.06  # load before the jaws accelerate it (a rim pinch dropped
                                    # the bowl at 29 cm when lifted at full speed)
-    carry_speed: float = 0.15      # a bowl held by a 2.6 mm rim pinch left the jaws at 0.25
+    carry_speed: float = 0.18      # a bowl held by a 2.6 mm rim pinch left the jaws at 0.25; at 0.22,
+    #                                libero_spatial 2 dropped it twice as often and fell 49 -> 36 of 50
     over_xy: float = 0.02          # the object is "over" the target within this
-    lower_speed: float = 0.10
+    lower_speed: float = 0.15
     lower_speed_min: float = 0.03
     lower_done: float = 0.004      # lowered to within this of the target height
     place_clearance: float = 0.015 # object bottom above the target surface before release
@@ -99,7 +100,8 @@ class SkillConfig:
     #                                 hand does (fingertips 1.7 mm below its top): 3 mm above, they touched
     #                                 the plate on 1-4 steps of 400 and never moved it; 6 mm below the
     #                                 floor tilted the plate 8-12 degrees and pinned it to the table
-    push_speed: float = 0.06        # m/s: ~250 mm in ~80 steps
+    push_speed: float = 0.10        # m/s: at the humans' 0.06 the plate stick-slipped and averaged 0.019;
+    #                                 at 0.10, 8 of 8 within LIBERO's 300 steps, median 182 against 265
     push_ahead: float = 0.08        # m the aim runs ahead of the held point: aimed 10-30 mm ahead,
     #                                 the reference stopped where the stuck plate held it, and the
     #                                 push had no force left; the human hand moves at a steady rate
