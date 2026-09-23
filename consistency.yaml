@@ -680,7 +680,8 @@ branches:
       from it beats a search from zero (Q9); that regression on kept episodes suffices rather than
       iterated relabelling; that any arm passes the audit or that the search settles on it (Q8, measured
       in that order -- audit pass rate per arm and task, then the search's settled rate, then
-      pi_theta's).
+      pi_theta's). evidence: CTR-search-settles, which measures the alternation this claim is part of;
+      pi_theta's own contract is owed once policy.py exists.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-task-loss-core
@@ -693,7 +694,17 @@ branches:
     - AXM-libero-scores-final-state
     - AXM-libero-joint-bands
     - AXM-object-geometry-known
-    derivation_rule: 'Restated after a confirmation review whose bound measurements all held on the 30 tasks (max(a, b) <= D* to 2e-16 m over 2,100 targeted states and 58,780 LIBERO-checked poses; its premise -- contact implies exact separation <= 0, margin = gap = 0 on all 7 contact pairs -- over 39,875 near-contact states; slope <= 1.9058 over 197,040 pairs; no hidden underestimate in 300 small-d states) and found two scoping faults: M''s invariance holds only for single-conjunct goals (libero_10 task 0''s two conjuncts flip at M = 0.1474), now scoped to the 30 and named for libero_10; the slope and D* clauses hold only for in/on conjuncts, joints getting their own statement (1-Lipschitz, max |dd|/|dq| = 1.0000). The missed-contact zero is scoped to a = 0 (goal 2 had 786/4000 missed-contact samples with d > 0), and the model property margin = gap = 0 is named.'
+    derivation_rule: >-
+      Restated after a confirmation review whose bound measurements all held on the 30 tasks (max(a, b)
+      <= D* to 2e-16 m over 2,100 targeted states and 58,780 LIBERO-checked poses; its premise --
+      contact implies exact separation <= 0, margin = gap = 0 on all 7 contact pairs -- over 39,875
+      near-contact states; slope <= 1.9058 over 197,040 pairs; no hidden underestimate in 300 small-d
+      states) and found two scoping faults: M's invariance holds only for single-conjunct goals
+      (libero_10 task 0's two conjuncts flip at M = 0.1474), now scoped to the 30 and named for
+      libero_10; the slope and D* clauses hold only for in/on conjuncts, joints getting their own
+      statement (1-Lipschitz, max |dd|/|dq| = 1.0000). The missed-contact zero is scoped to a = 0 (goal
+      2 had 786/4000 missed-contact samples with d > 0), and the model property margin = gap = 0 is
+      named. evidence: CTR-loss-agrees-with-scorer.
     sufficiency:
       n_min: 3
       min_consensus: 0.8
@@ -737,7 +748,7 @@ branches:
       caller's, verdicts.Watch.fork); the entailment gap is answered with the reviewer's read-set audit
       plus measurement, stated as such. The six-configuration, cross-episode and search-pattern
       measurements were taken with the previous module, whose restore with other_instance=True is the
-      new default path unchanged.
+      new default path unchanged. evidence: CTR-restore-is-exact.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-teacher-verdicts
@@ -791,7 +802,7 @@ branches:
       period_end reads that state and the next substep re-reads it before the count advances. Evidence
       for the verdicts themselves -- fork equivalence, the release sweep, the knock sweep -- belongs in
       component-belief under CMP-optimization-teacher, which has no contract yet; that is the next thing
-      this component owes.
+      this component owes. evidence: CTR-verdicts-decide.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-optimization-teacher
@@ -858,7 +869,8 @@ branches:
       share their mean rank weight; joint conjuncts get a terminal order in metres from the model's
       geometry; the keep-filter uses DEF-smooth-motion's 95th percentile and adds 'no violation on the
       executed trajectory'; (1) is scoped to states reached under this execution. The plan
-      parameterization is left general here; BRN-screw-search specializes it.
+      parameterization is left general here; BRN-screw-search specializes it. evidence:
+      CTR-search-settles.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-screw-search
@@ -909,7 +921,7 @@ branches:
       needing the squeeze; (e) adds that executable twists depend on the arm's lead limit. Premises now
       include the servo lead scaling, the rate limiter and the rigid in-hand grip the claims use. The
       reviewer also found that the servo's lead-scale rewrites are not counted as re-anchors, which
-      bears on BRN-optimization-teacher's smoothness keep-filter.
+      bears on BRN-optimization-teacher's smoothness keep-filter. evidence: CTR-search-settles.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   # ---- CMP-scene-randomizer: resets, layouts and what a policy reads: one execution core, two environments
@@ -925,10 +937,10 @@ branches:
       qacc_warmstart, ctrl, time) bit-identical to robosuite's env.step for the same command.
     premises: [AXM-one-execution-path, AXM-reproducible-measurement]
     derivation_rule: >-
-      Falsified before implementation by an independent reviewer: it refreshes on every
-      substep, but robosuite's first period after a reset runs on the controller's stale cache
-      (AXM-robosuite-controller-cache), so the two paths differ from period 0 and never
-      re-converge. Superseded by BRN-lean-step-keeps-controller-cache.
+      Falsified before implementation by an independent reviewer: it refreshes on every substep, but
+      robosuite's first period after a reset runs on the controller's stale cache
+      (AXM-robosuite-controller-cache), so the two paths differ from period 0 and never re-converge.
+      Superseded by BRN-lean-step-keeps-controller-cache. evidence: CTR-execution-reproducible.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-lean-step-keeps-controller-cache
@@ -947,14 +959,14 @@ branches:
       update, reward) writes nothing the next substep reads.
     premises: [AXM-one-execution-path, AXM-reproducible-measurement, AXM-robosuite-controller-cache]
     derivation_rule: >-
-      mj_forward has no effect on the next step beyond what mj_step recomputes (warmstart reads
-      only qacc_warmstart, written in the advance), and mj_step1 + mj_step2 is mj_step for the
-      Euler integrator: 300 substeps from a 37-contact state were bit-identical three ways.
-      Honouring the flag reproduces robosuite's refresh schedule exactly: 60 periods / 1500
-      substeps from TaskEnv libero_goal 8 reset(0), gripper closing, all mjSTATE_INTEGRATION
-      fields and qacc with max difference 0; 2.88x faster (12.05 -> 4.18 ms per period).
-      Implementation: screwhead/sim/sim_arm.py (to be written), held by a test that runs both
-      paths from one saved state.
+      mj_forward has no effect on the next step beyond what mj_step recomputes (warmstart reads only
+      qacc_warmstart, written in the advance), and mj_step1 + mj_step2 is mj_step for the Euler
+      integrator: 300 substeps from a 37-contact state were bit-identical three ways. Honouring the flag
+      reproduces robosuite's refresh schedule exactly: 60 periods / 1500 substeps from TaskEnv
+      libero_goal 8 reset(0), gripper closing, all mjSTATE_INTEGRATION fields and qacc with max
+      difference 0; 2.88x faster (12.05 -> 4.18 ms per period). Implementation: screwhead/sim/sim_arm.py
+      (to be written), held by a test that runs both paths from one saved state. evidence:
+      CTR-execution-reproducible.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-reset-anchors-all-execution
@@ -985,7 +997,8 @@ branches:
       <= 6.1e-9 rad with the anchor vs up to 2.2e-1 without). Every refutation from round 3 on was in
       the record-keeping clauses added to this branch -- the record_rollout replay, the execution hash
       missing the arm model read from another project's venv, numpy's version -- so those move to their
-      own branch, BRN-trial-provenance, which this one no longer claims.
+      own branch, BRN-trial-provenance, which this one no longer claims. evidence:
+      CTR-execution-reproducible.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-policies-read-one-forwarded-state
@@ -1018,7 +1031,7 @@ branches:
       reads), but a second render of one forwarded state differed at 2 of 600 steps (3 wrist pixels, 1
       level) and PrivilegedEnv.obs() without raw re-rendered and replaced self.raw
       (teacher_env.py:204-205), swapping a student's frame at 1 of 600 -- now obs() reuses the period's
-      frames and the EGL limit is named, as in the reset branch.
+      frames and the EGL limit is named, as in the reset branch. evidence: CTR-execution-reproducible.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   # ---- CMP-twist-servo: the twist servo and the joint ramp every policy's action goes through
@@ -1029,7 +1042,19 @@ branches:
     premises:
     - AXM-servo-tracks-reachable-poses
     - AXM-one-execution-path
-    derivation_rule: 'Reduced to the clauses measured sound in all three reviews of this branch: lead at command time <= max_lag (up to float rounding); direction of theta - meas kept (cos >= 0.9999999999999997 on 1486 scaled steps); pose reference = FK(ref) to 0.0 mm; non-binding branch bit-identical to the current servo (0 mismatches over 9599 steps); re-anchors counted exactly on the 10 scaled steps with residual > max_pose_err, no trajectory changed by the counting; success 10/10 vs 9/10 with and without the reset fix (24/30 vs 23/30 on 15 more tasks). Consequences measured under stated conditions, kept out of the claim because each held only in the condition measured: pressing on flat_stove_1_burner the stored lead is 30.3-32.2 mm (per-joint clipping 80.5 / 135.0 / 258.3 mm in 3D); with the command reversed it unwinds at 2.4-2.7 mm per period against 2.5 commanded; if the block gives way the arm closes it within 3 periods at <= 0.46 m/s and 15.1 m/s^2, where clipping moves 78-121 mm or jumps 154 mm at up to 0.60 m/s and 24.6 m/s^2.'
+    derivation_rule: >-
+      Reduced to the clauses measured sound in all three reviews of this branch: lead at command time <=
+      max_lag (up to float rounding); direction of theta - meas kept (cos >= 0.9999999999999997 on 1486
+      scaled steps); pose reference = FK(ref) to 0.0 mm; non-binding branch bit-identical to the current
+      servo (0 mismatches over 9599 steps); re-anchors counted exactly on the 10 scaled steps with
+      residual > max_pose_err, no trajectory changed by the counting; success 10/10 vs 9/10 with and
+      without the reset fix (24/30 vs 23/30 on 15 more tasks). Consequences measured under stated
+      conditions, kept out of the claim because each held only in the condition measured: pressing on
+      flat_stove_1_burner the stored lead is 30.3-32.2 mm (per-joint clipping 80.5 / 135.0 / 258.3 mm in
+      3D); with the command reversed it unwinds at 2.4-2.7 mm per period against 2.5 commanded; if the
+      block gives way the arm closes it within 3 periods at <= 0.46 m/s and 15.1 m/s^2, where clipping
+      moves 78-121 mm or jumps 154 mm at up to 0.60 m/s and 24.6 m/s^2. evidence:
+      CTR-servo-keeps-its-reference.
     sufficiency:
       n_min: 3
       min_consensus: 0.8
@@ -1128,9 +1153,10 @@ branches:
     premises: [AXM-panda-gripper-geometry, AXM-handle-shares-body]
     derivation_rule: >-
       screwhead/teacher/skill_teacher.py calls Skills.leave_handle before pick. The jaws surround the
-      handle along the jaw axis, so any first motion with a component along it (rising, for
-      a vertical pinch) pushes a finger into the handle; along the approach axis they clear it.
-      evidence: traced on goal 3 -- the drawer stays at -0.159 through the pick.
+      handle along the jaw axis, so any first motion with a component along it (rising, for a vertical
+      pinch) pushes a finger into the handle; along the approach axis they clear it. evidence: traced on
+      goal 3 -- the drawer stays at -0.159 through the pick. evidence: CTR-teacher-reliable (goal 3's
+      drawer task is the one this governs).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-scan-then-place

@@ -630,6 +630,28 @@ interfaces:
       - the source embodiment is recorded with every twist
 
 contracts:
+  - id: CTR-execution-reproducible
+    subject: CMP-scene-randomizer
+    claim_type: capability
+    metrics: [{id: reproducible, unit: bool}]
+    acceptance: {rule: "reproducible == true", target_rate: 0.99}
+    exclusions: [rendering, which EGL may vary by one intensity level between renders of one state]
+    compatibility_key: [sw_revision]
+    evaluable_by: [TST-teacher-deterministic]
+    sufficiency: {n_min: 8, max_ci_width: 0.35}
+
+  - id: CTR-servo-keeps-its-reference
+    subject: CMP-twist-servo
+    claim_type: capability
+    metrics:
+      - {id: acc_p95, unit: m/s^2}
+      - {id: reanchors, unit: count}
+    acceptance: {rule: "acc_p95 <= 2.0 and reanchors == 0", target_rate: 0.9}
+    exclusions: [episodes that fail for reasons other than motion]
+    compatibility_key: [sw_revision]
+    evaluable_by: [TST-teacher-motion]
+    sufficiency: {n_min: 20, max_ci_width: 0.3}
+
   - id: CTR-loss-agrees-with-scorer
     subject: CMP-optimization-teacher
     claim_type: capability
@@ -1394,7 +1416,7 @@ tests:
 
   - id: TST-teacher-motion
     layer: component
-    targets: [CMP-skill-library]
+    targets: [CMP-skill-library, CMP-twist-servo]
     run: HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/teacher_motion.py --out $OUT
     metrics: [release_gap_mm, drop_count, acc_p95, jerk_p95, reanchors, success]
     capture: [teacher_revision, task_suite, task]
@@ -1403,7 +1425,7 @@ tests:
 
   - id: TST-teacher-deterministic
     layer: component
-    targets: [CMP-skill-library]
+    targets: [CMP-skill-library, CMP-scene-randomizer]
     run: python3 tools/teacher_determinism.py --out $OUT
     metrics: [reproducible]
     capture: [teacher_revision, task_suite, task]
