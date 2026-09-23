@@ -23,14 +23,14 @@ most current work is on the demonstrations it learns from.
 
 A geometry-driven demonstration policy (`screwhead/teacher/`) that reads a task's goal from its
 bddl and the scene's geometry from the simulator, and labels any state a student reaches (DAgger).
-Status at v8, 50 episodes per task at seed 555 (`runs/skill_v8`):
+Status at v16, 50 episodes per task at seed 555 (`runs/skill_v16`):
 
 | suite | at 600 steps | within LIBERO's step limit |
 |---|---|---|
-| libero_spatial (limit 220) | 490 / 500 | 459 / 500 |
-| libero_object (limit 280) | 499 / 500 | 499 / 500 |
-| libero_goal (limit 300) | 486 / 500 | 436 / 500 |
-| all | 1475 / 1500 | 1394 / 1500 |
+| libero_spatial (limit 220) | 499 / 500 | 477 / 500 |
+| libero_object (limit 280) | 500 / 500 | 496 / 500 |
+| libero_goal (limit 300) | 500 / 500 | 462 / 500 |
+| all | 1499 / 1500 | 1435 / 1500 |
 
 The goal is at least 95% on every task within LIBERO's limits. What works and what is missing,
 task by task and against LIBERO's own human demonstrations, is in
@@ -61,6 +61,26 @@ task by task and against LIBERO's own human demonstrations, is in
 
 Features by date, newest first. Numbers are measured at the stated commit.
 
+- **2026-09-24**
+  - Rim pinches halfway between the palm's depth and the usual one, before the usual (libero_spatial 4
+    48 -> 49; 1498 -> 1499 of 1500).
+  - libero_goal 3 the humans' way: the drawer is opened first and the bowl picked beside it when it
+    keeps its rim pinch with the drawer open (DEF-skill-contract's clear_of, which the code had
+    approximated by a footprint test); a held object under an overhang moves level to a clear
+    column before it rises (BRN-lift-leaves-overhang). Goal 3 within 300 steps 0 -> 12 of 50
+    (1423 -> 1435).
+  - The grasp approach is probed every 2 cm: the hand's side wings slipped between the probes into a
+    wine-rack bar (1495 -> 1498).
+  - The servo scales its lead uniformly (BRN-servo-lead-scaled-uniformly) by default: clipped per
+    joint, a fast descent tilted the tool 18.6 deg, the elbow reached its stop and the arm stood
+    still for 550 steps (1482 -> 1495).
+  - Execution is anchored at every reset by default: robosuite's finger target survived resets, so
+    an episode depended on the ones its process ran before. `skill_eval --interleave N` runs a
+    task's episodes on N workers, episode for episode identical to one worker.
+  - Clearing spots are searched on a 12 x 32 grid (libero_goal 3 41 -> 50 of 50).
+  - The support ray starts above an object's bottom: started below, it began inside the table and
+    met its underside 49 mm down, and the cream cheese's fingertips went 4.3 mm into the table
+    (libero_goal 6 within 300 steps 36 -> 50).
 - **2026-09-23**
   - Transport at human speeds (lift/lower 0.15, carry 0.18 m/s) and a 10 cm/s push (1466 -> 1475;
     within LIBERO's limits 1343 -> 1394).

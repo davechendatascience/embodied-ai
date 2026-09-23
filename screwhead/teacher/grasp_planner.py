@@ -76,14 +76,17 @@ class GraspPlanner:
         for w, d in box.width_axes():                     # narrow face first
             if w + self.k.grip_margin <= self.k.max_grip and self.clear_body(box.world_centre, -Z, bid):
                 faces += self.at(box.world_centre, half_h, d, w, body=bid, floor=floor)
-        deep, shallow = [], []
+        deep, middle, shallow = [], [], []
         for c, hw, d, w in self.parts(obj, box):
             if self.clear_body(c, -Z, bid):
-                deep += self.at(c, hw, d, w, body=bid, floor=floor, deep=True)
+                deep += self.at(c, hw, d, w, body=bid, floor=floor, deep=1.0)
+                middle += self.at(c, hw, d, w, body=bid, floor=floor, deep=0.5)
                 shallow += self.at(c, hw, d, w, body=bid, floor=floor)
-        # the palm's depth first, the usual depth after it: deep only, a bowl inside the top drawer
-        # had no reachable pinch at all and was forced (libero_spatial 4, 49 -> 8 of 50)
-        parts = deep + shallow
+        # the palm's depth first, then halfway, then the usual depth: deep only, a bowl inside the top
+        # drawer had no reachable pinch at all and was forced (libero_spatial 4, 49 -> 8 of 50); there
+        # the palm's depth meets the cabinet in every layout, and the usual depth let the bowl pivot
+        # out of the pads as it left the drawer floor (2 of 50)
+        parts = deep + middle + shallow
         for g in self.part_geoms(obj, box):
             sides += self.handle_grasps(g)
         if not (faces or parts or sides):
@@ -92,17 +95,19 @@ class GraspPlanner:
         return [(n, t) for n, t in (("faces", faces), ("parts", parts), ("sides", sides)) if t]
 
     def at(self, centre: np.ndarray, half_h: float, d: np.ndarray, w: float, body: int = -1,
-           floor: float = -np.inf, deep: bool = False) -> list:
+           floor: float = -np.inf, deep: float = 0.0) -> list:
         """Top-down grasps on a body of this height, jaws both ways round, the tool point no
         lower than `floor` (the support plus the fingers' reach).
 
-        `deep`: a pinch on a thin wall goes as deep as the palm allows. A rim pinch is a pivot
+        `deep`: the fraction of the way from the usual depth to the deepest the palm allows (1: as
+        deep as the palm allows, the preferred pinch on a thin wall). A rim pinch is a pivot
         the pads' vertical spread alone resists; LIBERO's humans pinch the bowl with the pads 36 mm
         apart up its wall where 20 mm below the rim put the teacher's 20 mm apart, and at the
         palm's depth the bowl's mid-carry drops fell 12 -> 1 (spatial 6), 14 -> 4 (spatial 7) and
         12 -> 5 (goal 3) episodes of 20."""
         deepest = self.gripper().palm - PALM_MARGIN
-        depth = deepest if deep else min(max(MIN_DEPTH, DEPTH_FRACTION * half_h), deepest)
+        usual = min(max(MIN_DEPTH, DEPTH_FRACTION * half_h), deepest)
+        depth = usual + float(deep) * (deepest - usual)
         p = centre + Z * max(half_h - depth, -half_h + FLOOR_MARGIN)
         p[2] = max(float(p[2]), floor)
         h = np.array([d[0], d[1], 0.0])

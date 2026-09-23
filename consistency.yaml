@@ -1686,13 +1686,14 @@ branches:
     claim_type: contract
     statement: >-
       Top-down pinches on a thin wall of an object -- grasp sites on its wall segments rather than
-      across its body -- are offered at two depths, the deeper first: as deep below the wall's top as
-      the palm allows (the palm's offset behind the tool point less a declared margin), and at the
-      depth a grasp across a body would take. Neither goes lower than the object's floor margin and
-      the support's clearance allow. The reach screen takes the first it can witness, so the deep
-      pinch is used where the arm can reach it and the usual depth where it cannot. Grasps across a
-      body keep their depth. Not claimed: that the pinch cannot be lost, only that of the positions
-      the palm allows the deep one spreads the pads furthest up the wall.
+      across its body -- are offered at three depths, listed deepest first: as deep below the wall's
+      top as the palm allows (the palm's offset behind the tool point less a declared margin), halfway
+      between that and the usual depth, and at the depth a grasp across a body would take (the usual
+      depth). None goes lower than the object's floor margin and the support's clearance allow. The
+      reach screen chooses among those it can witness by its conditioning bars first and list order
+      within a bar, so a deeper pinch is used where the arm can reach it at the best bar any pinch
+      reaches. Grasps across a body keep their depth. Not claimed: that the pinch cannot be lost, only
+      that of the positions offered the deepest witnessed one spreads the pads furthest up the wall.
     premises: [AXM-no-torsional-friction, AXM-panda-gripper-geometry, LMA-grip-fails-by-contact-not-load,
                AXM-object-geometry-known]
     derivation_rule: >-
@@ -1704,8 +1705,10 @@ branches:
       teacher at 20 mm below the rim with them 20 mm apart; at the palm's depth the mid-carry drops
       went 12 -> 1 (spatial 6), 14 -> 4 (spatial 7) and 12 -> 5 (goal 3) episodes of 20. Offered
       alone, the deep pinch left a bowl inside the top drawer with no reachable grasp (spatial 4,
-      49 -> 8 of 50); offered first with the usual depth after it, 49 of 50. evidence:
-      CTR-teacher-reliable, CTR-teacher-gentle.
+      49 -> 8 of 50); offered first with the usual depth after it, 49 of 50. There the palm's depth
+      meets the cabinet in every layout, and the usual depth let the bowl pivot out of the pads as it
+      left the drawer floor; halfway, 48 -> 49 of 50 at the same seed with every other episode of the
+      1500 unchanged (runs/skill_v16). evidence: CTR-teacher-reliable, CTR-teacher-gentle.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-lift-leaves-overhang
