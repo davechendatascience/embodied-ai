@@ -155,11 +155,11 @@ def grade(lo: float) -> str:
     return "reliable" if lo >= RELIABLE_LO else ("marginal" if lo >= MARGINAL_LO else "broken")
 
 
-def collect(suite: str, episodes: int, horizon: int, seed: int, out: Path) -> Path:
+def collect(suite: str, episodes: int, horizon: int, seed: int, out: Path, init_order: bool = False) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
     cmd = [".venv-libero/bin/python", "tools/skill_eval.py", "--suite", suite,
            "--episodes", str(episodes), "--horizon", str(horizon), "--seed", str(seed), "--cpus", PERF,
-           "--trials", str(out)]
+           "--trials", str(out)] + (["--init-order"] if init_order else [])
     env = {"HF_HUB_OFFLINE": "1", "PYTHONPATH": "third_party/LIBERO:.", "MUJOCO_GL": "egl",
            "PATH": "/usr/bin:/bin", "HOME": str(Path.home())}
     log = out.with_suffix(".log")
@@ -263,6 +263,7 @@ def _parse() -> argparse.Namespace:
     ap.add_argument("--suites", nargs="*", default=["libero_object", "libero_spatial", "libero_goal"])
     ap.add_argument("--episodes", type=int, default=20)
     ap.add_argument("--horizon", type=int, default=500)
+    ap.add_argument("--init-order", action="store_true", help="LIBERO's protocol, passed to skill_eval")
     ap.add_argument("--seed", type=int, default=555,
                     help="skill_eval's seed; a test run on the sweeps' seed re-observes their episodes")
     ap.add_argument("--evidence", default="runs/evidence/reliability")
@@ -287,7 +288,7 @@ def _gather(args) -> list[dict]:
         path = ROOT / (args.reuse or args.evidence) / f"{suite}.trials.json"
         if not args.reuse:
             print(f"[run] {suite}: {args.episodes} episodes x {SUITE_TASKS.get(suite, 10)} tasks", flush=True)
-            collect(suite, args.episodes, args.horizon, args.seed, path)
+            collect(suite, args.episodes, args.horizon, args.seed, path, args.init_order)
         if not path.exists():
             print(f"  (no trials at {path})")
             continue

@@ -115,11 +115,11 @@ def reference(suites: list[str], demos: int) -> None:
 
 # -- the episodes -----------------------------------------------------------------------------
 def _task(item: tuple) -> list[dict]:
-    suite, task, episodes, seed, horizon, ref, cores, video = item
+    suite, task, episodes, seed, horizon, ref, cores, video, init_order = item
     cpu = cores.get()
     try:
         os.sched_setaffinity(0, {cpu})
-        return _episodes(suite, task, episodes, seed, horizon, ref, cpu, video)
+        return _episodes(suite, task, episodes, seed, horizon, ref, cpu, video, init_order)
     finally:
         cores.put(cpu)
 
@@ -138,7 +138,7 @@ def _verdict_frames(frames: list, text: str, ok: bool, n: int) -> list:
 
 
 def _episodes(suite: str, task: int, episodes: int, seed: int, horizon: int, ref: dict, cpu: int,
-              video: dict | None = None) -> list[dict]:
+              video: dict | None = None, init_order: bool = False) -> list[dict]:
     from skill_eval import Job, _run_episode
     from screwhead.sim import contacts
     from screwhead.sim.sim_arm import REST_SPEED
@@ -147,7 +147,7 @@ def _episodes(suite: str, task: int, episodes: int, seed: int, horizon: int, ref
     from screwhead.teacher.skill_teacher import SkillTeacher
     video = video or {}
     job = Job(suite, task, episodes, seed * 100 + task, cpu, 0, horizon, False, {}, video.get("dir", ""),
-              video.get("per_task", 0), video.get("px", 0))
+              video.get("per_task", 0), video.get("px", 0), init_order=init_order)
     env = TaskEnv(suite, task, horizon=horizon, seed=job.seed, render=bool(video))
     teacher = SkillTeacher(env)
     sc, m, d = env.scene, env.scene.m, env.scene.d
@@ -227,7 +227,8 @@ def _episodes(suite: str, task: int, episodes: int, seed: int, horizon: int, ref
             out = Path(video["dir"]) / suite / f"{suite}_t{task}_ep{ep}_{'settled' if settled else 'unsettled'}.mp4"
             out.parent.mkdir(parents=True, exist_ok=True)
             imageio.mimsave(out, frames, fps=20, macro_block_size=1)
-        rows.append(dict(task=task, episode=ep, refused=False, success=first, success_final=final,
+        rows.append(dict(task=task, episode=ep, refused=False, init_index=getattr(env, "init_index", None),
+                         success=first, success_final=final,
                          finished=finished, released=not held, at_rest=not still,
                          tilt_excess_deg=round(float(tilt_excess), 1), settled=settled,
                          settle_steps=env.t - t_first if first else -1, why=why, tipped=tipped,
@@ -244,7 +245,8 @@ def _trial(r: dict, suite: str, seed: int, horizon: int, rev: str) -> dict:
             "conditions": {"task": r["task"], "suite": suite, "why": ",".join(r.get("why", [])),
                            "tipped": "; ".join(r.get("tipped", []))},
             "repro": {"seed": seed * 100 + r["task"], "task": r["task"], "task_suite": suite,
-                      "episode": r["episode"], "horizon": horizon, "teacher_revision": rev}}
+                      "episode": r["episode"], "horizon": horizon, "init_index": r.get("init_index"),
+                      "teacher_revision": rev}}
 
 
 def main() -> int:
@@ -253,6 +255,7 @@ def main() -> int:
     ap.add_argument("--tasks", type=int, nargs="*", default=None, help="default: every task of each suite")
     ap.add_argument("--episodes", type=int, default=20)
     ap.add_argument("--seed", type=int, default=557)
+    ap.add_argument("--init-order", action="store_true", help="LIBERO's protocol: episode e from initial state e")
     ap.add_argument("--reference", action="store_true", help="build the humans' reference and stop")
     ap.add_argument("--demos", type=int, default=50)
     ap.add_argument("--cpus", default=PERF)
@@ -276,7 +279,7 @@ def main() -> int:
         cores.put(c)
     video = (dict(dir=str((ROOT / args.video).resolve()), per_task=args.videos_per_task, px=args.video_px,
                   hold=args.hold) if args.video else None)
-    items = [(s, t, args.episodes, args.seed, HORIZON.get(s, 600), ref, cores, video)
+    items = [(s, t, args.episodes, args.seed, HORIZON.get(s, 600), ref, cores, video, args.init_order)
              for s in args.suites for t in (args.tasks if args.tasks is not None else range(TASKS[s]))]
     trials, table = [], []
     with mp.get_context("spawn").Pool(len(cpus), maxtasksperchild=1) as pool:

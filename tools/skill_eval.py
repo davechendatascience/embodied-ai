@@ -44,6 +44,7 @@ class Job:
     max_videos: int
     video_px: int
     stride: int = 1      # this job's episodes are ep_offset, ep_offset + stride, ... of one stream
+    init_order: bool = False   # LIBERO's protocol: episode e starts from initial state e (mod their number)
 
 
 def _observe(errors: list, fn, *args):
@@ -61,7 +62,13 @@ def _run_episode(env, teacher, job: Job, ep: int, record: bool):
     from screwhead.teacher.episode_log import EpisodeLog
     from screwhead.teacher.grip_watch import GripWatch
     from screwhead.teacher.refusal import Refusal
-    env.reset()
+    # Drawn from the seeded stream (with replacement), 50 episodes covered 26-34 of a task's 50 initial
+    # states and repeated the rest exactly; --init-order runs each once, in order, as LIBERO does
+    episode = job.ep_offset + ep * job.stride
+    if job.init_order:
+        env.reset(init_index=episode % len(env.init_states))
+    else:
+        env.reset()
     errors: list[str] = []
     log = _observe(errors, EpisodeLog, env, teacher)
     # CTR-teacher-gentle's metrics, kept on their own error list: a failing watch must not
@@ -116,6 +123,7 @@ def _run_episode(env, teacher, job: Job, ep: int, record: bool):
                forced_grasp=bool(forced), rejected_by=forced, **gentle,
                last_phase=teacher.phase, step_index=teacher.step_index, phases=dict(phases),
                language=env.language, diag=diag, mechanism=mechanism, detail=detail,
+               init_index=getattr(env, "init_index", None),
                **{k: round(float(v), 4) if isinstance(v, float) else v
                   for k, v in track.items() if k not in ("skill", "regressed")})
     return row, frames
@@ -142,7 +150,9 @@ def _crashed_row(job: Job, ep: int, env, e: Exception) -> dict:
     import traceback
     where = traceback.extract_tb(e.__traceback__)[-1]
     what = f"crash: {type(e).__name__}: {e} at {Path(where.filename).name}:{where.lineno}"
-    return _failed_row(job.task, job.ep_offset + ep * job.stride, env.t, env.language, what, "crash")
+    row = _failed_row(job.task, job.ep_offset + ep * job.stride, env.t, env.language, what, "crash")
+    row["init_index"] = getattr(env, "init_index", None)
+    return row
 
 
 def _fill_lost(rows: list[dict], jobs: list[Job]) -> list[dict]:
@@ -213,6 +223,9 @@ def _parse() -> argparse.Namespace:
     ap.add_argument("--at-once", type=int, default=0,
                     help="processes alive at a time (0: one per core in --cpus)")
     ap.add_argument("--seed", type=int, default=555)
+    ap.add_argument("--init-order", action="store_true",
+                    help="LIBERO's protocol: episode e starts from the task's initial state e, each once "
+                         "(default: drawn from the seeded stream, with replacement)")
     ap.add_argument("--split", type=int, default=1,
                     help="workers per task, each running a share of the episodes on its own "
                          "seed -- for iterating on one task without waiting on one core")
@@ -244,14 +257,15 @@ def _jobs(args) -> list[Job]:
             if n > 0:
                 jobs.append(Job(args.suite, t, n, args.seed * 100 + t, cpus[len(jobs) % len(cpus)], j,
                                 args.horizon, args.refuse, start, args.video,
-                                args.max_videos, args.video_px, stride=args.interleave))
+                                args.max_videos, args.video_px, stride=args.interleave,
+                                init_order=args.init_order))
         for j in range(args.split if args.interleave <= 1 else 0):
             n = min(per, args.episodes - j * per)
             if n > 0:
                 seed = args.seed * 100 + t if args.split == 1 else (args.seed * 100 + t) * 1000 + j
                 jobs.append(Job(args.suite, t, n, seed, cpus[len(jobs) % len(cpus)], j * per,
                                 args.horizon, args.refuse, start, args.video,
-                                args.max_videos, args.video_px))
+                                args.max_videos, args.video_px, init_order=args.init_order))
     return jobs
 
 
@@ -380,7 +394,7 @@ def _write_trials(rows: list[dict], args, rev: str) -> None:
                         "refused_predicate": r.get("refused_predicate", "")},
          "detail": dict(r.get("detail", {}), episode=r["episode"], steps=r["steps"], language=r["language"]),
          "repro": {"seed": args.seed * 100 + r["task"], "task": r["task"], "task_suite": args.suite,
-                   "episode": r["episode"], "horizon": args.horizon,
+                   "episode": r["episode"], "horizon": args.horizon, "init_index": r.get("init_index"),
                    "teacher_revision": rev}} for r in rows]}, indent=1))
     written = json.loads(Path(args.trials).read_text())["trials"]
     leaked = [t for t in written if t["metrics"].get("refused") and "success" in t["metrics"]]
