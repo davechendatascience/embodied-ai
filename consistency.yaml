@@ -2284,25 +2284,27 @@ branches:
       At every control step the planner re-evaluates, from that step's state and without latching, whether
       each place step is done and whether its object is delivered. A place step is done only when LIBERO's
       predicate for its goal holds and its object is let go: not held (DEF-holding), touched by no robot
-      geometry, and with the tool point more than a declared margin outside the object's box --
-      DEF-skill-contract's release postcondition, read from that step's state. Its object is delivered at
-      a step only when it is not held and its origin is within a declared plan distance of the drop point
-      and within declared heights below and above the target height (the origin height the place skill
-      lowers the object to); the release the place skill commands on the ground that the object is
-      delivered uses the same step's state. The planner selects, at every control step, the first plan
-      step in order that is not done, where the pick before a place step is also skipped when that place
-      step's object is delivered. So a place step whose object is delivered but whose goal does not hold
-      is not passed over for a later step, and at a step where it is selected the place skill, finding its
-      object delivered, commands the jaws open and a retreat rather than taking the object back; and a
-      later plan step is selected only when every earlier place step is done, which requires its object
-      let go. Claimed, for plans in which no later step grasps an object that an earlier place step
-      delivered: no control step selects a later plan step while an earlier place step's object is held,
-      touched by the robot, or within the declared margin of the tool point, with its goal satisfied; and
-      no control step commands a release on the ground that the object is delivered while its origin is
-      more than the declared height above its target height. Not claimed: that LIBERO's predicate still
-      holds after the release; that holding is judged without error; anything of plans that re-pick a
-      delivered object; releases commanded on other grounds; that a delivered object stays delivered; that
-      the margin keeps every finger outside the object's box.
+      geometry, and with the tool point more than a declared margin outside the object's box, each read
+      from that step's state -- a stand-in for DEF-skill-contract's release postcondition, not the
+      postcondition itself. Its object is delivered at a step only when it is not held and its origin is
+      within a declared plan distance of the drop point and within declared heights below and above the
+      target height (the origin height the place skill lowers the object to); the release the place skill
+      commands on the ground that the object is delivered uses the same step's state. The planner selects,
+      at every control step, the first plan step in order that is not done, where the pick before a place
+      step is also skipped when that place step's object is delivered. So a place step whose object is
+      delivered but whose goal does not hold is not passed over for a later step, and at a step where it
+      is selected the place skill, finding its object delivered, commands the jaws open and a retreat
+      rather than taking the object back; and a later plan step is selected only when every earlier place
+      step is done, which requires its object let go. Claimed, for plans in which no later step grasps an
+      object that an earlier place step delivered: no control step selects a later plan step while an
+      earlier place step's object is held, touched by the robot, or within the declared margin of the tool
+      point, with its goal satisfied; and no control step commands a release on the ground that the object
+      is delivered while its origin is more than the declared height above its target height. Not claimed:
+      that LIBERO's predicate still holds after the release; that holding is judged without error;
+      anything of plans that re-pick a delivered object; releases commanded on other grounds; that a
+      delivered object stays delivered; that the margin keeps every finger outside the object's box, or
+      that nothing of the object lies between the fingers when a later step starts (a thin part between
+      the open pads, more than the margin from the tool point, is let go by this test).
     premises: [AXM-libero-scores-final-state, DEF-holding, DEF-skill-contract]
     derivation_rule: >-
       AXM-libero-scores-final-state makes a predicate that holds while the object is still in the jaws no
@@ -2321,6 +2323,7 @@ branches:
       contact alone, the contact flickered as the jaws opened round the pot and the knob's reach dragged
       it back into them. With the object let go as DEF-skill-contract's postcondition has it (the tool
       point 20 mm outside its box), libero_10 2 10 of 10 (v29: 5) and libero_10 8 9 of 10, inits 0-9.
+      Restated per the verifier: the test is a stand-in for the postcondition, which it does not entail.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-regression-planner
@@ -2636,6 +2639,52 @@ branches:
       the pre-grasp lies on the approach axis and the squeeze and advance come first, and claim (2)
       excludes the squeeze's region as well. Supersedes the staged BRN-dogleg-approach-under-overhang
       (withdrawn; never built).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-share-a-surface-side-by-side
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      When a task's plan sets two or more distinct objects on one region by place_on and places none into
+      it by place_in, the drop point in plan of each such object is chosen, once per episode at the first
+      step it is asked for, as follows, in place of BRN-drop-point-footprint-as-carried's search. Each
+      object's footprint is its box as it lies at that step, turned about the vertical as
+      BRN-carry-turns-object-to-fit's rule would turn it for the region, and centred on its origin; its
+      width along a horizontal axis is twice the sum of its box's half-extents projected on that axis. The
+      rule applies only to a region with exactly two box axes within a declared angle of horizontal; of
+      those, the one along which the objects' widths sum to less is taken (ties to the first), projected
+      onto the horizontal plane, normalised, and signed so that its component along the region centre's
+      position from the robot's base (the frame's origin) is non-negative -- where that component is zero,
+      as the region's box axis points. The footprints are laid out along it in the plan's order, from its
+      far end, each a declared non-negative gap from the next, the row centred on the region's centre;
+      each object's drop point is the region's centre moved along the axis by its footprint centre's
+      offset in the row, unless the magnitude of that offset, or of the offset of an object before it in
+      the row, exceeds the region's half-extent along that axis, in which case that object's drop point is
+      the search's. Claimed: (1) a region set on by one object, or into which the plan places any object,
+      keeps the search's drop points; (2) in the row laid out at any one step, the offset the rule gives
+      an object has magnitude within the region's half-extent along the axis, and an earlier object's
+      offset is greater, along the axis as signed, than a later one's; (3) whether the rule applies, and
+      each drop point it gives, are functions of the plan, the region's box, the robot base's position,
+      and the objects' boxes and poses at the step each is chosen; a drop point that falls back to the
+      search is the search's, a function of what it reads. Not claimed: that the footprints as the objects
+      are carried or come to rest are those computed; that neighbours do not touch when the widths
+      computed at different steps differ; that the objects rest where they are dropped; that the region's
+      other axis leaves room.
+    premises: [BRN-drop-point-footprint-as-carried, BRN-carry-turns-object-to-fit, AXM-object-geometry-known]
+    derivation_rule: >-
+      libero_10 8 (put both moka pots on the stove) failed 50 of 50 in the teacher-alone sweeps v26 and
+      v29: the stove's cook region is 15 cm square, a pot's footprint 8 x 15 cm, and the drop point
+      search, run for the second pot while the first sat at the centre, found no open point and returned
+      the centre; the second pot came down on the first and knocked it off the stove. LIBERO's humans set
+      the two pots side by side along the pots' narrow axis, the first on the far side, 9-12 cm apart (12
+      of 12 demonstrations: first at +2 to +6 cm, second at -2 to -7 cm from the centre). With the rule
+      (and BRN-place-onto-physical-support's release of a handle-held object at rest, without which the
+      first pot is never let go), the teacher alone, inits 0-9: libero_10 8 8 of 10. Set on surfaces only:
+      applied also to libero_10 0's basket (place_in), its soup, sent to the far side, came down on the
+      basket's rim (9 of 10 where dropped together had 10); a container's walls settle two objects dropped
+      at one point side by side, a surface does not. Restated once per the verifier: offsets by magnitude,
+      the gap non-negative, the axis's sign and its tie defined, the rule's inputs complete;
+      BRN-drop-point-footprint-as-carried excepts the drop points this rule gives.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 policies:
