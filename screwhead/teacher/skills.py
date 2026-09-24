@@ -684,12 +684,18 @@ class Skills:
         near = self.reach._footprint_distance(np.asarray(xy, float)[None])[:, 0] < radius
         return bool((near & keep & self._solid(ignore) & (bottoms > z_lo) & (bottoms < z_hi)).any())
 
-    def _roof_under(self, xy: np.ndarray, radius: float, z_lo: float, z_hi: float, ignore: set[int]) -> float | None:
-        """The lowest bottom, between z_lo and z_hi, of the colliding geoms within `radius` of xy in plan
-        (the robot's aside, and bodies in `ignore`); None when there are none."""
+    def _roof(self, xy: np.ndarray, radius: float, z_lo: float, z_top: float, z_hi: float,
+              ignore: set[int]) -> float | None:
+        """The lowest bottom below z_hi of the colliding geoms (the robot's aside, and bodies in
+        `ignore`) that lie over an object centred at xy: within `radius` of it in plan with their bottom
+        above its top z_top, or over xy itself in plan with their bottom above z_lo. None when none do.
+        Within the radius at any height, a wine rack's bar 3.5 mm beside the bottle's centre, 23 cm
+        below its top, roofed libero_goal 9's rack and the bottle was laid (50 -> 3 of 50); the shelf's
+        boards lie over the book's and the pan's centres."""
         _pos, _rad, bottoms, _tops, keep = self.reach._geoms_now()
-        near = self.reach._footprint_distance(np.asarray(xy, float)[None])[:, 0] < radius
-        sel = near & keep & self._solid(ignore) & (bottoms > z_lo) & (bottoms < z_hi)
+        dist = self.reach._footprint_distance(np.asarray(xy, float)[None])[:, 0]
+        over = ((dist < radius) & (bottoms > z_top)) | ((dist <= 0.0) & (bottoms > z_lo))
+        sel = over & keep & self._solid(ignore) & (bottoms < z_hi)
         return float(bottoms[sel].min()) if sel.any() else None
 
     def _solid(self, ignore: set[int]) -> np.ndarray:
@@ -774,8 +780,8 @@ class Skills:
                 return None
             c = np.r_[xy, rest] + off
             lo = rest - low + k.place_clearance           # above the object's resting bottom
-            return (self._covered(c[:2], r, lo, carry_z + height, mine),
-                    self._roof_under(c[:2], r, lo, carry_z + height, mine), rest)
+            roof = self._roof(c[:2], r, lo, rest - low + height, carry_z + height, mine)
+            return roof is not None, roof, rest
 
         def entry_at(xy):
             """(u, E, R_entry, entering) for the drop point xy: the side the object is already entering
