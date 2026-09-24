@@ -380,14 +380,15 @@ class Skills:
         rel = box.R.T @ (np.asarray(self.env.snapshot()["p_tool"], float) - box.world_centre)
         return float(np.linalg.norm(np.maximum(np.abs(rel) - box.half, 0.0))) > self.k.clear_margin
 
-    def released_in_the_way(self, keep: str | None = None) -> str | None:
-        """An object a place of this episode released and nothing has grasped since (other than `keep`)
-        that the robot touches, or whose box the tool point is within clear_margin of: DEF-skill-contract's
-        start gate, read with let_go's stand-in for its release postcondition. None when there is none."""
+    def released_in_the_way(self) -> str | None:
+        """An object whose release a place of this episode commanded, and which no place has since found
+        held, that the robot touches, or whose box the tool point is within clear_margin of:
+        DEF-skill-contract's start gate for the objects places release, read with let_go's stand-in for
+        its release postcondition. None when there is none."""
         m, d = self.scene.m, self.scene.d
         p_tool = np.asarray(self.env.snapshot()["p_tool"], float)
         for obj, released in self._let_go.items():
-            if not released or obj == keep:
+            if not released:
                 continue
             try:
                 bid = self.scene.body_id(obj)
