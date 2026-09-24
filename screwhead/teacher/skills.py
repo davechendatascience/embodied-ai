@@ -34,6 +34,7 @@ from .reach import Reach
 from .refusal import Refusal
 
 MIN_TWIST_DIST = 0.001    # m: nearer than this, the speed floor does not apply
+FALLING = 0.05            # m/s: an object let go and moving faster has not landed yet
 
 
 @dataclass(frozen=True)
@@ -176,6 +177,7 @@ class Skills:
         self._carry_cache: dict = {}
         self._spots: dict[str, tuple] = {}         # synthetic regions: where a crowded object goes
         self._clearing: dict[tuple, str | None] = {}
+        self._let_go: dict[str, bool] = {}          # objects this episode's releases have let go
 
     # -- commands -------------------------------------------------------------------------
     def twist_to(self, R, p, R_goal, p_goal, v_max=None, v_min=None):
@@ -209,7 +211,7 @@ class Skills:
         if ep != self._episode:
             self._episode = ep
             for cache in (self._grasp_cache, self._handle_cache, self.grasp_log,
-                          self._drop_cache, self._carry_cache, self._spots, self._clearing):
+                          self._drop_cache, self._carry_cache, self._spots, self._clearing, self._let_go):
                 cache.clear()
 
     def grasp_for(self, obj: str, via: np.ndarray | None = None,
@@ -408,8 +410,8 @@ class Skills:
     def via_for(self, region: str) -> np.ndarray:
         """Where the tool must be to deliver into this region -- the point the grasp has to
         stay reachable at, not just the grasp itself."""
-        _, p_reg, half = self.region_pose(region)
-        return np.array([p_reg[0], p_reg[1], p_reg[2] + float(half[2]) + self.k.lift])
+        R_reg, p_reg, half = self.region_pose(region)
+        return np.array([p_reg[0], p_reg[1], p_reg[2] + self._region_up(R_reg, half) + self.k.lift])
 
     # -- pick ------------------------------------------------------------------------------------
     def pick(self, obj: str, s: dict, via: np.ndarray | None = None,
@@ -444,6 +446,14 @@ class Skills:
             return self.action(self.twist_to(R, p, R_t, target), open_to)
         self.phase = "down"                            # above the start: straight down to it
         return self.action(self.twist_to(R, p, R_g, pre), open_to)
+
+    def _falling(self, obj: str) -> bool:
+        """Moving faster than FALLING: let go and not yet landed."""
+        try:
+            b = self.scene._root_id(obj)
+        except ValueError:
+            return False
+        return float(np.linalg.norm(self.scene.d.cvel[b][3:])) > FALLING
 
     def _risen(self, obj: str) -> float:
         """How far the object has risen since its grasp was chosen."""
@@ -552,8 +562,17 @@ class Skills:
             if self.at_place(q, target_q):     # let go of it, do not take it back
                 self.phase = "settle"
                 return self.retreat(s)
+            if self._let_go.get(obj) and self._falling(obj):
+                # let go by this law's own release and still falling: judged once it lands. Taken back
+                # mid-fall, the jaws came down on libero_90 55's soup as it reached the tray and threw it
+                # 1.2 m. Only after a release: a grip that flickers against a compartment wall while the
+                # lower moves at 15 cm/s is not a fall, and waiting there opened the jaws on libero_90
+                # 75's book (18 of 50 lost)
+                self.phase = "settle"
+                return self.retreat(s)
             self.phase = "regrasp"
             return self.pick(obj, s, via=self.via_for(region), place=(region, inside))
+        self._let_go[obj] = False                       # in the hand: nothing has been let go
         delta = target_q - q
         over = float(np.linalg.norm(delta[:2]))
         carry_z = self._carry_height(obj, region, q, target_q, R, p)
@@ -586,6 +605,7 @@ class Skills:
             return self.action(self.twist_to(R, p, R_fit, p + delta, v_max=k.lower_speed,
                                              v_min=k.lower_speed_min), 0.0)
         self.phase = "release"
+        self._let_go[obj] = True
         return self.action(np.zeros(6), A_OPEN)
 
     def _fit_yaw(self, obj: str, region: str, R: np.ndarray) -> np.ndarray:
@@ -668,9 +688,10 @@ class Skills:
         centre_off = float((box.world_centre - q)[2])
         xy, _d = self._open_point(obj, R_reg, p_reg, half, box)
         if inside:
-            target = np.array([xy[0], xy[1], p_reg[2] + max(0.0, float(half[2]) - half_h) + self.k.place_clearance])
+            target = np.array([xy[0], xy[1], p_reg[2] + max(0.0, self._region_up(R_reg, half) - half_h)
+                               + self.k.place_clearance])
         else:
-            target = p_reg + R_reg @ np.array([0.0, 0.0, float(half[2])])
+            target = self._region_top(R_reg, p_reg, half)
             target[:2] = xy
             target[2] += half_h - centre_off + self.k.place_clearance
         return lambda cand: [pose(cand[0], target + (cand[1] - q))]
@@ -692,12 +713,31 @@ class Skills:
         if inside:
             target_q = p_reg.copy()
             target_q[:2] = xy
-            target_q[2] = p_reg[2] + max(0.0, float(half[2]) - half_h) + self.k.place_clearance
+            target_q[2] = p_reg[2] + max(0.0, self._region_up(R_reg, half) - half_h) + self.k.place_clearance
         else:
-            target_q = p_reg + R_reg @ np.array([0.0, 0.0, float(half[2])])
+            target_q = self._region_top(R_reg, p_reg, half)
             target_q[:2] = xy
             target_q[2] += half_h - centre_off + self.k.place_clearance
         return q, target_q
+
+    @staticmethod
+    def _region_up(R_reg, half) -> float:
+        """How far a region reaches up from its centre: its local z half-extent when that is its most
+        vertical axis, as every region was taken to be; else its extent along the world's vertical. A
+        tray's contain region lies on its side, local z along the world's x: taken as 135 mm up where it
+        reaches 41, libero_90 55's soup was let go 9 cm over the tray and bounced out of it."""
+        half = np.abs(np.asarray(half, float))
+        if int(np.argmax(np.abs(R_reg[2]))) == 2:
+            return float(half[2])
+        return float((np.abs(R_reg) @ half)[2])
+
+    @classmethod
+    def _region_top(cls, R_reg, p_reg, half) -> np.ndarray:
+        """The top of a region above its centre: along its local z when that is its most vertical axis,
+        as before; else straight up by its vertical extent (_region_up)."""
+        if int(np.argmax(np.abs(R_reg[2]))) == 2:
+            return p_reg + R_reg @ np.array([0.0, 0.0, float(half[2])])
+        return p_reg + np.array([0.0, 0.0, cls._region_up(R_reg, half)])
 
     def _on_support(self, obj: str, box, q: np.ndarray, xy: np.ndarray, R_reg, p_reg, half,
                     region_z: float) -> float:
@@ -784,7 +824,7 @@ class Skills:
         ohw = [float(np.abs(a @ B).sum()) for a in ax]
         off = Rz @ (box.world_centre - self.scene.body_pose(obj)[1])
         centre = np.array([xy[0], xy[1], p_reg[2]]) + ax[0] * float(ax[0] @ off) + ax[1] * float(ax[1] @ off)
-        top = float(p_reg[2] + abs(float(half[2])))
+        top = float(p_reg[2] + self._region_up(R_reg, half))
         exclude = self.scene.body_id(obj)
         return all(self._open_above(centre + ax[0] * fx + ax[1] * fy, top, exclude)
                    for fx in (-ohw[0], 0.0, ohw[0]) for fy in (-ohw[1], 0.0, ohw[1]))
@@ -793,7 +833,7 @@ class Skills:
         """The drop-point search as it stood before BRN-drop-point-footprint-as-carried: origins about
         the region's centre, the footprint centred on the origin, as grasped, along the world's axes."""
         k = self.k
-        top = float(p_reg[2] + abs(float(half[2])))
+        top = float(p_reg[2] + self._region_up(R_reg, half))
         ohw = np.abs(box.R @ np.diag(box.half)).sum(1)[:2]      # object half-footprint
         span = np.maximum(np.abs(np.asarray(half[:2], float)) - ohw, 0.0)
         best, best_d = np.asarray(p_reg[:2], float), np.inf

@@ -137,7 +137,13 @@ def plan_for(goals: list[tuple], objects: dict[str, str] | None = None) -> list[
     # (0 of 20). Then open, fill, close what was filled, and switch last (a knob is easier to reach
     # with an empty gripper)
     filled = {g[2] for g in goals if g[0].lower() in PICK_PLACE}
-    first = [c for c in closes if c.region not in filled]
-    last = [c for c in closes if c.region in filled]
+
+    def fills(c) -> bool:
+        # a fixture is filled when a region of its own is: "close the microwave" names microwave_1, the
+        # mug goes into microwave_1_heating_region -- read apart, the door was closed first and the mug
+        # was then carried to a shut microwave (libero_10 9, 0 of 50)
+        return any(f == c.region or f.startswith(f"{c.region}_") for f in filled)
+    first = [c for c in closes if not fills(c)]
+    last = [c for c in closes if fills(c)]
     return first + opens + places + last + switches
 
