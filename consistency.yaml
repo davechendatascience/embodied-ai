@@ -2389,10 +2389,10 @@ branches:
       no control step of this drive commands the jaws closed; (2) the command at every step is a function
       of that step's state, the skill's arguments (the fixture and the mode), the declared tables and the
       declared constants; (3) every target is an entry of the chosen table carried at q or at q + lead.
-      Not claimed: that the door moves, or reaches LIBERO's threshold for the mode (measured in component-
-      belief); that the tool is clear of the door when the drive ends; that the path is free of contact;
-      that a table's entry is a pose any one human held; that an object in the door's sweep is moved
-      first.
+      Not claimed: that the door moves, or reaches LIBERO's threshold for the mode (measured in
+      component-belief); that the tool is clear of the door when the drive ends; that the path is free of
+      contact; that a table's entry is a pose any one human held; that an object in the door's sweep is
+      moved first.
     premises: [AXM-libero-joint-bands, AXM-object-geometry-known, AXM-bddl-states-goals-not-methods,
                AXM-mujoco-forward-is-a-function-of-state]
     derivation_rule: >-
