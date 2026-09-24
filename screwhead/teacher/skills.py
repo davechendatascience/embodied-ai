@@ -164,6 +164,7 @@ class SkillConfig:
     swing_lead: float = 0.10       # rad past the door's angle the swing's target is taken at, once engaged
     swing_engage: float = 0.015    # m from the humans' pose at the door's present angle: engaged (the palm on
     #                                the handle as theirs); farther, the tool goes there first, no lead
+    wrist_margin: float = 0.2      # rad inside the last joint's range a turn must stay to count as within it
     drive_lead_rot: float = 0.06   # rad a hinge drive may lead the handle (< at_rot): leading by the
     #                                whole remaining turn spun the tool at w_max while the knob, damped,
     #                                followed at a fifth of that -- the jaws were pried open and let go
@@ -524,7 +525,7 @@ class Skills:
         held = np.r_[c[:2] + u[:2] * k.push_lead * radius, z_push]
         # the jaws along the motion, one finger leading: of the two frames that do it, the one the
         # wrist is nearer to now -- a function of the state, and no half turn of the wrist
-        frames = sorted((top_down(u), top_down(-u)), key=lambda Rc: rot_angle(R.T @ Rc))
+        frames = self._by_wrist(R, (top_down(u), top_down(-u)))
         R_push = frames[0]
         off = (p - held)[:2]
         along = float(off @ u[:2])
@@ -1294,6 +1295,21 @@ class Skills:
         self.phase = "swing"
         return self.action(self.twist_to(R, p, R_t, p_t, v_max=k.drive_speed, v_min=k.drive_speed_min), A_OPEN)
 
+    def _by_wrist(self, R: np.ndarray, frames) -> list:
+        """Two tool frames the open jaws make equal -- the same approach, the jaw axis either way along a
+        line -- ordered: those the last joint reaches by turning within its range first, the nearer turn
+        first among them. By turn alone the hook of libero_90 23's top drawer took the frame 2.88 rad
+        into a 2.90 rad joint and the arm drifted clamped for 450 steps; the other was 0.3 rad from zero."""
+        lo, hi = self.env.servo._np.limits[-1]
+        q7 = float(self.scene.d.qpos[self.env.joint_indexes[-1]])
+
+        def key(Rc):
+            dR = R.T @ Rc
+            turn = float(np.arctan2(dR[1, 0], dR[0, 0]))      # about the tool's own axis, the last joint's
+            within = lo + self.k.wrist_margin <= q7 + turn <= hi - self.k.wrist_margin
+            return (not within, rot_angle(dR))
+        return sorted(frames, key=key)
+
     def _hook_frame(self, a: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
         """(bar centre, opening direction in plan, the bar's long axis, the bar's top) now."""
         c, Rg, hl = geom_world_box(self.scene.m, self.scene.d, a["handle_geom"], self.scene.base)
@@ -1321,7 +1337,7 @@ class Skills:
         k = self.k
         R, p = s["R_tool"], s["p_tool"]
         c, u, _bar, top = self._hook_frame(a)
-        R_hook = min((top_down(u), top_down(-u)), key=lambda Rc: rot_angle(R.T @ Rc))
+        R_hook = self._by_wrist(R, (top_down(u), top_down(-u)))[0]
         hook = c + u * k.hook_lead + Z * k.hook_above
         off = p - hook
         along = float(off @ u)
@@ -1354,7 +1370,7 @@ class Skills:
             y = jaw - z * float(jaw @ z)
             y = y / np.linalg.norm(y)
             return np.column_stack([np.cross(y, z), y, z])
-        R_f = min((frame(bar), frame(-bar)), key=lambda Rc: rot_angle(R.T @ Rc))
+        R_f = self._by_wrist(R, (frame(bar), frame(-bar)))[0]
         hook = c + Z * k.front_hook_above
         off = p - hook
         along = float(off @ u)                               # > 0: in front of the hook point
@@ -1392,7 +1408,7 @@ class Skills:
             y = jaw - z * float(jaw @ z)
             y = y / np.linalg.norm(y)
             return np.column_stack([np.cross(y, z), y, z])
-        R_push = min((fist(bar), fist(-bar)), key=lambda Rc: rot_angle(R.T @ Rc))
+        R_push = self._by_wrist(R, (fist(bar), fist(-bar)))[0]
         push = c + u * k.push_close_lead
         off = p - push
         along = float(off @ u)                               # > 0: still in front of the push point
