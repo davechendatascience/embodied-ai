@@ -2549,6 +2549,78 @@ branches:
       claim (2) of the four cases, not of the place's own phases.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-pick-descends-beside-overhang
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Vertical is the world's z axis and 'in plan' the projection onto the horizontal plane; the tool's
+      pose, the arm's joint positions and the scene's collision geometry are read from each step's state
+      (AXM-mujoco-forward-is-a-function-of-state), the arm's joint ranges being constants of its model. A
+      pick has, at each step, its object, its grasp -- the tool frame R_g and grasp point -- its pre-grasp
+      point (the grasp point backed off by a declared distance along the approach, R_g's third axis), its
+      crossing plane's height (at least the pre-grasp's), and the jaws' opening; the pick's own law up to
+      this branch is: at the grasp, squeeze; on the approach axis -- within a declared lateral funnel of
+      it and no further back along it than the back-off distance plus a declared non-negative margin, so
+      the pre-grasp is on it -- advance along it; otherwise up, over and down on to the pre-grasp -- rise
+      to the crossing plane where the tool is below it and more than a declared distance off the pre-grasp
+      in plan, cross it at the plane turning toward R_g, and come straight down once within the funnel in
+      plan. A tool pose is clear when a declared deterministic inverse-kinematics solver, started from the
+      arm's joints as read at the step, converges to it, and the arm, put at that solution in the
+      simulator with the jaws at the opening, touches nothing but the picked object; each such screen
+      writes the arm's joints and the jaws, runs the forward computation, reads the contacts and restores
+      everything it wrote -- the arm's joints, the jaws, their velocities and the derived fields -- before
+      anything else reads the simulator; the solver's result depends only on its start joints, its target
+      pose and the joint ranges, with no memory across calls (AXM-mujoco-forward-is-a-function-of-state).
+      The column of a point is the tool poses at frame R_g at that point raised by 0, 1, 2, ... times a
+      declared step, up to the crossing plane's height above the pre-grasp. The side point of a grasp --
+      of the pick's object, R_g, pre-grasp point, crossing plane's height and jaws' opening -- is computed
+      once per episode for each such tuple, at the first step the pick asks for it, from at most one plus
+      the number of directions times the number of distances columns and their slide points: none when
+      every pose of the pre-grasp's column is clear; otherwise the first point, at the pre-grasp's height
+      and at a distance from it in plan of a declared step times 1, 2, ... up to a declared maximum,
+      nearest first, and among each distance in a declared number of directions evenly spaced from the
+      world's x axis counter-clockwise, whose column is clear and whose points a quarter, a half and three
+      quarters of the way back to the pre-grasp, at frame R_g, are clear; none if no such point exists.
+      When a pick's grasp has a side point, the squeeze and the advance still come first, and at a step
+      where neither applies the command is: on the slide -- within the funnel in plan of the segment from
+      the pre-grasp to the side point, and within a declared band of the pre-grasp's height -- the tool
+      toward the pre-grasp at frame R_g; otherwise the pick's own up, over and down on to the side point
+      in place of the pre-grasp. Claimed: (1) a pick whose grasp has no side point acts as it did without
+      this rule; (2) at every step at which the pick's grasp has a side point, the tool is on the slide,
+      not at the grasp and not on the approach axis, the commanded translation points from the tool toward
+      the pre-grasp; (3) the side point, where it exists, has a column (up to the crossing plane's height
+      it was computed for) and three slide points that were each clear at the step it was computed; (4)
+      whether a grasp has a side point, and which, is a function of the state at the step it is computed,
+      the picked object, the grasp, the crossing plane's height, the jaws' opening, the arm's joint ranges
+      and declared constants. Not claimed: that anything between the sampled poses is clear; that inverse
+      kinematics from the present joints is the configuration the servo reaches; that the pre-grasp
+      itself, the approach or the grasp are clear; that the scene at the step the side point is computed
+      is the scene when the hand gets there.
+    premises: [DEF-skill-contract, AXM-object-geometry-known, AXM-mujoco-forward-is-a-function-of-state]
+    derivation_rule: >-
+      Mirror of BRN-lift-leaves-overhang for the way down. libero_90 5 (put the pudding in the open top
+      drawer and close it) failed 39 of 50 in the teacher-alone sweep v26, 24 of them stalled in the
+      pick's descent with the hand on the open drawer's handle: the pudding (80 x 46 x 28 mm) fits the
+      jaws only across its 46 mm, the hand is 21 cm wide along the jaws, and its edge came down on the
+      handle 9 cm off the pudding's centre, 17 cm up. Every grasp candidate's column collided at the grasp
+      screen. LIBERO's humans grasp it the same way and brush the handle (10 of 10 demonstrations touch
+      it). Coming down beside the handle and sliding in under it at the pre-grasp's height leaves the
+      handle untouched. Built, with the drawer's open precondition read as the declared contract has it
+      (away from the handle, admits(R, o) alone: held also to LIBERO's threshold, the hand reaching the
+      pudding eased the drawer 2 cm shut, 1 mm past the threshold, and the plan turned to reopening it
+      mid-pick every time): the teacher alone, inits 0-9, libero_90 5 9 of 10 (v26: 1); the other drawer
+      tasks 2, 8, 23, 24 10, 3, 3, 7 of 10 as in v26, 32 2 (v26: 3; its tall ketchup cycles between
+      release and re-pick in the drawer either way); libero_10 3 18 of 20 as in v26. The 9 of 10 is of the
+      two changes together: without the precondition the pick never finishes (the plan turns to the drawer
+      mid-pick), so the side column is not measured alone. Restated four times per the verifier: the
+      screens' restore stated, claim (2) of direction only, the object, the solver and the approach axis
+      named as inputs, the grasp's identity and the number of screens bounded; the screens restore the
+      jaws too, and the side point is keyed by the crossing plane's height and the jaws' opening as well;
+      the pre-grasp lies on the approach axis and the squeeze and advance come first, and claim (2)
+      excludes the squeeze's region as well. Supersedes the staged BRN-dogleg-approach-under-overhang
+      (withdrawn; never built).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:
