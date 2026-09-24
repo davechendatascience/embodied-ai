@@ -2361,6 +2361,56 @@ branches:
       CTR-teacher-reliable and CTR-teacher-attempts measure the sequence-walking teacher that runs.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-swing-door-as-the-humans
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      The articulate skill drives the microwave's door -- the fixture of category microwave, a hinge --
+      without a grasp, in either mode. At each control step of that drive it reads from that step's state,
+      through the forward pass (AXM-mujoco-forward-is-a-function-of-state): the door's joint angle q, its
+      hinge axis and anchor, the door body's pose and its geoms, and the tool's pose (the arm's forward
+      kinematics). It commands the jaws fully open and the tool toward one target pose. The target is
+      built from one of three declared tables, each a list of entries (a door angle, a tool point and tool
+      axes in the door body's frame): for opening, the front-side table while q has not reached the angle
+      of that table's entry farthest open and the tool point is on the handle's side of the panel's face
+      (its least coordinate along the door frame's y axis), else the behind-side table; for closing, the
+      closing table. 'The entry nearest an angle' is the chosen table's entry whose angle is nearest it,
+      ties going to the entry nearer the table's closed end; an entry 'carried at' an angle is its pose in
+      the door body's frame, placed in the world by the door's present pose turned about its hinge axis
+      through its anchor by that angle minus q. The tool is engaged when it is within a declared
+      engagement distance and turn of the entry nearest q carried at q. Not engaged, the target is the
+      entry nearest q carried at q; engaged, it is the entry nearest q + lead carried at q + lead, the
+      lead a declared angle in the drive's direction. The command toward the target is given by one rule
+      of the tool's pose, the target and the top of the door's geoms, with 'the plane' a declared height
+      above that top and 'below' meaning more than a declared band below the plane: when the tool point is
+      laterally within a declared funnel of the target, or below and laterally within a declared column
+      distance of it, toward the target itself; otherwise, when below, straight up to the plane; otherwise
+      -- at or above the plane's band -- across to the point on the plane above the target. Claimed: (1)
+      no control step of this drive commands the jaws closed; (2) the command at every step is a function
+      of that step's state, the skill's arguments (the fixture and the mode), the declared tables and the
+      declared constants; (3) every target is an entry of the chosen table carried at q or at q + lead.
+      Not claimed: that the door moves, or reaches LIBERO's threshold for the mode (measured in component-
+      belief); that the tool is clear of the door when the drive ends; that the path is free of contact;
+      that a table's entry is a pose any one human held; that an object in the door's sweep is moved
+      first.
+    premises: [AXM-libero-joint-bands, AXM-object-geometry-known, AXM-bddl-states-goals-not-methods,
+               AXM-mujoco-forward-is-a-function-of-state]
+    derivation_rule: >-
+      The teacher grasped the door's handle and carried the grasp along the hinge's arc; the grasp slipped
+      at -0.41 rad (libero_90 35 init 0; LIBERO's Open holds below -1.3), and in the teacher-alone sweep
+      v25 'open the microwave' succeeded in 0 of 50, 'close the microwave' in 27. LIBERO's humans never
+      grasp this door (no grasp recorded in any of the 50 demonstrations of opening): their palm catches
+      the handle's bar from behind its outer end, past the door's free edge, and drags the door to about
+      -0.8 rad; they go over and behind the panel and push it on; they close it from the handle's side;
+      the jaws are open (80 mm) in every recorded bin. The tables are those poses, binned by the door's
+      angle (tools/door_survey.py, screwhead/teacher/door_swing.json; tests/test_door_swing.py holds every
+      table the law chooses non-empty and sorted). Led from the first step instead of engaged first, the
+      palm came down in front of the bar and pushed the door shut. With the law, 10 of 10 episodes of each
+      (inits 0-9, the teacher alone) succeeded. The scope is the microwave by category because its tables
+      are the microwave's. Verified 3/3 (TRL-0628..0630) after three restatements (a refuted scope and
+      lookup, two gaps on the state's inputs and the approach rule).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:
