@@ -166,6 +166,30 @@ axioms:
       Classical rigid-body statics (the support-polygon criterion). MuJoCo's contacts are soft, so the
       hull is the one of the contacts the solver reports, within their penetration.
 
+  - id: AXM-geom-distance-exact
+    domain: environment
+    statement: >-
+      For two collision geoms, MuJoCo's mj_geomDistance (MuJoCo 3.8.1) returns the smallest signed
+      distance between the shapes its contact solver collides -- primitives as themselves, each mesh as
+      its convex hull -- to within the solver's tolerance, whenever that distance is below the distmax
+      passed to it.
+    rationale: >-
+      MuJoCo's API (mj_geomDistance, "smallest signed distance between two geoms") and its collision
+      model, in which a mesh collides as its convex hull. Distances, not samples: no feature between
+      two sample points can be missed, the refutation of LMA-touchdown-from-paired-rays (a 3 mm wall
+      between two rays).
+
+  - id: AXM-contacts-damp-residual-motion
+    domain: environment
+    statement: >-
+      An object that satisfies AXM-static-stability's condition on fixed supports and moves no faster
+      than the scene's rest speed comes to rest without leaving its contact hull: MuJoCo's contacts
+      are damped (solref's time constant, 0.02 s by default), and the residual motion of a statically
+      stable object decays under them.
+    rationale: >-
+      MuJoCo's soft-contact model; the same rest speed ends the settling of every LIBERO initial state
+      this project loads (SimArm._settled_init_state), whose objects then stay put.
+
   - id: AXM-acceleration-loads-the-grip
     domain: physics
     statement: >-
@@ -416,13 +440,14 @@ definitions:
   - id: DEF-resting
     term: Resting on the intended support
     meaning: >-
-      An object, held or released, rests on its intended support at a step when every contact it has with a body
-      other than the robot is with the intended support -- the body the goal region belongs to, or for
-      an On goal whose target is an object, that object -- it has at least one such contact, no point of
-      it moves faster than the scene's rest speed (|v| + |w| r, r its bounding radius; sim_arm's
-      REST_SPEED), and AXM-static-stability's condition holds for those contacts: the vertical through
-      its centre of mass passes inside their convex hull in plan, every contact normal within the
-      vertical bound. It is a predicate on one step's simulator state.
+      An object, held or released, rests on its intended support at a step when: every contact it has
+      with a body other than the robot is with the intended support -- the body the goal region belongs
+      to, or for an On goal whose target is an object, that object -- and it has at least one; at every
+      such contact the normal is within the vertical bound and the friction coefficient is at least the
+      tangent of the normal's angle from vertical; the vertical through its centre of mass passes inside
+      the convex hull, in plan, of those contact points; and no point of it moves faster than the rest
+      speed, 5 mm/s (|v| + |w| r, r its bounding radius; sim_arm's REST_SPEED). A predicate on one
+      step's simulator state.
 
   - id: DEF-smooth-motion
     term: Smooth motion
@@ -646,53 +671,51 @@ lemmas:
       discipline that survives a change of caller.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
-  - id: LMA-touchdown-from-paired-rays
-    statement: >-
-      Where an object first touches its support is where, over its footprint, the gap
-      between its underside and the support below is smallest -- the touchdown tool pose is
-      the current tool pose lowered by the minimum, over paired downward rays, of (underside
-      height - support height), with the underside read from the object's geometry in its
-      current in-hand pose. One support height minus one box bottom is that only when the
-      support or the underside is flat across the footprint.
-    premises: [AXM-grip-fixes-object-in-hand, AXM-support-scannable, AXM-object-geometry-known]
-    derivation_rule: >-
-      Rigid descent of a held object -- contact begins at the ray whose gap closes first; both
-      heights per ray are in the state. Re-read while descending, since the grip holds only
-      while it does not slip.
-    sufficiency: {n_min: 3, min_consensus: 0.8}
-
   - id: LMA-contact-release-is-robust
     statement: >-
-      If the touchdown estimate can err by more than DEF-gentle-placement's 5 mm, then
-      releasing once the object rests on its support -- stopped by it, touching the intended
-      support rather than a rim, a wall or another object, with nothing holding it touching
-      first -- is gentle regardless of that error, and a release at a precomputed height is
-      not. (A height release with an estimate good to ~3 mm is gentle too; which regime holds
-      is a measurement of predicted vs actual first-contact tool heights.)
-    premises: [DEF-gentle-placement, AXM-release-is-free-fall, LMA-touchdown-from-paired-rays]
+      Commanding the jaws open at a step at which the object rests on its intended support (DEF-resting)
+      begins the release with the object moving no faster than the rest speed (5 mm/s, below
+      DEF-gentle-placement's 0.05 m/s) and touching that support: no part of it is falling
+      (AXM-release-is-free-fall does not apply), and when its lowest point is one of those contact
+      points the release is gentle in DEF-gentle-placement's sense. Not claimed: that the fingers, which
+      still touch it when the command is given, do not move it as they open.
+    premises: [DEF-resting, DEF-gentle-placement, AXM-release-is-free-fall]
     derivation_rule: >-
-      A resting object has zero gap and about zero speed at release; a height trigger leaves
-      the estimate error as a gap, i.e. free fall from it.
+      DEF-resting bounds the speed and puts the object on the support; a supported object is not in
+      free fall. Restated from a version whose aside -- a release at a height known to 3 mm is gentle
+      too -- was refuted: 2 mm off, the tool still descending at 0.08 m/s, it is not.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: LMA-clearance-bounds-motion
+    statement: >-
+      If every collision geom of a rigid body is at signed distance at least c > 0 from every collision
+      geom of the bodies in a set S, then under any motion of that body as a rigid whole in which no
+      point of it travels as far as c, it touches no body of S. In particular the body's travel toward
+      a support before it first touches it is at least c, whatever the shapes, with no sampling.
+    premises: [AXM-geom-distance-exact, AXM-object-geometry-known]
+    derivation_rule: >-
+      The distance between two sets changes by no more than the largest displacement of either set's
+      points (the triangle inequality), and AXM-geom-distance-exact gives c for the shapes contacts
+      are computed on.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: LMA-release-when-resting-stays
     statement: >-
       Take the first step after the jaws are commanded open at which no part of the robot touches the
       object. If at that step the object rests on its intended support (DEF-resting) with its origin
-      inside the goal region, then for as long as that support does not move and nothing but it
-      touches the object, the object stays where it is, moving no faster than the rest speed, and the
-      goal LIBERO evaluates on that state keeps its value. Not claimed: anything after a later plan step
-      moves the support (a drawer closed with the object in it) or brings another object or the robot
-      into contact with it (a second object placed beside it); that the release was gentle.
-    premises: [AXM-static-stability, DEF-resting, AXM-libero-scores-final-state]
+      inside the goal region, then for as long as that support does not move and nothing but it touches
+      the object, the object comes to rest without leaving its contact hull. Not claimed: anything after
+      a later plan step moves the support (a drawer closed with the object in it) or brings another
+      object or the robot into contact with it; that a goal conjunct holding at that step with the object
+      at the edge of its region still holds after the residual motion; that the release was gentle.
+    premises: [AXM-static-stability, AXM-contacts-damp-residual-motion, DEF-resting]
     derivation_rule: >-
-      At that step the only contacts are with the intended support, all within the vertical bound and
-      frictional enough not to slide, with the vertical through the centre of mass inside their hull
-      (DEF-resting): AXM-static-stability's condition, so nothing tips it and it stays within the rest
-      speed while no new force acts. LIBERO's predicates are functions of the simulator state
-      (AXM-libero-scores-final-state), which for this object does not change. A first statement was
-      refuted: it concluded the goal held until the teacher finished, and libero_10's bottom-drawer task
-      closes the drawer, carrying the bowl, after the bowl is placed.
+      At that step the only contacts are with the intended support, frictional enough not to slide, with
+      the vertical through the centre of mass inside their hull and no point faster than the rest speed
+      (DEF-resting): AXM-static-stability's condition, so nothing tips it, and AXM-contacts-damp-
+      residual-motion brings it to rest inside the hull. Earlier statements were refuted: one concluded
+      the goal held until the teacher finished (libero_10 closes the drawer on the bowl), one left
+      friction out of resting (a bowl on a 15 deg face with friction 0.25 slides).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: LMA-pinch-clears-the-descent
@@ -701,7 +724,7 @@ lemmas:
       the support, container walls and other objects along the descent to touchdown and at
       it -- checked with the ACTUAL in-hand pose after the grasp, since the object shifts when
       the pads close and a predicted pose can be off by that shift.
-    premises: [LMA-touchdown-from-paired-rays, LMA-whole-path-reachable, DEF-reachable-pose]
+    premises: [LMA-clearance-bounds-motion, LMA-whole-path-reachable, DEF-reachable-pose]
     derivation_rule: >-
       Endpoint clearance is not path clearance (LMA-whole-path-reachable); the in-hand pose is
       known only once held.
@@ -1653,51 +1676,55 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      A place's steps after its carry are of two kinds. Its release steps are those at which the object
-      rests on its intended support (DEF-resting) with its origin inside the goal region; at a release
-      step the skill commands the jaws open and no tool motion, and, once the jaws are wider than the
-      object along the jaw axis, a retreat along the approach -- and never commands the jaws closed. Its
-      lower steps are the others. At a lower step at which the object touches nothing but the fingers,
-      the skill reads the touchdown gap g, the minimum over paired downward rays across the held
-      object's footprint of (underside height - support height), the underside read from the object's
-      collision geometry in its current in-hand pose and the supports from rays that exclude the object
-      and the robot (LMA-touchdown-from-paired-rays), and commands the tool down toward the pose lowered
-      by g at a speed v no greater than the lower speed and small enough that v dt + v^2 / (2 a) <= g,
-      with dt the control period and a the servo's declared acceleration bound (AXM-velocity-steps-are-
-      jerks: each command is tracked within one control period). At a lower step at which the object
-      touches its intended support but does not rest on it, the skill commands the tool down at the
-      speed that bound allows for the object's current tilt drop (the height its lowest box corner
-      stands below its bottom face's centre) while that tilt drop exceeds the lower phase's tolerance,
-      and holds the tool still otherwise. At a lower step at which the jaws are wider than the object
-      and it does not rest, the jaws stay open and the tool retreats; whether the object is then taken
-      back is BRN-place-done-when-released's rule. BRN-carry-turns-object-to-fit's turn is commanded at
-      lower steps only, never at release steps. Claimed: the jaws are commanded open by this rule only
-      at release steps; no release step commands them closed; every command is read from that step's
-      state and the place's drop point; and at every lower step at which the object touches nothing but
-      the fingers, the commanded speed lets the tool stop within the touchdown gap. Not claimed: that
-      lowering brings every tilted object to rest; enclosed regions, where the rays meet the ceiling
-      first (AXM-support-scannable); a contact of the object with any body whose normal lies outside the
-      vertical bound (the wine rack's cradle), where AXM-static-stability's criterion is not the one;
-      that the resting pose is within LIBERO's humans' tilt; that the retreat touches nothing; that the
-      drop point, chosen once per episode, is re-derivable from a later state; the provenance of the
-      rest speed, the vertical bound and the acceleration bound.
-    premises: [LMA-touchdown-from-paired-rays, LMA-contact-release-is-robust, LMA-release-when-resting-stays,
-               DEF-resting, AXM-static-stability, AXM-velocity-steps-are-jerks]
+      Every step of a place after its carry falls in exactly one of three cases, each read from that
+      step's state and the place's drop point. (R) The object rests on its intended support
+      (DEF-resting) with its origin inside the goal region, or the jaws are wider than the object along
+      the jaw axis, or the jaw aperture is increasing: the jaws are commanded fully open, and the tool
+      straight up at the retreat speed if the jaws are wider than the object, else held still. (F)
+      Otherwise the object touches no body but the fingers: the jaws are commanded to hold it, and the
+      tool moves toward the drop point's descent at a linear speed v and turn rate w (the carry's turn,
+      BRN-carry-turns-object-to-fit) for which max(u, v) dt + w r dt + v dt + v^2 / (2 a) <= c, where c
+      is the clearance between the object's collision geoms and every collision geom of a body that is
+      neither the object nor the robot (LMA-clearance-bounds-motion, from AXM-geom-distance-exact), u
+      the servo's previous commanded linear speed, r the object's bounding radius, dt the control period
+      and a the servo's linear change bound while holding (BRN-execution-bounds-acceleration); where no
+      positive v meets it, v = 0. (T) Otherwise it touches some body and does not rest: the jaws are
+      commanded to hold it; while its tilt drop (the height its lowest box corner stands below its bottom
+      face's centre) exceeds the lower phase's tolerance, the tool goes down at a speed v with
+      max(u, v) dt + v dt + v^2 / (2 a) <= that tilt drop, and otherwise the tool goes straight up at the
+      lower speed. Claimed: (1) the cases are exclusive and exhaustive; (2) the jaws are commanded open
+      only in case R and never toward closed in it, so neither a flicker of holding nor an opening that
+      disturbs the object brings them closed again; (3) if the object moves rigidly with the tool
+      (AXM-grip-fixes-object-in-hand) and the servo tracks each command within one period
+      (AXM-velocity-steps-are-jerks) under its change bound, and case F begins with u dt <= c, then at
+      every step of case F some command meets the bound and the travel before the next step is less
+      than c, so the object touches nothing it was clear of. Not claimed: that lowering rights every
+      tilted object; that case T's lift leads to a later rest; supports whose contact normals lie outside
+      the vertical bound (the wine rack's cradle), where AXM-static-stability's criterion is not the one;
+      that the resting pose is within LIBERO's humans' tilt; that the retreat touches nothing; slip in the
+      grip; that the drop point, chosen once per episode, is re-derivable from a later state; the
+      provenance of the rest speed, the vertical bound and the change bound.
+    premises: [LMA-clearance-bounds-motion, LMA-contact-release-is-robust, LMA-release-when-resting-stays,
+               DEF-resting, AXM-static-stability, AXM-velocity-steps-are-jerks, AXM-grip-fixes-object-in-hand,
+               BRN-execution-bounds-acceleration, BRN-carry-turns-object-to-fit]
     derivation_rule: >-
-      The general case of the three placement rules measured on 2026-09-24. LMA-touchdown-from-paired-
-      rays gives where the object first touches -- the physical surface, not LIBERO's region site (the
-      basket's floor 16 mm above its contain region), a tilted pot's lowest corner, not its bottom's
-      centre, and a book across two compartment walls on the walls, which one ray through its centre
-      misses. DEF-resting, from AXM-static-stability, says when that touch is a place to let go: a pot
-      touching the burner at a corner is not resting, and lowering on while its tilt drop exceeds the
-      tolerance rights it (the moka pot, 14 of 20 only when it was pressed on); a bottle standing on the
-      basket's floor rests. Resting is read from the state, so a flicker of holding cannot close the jaws
-      again at a release step (the release chatter that lifted libero_90 77's book 5 cm). A sampled servo
-      that tracks each command within one period stops from v in v dt + v^2 / (2 a), not v^2 / (2 a).
-      LMA-release-when-resting-stays makes a release that leaves the object resting keep it there while
-      nothing else moves it, and LMA-contact-release-is-robust makes it gentle. When built it replaces
-      the second ground of BRN-place-onto-physical-support and its handle-held exception. Not yet
-      implemented. evidence: CTR-teacher-settled, CTR-teacher-gentle (release_gap_mm <= 5).
+      The general case of the three placement rules measured on 2026-09-24, restated twice under the
+      verifier. The clearance, an exact distance (LMA-clearance-bounds-motion), replaces rays, which
+      miss a feature between two of them; it is the physical surface, not LIBERO's region site (the
+      basket's floor 16 mm above its contain region), a tilted pot's lowest corner, and a book's two
+      compartment walls. Stopping: under a change bound a, a servo tracking within one period from u
+      travels at most max(u, v) dt this period and v dt + v^2 / (2 a) stopping from v; the clearance
+      shrinks by no more than the object's point travel, max(u, v) dt + w r dt, so the bound at one F
+      step leaves v dt + v^2 / (2 a) >= v dt of clearance, and v = 0 then meets it at the next.
+      DEF-resting, from AXM-static-stability, says when a touch is a place to let go: a pot at a
+      corner is not resting and case T lowers on while its tilt drop exceeds the tolerance, which
+      rights it (the moka pot, 14 of 20 only when pressed on); a bottle on the basket's floor rests.
+      Case R holds on an opening aperture as well as on resting, so the chatter that lifted
+      libero_90 77's book 5 cm -- holding flickering back while the jaws opened -- cannot close them.
+      LMA-release-when-resting-stays and LMA-contact-release-is-robust make such a release leave it
+      at rest and unfallen. When built it replaces the second ground of BRN-place-onto-physical-support
+      and its handle-held exception. Not yet implemented. evidence: CTR-teacher-settled,
+      CTR-teacher-gentle (release_gap_mm <= 5).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-pinch-for-the-whole-place
@@ -2070,9 +2097,8 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      The drop point of a place (the origin position it carries the object to, chosen at the first step
-      of the episode at which the place's target is asked for -- in practice before the grasp -- from the
-      object's pose then; and the point admits() asks for) is the earlier search's: candidate origins on a grid about the
+      The drop point of a place (the origin position it carries the object to, chosen once per episode, from
+      the object's pose at that step) is the earlier search's: candidate origins on a grid about the
       region's centre, nearest first, the object's footprint centred on its origin as it lies, open from
       above at its centre and at its boundary widened by a declared margin -- open meaning that no
       vertical downward ray from a declared height above the region's top meets anything (the object and
@@ -2085,13 +2111,13 @@ branches:
       its centre, its boundary and its margin-widened boundary: origins about the region's centre, then
       origins that put the footprint's centre about the region's centre; with the margin, then without;
       the nearest to the centre that passes is taken, and if none passes, the earlier search's result
-      stands. "The carry will turn the object" is the turn BRN-carry-turns-object-to-fit computes from the
-      object's pose when the point is chosen; it is the turn the carry commands if the grasp and the lift
-      leave the object's yaw unchanged (AXM-grip-fixes-object-in-hand fixes it from the grasp on). Claimed:
+      stands. "The carry will turn the object" is the turn BRN-carry-turns-object-to-fit's rule gives for the
+      object's pose at the step the point is chosen; the carry's own turn is computed from the in-hand
+      pose and is not claimed to equal it (a grasp can pitch a book so that it fits unturned). Claimed:
       the drop point differs from the earlier search's only under the conditions above, read when it is
       chosen;
       and a point the carried search returns passed its test at every sampled point of the carried
-      footprint. Not claimed: that the grasp leaves the object's yaw unchanged; that an obstacle between
+      footprint. Not claimed: that the carry turns the object as predicted; that an obstacle between
       sampled points is seen; that the object fits the
       region; that the carry reaches the drop point in the turned orientation; the provenance of the
       margin, the clearance, the fit tolerance and the grid.
@@ -2130,7 +2156,7 @@ branches:
       cast from above the region's top by the object's height, the object's own body and the robot
       excluded (where the ray meets nothing, the region-derived height); "held by its handle" is the
       affordance table's held_by: handle with evidence measured or declared. Claimed: for such an object
-      resting on the surface that ray meets, where that surface stands above the region-derived height,
+      resting with its bottom face's centre on the surface that ray meets, where that surface stands above the region-derived height,
       the lower phase's exit is reachable, so it is not pressed against it to the horizon; the release is never
       commanded on the second ground while the object touches only the fingers; and for an object held
       by its handle, or tilted at that step, the lower phase ends exactly as before. Not claimed: that
