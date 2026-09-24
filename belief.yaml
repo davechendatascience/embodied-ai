@@ -272,6 +272,7 @@ components:
       - {id: FM-no-grip, observable: "mechanism reached-but-no-grip: tool at the grasp and the object never held -- wrong face, wrong width, or the object pushed away"}
       - {id: FM-not-delivered, observable: "mechanism held-but-not-delivered: object held, never within 50 mm of its target -- slipped in transit or the carry path is unreachable"}
       - {id: FM-unscored, observable: "mechanism delivered-but-unscored: object at the target and LIBERO's predicate still false -- the placement pose is wrong for that predicate"}
+      - {id: FM-unsettled, observable: "teacher_settled: LIBERO's goal held at some step, but once the teacher has finished a placed object is still held, still moving, tipped past every human demo of the task, or out of its goal"}
     remediation: >-
       Parameterise each skill by measured geometry (gripper span from finger FK, clearance
       from the scene, grasp frames from the object); sequence from the BDDL goal predicates;
@@ -1080,6 +1081,28 @@ contracts:
     evaluable_by: [TST-teacher-reliability]
     sufficiency: {n_min: 100, max_ci_width: 0.25}
 
+  # A demonstration ends where the teacher ends, and LIBERO scores the first step its goal holds.
+  # On episode 0 of all 130 tasks, 93 of the 104 objects the successful episodes placed were at
+  # that step still held, falling or rocking; 12 came to rest more than 15 deg from their start
+  # pose (a moka pot at 64 deg on the stove, where no human demo left it past 20), and 2 successes
+  # did not survive two seconds of stillness. So the teacher is scored after it has finished:
+  # upright means no more tipped than LIBERO's 50 human demonstrations of the task leave the
+  # object (runs/demo_survey/final_tilt.json, built by the test from LIBERO's datasets).
+  - id: CTR-teacher-settled
+    subject: CMP-skill-library
+    claim_type: capability
+    metrics:
+      - {id: settled, unit: bool}
+      - {id: success_final, unit: bool}
+      - {id: finished, unit: bool}
+      - {id: released, unit: bool}
+      - {id: at_rest, unit: bool}
+      - {id: tilt_excess_deg, unit: deg}
+    acceptance: {rule: "settled == true", target_rate: 0.95}
+    compatibility_key: [task_suite, teacher_revision]
+    evaluable_by: [TST-teacher-settled]
+    sufficiency: {n_min: 100, max_ci_width: 0.25}
+
   # ---- Gate 3: the premise. If the padded-vector baseline transfers fine,
   # there is nothing to fix and the project has no reason to exist.
   # Split in two: opposite expected verdicts need opposite bars, and a bar is
@@ -1525,6 +1548,18 @@ tests:
     metrics: [success, refused, release_gap_mm, drop_count]
     capture: [task, task_suite, teacher_revision, mechanism]
     cost: 80.0
+    timeout_s: 10800
+
+  # All 130 tasks, 20 episodes each, on a seed of its own (557): each episode continued past
+  # LIBERO's first success until the teacher's plan completes and the scene is at rest, or the
+  # horizon (600; 800 on libero_10)
+  - id: TST-teacher-settled
+    layer: e2e
+    targets: [CMP-skill-library]
+    run: HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/teacher_settled.py --episodes 20 --seed 557 --out $OUT
+    metrics: [settled, success, success_final, finished, released, at_rest, tilt_excess_deg, settle_steps]
+    capture: [task_suite, task, teacher_revision]
+    cost: 120.0
     timeout_s: 10800
 
   # ---- Gate 3 rollouts. Blocked, deliberately: the canonical-init rollout.py
