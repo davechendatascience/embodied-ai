@@ -2281,30 +2281,34 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      At every control step the planner re-evaluates, from that step's state and without latching, whether
-      each place step is done and whether its object is delivered. A place step is done only when LIBERO's
-      predicate for its goal holds and its object is let go: not held (DEF-holding), touched by no robot
-      geometry, and with the tool point more than a declared margin outside the object's box, each read
-      from that step's state -- a stand-in for DEF-skill-contract's release postcondition, not the
-      postcondition itself. Its object is delivered at a step only when it is not held and its origin is
-      within a declared plan distance of the drop point and within declared heights below and above the
-      target height (the origin height the place skill lowers the object to); the release the place skill
-      commands on the ground that the object is delivered uses the same step's state. The planner selects,
-      at every control step, the first plan step in order that is not done, where the pick before a place
-      step is also skipped when that place step's object is delivered. So a place step whose object is
-      delivered but whose goal does not hold is not passed over for a later step, and at a step where it
-      is selected the place skill, finding its object delivered, commands the jaws open and a retreat
-      rather than taking the object back; and a later plan step is selected only when every earlier place
-      step is done, which requires its object let go. Claimed, for plans in which no later step grasps an
-      object that an earlier place step delivered: no control step selects a later plan step while an
-      earlier place step's object is held, touched by the robot, or has the tool point within the declared
-      margin of, or inside, its box, with its goal satisfied; and no control step commands a release on
-      the ground that the object is delivered while its origin is more than the declared height above its
-      target height. Not claimed: that LIBERO's predicate still holds after the release; that holding is
-      judged without error; anything of plans that re-pick a delivered object; releases commanded on other
-      grounds; that a delivered object stays delivered; that the margin keeps every finger outside the
-      object's box, or that nothing of the object lies between the fingers when a later step starts (a
-      thin part between the open pads, more than the margin from the tool point, is let go by this test).
+      At every control step the planner re-evaluates, from that step's state and one record -- the object
+      last held, the last object DEF-holding's test found in the jaws this episode -- whether each place
+      step is done and whether its object is delivered. A place step is done only when LIBERO's predicate
+      for its goal holds and its object is let go: not held (DEF-holding), and, if it is the object last
+      held, also touched by no robot geometry and with the tool point more than a declared margin outside
+      the object's box, each read from that step's state -- a stand-in for DEF-skill-contract's release
+      postcondition, not the postcondition itself; an earlier object, not the last held, is let go when
+      not held, so a hand carrying the next object that brushes it does not make its place step undone.
+      Its object is delivered at a step only when it is not held and its origin is within a declared plan
+      distance of the drop point and within declared heights below and above the target height (the origin
+      height the place skill lowers the object to); the release the place skill commands on the ground
+      that the object is delivered uses the same step's state. The planner selects, at every control step,
+      the first plan step in order that is not done, where the pick before a place step is also skipped
+      when that place step's object is delivered. So a place step whose object is delivered but whose goal
+      does not hold is not passed over for a later step, and at a step where it is selected the place
+      skill, finding its object delivered, commands the jaws open and a retreat rather than taking the
+      object back; and a later plan step is selected only when every earlier place step is done, which
+      requires its object let go. Claimed, for plans in which no later step grasps an object that an
+      earlier place step delivered: no control step selects a later plan step while an earlier place
+      step's object is held, or, being the object last held, is touched by the robot or has the tool point
+      within the declared margin of, or inside, its box, with its goal satisfied; and no control step
+      commands a release on the ground that the object is delivered while its origin is more than the
+      declared height above its target height. Not claimed: that LIBERO's predicate still holds after the
+      release; that holding is judged without error; anything of plans that re-pick a delivered object;
+      releases commanded on other grounds; that a delivered object stays delivered; that the margin keeps
+      every finger outside the object's box, or that nothing of the object lies between the fingers when a
+      later step starts (a thin part between the open pads, more than the margin from the tool point, is
+      let go by this test).
     premises: [AXM-libero-scores-final-state, DEF-holding, DEF-skill-contract]
     derivation_rule: >-
       AXM-libero-scores-final-state makes a predicate that holds while the object is still in the jaws no
@@ -2324,7 +2328,11 @@ branches:
       it back into them. With the object let go as DEF-skill-contract's postcondition has it (the tool
       point 20 mm outside its box), libero_10 2 10 of 10 (v29: 5) and libero_10 8 9 of 10, inits 0-9.
       Restated per the verifier: the test is a stand-in for the postcondition, which it does not entail.
-      Claim worded as the test reads: the tool point against the object's box.
+      Claim worded as the test reads: the tool point against the object's box. Restated per the verifier:
+      applied to every earlier object, the strict test made a place step undone when the hand carrying the
+      next object brushed it, and re-selected it with the next object in the jaws; it applies to the
+      object last held only, a record of the episode the statement now names. With it, libero_10 6 18 of
+      20 (inits 0-19) where the strict test on every object gave 12 (v32; v31, before the gate, 19).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-regression-planner
