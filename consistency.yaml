@@ -512,14 +512,15 @@ definitions:
   - id: DEF-box-world
     term: Box world
     meaning: >-
-      The teacher's own plan-time model of a state, perfect physics assumed. Every collision geom that is
-      not the robot's is its bounding box aligned with its frame (AXM-libero-collision-shapes; a box geom
-      is itself), the floor its plane; the robot's hand and fingers likewise, each grown on every side by
-      the servo's lead bound for the phase (AXM-servo-lead-bounds-travel: 34.3 mm, 11.7 mm when lowering)
-      plus the contact margins (AXM-libero-contact-parameters). Bodies move only as the plan moves them:
-      a grasped object rigidly with the tool, an articulated part along its joint as the plan drives it;
-      every other body stays exactly where it is -- nothing is pushed, falls or slides. Two bodies
-      collide in the box world when a box of one overlaps a box of the other.
+      The teacher's own plan-time model of a state, perfect physics assumed: the tool follows the
+      planned path exactly, a grasped object rides rigidly with it, an articulated part moves only along
+      its joint as a drive moves it, an object set down comes straight down to rest on the first box
+      beneath it or the floor, and nothing else moves -- nothing is pushed, tips, slides or bounces.
+      Every collision geom that is not the robot's is its bounding box aligned with its frame
+      (AXM-libero-collision-shapes; a box geom is itself); the floor is its plane, which a box meets when
+      its lowest corner is below it; the robot's hand and fingers are their geoms' boxes likewise. Two
+      bodies collide in the box world when a box of one overlaps a box of the other, or one meets the
+      floor. How far MuJoCo departs from it is measured, not assumed.
 
   - id: DEF-smooth-motion
     term: Smooth motion
@@ -792,18 +793,20 @@ lemmas:
 
   - id: LMA-swept-box-conservative
     statement: >-
-      If a box moves rigidly from one pose to another along a path on which no point of it travels
-      farther than d from where it started, then at every pose along that path the box lies inside the
-      starting box grown by d on every side (each half-extent plus d). So a moving box that at each of a
-      path's samples, grown by the largest point travel to the next sample, overlaps no other box,
-      overlaps none anywhere along the path -- however thin the other box, and whatever the samples'
-      spacing.
+      Let a box move rigidly from one sample of a path to the next, and let d bound the length of the
+      path every point of it traces between the two samples (for a straight move turning at a steady rate
+      about one axis, the translation plus the turn's angle times the farthest distance of any of the
+      box's points from that axis). Then at every pose between the samples the box lies inside its box
+      at the first sample grown by d on every side. So if, at every sample of a path, the box grown by
+      its d to the next sample overlaps no box that stays still meanwhile, it overlaps none anywhere
+      along the path, however thin those boxes and whatever the samples' spacing.
     premises: [DEF-box-world]
     derivation_rule: >-
-      Every point of the moving box stays within d of its starting position, so within d of the
-      starting box; the starting box grown by d on every side contains every point within d of it.
-      This is the property the paired-ray lemma lacked: a feature between two samples is covered by the
-      grown box, not missed between rays.
+      A point that traces a path of length at most d stays within d of where it started, so the box
+      stays within d of its starting box, which the box grown by d on every side contains. Restated: an
+      earlier statement bounded only each point's displacement at the next sample, and a box 40 mm from
+      the turning axis, turned 180 deg while moving 80 mm, returns near where it began while passing 40
+      mm to the side mid-way.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: LMA-release-when-resting-stays
@@ -1833,42 +1836,52 @@ branches:
       CTR-teacher-settled, CTR-teacher-gentle (release_gap_mm <= 5).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
-  - id: BRN-plan-in-box-world
+  - id: BRN-plan-through-box-world
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      Before a pick's approach to its grasp and a place's carry and lower begin, the skill evaluates the
-      step's planned tool path in the box world (DEF-box-world): the straight segments between the
-      phase targets the step will command, sampled so that no point of the hand, the fingers or the held
-      object travels farther than the grow distance d between samples; at each sample those boxes, grown
-      by the phase's lead bound and by d (LMA-swept-box-conservative), are tested with the fifteen-axis
-      test (LMA-separating-axis-boxes) against the boxes of every body other than the robot, the object
-      being picked or held, and the step's target and its support. If one overlaps, the step is not
-      begun as planned; the plan is repaired, in this order: (1) another grasp the reach screen passes,
-      or a higher carry, whose path passes the same test; (2) if the blocking body is an object whose
-      category the affordance table declares moved by pick and no goal names it, a relocate step first,
-      moving it to a free spot (DEF-skill-contract) that the same test passes for its own carry; (3)
-      otherwise the step is begun as before and the blocking body is recorded. Claimed: a step begun
-      after a repair of kind (1) or (2) has a planned path that collides with nothing in the box world at
-      plan time; a relocate step never moves an object a goal names or the step's target or support;
-      the test is exact for box geoms and conservative for the rest (AXM-libero-collision-shapes).
-      Not claimed: freedom from collision in the simulator (the box world assumes perfect physics, and
-      the executed path deviates from the planned one by the servo's lead, covered only up to its
-      measured bound); that a repair exists; the arm's links above the hand, which are not tested (a
-      named future extension); that a relocated object stays where it is put.
+      Before executing a plan, and again whenever an object ends a step more than a declared tolerance
+      from where the plan predicted, the teacher simulates the plan from the current state in the box
+      world (DEF-box-world). Each step's tool path is the straight segments between the phase poses its
+      skill commands -- a pick's pre-grasp and grasp; a place's lift to its carry height, carry to above
+      the drop point, lower to the release pose and retreat; a drive's grasp of the handle and the
+      handle's path along the joint to its target -- sampled so that the path traced by every point of
+      the hand, the fingers and the held object between samples is no longer than the grow distance d,
+      each sample tested grown by d (LMA-swept-box-conservative) with the fifteen-axis test
+      (LMA-separating-axis-boxes) against every other body's boxes and the floor; a released object is
+      set at the pose where it comes to rest and stays there for later steps; a driven part, and what
+      rests on it, moves along its joint. Three contacts are allowed, each only where stated: the
+      fingers with the object being picked, from the pre-grasp pose to the grasp; the fingers with the
+      handle's body during a drive; the held object with the body it is released on to, at the last
+      sample of the lower. Any other overlap, or the simulated end state failing LIBERO's goal -- read by
+      writing the simulated poses into the simulator state for one forward pass, no dynamics, and
+      restoring it -- fails the plan. The teacher executes a plan only if its simulation passes. While
+      none has, it tries candidates in this order, each as a whole plan: the default; drop points in
+      each goal region nearest its centre first; grasps in the reach screen's order; the placements
+      whose goals do not refer to one another in every other order; and a relocate step, taken with an
+      empty hand before the step it would block, moving a movable object no goal names to a free spot
+      -- the first to pass is executed, up to a declared number of candidates. If none passes, the
+      default is executed and recorded as unplanned. Claimed: (1) the simulation of every plan executed as
+      planned passed -- no overlap in the box world but the three allowed contacts, and LIBERO's goal met
+      on its end state; (2) the candidate order is fixed, so the plan chosen is a function of the state
+      it is planned from; (3) an unplanned execution is recorded. Not claimed: that MuJoCo follows the
+      box world -- the servo's lead, slip, tipping, bouncing (to be measured by an agreement contract declared with the build); that a
+      candidate passes; the arm's links above the hand, which are not tested; the provenance of the
+      tolerance, the grow distance and the candidate bound.
     premises: [DEF-box-world, LMA-separating-axis-boxes, LMA-swept-box-conservative, AXM-libero-collision-shapes,
-               AXM-libero-objects-are-boxes, AXM-servo-lead-bounds-travel, AXM-libero-contact-parameters,
-               AXM-grip-fixes-object-in-hand, AXM-category-affordances-declared, DEF-skill-contract]
+               AXM-libero-objects-are-boxes, AXM-grip-fixes-object-in-hand, AXM-libero-scores-final-state,
+               AXM-one-gripper, DEF-skill-contract, AXM-category-affordances-declared]
     derivation_rule: >-
-      The user's request (2026-09-24): plan the scenario first in a fast idealized world, perfect physics
-      assumed, and route around what blocks. Measured blockers: the mug in the microwave door's swing
-      pushed in 36 of libero_10 9's 50 failures; the cabinet top over a drawer in 34 blocked reaches
-      (libero_90 2, 5, 8). All placed objects collide as boxes and fixtures almost all do, so the box
-      world is exact for them and conservative for the rest; the grow distance makes sampling safe;
-      the servo's measured lead makes the plan-to-execution gap part of the test rather than an
-      assumption. A plan repaired by (1) or (2) passed the test at every sample, so by the two lemmas it
-      collides with nothing in the box world. Not yet implemented. evidence: CTR-teacher-reliable,
-      CTR-teacher-settled.
+      The user's direction (2026-09-24): plan the scenario in a fast world with perfect physics first,
+      and let planning pass through it to reach success before anything is executed. Measured: in
+      libero_10 6 the gripper's right finger, lowering the pudding to the right of the plate, rubbed the
+      mug placed on that plate from 4 to 11 deg, and the mug was later knocked over; the mug in the
+      microwave door's swing was pushed in 36 of libero_10 9's 50 failures. The box world simulates a
+      place's carry and lower 394 times faster than MuJoCo executes it (libero_90 48). By the two lemmas
+      a passing simulation has no overlap anywhere along its paths but the allowed contacts; the end
+      state is scored by LIBERO's own predicates, not an approximation. Replaces BRN-plan-in-box-world,
+      refuted because every pick's fingers meet the object picked and it tested steps one at a time.
+      Not yet implemented. evidence: CTR-teacher-reliable, CTR-teacher-settled.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-pinch-for-the-whole-place
