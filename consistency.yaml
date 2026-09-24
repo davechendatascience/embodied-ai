@@ -1994,8 +1994,10 @@ branches:
       episodes, a first contact no deeper than 12 mm fell in 414 succeeding episodes and 74 failing ones,
       deeper in 135 and 103. Claim (2) because the follower's actions are the skills' own twist and jaw
       commands; (3) from the bounds and the ban as stated; (4) by the log's definition. Measured (branch
-      follow): the kinematic world finds a route from 5757 of LIBERO's 6500 initial states; libero_10 8 went
-      from 0 to 11 of 50 once the contact phases were left to the teacher's laws. Replaces
+      follow at fa98930, skill_teacher:a20c3a855f): the kinematic world finds a route from 5757 of LIBERO's
+      6500 initial states; followed, LIBERO's protocol succeeded in 5844 of 6500 episodes against the
+      teacher's 5709 (186 gained, 51 lost; 5782 against 5641 within LIBERO's step limits), libero_10 8 in 39
+      of 50 against 0. Replaces
       BRN-plan-through-box-world, pruned. Restated from versions doubted on eleven, then six gaps: where
       samples fall, pairs that both move, convexity, drives and drops, what a ban reaches, and what a
       failing leg bans. evidence: CTR-teacher-reliable, CTR-teacher-settled, CTR-teacher-gentle.
