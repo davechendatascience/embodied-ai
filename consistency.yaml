@@ -2416,61 +2416,118 @@ branches:
     claim_type: contract
     statement: >-
       Vertical is the world's z axis and 'in plan' is the projection onto the world's horizontal plane;
-      poses and the scene's collision geometry are read from each step's state
-      (AXM-grip-fixes-object-in-hand, AXM-mujoco-forward-is-a-function-of-state). At every control step of
-      a place, given the placed object, the place's drop point, the region's box (its centre, axes and
-      half-extents) and the place's carry height, the skill decides whether the target is roofed and how
-      to enter it. The object is measured as it would rest level: its most upright axis is the one of its
-      box's axes nearest the vertical, ties to the first; its height is twice its half-extent along that
-      axis, its reach its largest half-extent across it plus a declared margin, and its rest height puts
-      its lowest point a declared clearance above the first surface met straight down, from the region's
-      centre height, under its centre at the drop point, the object's own body excluded. When that ray
-      meets nothing, the target is not roofed at that step. The target is roofed at a step when some
-      colliding geom other than the robot's and the object's lies within that reach of the drop point in
-      plan, with its bottom above the object's top at rest and below the carry height plus the object's
-      height. The directions are the region's box axes within a declared angle of horizontal, each
-      projected onto the horizontal plane and normalised, in the order of the region's axes, each with +
-      before -. For a direction u, the entry point E is the drop point at the rest height moved along u by
-      the distance to the region's face plus the object's largest level half-extent plus a declared
-      margin. The object is in u's corridor when its origin is within a declared distance, in plan, of the
-      line through the drop point along u, from that distance before the drop point to that distance
-      beyond E, and no higher than E plus a declared band. A direction is kept when the object is in its
-      corridor, or else when a disc of the object's least level half-extent plus a margin, swept level
-      from the drop point to E over the height band from its lowest point at rest plus the clearance to
-      its top at rest, meets no colliding geom other than the robot's and the object's. Taken is the first
-      direction, in the order above, whose corridor holds the object; if none does, the kept direction
-      whose E is nearest the robot's base in plan, ties to the first in that order. 'Over' a point means
-      within a declared distance of it in plan. For a roofed target with a direction taken, the command
-      is: in the corridor and not over the drop point, level toward over the drop point, the object turned
-      about the vertical so its longest level axis lies along u; in the corridor and over the drop point,
-      the place's own lower and release (BRN-place-onto-physical-support); not in the corridor, over E and
-      above E's height plus the band, toward E; otherwise the place's own lift and carry with E as the
-      carry's destination. A target not roofed at a step, or roofed with no direction kept, is placed at
-      that step as before. Claimed: (1) at every step at which the target is roofed, a direction is taken,
-      and the object is in that direction's corridor and not over the drop point, the commanded tool
-      translation has no vertical component; (2) whether the target is roofed, which direction is taken,
-      and which of the four commands applies are, at every step, functions of that step's state, the
-      placed object, the drop point, the region's box, the carry height and declared constants; (3) the
-      drop point, and the lower and release over it, are the place's own. Not claimed: that the object
-      reaches the corridor, that the target stays roofed while the object is in it, that the hand clears
-      the roof, that the object fits the opening, rests upright, or stays in the region; anything of the
+      poses, the arm's joint positions and ranges, and the scene's collision geometry are read from each
+      step's state (AXM-grip-fixes-object-in-hand, AXM-mujoco-forward-is-a-function-of-state). At every
+      control step of a place at which the object is held, given the placed object, the place's drop point
+      in plan, the region's box (its centre, axes and half-extents) and the place's carry height, the
+      skill decides whether the target is roofed and how to enter it. The object's pose in the tool's
+      frame is read from the step's state; 'carried at' a tool frame F means the object at that pose
+      relative to a tool with frame F. Its rest height at a point, carried at F, puts its lowest point a
+      declared clearance above the first surface met straight down, from the region's centre height, under
+      its box centre when its origin is over that point, the object's own body excluded; where that ray
+      meets nothing it has none. The downward frame has its approach straight down and its jaw axis the
+      tool's present jaw axis projected onto the horizontal plane and normalised (the world's y axis where
+      that projection vanishes). Carried at the downward frame, the object's most upright axis is the one
+      of its box's axes nearest the vertical, ties to the first; its height is twice its half-extent along
+      that axis; its level axes are the other two; its reach is its largest level half-extent plus a
+      declared margin; its resting bottom at the drop point is its rest height there less the depth of its
+      lowest point below its origin, and its top is that bottom plus its height. Where it has no rest
+      height at the drop point, the target is not roofed at that step. The target is roofed at a step when
+      some colliding geom other than the robot's and the object's lies within the reach of the object's
+      centre at rest in plan, with its bottom above the resting bottom plus the clearance and below the
+      carry height plus the height; the roof is the lowest such bottom. The object is laid when the roof
+      lies below its top plus the clearance. The directions are the region's box axes within a declared
+      angle of horizontal, each projected onto the horizontal plane and normalised, in the order of the
+      region's axes, each with + before -. The wrist order of two tool frames puts first those the last
+      joint reaches within its range less a declared margin -- its present position plus the frame's turn,
+      the angle whose tangent is the y over the x component, in the present tool frame, of the frame's
+      first axis -- then the smaller angle of the rotation from the present frame, ties to the first. For
+      a direction u, when the object is not laid, the entry frame is the present tool frame turned about
+      the vertical by the signed angle from the horizontal projection of the object's longest level axis
+      to u, less a half turn toward zero where its magnitude exceeds a quarter turn; its along half-extent
+      is that longest level half-extent, its across half-extent its least level half-extent, and its rest
+      height, bottom and top are those at the downward frame. When it is laid, for the pitch angles a
+      declared lay pitch times 1, 0.75, 0.5, 0.25 and 0, in that order, the pitch's frame has approach
+      cos(pitch) times -u minus sin(pitch) times the vertical, and is the first under the wrist order of
+      the two frames whose jaw axis is the vertical's, or its negative's, component orthogonal to that
+      approach, normalised, and whose first axis is the jaw axis crossed with the approach; the entry
+      frame is the first pitch's frame at which the object, carried at it, has a rest height at the drop
+      point and its bottom there plus its vertical extent (twice its half-extent along the vertical) plus
+      the clearance is at or below the roof; where none is, u has no entry frame. A laid object's along
+      and across half-extents, at the entry frame, are its box's half-extents projected onto u and onto
+      the horizontal normal to u, and its bottom and top are its rest height there less the depth of its
+      lowest point, and that bottom plus its vertical extent. For the entry frame, the entry point E is
+      the drop point at the entry's rest height moved along u by the distance, along the region's axis,
+      from the object's box centre at rest to the region's face on u's side (zero if negative), plus the
+      along half-extent, plus a declared margin. The object is in u's corridor when its origin is within a
+      declared distance, in plan, of the line through the drop point along u, from that distance before
+      the drop point to that distance beyond E, and no higher than E plus a declared band. A direction
+      with an entry frame is kept when the object is in its corridor, or else when a disc of the across
+      half-extent plus a margin, swept level in plan from the object's box centre at rest to that centre
+      moved as the origin is to E, over the height band from its bottom plus the clearance to its top,
+      meets no colliding geom other than the robot's and the object's. Taken is the first direction with
+      an entry frame, in the order above, whose corridor holds the object; if none does, the kept
+      direction whose moved centre is nearest the robot's base in plan, ties to the first in that order.
+      'Over' a point means within a declared distance of it in plan. For a roofed target with a direction
+      taken, the place's drop point is at the entry's rest height, and the command is: in the corridor and
+      not over the drop point, toward the drop point at that height; not in the corridor, over E and above
+      E's height plus the band, toward E; otherwise, not in the corridor, the place's own slide and lift,
+      their rotation goal unchanged, and its carry, with E as their destination; in the corridor and over
+      the drop point, the place's own lower and release toward the drop point at that height
+      (BRN-place-onto-physical-support). The command toward the drop point, the command toward E, the
+      carry and the lower turn the tool toward the entry frame. When the release is commanded with a
+      direction taken, the skill records, for the object and region, the drop point at the entry's rest
+      height, and a withdrawal: u and the tool point then moved along u by E's distance from the drop
+      point; both records are cleared at the next step at which the place finds the object held, and at an
+      episode's start. While the object is not held and a release is recorded, the place's target -- what
+      its delivered test reads -- is the recorded point. While a withdrawal is recorded and no placed
+      object is held, the retreat commands the tool, its rotation goal unchanged, toward the point level
+      with it along u at the withdrawal point's distance along u, until that distance is within the over
+      distance; then it clears the withdrawal and retreats as before. A target not roofed at a step, or
+      roofed with no direction kept, is placed at that step as before. Claimed: (1) at every step at which
+      the target is roofed, a direction is taken, and the object is in that direction's corridor and not
+      over the drop point, the commanded tool translation is toward the drop point at the entry's rest
+      height; (2) whether the target is roofed, whether the object is laid, which direction and entry
+      frame are taken, and which of the commands above applies are, at every step, functions of that
+      step's state, the placed object, the drop point, the region's box, the carry height and declared
+      constants; (3) for a laid object with a direction taken, the object carried at the entry frame and
+      resting at the drop point has its top, plus the clearance, at or below the roof of that step; (4)
+      while a withdrawal is recorded, no placed object is held and the withdrawal point's distance along u
+      exceeds the over distance, the retreat's commanded translation has no vertical component; (5) the
+      drop point in plan is the place's own. Not claimed: that the object reaches the corridor; that the
+      roof, the laid decision or the direction stay the same while the object is in the corridor; that the
+      tool reaches the entry frame or tracks the commanded height; that the hand or arm clears the roof,
+      the table or other objects; that the object fits the opening across its width, rests level, or stays
+      in the region after release; that the withdrawal leaves the object undisturbed; anything of the
       place's own lift, carry, lower and release beyond what BRN-place-onto-physical-support states.
     premises: [BRN-place-onto-physical-support, AXM-object-geometry-known, AXM-grip-fixes-object-in-hand, AXM-mujoco-forward-is-a-function-of-state]
     derivation_rule: >-
       Every roofed target in LIBERO failed for the teacher, whose place comes straight down over the drop
       point: the shelf's two layers (libero_90 40, 42, 86, 88, 89: 0 of 50 each in the teacher-alone sweep
-      v25) and the microwave's heating region (libero_10 9, 0 of 50). LIBERO's humans enter each of them
+      v26) and the microwave's heating region (libero_10 9, 0 of 50). LIBERO's humans enter each of them
       level, along the region's horizontal y axis (the object's path over its last 12 cm before release:
-      medians 0.92, 0.98, 0.88, 0.92 and 0.98 of the unit direction, 20 demonstrations each). Built and
-      traced on libero_90 40: measured by its box as it swung, a pan hanging 10 deg from its handle
-      reached 1 mm past the roof's underside, stopped counting as roofed and was lifted back out -- hence
-      the object is measured as it rests; re-swept every step, the band flickered mid-entry -- hence a
-      direction holding the object in its corridor is taken first; the shelf's visual mesh spans its
-      openings -- hence colliding geoms only. With the law, the teacher alone: libero_90 40 10 of 10,
-      libero_90 42 6 of 10 (inits 0-9). Restated four times per the verifier: (1) holds only where the
-      target is roofed, of the tool's translation, distances in plan; (2) names its inputs and declares
-      the tie-breaks; the lower and release apply only in the corridor over the drop point; a ray meeting
-      nothing leaves the target unroofed.
+      medians 0.92, 0.98, 0.88, 0.92 and 0.98 of the unit direction, 20 demonstrations each). The first
+      statement (entered upright, turned about the vertical) brought libero_90 40 to 10 of 10 and 42 to 6
+      of 10 (inits 0-9) and left the books at 0: counting only what lay above the object's top at rest,
+      the roofed test did not count a roof the standing book is taller than -- hence the band from its
+      resting bottom. The humans lay the books: 56 of 60 demonstrations of libero_90 86, 88 and 89 release
+      the book with its thickness up, the approach tilted down by a median 8.6 deg (88), 6.8 deg (86) and
+      32 deg (89). Built and traced on 88 and 89: level, the wrist trailing 20 cm behind the tool at its
+      height sat on the next book on the table -- hence the pitch; at the full pitch 89's book missed its
+      71 mm opening by 0.8 mm -- hence pitched only as far as the opening allows; by the jaws' nearer sign
+      the wrist sat 0.01 rad from its limit 19 deg short of the frame -- hence the wrist order; commanded
+      level, the arm sagged 22 mm reaching in and the book's edge met the shelf's floor -- hence toward
+      the drop point at the rest height; judged against the region-derived height, 11 cm above where it
+      rests, a released book was taken back out, and the retreat straight up lifted it on the open jaws'
+      lower finger -- hence the recorded release and the level withdrawal. Measured and not built:
+      centring the object's box on the drop point (libero_90 88 settled 2 of 10, against 10 of 10
+      without); a wider lower toward E (libero_90 86 13 of 20 over two fixture draws, against 14 of 20
+      without); a drop point chosen across the region for an arm clear of the scene (at every candidate
+      libero_90 89's hand met the table). With the law, the teacher alone, inits 0-9, fixture seed 555,
+      success: libero_90 40 10, 42 6, 86 9, 88 10, 89 0 of 10; fixture seed 557, settled
+      (TST-teacher-settled) 40 7, 42 5, 86 3, 88 10 of 10, success 10, 5, 5, 10. libero_10 9 stays 0 of
+      10. Not solved: 89 (under the bottom layer the hand meets the table; the humans insert at 32 deg and
+      let the book drop), and a descent at E onto a book standing on the table (86).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 policies:
