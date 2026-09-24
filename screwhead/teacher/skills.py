@@ -380,6 +380,27 @@ class Skills:
         rel = box.R.T @ (np.asarray(self.env.snapshot()["p_tool"], float) - box.world_centre)
         return float(np.linalg.norm(np.maximum(np.abs(rel) - box.half, 0.0))) > self.k.clear_margin
 
+    def released_in_the_way(self, keep: str | None = None) -> str | None:
+        """An object a place of this episode released and nothing has grasped since (other than `keep`)
+        that the robot touches, or whose box the tool point is within clear_margin of: DEF-skill-contract's
+        start gate, read with let_go's stand-in for its release postcondition. None when there is none."""
+        m, d = self.scene.m, self.scene.d
+        p_tool = np.asarray(self.env.snapshot()["p_tool"], float)
+        for obj, released in self._let_go.items():
+            if not released or obj == keep:
+                continue
+            try:
+                bid = self.scene.body_id(obj)
+            except ValueError:
+                continue
+            if any(contacts.is_robot(contacts.body_name(m, b)) for b in contacts.touching(m, d, bid)):
+                return obj
+            box = self.scene.object_box(obj)
+            rel = box.R.T @ (p_tool - box.world_centre)
+            if float(np.linalg.norm(np.maximum(np.abs(rel) - box.half, 0.0))) <= self.k.clear_margin:
+                return obj
+        return None
+
     def holding(self, geom: int, width: float) -> bool:
         """Both finger groups touch the handle geom and the jaws have closed down to its width.
 

@@ -25,6 +25,7 @@ class SkillTeacher:
         self.plan = self.spec.plan
         self.phase = ""
         self.step_index = 0
+        self._selected = None                 # (episode, index, step) last allowed to start
         self.step = None
 
     # -- goal predicates, scored by LIBERO itself ------------------------------------
@@ -128,6 +129,17 @@ class SkillTeacher:
             self.phase = "done"
             return self.skills.action(np.zeros(6), A_OPEN)
         i, step = self.current_step()
+        # DEF-skill-contract's start gate: a skill newly selected does not start while an object an earlier
+        # skill released, and nothing has grasped since, is touched by the robot or has the tool point
+        # within the margin of its box; the hand retreats instead
+        key = (getattr(self.env, "episode", None), i, None if step is None else (step.skill, step.obj, step.region))
+        if key != self._selected:
+            blocking = self.skills.released_in_the_way(keep=None if step is None else step.obj)
+            if blocking is not None and step is not None:
+                self.step_index, self.step = i, step
+                self.phase = "clear"
+                return self.skills.retreat(s)
+            self._selected = key
         self.step_index = i
         self.step = step                       # what is being executed (may be a precondition)
         if step is None:
