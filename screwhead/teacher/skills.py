@@ -101,6 +101,8 @@ class SkillConfig:
     lower_speed_min: float = 0.03
     lower_done: float = 0.004      # lowered to within this of the target height
     place_clearance: float = 0.015 # object bottom above the target surface before release
+    entry_margin: float = 0.03     # m past the region's box the level entry to a roofed target starts
+    entry_line: float = 0.02       # m off the entry line the object may be and still be entering along it
     at_place_xy: float = 0.04      # a released object this close to its target is left there
     at_place_dz: float = 0.03
     at_place_above: float = 0.03   # ... and no higher than this above it: with no bound, a bowl 8 cm
@@ -589,9 +591,31 @@ class Skills:
             self.phase = "regrasp"
             return self.pick(obj, s, via=self.via_for(region), place=(region, inside))
         self._let_go[obj] = False                       # in the hand: nothing has been let go
+        carry_z = self._carry_height(obj, region, q, target_q, R, p)
+        entry = self._level_entry(obj, region, q, target_q, carry_z)
+        if entry is not None:                          # BRN-place-enters-roofed-target-level
+            u, E, turn = entry
+            rel = q - target_q
+            t = float(rel[:2] @ u[:2])                 # along the entry line, out from the drop point
+            lat = float(np.linalg.norm(rel[:2] - u[:2] * t))
+            d_out = float((E - target_q)[:2] @ u[:2])
+            corridor = (lat <= k.entry_line and -k.entry_line <= t <= d_out + k.entry_line
+                        and q[2] <= E[2] + k.plane_band)
+            over_drop = float(np.linalg.norm(rel[:2])) <= k.over_xy
+            R_fit = axis_rot(Z, turn) @ R              # its long axis along the entry
+            if corridor and not over_drop:
+                self.phase = "insert"                  # level, under the roof, to over the drop point
+                goal = p + np.array([target_q[0] - q[0], target_q[1] - q[1], 0.0])
+                return self.action(self.twist_to(R, p, R_fit, goal, v_max=k.lower_speed,
+                                                 v_min=k.lower_speed_min), 0.0)
+            if not corridor and float(np.linalg.norm((q - E)[:2])) <= k.over_xy and q[2] > E[2] + k.plane_band:
+                self.phase = "lower"                   # outside the region, down to the entry's height
+                return self.action(self.twist_to(R, p, R_fit, p + (E - q), v_max=k.lower_speed,
+                                                 v_min=k.lower_speed_min), 0.0)
+            if not corridor:
+                target_q = E                           # not yet entering: carried to over the entry point
         delta = target_q - q
         over = float(np.linalg.norm(delta[:2]))
-        carry_z = self._carry_height(obj, region, q, target_q, R, p)
         if over > k.over_xy and q[2] < carry_z - k.plane_band:
             exit_q = self._overhang_exit(obj, q)
             if exit_q is not None:                     # BRN-lift-leaves-overhang
@@ -623,6 +647,131 @@ class Skills:
         self.phase = "release"
         self._let_go[obj] = True
         return self.action(np.zeros(6), A_OPEN)
+
+    def _own_bodies(self, obj: str) -> set[int]:
+        m = self.scene.m
+        root = self.scene._root_id(obj)
+        out = set()
+        for b in range(m.nbody):
+            x = b
+            while x > 0 and x != root:
+                x = int(m.body_parentid[x])
+            if x == root:
+                out.add(b)
+        return out
+
+    def _covered(self, xy: np.ndarray, radius: float, z_lo: float, z_hi: float, ignore: set[int]) -> bool:
+        """Some geom (the robot's aside, and bodies in `ignore`) whose bottom lies between z_lo and z_hi
+        comes within `radius` of `xy` in plan: something over it, below z_hi."""
+        _pos, _rad, bottoms, _tops, keep = self.reach._geoms_now()
+        near = self.reach._footprint_distance(np.asarray(xy, float)[None])[:, 0] < radius
+        return bool((near & keep & self._solid(ignore) & (bottoms > z_lo) & (bottoms < z_hi)).any())
+
+    def _solid(self, ignore: set[int]) -> np.ndarray:
+        """Per geom: it collides (a visual mesh does not -- the shelf's spans the whole shelf, its
+        openings included) and is not of a body in `ignore`."""
+        m = self.scene.m
+        body = np.asarray(m.geom_bodyid)
+        mine = np.isin(body, list(ignore)) if ignore else np.zeros(len(body), bool)
+        return ((np.asarray(m.geom_contype) != 0) | (np.asarray(m.geom_conaffinity) != 0)) & ~mine
+
+    def _level_clear(self, a: np.ndarray, b: np.ndarray, radius: float, z_lo: float, z_hi: float,
+                     ignore: set[int]) -> bool:
+        """A disc of `radius` swept in plan from a to b meets no colliding geom (the robot's aside, and
+        bodies in `ignore`) overlapping the height band [z_lo, z_hi]."""
+        _pos, _rad, bottoms, tops, keep = self.reach._geoms_now()
+        n = max(2, int(np.ceil(float(np.linalg.norm(np.asarray(b)[:2] - np.asarray(a)[:2])) / 0.01)) + 1)
+        line = np.asarray(a, float)[:2] + np.linspace(0.0, 1.0, n)[:, None] * (np.asarray(b, float)[:2] - np.asarray(a, float)[:2])
+        near = self.reach._footprint_distance(line).min(1) < radius
+        return not bool((near & keep & self._solid(ignore) & (bottoms < z_hi) & (tops > z_lo)).any())
+
+    def _rest_under(self, obj: str, box, q: np.ndarray, xy: np.ndarray, z_from: float) -> float | None:
+        """The origin height at which the object, carried as it is, has the lowest point of its box
+        place_clearance above the first surface met straight down from z_from under its centre at the drop
+        point xy -- the lowest point, not its bottom face's centre: a pan hanging 4.6 deg from its handle
+        reaches 14 mm below that, into the shelf's board."""
+        centre = np.asarray(xy, float)[:2] + (box.world_centre - q)[:2]
+        _g, dist = self.planner.ray_scene(np.array([centre[0], centre[1], z_from]), -Z, self.scene.body_id(obj))
+        if dist < 0:
+            return None
+        low = float(box.world_centre[2] - (np.abs(box.R) @ box.half)[2])
+        return z_from - dist + float(q[2]) - low + self.k.place_clearance
+
+    def _level_entry(self, obj: str, region: str, q: np.ndarray, target_q: np.ndarray, carry_z: float):
+        """A roofed target's level entry (BRN-place-enters-roofed-target-level): None when nothing lies
+        over the object's footprint at the target between its top there and its top carried; else
+        (u, E), u the outward entry direction and E the origin's entry point at the target's height --
+        of the region's horizontal axes and signs whose level sweep out from the target is clear over
+        the object's height band, the one whose entry point is nearest the robot's base. LIBERO's
+        humans enter every roofed target level, along the region's horizontal y axis (both of the
+        shelf's layers, the microwave), 20 of 20 demonstrations of each."""
+        k = self.k
+        box = self.scene.object_box(obj)
+        ext = np.abs(box.R) @ box.half
+        off = box.world_centre - q                        # origin to box centre
+        R_reg, p_reg, half = self.region_pose(region)
+        half = np.abs(np.asarray(half, float))
+        # the height it rests at: its bottom on the first surface under the drop point below the region's
+        # centre -- from above the region's top, the ray met the shelf's roof and the microwave's
+        rest = self._rest_under(obj, box, q, target_q[:2], float(p_reg[2]))
+        if rest is None:
+            return None
+        target_q = np.r_[target_q[:2], rest]
+        c = target_q + off                                # the box's centre at the target
+        # measured as it rests, level -- its height along its most upright axis, its reach across the
+        # other two -- not by its box as it swings: a pan hanging 10 deg from its handle as it went under
+        # the shelf's roof reached 1 mm past the roof's underside, stopped counting as roofed, and was
+        # lifted back out
+        up = int(np.argmax(np.abs(box.R[2])))
+        height = 2.0 * float(box.half[up])
+        level = [(float(box.half[i]), box.R[:, i]) for i in range(3) if i != up]
+        bottom_t = rest - float(q[2] - (box.world_centre[2] - ext[2]))     # the lowest point at rest
+        top_t = bottom_t + height
+        r = max(h for h, _a in level) + k.exit_margin
+        mine = self._own_bodies(obj)
+        if not self._covered(c[:2], r, top_t, carry_z + height, mine):
+            return None
+        long_half, long_axis = max(level, key=lambda e: e[0])
+        short_half = min(level, key=lambda e: e[0])[0]
+        long_axis = np.array([long_axis[0], long_axis[1], 0.0]) / max(float(np.linalg.norm(long_axis[:2])), 1e-9)
+        best = None
+        for j in range(3):
+            axis = np.asarray(R_reg[:, j], float)
+            if abs(float(axis[2])) >= VERTICAL_COS:
+                continue                                  # the region's vertical axis
+            for sgn in (1.0, -1.0):
+                u = sgn * np.array([axis[0], axis[1], 0.0])
+                n = float(np.linalg.norm(u))
+                if n < 1e-6:
+                    continue
+                u /= n
+                # turned about the vertical so its longest level axis lies along the entry: a pan goes in
+                # pan first, its handle out behind it, through an opening its length does not fit across
+                turn = float(np.arctan2(long_axis[0] * u[1] - long_axis[1] * u[0], long_axis @ u))
+                if abs(turn) > np.pi / 2:
+                    turn -= np.sign(turn) * np.pi
+                face = float(half[j]) - float((c - p_reg) @ (sgn * axis))
+                d_out = max(face, 0.0) + long_half + k.entry_margin
+                e_c = c + u * d_out
+                E = target_q + u * d_out
+                # already in this side's corridor -- on its line, between the drop point and the entry point,
+                # at the entry's height -- it is this side: re-swept every step, a pan hanging from its handle
+                # flickered in and out of the band and was lifted back out of the shelf mid-entry
+                rel = q - target_q
+                t = float(rel[:2] @ u[:2])
+                inside = (float(np.linalg.norm(rel[:2] - u[:2] * t)) <= k.entry_line
+                          and -k.entry_line <= t <= d_out + k.entry_line and float(q[2]) <= float(E[2]) + k.plane_band)
+                if inside:
+                    return u, E, turn
+                if not self._level_clear(c[:2], e_c[:2], short_half + k.exit_margin, bottom_t + k.place_clearance,
+                                         top_t, mine):
+                    continue
+                dist = float(np.linalg.norm(e_c[:2]))     # the robot's base is the frame's origin
+                if best is None or dist < best[0]:
+                    best = (dist, u, E, turn)
+        if best is None:                                  # placed as an unroofed target
+            return None
+        return best[1], best[2], best[3]
 
     def _fit_yaw(self, obj: str, region: str, R: np.ndarray) -> np.ndarray:
         """The tool turned about the vertical so the held object's footprint fits the region's: unturned
