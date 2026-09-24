@@ -48,3 +48,18 @@ def test_a_standalone_close_comes_before_the_opens():
     top one back in (0 of 20)."""
     plan = plan_for([("close", "white_cabinet_1_bottom_region"), ("open", "white_cabinet_1_top_region")])
     assert [(s.skill, s.mode) for s in plan] == [("articulate", "close"), ("articulate", "open")]
+
+
+def test_a_support_is_moved_before_anything_is_set_on_it():
+    """libero_90 63: stacked first, the lower bowl's rim was covered by the upper one when it had to go
+    into the tray (0 of 20)."""
+    plan = plan_for([("on", "akita_black_bowl_1", "akita_black_bowl_2"),
+                     ("in", "akita_black_bowl_2", "wooden_tray_1_contain_region")])
+    assert [(s.skill, s.obj) for s in plan] == [("pick", "akita_black_bowl_2"), ("place_in", "akita_black_bowl_2"),
+                                                ("pick", "akita_black_bowl_1"), ("place_on", "akita_black_bowl_1")]
+
+
+def test_independent_places_keep_the_bddl_order():
+    plan = plan_for([("in", "alphabet_soup_1", "basket_1_contain_region"),
+                     ("in", "tomato_sauce_1", "basket_1_contain_region")])
+    assert [s.obj for s in plan if s.skill == "pick"] == ["alphabet_soup_1", "tomato_sauce_1"]

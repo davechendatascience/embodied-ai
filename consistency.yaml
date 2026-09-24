@@ -1894,6 +1894,33 @@ branches:
       regions have their local y vertical, and nothing turned. evidence: CTR-teacher-reliable.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-supports-moved-first
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      The planner orders a task's In and On goals among themselves, one at a time: from the goals not
+      yet ordered, it takes the first in the bddl's order whose target, as the bddl names it, is not the
+      object of another not-yet-ordered In or On goal; if every remaining goal has such a target (a
+      cycle), it takes the first remaining in the bddl's order. Each In or On goal becomes a pick of its
+      object followed by a place (or a push), in that order. Claimed: when the relation 'the object of
+      goal A is the target, as named, of goal B' has no cycle, no place step of an In or On goal sets its
+      object on or in an object that the pick of a later In or On goal grasps. Not claimed: anything
+      about other plan steps (opens, closes, switches, parks, or moves made to meet a precondition),
+      including where they fall relative to these and whether they carry objects along; targets named
+      as a region that an object owns, which are not identified with that object; that the plan
+      succeeds; or which order results when there is a cycle.
+    premises: [AXM-bddl-states-goals-not-methods, AXM-one-gripper, DEF-skill-contract]
+    derivation_rule: >-
+      The bddl states the goals and not their order (AXM-bddl-states-goals-not-methods), and with one
+      gripper an object must be free to be grasped (AXM-one-gripper). Taking at each step a goal whose
+      target no remaining goal moves places every support before what is set on it. Measured: libero_90
+      63 and 64 (On(b1, b2) and In(b2, tray)): stacked first, the lower bowl's rim was covered when it
+      had to go into the tray and no grasp of it closed (0 of 20 each); support first, 20 of 20 each
+      (runs/skill_l90_v4), with every episode of the 30 benchmark tasks and libero_10 unchanged. A first
+      statement ('a later step is to move') was refuted: a later Close can carry an object along, which
+      this ordering does not govern. evidence: CTR-teacher-reliable.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
   - id: BRN-place-done-when-released
     subject: CMP-skill-library
     claim_type: contract

@@ -89,12 +89,28 @@ def parse(path: str | Path, suite: str | None = None) -> TaskSpec:
                     goals=[tuple(g) for g in p["goal_state"]], objects=objects, fixtures=fixtures)
 
 
+def _supports_first(goals: list[tuple]) -> list[tuple]:
+    """The goals, a goal that moves an object ordered before any goal that sets something on or in
+    that object; otherwise in the bddl's order. Stacked first, libero_90 63's lower bowl had the
+    upper one nested in it when it had to go into the tray, its rim was covered, and no grasp of it
+    closed (0 of 20)."""
+    places = [g for g in goals if g[0].lower() in PICK_PLACE]
+    rest = [g for g in goals if g[0].lower() not in PICK_PLACE]
+    ordered, pending = [], list(places)
+    while pending:
+        free = [g for g in pending if not any(h[1] == g[2] for h in pending if h is not g)]
+        nxt = free[0] if free else pending[0]           # a cycle cannot be ordered: keep the bddl's order
+        ordered.append(nxt)
+        pending.remove(nxt)
+    return ordered + rest
+
+
 def plan_for(goals: list[tuple], objects: dict[str, str] | None = None) -> list[Step]:
     """Goal conjunction -> skill sequence. Raises on a predicate we cannot satisfy, so a
     suite we cannot yet do is a loud failure rather than a silently empty plan. `objects`
     (instance -> category) lets the affordance table say how each object is moved."""
     opens, places, closes, switches = [], [], [], []
-    for g in goals:
+    for g in _supports_first(goals):
         pred = g[0].lower()
         if pred in PICK_PLACE:
             obj, region = g[1], g[2]

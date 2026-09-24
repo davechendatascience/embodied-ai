@@ -23,8 +23,8 @@ most current work is on the demonstrations it learns from.
 
 A geometry-driven demonstration policy (`screwhead/teacher/`) that reads a task's goal from its
 bddl and the scene's geometry from the simulator, and labels any state a student reaches (DAgger).
-Status at v21, 50 episodes per task at seed 555 unless stated (`runs/skill_v21`, `runs/skill_l10_v7`,
-`runs/skill_l90_v3`):
+Status at v22, 50 episodes per task at seed 555 unless stated (`runs/skill_v22`, `runs/skill_l10_v8`,
+`runs/skill_l90_v4`):
 
 | suite | at 600 steps | within LIBERO's step limit |
 |---|---|---|
@@ -33,7 +33,7 @@ Status at v21, 50 episodes per task at seed 555 unless stated (`runs/skill_v21`,
 | libero_goal (limit 300) | 500 / 500 | 462 / 500 |
 | the three | 1498 / 1500 | 1436 / 1500 |
 | libero_10 (limit 520; at 800 steps) | 357 / 500 | 354 / 500 |
-| libero_90 (limit 400; 20 per task) | 1465 / 1800 | 1459 / 1800 |
+| libero_90 (limit 400; 20 per task) | 1505 / 1800 | 1498 / 1800 |
 
 The goal is at least 95% on every task within LIBERO's limits. What works and what is missing,
 task by task and against LIBERO's own human demonstrations, is in
@@ -65,6 +65,9 @@ task by task and against LIBERO's own human demonstrations, is in
 Features by date, newest first. Numbers are measured at the stated commit.
 
 - **2026-09-24**
+  - A support is moved before anything is set on it (libero_90 63 and 64, stack a bowl on another and
+    put them in the tray: 0 -> 20 of 20 each; libero_90 1465 -> 1505).
+  - The stamp-monitor MCP server is registered (read-only audit of both ledgers).
   - A held object is turned about the vertical during the carry when that makes its footprint fit the
     target region (libero_90's book into the caddy's front compartment: 73, 78, 81 0 -> 9, 4, 8 of 20;
     libero_90 1444 -> 1465).
