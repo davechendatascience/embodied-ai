@@ -572,7 +572,14 @@ class Skills:
             self.phase = "carry"
             goal = p + np.array([delta[0], delta[1], max(0.0, carry_z - q[2])])
             return self.action(self.twist_to(R, p, R_fit, goal, v_max=k.carry_speed), 0.0)
-        if delta[2] < -k.lower_done:
+        R_reg, p_reg, half = self.region_pose(region)
+        stop_z = self._on_support(obj, self.scene.object_box(obj), q, target_q[:2], R_reg, p_reg, half,
+                                  float(target_q[2]))
+        # an object held by its handle hangs tilted and is seated by being pressed on to its support, as
+        # before: stopped at the support, the moka pot went 14 -> 8 of 20 (libero_10 2)
+        resting = (self._held_by(obj) != "handle"
+                   and not contacts.only_gripper(self.scene.m, self.scene.d, self.scene.body_id(obj)))
+        if delta[2] < -k.lower_done and not (resting and q[2] - stop_z <= k.lower_done):
             self.phase = "lower"
             # on to the drop point, not only down: lowered straight, the bowl drifted 13 mm toward
             # the cabinet on its way into libero_10 3's drawer
@@ -587,31 +594,38 @@ class Skills:
         longest horizontal axis along the region's. Re-derived from the object's pose every step.
         Carried as grasped, libero_90 73's book (110 x 29 mm) came down crosswise into a 56 x 124 mm
         caddy compartment, caught its wall and was lost (0 of 20)."""
-        box = self.scene.object_box(obj)
         R_reg, _p_reg, half = self.region_pose(region)
+        th = self._fit_turn(self.scene.object_box(obj), R_reg, half)
+        return axis_rot(Z, th) @ R if th else R
+
+    def _fit_turn(self, box, R_reg, half) -> float:
+        """The turn about the vertical _fit_yaw gives the object for a region: 0 when it fits as it is
+        or cannot fit either way."""
         axes = [(2.0 * float(box.half[j]), box.R[:, j]) for j in range(3) if abs(float(box.R[2, j])) < VERTICAL_COS]
         if not axes:
-            return R
+            return 0.0
         # the region's horizontal axes, whichever of its box axes they are: the caddy's compartment
         # regions have their local y vertical
         flat = [i for i in range(3) if abs(float(R_reg[2, i])) < VERTICAL_COS]
         if len(flat) != 2:
-            return R
+            return 0.0
         rx, ry = R_reg[:, flat[0]], R_reg[:, flat[1]]
         room = (2.0 * abs(float(half[flat[0]])), 2.0 * abs(float(half[flat[1]])))
 
-        def fits(yaw):
+        def fits(yaw, tol):
             Rz = axis_rot(Z, yaw)
             ex = sum(length * abs(float((Rz @ v) @ rx)) for length, v in axes)
             ey = sum(length * abs(float((Rz @ v) @ ry)) for length, v in axes)
-            return ex <= room[0] + self.k.fit_tol and ey <= room[1] + self.k.fit_tol
-        if fits(0.0):
-            return R
+            return ex <= room[0] + tol and ey <= room[1] + tol
+        # left as it is only if it fits with no tolerance: libero_90 77's book came down turned 15 deg,
+        # 56.5 mm across a 55.5 mm compartment -- inside fit_tol -- and its corner landed on the wall
+        if fits(0.0, 0.0):
+            return 0.0
         _l, a = max(axes, key=lambda e: e[0])
         r = rx if room[0] >= room[1] else ry
         th = float(np.arctan2(a[0] * r[1] - a[1] * r[0], a[0] * r[0] + a[1] * r[1]))
         th = min((th, th - np.pi, th + np.pi), key=lambda x: (abs(x), -x))   # a tie goes to the positive turn
-        return axis_rot(Z, th) @ R if fits(th) else R
+        return th if fits(th, self.k.fit_tol) else 0.0
 
     def _overhang_exit(self, obj: str, q: np.ndarray) -> np.ndarray | None:
         """Where the held object's origin must first move, level, before it rises: None when the
@@ -685,6 +699,36 @@ class Skills:
             target_q[2] += half_h - centre_off + self.k.place_clearance
         return q, target_q
 
+    def _on_support(self, obj: str, box, q: np.ndarray, xy: np.ndarray, R_reg, p_reg, half,
+                    region_z: float) -> float:
+        """The origin height at which the lower phase ends: the region-derived one, raised to where the
+        object's bottom is place_clearance above the surface under its footprint's centre at the drop
+        point (BRN-place-onto-physical-support). Read only there, and only once the object touches something
+        besides the fingers -- not for the carry height, the grasp screen or the delivered test, which keep
+        the region-derived height. A moka pot swings level for a step mid-air; let go there, it fell 15 mm
+        and tipped (libero_10 2, 14 -> 6 of 20). LIBERO's regions are sites, not surfaces: the basket's
+        contain region reaches 3 mm below the table while its floor stands 16 mm above it, so the
+        target lay 7 mm below the floor, the lower phase never ended, and the jaws pressed the bottle
+        into the floor to the horizon (libero_object 2, 0 of 20 settled with 20 of 20 success). The
+        centre, not the highest point under the footprint: a corner over a caddy wall raised a book's
+        release 7 cm and it fell out; what lies under the corners is the drop point's test (_open_point)."""
+        R = box.R
+        up = int(np.argmax(np.abs(R[2])))
+        # only for an object carried level: its lowest corner within the lower phase's tolerance of its
+        # bottom face's centre. A moka pot hangs 21 deg from its handle, its lowest corner 27 mm under
+        # that centre; lowered to the region's height it is pressed on to the burner, which rights it
+        # (libero_10 2, 8 of 10), and raised to the burner's it is let go tilted and tips (1 of 10)
+        if sum(abs(float(R[2, i])) * float(box.half[i]) for i in range(3) if i != up) > self.k.lower_done:
+            return region_z
+        bottom = box.world_centre - R[:, up] * float(box.half[up]) * float(np.sign(R[2, up]) or 1.0)
+        centre = np.asarray(xy, float)[:2] + (bottom - q)[:2]
+        top = float(p_reg[2] + (np.abs(R_reg) @ np.abs(np.asarray(half, float)))[2])
+        z_from = top + 2.0 * float((np.abs(R) @ box.half)[2])
+        _g, dist = self.planner.ray_scene(np.array([centre[0], centre[1], z_from]), -Z, self.scene.body_id(obj))
+        if dist < 0:
+            return region_z
+        return max(region_z, z_from - dist + float((q - bottom)[2]) + self.k.place_clearance)
+
     def _drop_xy(self, obj: str, region: str, R_reg, p_reg, half, box) -> np.ndarray:
         """The point of the region nearest its centre that is open from above.
 
@@ -706,7 +750,48 @@ class Skills:
 
     def _open_point(self, obj: str, R_reg, p_reg, half, box) -> tuple[np.ndarray, float]:
         """(the point of the region nearest its centre open from above, its distance from the
-        centre; inf when none is)."""
+        centre; inf when none is).
+
+        The earlier search stands wherever its answer holds: its point, if the object's own
+        footprint there -- as it will be carried, centred on its box -- overhangs nothing. Only
+        where it does, or the earlier search found nothing, and only over a level region, is the
+        footprint searched as carried: over libero_10 3's drawer the earlier point was 22 mm clear of
+        the cabinet's face and the carried search's centre was not (10 -> 4 of 10), and over the
+        tilted wine rack the earlier search found nothing and used the centre, where the bottle sits
+        in its cradle, while the carried search found a spot 33 mm off it (50 -> 0 of 50)."""
+        best, best_d = self._open_point_grid(obj, R_reg, p_reg, half, box)
+        if float(np.max(np.abs(R_reg[2]))) < 1.0 - 1e-6:      # a tilted region: no level footprint to test
+            return best, best_d
+        # the earlier search's footprint is the object's, unturned and centred on its origin; where the
+        # carry will not turn it and its box is centred on its origin (a bowl), that is the true one
+        off = box.world_centre - self.scene.body_pose(obj)[1]
+        if self._fit_turn(box, R_reg, np.abs(np.asarray(half, float))) == 0.0 and float(np.linalg.norm(off[:2])) <= self.k.fit_tol:
+            return best, best_d
+        if np.isfinite(best_d) and self._footprint_clear(obj, R_reg, p_reg, half, box, best):
+            return best, best_d
+        carried, carried_d = self._open_point_carried(obj, R_reg, p_reg, half, box)
+        return (carried, carried_d) if np.isfinite(carried_d) else (best, best_d)
+
+    def _footprint_clear(self, obj: str, R_reg, p_reg, half, box, xy: np.ndarray) -> bool:
+        """The object's footprint with its origin at xy -- turned as the carry will turn it, centred
+        on its box, its centre and boundary sampled -- is open from above (the earlier search's top)."""
+        half = np.abs(np.asarray(half, float))
+        flat = [i for i in range(3) if abs(float(R_reg[2, i])) < VERTICAL_COS]
+        flat = flat if len(flat) == 2 else [0, 1]
+        ax = [R_reg[:, i] for i in flat]
+        Rz = axis_rot(Z, self._fit_turn(box, R_reg, half))
+        B = Rz @ box.R @ np.diag(box.half)
+        ohw = [float(np.abs(a @ B).sum()) for a in ax]
+        off = Rz @ (box.world_centre - self.scene.body_pose(obj)[1])
+        centre = np.array([xy[0], xy[1], p_reg[2]]) + ax[0] * float(ax[0] @ off) + ax[1] * float(ax[1] @ off)
+        top = float(p_reg[2] + abs(float(half[2])))
+        exclude = self.scene.body_id(obj)
+        return all(self._open_above(centre + ax[0] * fx + ax[1] * fy, top, exclude)
+                   for fx in (-ohw[0], 0.0, ohw[0]) for fy in (-ohw[1], 0.0, ohw[1]))
+
+    def _open_point_grid(self, obj: str, R_reg, p_reg, half, box) -> tuple[np.ndarray, float]:
+        """The drop-point search as it stood before BRN-drop-point-footprint-as-carried: origins about
+        the region's centre, the footprint centred on the origin, as grasped, along the world's axes."""
         k = self.k
         top = float(p_reg[2] + abs(float(half[2])))
         ohw = np.abs(box.R @ np.diag(box.half)).sum(1)[:2]      # object half-footprint
@@ -727,6 +812,53 @@ class Skills:
                 pt = p_reg + R_reg @ local
                 if all(self._open_above(pt + off, top, exclude) for off in foot):
                     best, best_d = pt[:2].copy(), dc
+        return best, best_d
+
+    def _open_point_carried(self, obj: str, R_reg, p_reg, half, box) -> tuple[np.ndarray, float]:
+        """The search over the footprint as it will be carried (BRN-drop-point-footprint-as-carried)."""
+        k = self.k
+        half = np.abs(np.asarray(half, float))
+        # the region's horizontal axes, whichever of its box axes they are (the caddy's compartments
+        # have their local y vertical), and the footprint the object will have over it: turned as the
+        # carry will turn it (_fit_turn), and centred where its box is, not at its origin -- a book's
+        # box centre is 12 mm from its origin, and centred on the origin in libero_90 77's compartment
+        # its end hung 5-7 mm over the wall
+        flat = [i for i in range(3) if abs(float(R_reg[2, i])) < VERTICAL_COS]
+        flat = flat if len(flat) == 2 else [0, 1]
+        ax = [R_reg[:, i] for i in flat]
+        top = float(p_reg[2] + (np.abs(R_reg) @ half)[2])
+        Rz = axis_rot(Z, self._fit_turn(box, R_reg, half))
+        B = Rz @ box.R @ np.diag(box.half)
+        ohw = np.array([float(np.abs(a @ B).sum()) for a in ax])       # half-footprint along each axis
+        off = Rz @ (box.world_centre - self.scene.body_pose(obj)[1])
+        c_loc = np.array([float(a @ off) for a in ax])                  # box centre from origin
+        span = np.maximum(half[flat] - ohw, 0.0)
+        best, best_d = np.asarray(p_reg[:2], float), np.inf
+        exclude = self.scene.body_id(obj)
+        # the whole footprint, with a margin, not only its centre: centred where the bottom drawer's
+        # region runs under the cabinet, the bowl's rim came down 4 mm from the cabinet's face, caught
+        # its top, and was let go 9 cm up (libero_10 3). The footprint's own edge is sampled too: a
+        # 7 mm caddy wall under a book's end lay between the centre and the margin and was not seen
+        # origins about the region's centre first -- LIBERO scores the origin -- then origins that put
+        # the footprint about the centre; with the margin, then, where no spot leaves room for it (a
+        # book in a compartment 7 mm longer than itself on each side), without it
+        for margin in (k.drop_margin, 0.0):
+            foot = [ax[0] * fx + ax[1] * fy
+                    for fx in sorted({-(ohw[0] + margin), -ohw[0], 0.0, ohw[0], ohw[0] + margin})
+                    for fy in sorted({-(ohw[1] + margin), -ohw[1], 0.0, ohw[1], ohw[1] + margin})]
+            for shift in (np.zeros(2), -c_loc):
+                for fx in np.linspace(-1, 1, k.drop_grid):
+                    for fy in np.linspace(-1, 1, k.drop_grid):
+                        local = np.array([fx * span[0], fy * span[1]]) + shift
+                        dc = float(np.linalg.norm(local))
+                        if dc >= best_d:
+                            continue
+                        pt = p_reg + ax[0] * local[0] + ax[1] * local[1]
+                        centre = pt + ax[0] * c_loc[0] + ax[1] * c_loc[1]
+                        if all(self._open_above(centre + o, top, exclude) for o in foot):
+                            best, best_d = pt[:2].copy(), dc
+                if np.isfinite(best_d):
+                    return best, best_d
         return best, best_d
 
     def _open_above(self, pt: np.ndarray, top: float, exclude: int) -> bool:

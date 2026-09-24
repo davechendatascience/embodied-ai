@@ -23,8 +23,8 @@ most current work is on the demonstrations it learns from.
 
 A geometry-driven demonstration policy (`screwhead/teacher/`) that reads a task's goal from its
 bddl and the scene's geometry from the simulator, and labels any state a student reaches (DAgger).
-Status at v22, 50 episodes per task at seed 555 unless stated (`runs/skill_v22`, `runs/skill_l10_v8`,
-`runs/skill_l90_v4`):
+Status at v24, 50 episodes per task at seed 555 unless stated (`runs/skill_v24`, `runs/skill_l10_v10`,
+`runs/skill_l90_v6`):
 
 | suite | at 600 steps | within LIBERO's step limit |
 |---|---|---|
@@ -32,8 +32,13 @@ Status at v22, 50 episodes per task at seed 555 unless stated (`runs/skill_v22`,
 | libero_object (limit 280) | 500 / 500 | 496 / 500 |
 | libero_goal (limit 300) | 500 / 500 | 462 / 500 |
 | the three | 1498 / 1500 | 1436 / 1500 |
-| libero_10 (limit 520; at 800 steps) | 357 / 500 | 354 / 500 |
-| libero_90 (limit 400; 20 per task) | 1505 / 1800 | 1498 / 1800 |
+| libero_10 (limit 520; at 800 steps) | 356 / 500 | 353 / 500 |
+| libero_90 (limit 400; 20 per task) | 1537 / 1800 | 1533 / 1800 |
+
+LIBERO scores the first step its goal holds. Scored instead after the teacher has finished -- the
+placed object released, at rest, and no more tipped than LIBERO's own human demonstrations leave it
+(`CTR-teacher-settled`, `tools/teacher_settled.py`) -- the teacher at v22 settled 2022 of 2600
+episodes against 2246 successes (RUN-0247).
 
 The goal is at least 95% on every task within LIBERO's limits. What works and what is missing,
 task by task and against LIBERO's own human demonstrations, is in
@@ -65,6 +70,14 @@ task by task and against LIBERO's own human demonstrations, is in
 Features by date, newest first. Numbers are measured at the stated commit.
 
 - **2026-09-24**
+  - Success is also scored after the teacher has finished (`CTR-teacher-settled`): on episode 0 of all
+    130 tasks, 93 of the 104 placed objects were still held, falling or rocking when LIBERO scored
+    them. Three fixes it found: a level object is let go once it rests on the physical surface under
+    it, not LIBERO's region box, which can lie below it (libero_object 2 and 4, libero_90 48, 69, 70:
+    pressed into the floor to the horizon, 0 -> 10 of 10 settled); the drop point tests the footprint
+    as it will be carried -- turned, centred on its box -- where the old test's differs; a tight fit is
+    squared rather than tolerated at 15 deg (books into the caddy: libero_90 73 8 -> 19, 78 2 -> 18 of
+    20; libero_90 1505 -> 1537, the 30 benchmark tasks unchanged, libero_10 357 -> 356).
   - A support is moved before anything is set on it (libero_90 63 and 64, stack a bowl on another and
     put them in the tray: 0 -> 20 of 20 each; libero_90 1465 -> 1505).
   - The stamp-monitor MCP server is registered (read-only audit of both ledgers).
