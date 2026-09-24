@@ -96,6 +96,26 @@ axioms:
       body_pos and body_quat -- all 10 libero_spatial tasks re-sample body_quat too, and
       libero_object re-samples nothing (TRL-0240).
 
+  - id: AXM-libero-soft-reset-state
+    domain: environment
+    statement: >-
+      With robosuite's hard_reset off, as SimArm opens LIBERO, env.reset() returns every MjData
+      field to the model's defaults (sim.reset(), that is mj_resetData) and rebuilds the robot's
+      controller; set_init_state then writes the flattened simulator state and runs a forward
+      pass. Between episodes the model's fields change only as AXM-libero-resamples-fixtures
+      says. Of the simulator's, robosuite's and LIBERO's state, what survives a reset and can
+      change the next episode's trajectory is exactly the controller's cache
+      (AXM-robosuite-controller-cache), the gripper's finger target
+      (AXM-robosuite-gripper-target-persists) and numpy's global generator
+      (AXM-libero-resamples-fixtures).
+    rationale: >-
+      Read from robosuite 1.4.0's environments/base.py (reset calls sim.reset() when hard_reset
+      is off, then _reset_internal) and LIBERO's env_wrapper.py (set_init_state: set_state, then
+      forward). That nothing else carries over is measured, not read: once those three were
+      anchored or seeded, teacher episodes in TaskEnv were bit-identical across up to 10 process
+      histories (CTR-execution-reproducible), and each of the three, left alone, changed an
+      episode (the three axioms' own measurements).
+
   - id: AXM-handle-shares-body
     domain: environment
     statement: >-
@@ -1208,28 +1228,44 @@ branches:
       after each state restore between layout tries, and after the random start's IK write before its
       hold: robosuite's finger target is set to fully open (the setpoint every settle pass ends on), the
       joint controller's cache is refreshed (update(force=True)), and the joint ramp is re-installed at
-      the placed pose. An episode's draws come from a generator seeded by (seed, episode index), and
-      internal redraws from a sub-generator seeded by (seed, episode index, attempt), a redrawn init
-      state settled in place rather than by recursing into reset; teacher caches kept per attempt are
-      keyed and cleared by (episode, attempt) (scripted_teacher.py:233-235, skills.py:151-156 and :406).
-      An episode's trajectory under a teacher is then a function of (seed, episode index, init state) in
-      both environments, the same whichever episodes ran before it in the process, and a hold after a
-      placement starts from the placed state. Outside the claim: GripperScan, measured once per process
-      (differences <= 1e-15 m); EGL rendering, which can differ by one intensity level between renders
-      of one state; distill's student-driven, mixed and DART episodes, whose features depend on which
-      workers share a GPU batch. What a trial records, so that it can be reproduced and never pooled
-      across executions, is BRN-trial-provenance.
-    premises: [AXM-reproducible-measurement, AXM-one-execution-path, AXM-robosuite-controller-cache, AXM-robosuite-gripper-target-persists]
+      the placed pose. Before every reset numpy's global generator is seeded by (seed, init index), as
+      LMA-seed-fixtures-per-init-state has it. At the end of every reset the twist servo's joint
+      reference, pose reference and previous twist are set to the arm's measured joints, their pose and
+      zero; the gripper servo keeps no state between calls. The teacher's own state is of three kinds:
+      caches of model constants (geom boxes, the gripper scan), which no reset changes; per-episode
+      decisions, cleared whenever the environment's episode counter changes, which it does at every
+      reset before the teacher first acts; and its current step and phase, recomputed from the state at
+      every control step. In TaskEnv, episode e's init index is the e-th draw of a generator seeded by
+      the seed alone (every episode draws exactly one, and a process that skips an episode draws its
+      index and discards it), and the random start's draws come from a generator seeded by (seed,
+      episode index, attempt). An episode's trajectory under a teacher in TaskEnv is then a function of
+      (seed, episode index, init state), the same whichever episodes ran before it in the process. In
+      PrivilegedEnv, whose init-index draws, layout redraws and displacements come from the process's
+      one generator seeded by the seed, a variable number per episode, it is a function of the seed and
+      the draws of the episodes run before it, and no execution state reaches it from them. In both, a
+      hold after a placement starts from the placed state. Outside the claim: GripperScan, measured once
+      per process (differences <= 1e-15 m); EGL rendering, which can differ by one intensity level
+      between renders of one state; distill's student-driven, mixed and DART episodes, whose features
+      depend on which workers share a GPU batch. What a trial records, so that it can be reproduced and
+      never pooled across executions, is BRN-trial-provenance.
+    premises: [AXM-reproducible-measurement, AXM-one-execution-path, AXM-robosuite-controller-cache,
+               AXM-robosuite-gripper-target-persists, AXM-libero-resamples-fixtures,
+               LMA-seed-fixtures-per-init-state, AXM-libero-soft-reset-state]
     derivation_rule: >-
-      Reduced to the mechanism that held in every one of six reviews: bit-identical teacher episodes
-      across up to 10 process histories in TaskEnv and across histories in PrivilegedEnv layout mode (a
-      redraw and 20-21 rejections included); split, non-split, teacher_motion and distill trials
-      reproduced bit-for-bit in fresh processes; every hold site starting from the placed state (drift
-      <= 6.1e-9 rad with the anchor vs up to 2.2e-1 without). Every refutation from round 3 on was in
-      the record-keeping clauses added to this branch -- the record_rollout replay, the execution hash
-      missing the arm model read from another project's venv, numpy's version -- so those move to their
-      own branch, BRN-trial-provenance, which this one no longer claims. evidence:
-      CTR-execution-reproducible.
+      AXM-libero-soft-reset-state names the three channels a reset leaves: the anchor closes the finger
+      target and the controller cache at every placement, and LMA-seed-fixtures-per-init-state makes the
+      fixture poses a function of (seed, init index). What remains is this project's state, stated in
+      the claim: the servos' (reset with the episode, or none), the teacher's (model constants,
+      per-episode decisions cleared at the reset, a step recomputed from the state) and the generators'.
+      Measured, the mechanism that held in every one of six earlier reviews: bit-identical teacher
+      episodes across up to 10 process histories in TaskEnv and across histories in PrivilegedEnv
+      layout mode (a redraw and 20-21 rejections included); split, non-split, teacher_motion and distill
+      trials reproduced bit-for-bit in fresh processes; every hold site starting from the placed state
+      (drift <= 6.1e-9 rad with the anchor vs up to 2.2e-1 without). Withdrawn from the earlier
+      statement: that a redrawn init state is settled in place rather than by recursing into reset (in
+      PrivilegedEnv a redraw that lands on an init state not yet settled starts the reset over), and
+      that every episode's draws come from a generator seeded by its index (PrivilegedEnv's come from
+      the process's one generator). evidence: CTR-execution-reproducible.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-policies-read-one-forwarded-state
@@ -1269,12 +1305,29 @@ branches:
   - id: BRN-servo-lead-scaled-uniformly
     subject: CMP-twist-servo
     claim_type: contract
-    statement: When the IK step would make TwistServo's joint reference lead the measured joints by more than its lead limit max_lag (0.1 rad as SimArm sets it) on some joint, the reference is set to meas + s (theta - meas) with s = max_lag / max|theta - meas| and the pose reference to FK of that reference; such a step is counted as a scale event, and also as a re-anchor when its IK residual exceeds max_pose_err (servo.py:116's re-anchor condition); otherwise the servo computes exactly as servo.py does now (servo.py:122 kept as written). Then, at command time, the joint reference leads the measured joints by at most max_lag per joint, and on a scaled step that lead keeps the direction of theta - meas and the pose reference is exactly FK of the joint reference. On the skill teacher -- libero_spatial 0 and 6 (init 48 included) and libero_goal 0, 7 and 8, two episodes each -- success is no lower than with per-joint clipping.
+    statement: >-
+      TwistServo's step solves for the IK result theta by damped iterations, at least one, each of which
+      clamps the configuration to the chain's joint limits, so theta lies within those limits. When theta
+      would lead the measured joints meas by more than the lead limit max_lag (0.1 rad as SimArm sets
+      it) on some joint, the joint reference is set to meas + s (theta - meas) with s = max_lag /
+      max|theta - meas|, and the pose reference to FK of that reference; such a step is counted as a
+      scale event, and also as a re-anchor when the IK residual (the pose error of theta against the
+      pose reference) exceeds max_pose_err. Otherwise, theta being within max_lag of meas on every
+      joint, the joint reference is theta, and when the IK residual exceeds max_pose_err the pose
+      reference is re-anchored to FK of theta, which leaves the joint reference unchanged. Then, at
+      command time, the joint reference leads the measured joints by at most max_lag per joint; on a
+      scaled step that lead keeps the direction of theta - meas, the pose reference is exactly FK of the
+      joint reference, and the joint reference lies within the joint limits on every joint where meas
+      does. On the skill teacher -- libero_spatial 0 and 6 (init 48 included) and libero_goal 0, 7 and
+      8, two episodes each -- success is no lower than with per-joint clipping.
     premises:
     - AXM-servo-tracks-reachable-poses
     - AXM-one-execution-path
     derivation_rule: >-
-      Reduced to the clauses measured sound in all three reviews of this branch: lead at command time <=
+      Both branches of the step are in the claim, so the lead bound is algebra: unscaled, max|theta -
+      meas| <= max_lag is the branch's condition; scaled, s max|theta - meas| = max_lag. Per joint the
+      scaled reference lies between meas and theta, so within any joint interval holding both. Reduced
+      to the clauses measured sound in all three reviews of this branch: lead at command time <=
       max_lag (up to float rounding); direction of theta - meas kept (cos >= 0.9999999999999997 on 1486
       scaled steps); pose reference = FK(ref) to 0.0 mm; non-binding branch bit-identical to the current
       servo (0 mismatches over 9599 steps); re-anchors counted exactly on the 10 scaled steps with
@@ -1466,18 +1519,33 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      Skills.articulate derives the handle grasp frame and the drive target from the joint's
-      current position: the frame chosen once per episode is carried by the joint's motion
-      since it was chosen (a rotation for a hinge, nothing for a slide), and the drive
-      target leads the handle's current grasp pose by at most 0.06 rad (hinge) or 3 cm
-      (slide), less than the squeeze alignment tolerance of 0.10 rad.
-    premises: [AXM-dagger-needs-markov-labels, AXM-panda-gripper-geometry, LMA-holding-is-geometric]
+      The first control step in an episode at which the skill drives a joint by its handle, it chooses
+      one handle grasp -- an orientation, a jaw width and an approach direction, screened for reach
+      along the joint's motion from the state at that step -- and records it with the joint's position
+      q0 at that step; the choice is kept for the rest of the episode, and re-running the screen from a
+      later state may choose differently. At every step the grasp orientation R_h and the approach are
+      the recorded ones carried by the joint's motion from q0 to its current position q (turned by
+      q - q0 about the hinge axis for a hinge, unchanged for a slide), and the grasp position p_h is the
+      handle geom's current centre. While the handle is held, the drive target is the pose (R_h, p_h)
+      carried by the joint's motion through dq, the joint's remaining travel to just past its goal
+      threshold, clipped to 0.06 rad (hinge) or 0.03 m (slide). Claimed: given the recorded choice, the
+      skill's command at every step of the drive is a function of the current state; and the drive
+      target leads the handle's current grasp pose by at most 0.06 rad (hinge) or 0.03 m (slide), the
+      rotation less than the squeeze alignment tolerance of 0.10 rad. Not claimed: that the recorded
+      choice is re-derivable from a later state.
+    premises: [AXM-dagger-needs-markov-labels, AXM-handle-shares-body, AXM-object-geometry-known,
+               AXM-panda-gripper-geometry, LMA-holding-is-geometric]
     derivation_rule: >-
-      screwhead/teacher/skills.py _handle_frame (frame via _joint_motion(qpos - q0)) and _drive
-      (dq clipped to the lead, from R_h and p_h). A frame fixed in the world makes the label
-      depend on the joint angle at selection; a target led from the tool's own pose lets the
-      tool outrun a damped knob and pry the jaws open.
-      evidence: CTR-teacher-reliable (goal 7, 12 -> 20/20 paired; goal 0 20 -> 20).
+      AXM-handle-shares-body makes the handle move with the joint, so the recorded orientation carried
+      by the joint's motion since q0 is the recorded grasp held fixed in the handle's frame;
+      AXM-object-geometry-known supplies q, the joint's axis and the handle geom's centre at every step,
+      and dq is read from q and LIBERO's threshold, so the target is a function of the current state and
+      the recorded choice, and the clip bounds its lead. Whether the recorded choice meets
+      AXM-dagger-needs-markov-labels is the open question: it is made once because re-solving it every
+      step flipped the winner between candidates and the jaws cycled 15-35 mm without closing. A frame
+      fixed in the world instead made the label depend on the joint angle at selection (0.15 rad of
+      misalignment read at a knob angle of 0.02). evidence: CTR-teacher-reliable (goal 7, 12 -> 20/20
+      paired; goal 0 20 -> 20).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-leave-handle-along-approach
@@ -1812,7 +1880,8 @@ branches:
       its threshold, that the approach is free of contact, or that the hand is clear of the drawer when
       the rule ends (a drive that grasped nothing has no retreat here; DEF-skill-contract's release
       postcondition is not met by this rule).
-    premises: [AXM-handle-shares-body, AXM-libero-joint-bands, AXM-object-geometry-known, DEF-skill-contract]
+    premises: [AXM-handle-shares-body, AXM-libero-joint-bands, AXM-object-geometry-known, DEF-skill-contract,
+               AXM-dagger-needs-markov-labels, AXM-parameters-derived]
     derivation_rule: >-
       AXM-object-geometry-known supplies the bar's pose and the joint's axis at every step;
       AXM-handle-shares-body makes pulling the bar pull the drawer; AXM-libero-joint-bands gives the
@@ -1823,8 +1892,12 @@ branches:
       pinch was reachable (0 of 20). LIBERO's humans open it with no grasp in 50 of 50 demos; over 20,
       at the start of the pull the tool is at the bar along u (-3 mm), 26 mm above its centre, pitched 31
       deg below level into the cabinet, jaws 80 mm open along the bar. The height was chosen on 4
-      separate episodes (18 mm opened 4 of 4; 0, 6, 12 and 26 mm none); with it, 20 of 20. evidence:
-      CTR-teacher-reliable.
+      separate episodes (18 mm opened 4 of 4; 0, 6, 12 and 26 mm none); with it, 20 of 20. Under
+      AXM-parameters-derived: the pitch (31 deg) is the humans' measured one; the height (18 mm) was
+      chosen on those 4 episodes; the stage distance (0.10 m), the engagement distance (3 mm), the
+      height band (4 mm), the corridor (15 mm) and the drag's lead (50 mm) are set by hand. Under
+      AXM-dagger-needs-markov-labels: whether the drawer is hooked or grasped is decided once per
+      episode, from the state at the first opening step. evidence: CTR-teacher-reliable.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-handle-tier-for-handled-objects
@@ -1850,13 +1923,22 @@ branches:
                AXM-parameters-derived]
     derivation_rule: >-
       AXM-category-affordances-declared is where held_by comes from and why only evidence-backed values
-      gate anything; AXM-object-geometry-known supplies each geom's box and pose; the maximum opening
-      and margin are declared constants, which AXM-parameters-derived admits as a source. Measured:
-      LIBERO's humans hold the frying pan by its handle in 100% of 152 grasps (141-156 mm out, jaws 27-29
-      mm) and the moka pot by its handle (51-58 mm off its axis, jaws 22-23 mm). With the tier, libero_90
-      18, 21 and 41 (pan) 4/5/4 -> 20/20/20 of 20 and libero_10 2 (moka pot) 9 -> 15 of 20. Choosing the
-      thinnest axis instead sent the moka pot's jaw line through its body (105 mm; task 2 0 of 20).
-      evidence: CTR-teacher-reliable.
+      gate anything; AXM-object-geometry-known supplies each geom's box and pose. The two claimed clauses
+      read none of the tier's numbers: the gate reads only the table, the perpendicular rule only the
+      considered axes and the radial direction. Which candidates the tier offers does depend on them,
+      and under AXM-parameters-derived their provenance is: the maximum jaw opening (75 mm) and the grip
+      margin (12 mm) were set by hand with the first skill teacher, below the Panda's 80 mm stroke and
+      not traced to the model; the handle fraction (0.6), the spread factor (3) and the points along a
+      spread axis (1/4, 1/2 and 3/4 of it) were set by hand for this tier. Measured against the fraction
+      (geom centres from the object's origin in plan, libero_90 18 and libero_10 2): the frying pan's
+      handle geoms lie at 112.7-192.6 mm of 192.6 (0.59-1.00), its dish's at most 97.1 (0.50); the moka
+      pot's handle geoms at 41.6-75.5 mm of 75.5 (0.55-1.00), its body's at most 35.9 (0.48). 0.6 lies
+      outside (0.50, 0.55], the interval that separates both, and leaves out the nearest handle geom of
+      each. Measured with the tier: LIBERO's humans hold the frying pan by its handle in 100% of 152
+      grasps (141-156 mm out, jaws 27-29 mm) and the moka pot by its handle (51-58 mm off its axis, jaws
+      22-23 mm); libero_90 18, 21 and 41 (pan) 4/5/4 -> 20/20/20 of 20 and libero_10 2 (moka pot) 9 ->
+      15 of 20. Choosing the thinnest axis instead sent the moka pot's jaw line through its body (105
+      mm; task 2 0 of 20). evidence: CTR-teacher-reliable.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-carry-turns-object-to-fit
