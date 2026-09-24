@@ -32,6 +32,7 @@ from ..geometry.frames import Z, axis_rot, pose, rot_angle, rotvec, top_down
 from .grasp_planner import GraspPlanner
 from ..sim.gripper_servo import A_OPEN, target_to_channel
 from ..sim.scene import VERTICAL_COS, geom_world_box
+from ..sim.sim_arm import REST_SPEED
 from .reach import Reach
 from .refusal import Refusal
 
@@ -114,6 +115,8 @@ class SkillConfig:
     drop_ray_height: float = 0.30  # rays cast down from this far above the region top
     drop_clear: float = 0.01       # a hit above the region top by more than this blocks the spot
     fit_tol: float = 0.005         # m an object's footprint may exceed a region's and still fit it
+    drop_sample: float = 0.01      # m apart, at most, the points a carried footprint is tested at
+    share_gap: float = 0.01        # m between objects the plan places side by side in one region
     drop_margin: float = 0.02      # m around the object's footprint that must be open from above too: at
     #                                0.01 a bowl carried 10 deg tilted and drifting 5-11 mm reached the face
     #                                of the drawer above libero_10 3's
@@ -135,7 +138,9 @@ class SkillConfig:
     retreat_speed: float = 0.15
     # articulation
     drive_past_open: float = 0.03  # drive a joint this far past its "open"/"on" threshold
+    clear_margin: float = 0.02     # m the tool point stays outside a let-go object's box before the next skill
     open_margin: float = 0.012     # a container counts as open for filling this far past LIBERO's threshold
+    open_slack: float = 0.02       # m short of LIBERO's threshold a container still counts as open, away from its handle
     drive_past_close: float = 0.01 # and this far past "close"/"off"
     drive_speed: float = 0.12
     # hook (a sliding drawer opened with open jaws from above), measured on LIBERO's 50 human demos
@@ -177,6 +182,7 @@ class SkillConfig:
     exit_step: float = 0.02         # m between the distances an exit is looked for at
     exit_max: float = 0.14          # m: the farthest exit examined
     exit_directions: int = 16
+    side_step: float = 0.03         # m between the heights a pick's column is checked at
 
 
 class Skills:
@@ -345,6 +351,26 @@ class Skills:
         return (abs(self.env.snapshot()["aperture_rate"]) < self.k.squeeze_rate
                 or contacts.only_gripper(m, d, bid))
 
+    def let_go(self, obj: str) -> bool:
+        """Out of the hand as DEF-skill-contract's release postcondition has it: not held, and no robot
+        geometry touches it. Held flickers false while an object pressed on to a support nudges the jaws,
+        and the jaws just opened are still round it: taken as done at either, libero_10 2's plan went on to
+        the stove's knob and the hand dragged the moka pot off the burner."""
+        if self.held(obj):
+            return False
+        m, d = self.scene.m, self.scene.d
+        try:
+            bid = self.scene.body_id(obj)
+        except ValueError:
+            return True
+        if any(contacts.is_robot(contacts.body_name(m, b)) for b in contacts.touching(m, d, bid)):
+            return False
+        # and none of it between the fingers: the tool point clear_margin outside its box (contact alone
+        # flickered as the jaws opened round the pot, and the knob's reach dragged it back into them)
+        box = self.scene.object_box(obj)
+        rel = box.R.T @ (np.asarray(self.env.snapshot()["p_tool"], float) - box.world_centre)
+        return float(np.linalg.norm(np.maximum(np.abs(rel) - box.half, 0.0))) > self.k.clear_margin
+
     def holding(self, geom: int, width: float) -> bool:
         """Both finger groups touch the handle geom and the jaws have closed down to its width.
 
@@ -465,12 +491,67 @@ class Skills:
             self.phase = "descend"                     # on the approach axis: advance
             target = p_g - app * (k.approach * float(np.clip(misalign, 0.0, 1.0)))
             return self.action(self.twist_to(R, p, R_g, target), open_to)
-        leg = self.path_to(R, p, R_g, pre, max(self.transit_for(obj), pre[2]))
+        safe = max(self.transit_for(obj), pre[2])
+        side = self._side_column(obj, R_g, pre, safe, open_to)
+        if side is not None:
+            # the column over the pre-grasp is blocked and this one beside it is not: down it, then level
+            # to the pre-grasp at its height
+            seg = side[:2] - pre[:2]
+            t = float(np.clip((p[:2] - pre[:2]) @ seg / max(float(seg @ seg), 1e-12), 0.0, 1.0))
+            if (float(np.linalg.norm(p[:2] - (pre[:2] + t * seg))) <= k.funnel_xy
+                    and abs(float(p[2] - pre[2])) <= k.plane_band):
+                self.phase = "slide"
+                return self.action(self.twist_to(R, p, R_g, pre), open_to)
+            leg = self.path_to(R, p, R_g, side, safe)
+            if leg is not None:
+                self.phase, R_t, target = leg
+                return self.action(self.twist_to(R, p, R_t, target), open_to)
+            self.phase = "down"
+            return self.action(self.twist_to(R, p, R_g, side), open_to)
+        leg = self.path_to(R, p, R_g, pre, safe)
         if leg is not None:
             self.phase, R_t, target = leg
             return self.action(self.twist_to(R, p, R_t, target), open_to)
         self.phase = "down"                            # above the start: straight down to it
         return self.action(self.twist_to(R, p, R_g, pre), open_to)
+
+    def _side_column(self, obj: str, R_g: np.ndarray, pre: np.ndarray, safe: float,
+                     open_to: float) -> np.ndarray | None:
+        """Where the pick comes down when the hand cannot come straight down on to its pre-grasp: None
+        when the tool poses at the grasp's frame over the pre-grasp, from its height to the crossing
+        plane, each put in the simulator by inverse kinematics, touch nothing but the object; else the
+        first point at the pre-grasp's height, nearest first (exit_step apart out to exit_max, in
+        exit_directions), whose column up to the plane and whose level slide back to the pre-grasp are
+        clear so; else None. Once per grasp and episode. Straight down, the hand came down on to the
+        open top drawer's handle over libero_90 5's pudding and stalled there (24 of 39 failures)."""
+        k = self.k
+        key = (("side", obj) + tuple(np.round(pre, 4)) + tuple(np.round(R_g, 3).ravel())
+               + (round(float(safe), 4), round(float(open_to), 4)))
+        if key in self._carry_cache:
+            return self._carry_cache[key]
+        body = self.scene.body_id(obj)
+        heights = np.arange(0.0, max(safe - float(pre[2]), 0.0) + 1e-9, k.side_step)
+
+        def clear(points):
+            Ts = [pose(R_g, x) for x in points]
+            th, conv, _sig, _margin = self.reach.solve(Ts)
+            return all(conv[i] and self.reach.collides(th[i], allow=body, aperture=open_to) == 0
+                       for i in range(len(Ts)))
+
+        found = None
+        if not clear([pre + Z * h for h in heights]):
+            angles = np.linspace(0.0, 2 * np.pi, k.exit_directions, endpoint=False)
+            for dist in np.arange(k.exit_step, k.exit_max + 1e-9, k.exit_step):
+                for th in angles:
+                    side = pre + dist * np.array([np.cos(th), np.sin(th), 0.0])
+                    slide = [pre + f * (side - pre) for f in (0.25, 0.5, 0.75)]
+                    if clear([side + Z * h for h in heights] + slide):
+                        found = side
+                        break
+                if found is not None:
+                    break
+        self._carry_cache[key] = found
+        return found
 
     def _falling(self, obj: str) -> bool:
         """Moving faster than FALLING: let go and not yet landed."""
@@ -479,6 +560,17 @@ class Skills:
         except ValueError:
             return False
         return float(np.linalg.norm(self.scene.d.cvel[b][3:])) > FALLING
+
+    def _still(self, obj: str) -> bool:
+        """At rest by sim_arm's test for a settled scene: |v| + |w| r below REST_SPEED, r the object's
+        bounding radius."""
+        try:
+            b = self.scene._root_id(obj)
+        except ValueError:
+            return False
+        v = self.scene.d.cvel[b]
+        r = float(np.linalg.norm(self.scene.object_box(obj).half))
+        return float(np.linalg.norm(v[3:])) + float(np.linalg.norm(v[:3])) * r < REST_SPEED
 
     def _risen(self, obj: str) -> float:
         """How far the object has risen since its grasp was chosen."""
@@ -649,9 +741,14 @@ class Skills:
                                   float(target_q[2]))
         # an object held by its handle hangs tilted and is seated by being pressed on to its support, as
         # before: stopped at the support, the moka pot went 14 -> 8 of 20 (libero_10 2)
-        resting = (self._held_by(obj) != "handle"
-                   and not contacts.only_gripper(self.scene.m, self.scene.d, self.scene.body_id(obj)))
-        if delta[2] < -k.lower_done and not (resting and q[2] - stop_z <= k.lower_done):
+        by_handle = self._held_by(obj) == "handle"
+        touching = not contacts.only_gripper(self.scene.m, self.scene.d, self.scene.body_id(obj))
+        resting = not by_handle and touching
+        # held by its handle and pressed on to its support until it stops: at rest (sim_arm's own test for a
+        # settled object) and touching something besides the fingers. Pressed to the region-derived height
+        # instead, libero_10 8's moka pot sat seated on the burner 7 mm above it for 600 steps, never let go
+        seated = by_handle and touching and self._still(obj)
+        if delta[2] < -k.lower_done and not (resting and q[2] - stop_z <= k.lower_done) and not seated:
             self.phase = "lower"
             # on to the drop point, not only down: lowered straight, the bowl drifted 13 mm toward
             # the cabinet on its way into libero_10 3's drawer
@@ -661,8 +758,11 @@ class Skills:
         self._let_go[obj] = True
         if R_entry is not None:
             self._released_at[(obj, region)] = np.asarray(target_q, float).copy()
-            # the hand leaves as it came: level, out along the entry, as far as the object came in
-            self._withdraw = (np.asarray(u, float), p + u * float((E - target_q)[:2] @ u[:2]))
+            # the hand leaves level, as far as the object came in: out along the entry; a laid object's lower
+            # finger is under it, and drawn out it dragged libero_90 88's book to the shelf's edge (settled 1 of
+            # 10), pushed in along the entry it seated it (8 of 10) -- laid, its approach within 45 deg of level
+            w = -u if float(R_entry[2, 2]) > -np.cos(np.pi / 4) else u
+            self._withdraw = (np.asarray(w, float), p + w * float((E - target_q)[:2] @ u[:2]))
         return self.action(np.zeros(6), A_OPEN)
 
     def _own_bodies(self, obj: str) -> set[int]:
@@ -854,7 +954,13 @@ class Skills:
                     # its handle flickered in and out of the band and was lifted back out of the shelf
                     rel = q - np.r_[xy, rest_e]
                     t = float(rel[:2] @ u[:2])
-                    inside = (float(np.linalg.norm(rel[:2] - u[:2] * t)) <= k.entry_line
+                    # and the tool behind it along u, within 45 deg of u from the drop point: near the drop point
+                    # the object lies in every direction's corridor, and libero_90 88's book, entered along -y, was
+                    # taken as entering along +y and the hand withdrew into the shelf
+                    tr = np.asarray(p[:2], float) - np.asarray(xy, float)
+                    t_tool = float(tr @ u[:2])
+                    behind = t_tool >= float(np.linalg.norm(tr - u[:2] * t_tool))
+                    inside = (behind and float(np.linalg.norm(rel[:2] - u[:2] * t)) <= k.entry_line
                               and -k.entry_line <= t <= d_out + k.entry_line and float(q[2]) <= float(E[2]) + k.plane_band)
                     if inside:
                         return u, E, R_entry, True
@@ -1050,9 +1156,54 @@ class Skills:
         key = (obj, region)
         if key in self._drop_cache:
             return self._drop_cache[key]
-        best, _best_d = self._open_point(obj, R_reg, p_reg, half, box)
+        shared = self._shared_spot(obj, region, R_reg, p_reg, half)
+        best = shared if shared is not None else self._open_point(obj, R_reg, p_reg, half, box)[0]
         self._drop_cache[key] = best
         return best
+
+    def _shared_spot(self, obj: str, region: str, R_reg, p_reg, half) -> np.ndarray | None:
+        """Where obj goes when the plan sets more than one object on the region: side by side along
+        the region's horizontal axis their footprints (as they lie now, turned as the carry will turn
+        them) are narrowest along, a declared gap apart, the plan's first on the side farther from the
+        robot's base; None for a region only one object is placed in, or when an origin so spread would
+        leave the region. Each dropped at the centre, libero_10 8's second moka pot came down on the
+        first and knocked it off the stove (0 of 50); LIBERO's humans set them side by side, the first
+        on the far side (12 of 12 demonstrations, 9-12 cm apart)."""
+        plan = getattr(getattr(self.env, "task_spec", None), "plan", None) or []
+        objs, into = [], False
+        for st in plan:
+            if st.skill in ("place_in", "place_on") and st.region == region and st.obj not in objs:
+                objs.append(st.obj)
+                into = into or st.skill == "place_in"
+        # set on a surface only: into a container the second falls in beside the first, and spread to its far
+        # side libero_10 0's soup came down on the basket's rim (9 of 10 where dropped together had 10)
+        if into or len(objs) < 2 or obj not in objs:
+            return None
+        half = np.abs(np.asarray(half, float))
+        flat = [i for i in range(3) if abs(float(R_reg[2, i])) < VERTICAL_COS]
+        if len(flat) != 2:
+            return None
+        widths = {}
+        for o in objs:
+            b = self.scene.object_box(o)
+            B = axis_rot(Z, self._fit_turn(b, R_reg, half)) @ b.R @ np.diag(b.half)
+            widths[o] = [2.0 * float(np.abs(R_reg[:, i] @ B).sum()) for i in flat]
+        j = min((0, 1), key=lambda i: sum(widths[o][i] for o in objs))
+        a = np.asarray(R_reg[:, flat[j]], float)
+        a = np.array([a[0], a[1]]) / max(float(np.linalg.norm(a[:2])), 1e-9)
+        if float(a @ np.asarray(p_reg[:2], float)) < 0.0:
+            a = -a                                    # +a points away from the robot's base
+        total = sum(widths[o][j] for o in objs) + self.k.share_gap * (len(objs) - 1)
+        s = total / 2.0
+        for o in objs:
+            w = widths[o][j]
+            c = s - w / 2.0
+            if abs(c) > float(half[flat[j]]):
+                return None                           # an origin would leave the region
+            if o == obj:
+                return np.asarray(p_reg[:2], float) + a * c
+            s -= w + self.k.share_gap
+        return None
 
     def admits(self, obj: str, region: str) -> bool:
         """admits(C, o) (DEF-skill-contract): some point of the region, the object's footprint
@@ -1099,7 +1250,18 @@ class Skills:
         top = float(p_reg[2] + self._region_up(R_reg, half))
         exclude = self.scene.body_id(obj)
         return all(self._open_above(centre + ax[0] * fx + ax[1] * fy, top, exclude)
-                   for fx in (-ohw[0], 0.0, ohw[0]) for fy in (-ohw[1], 0.0, ohw[1]))
+                   for fx in self._span_samples(ohw[0]) for fy in self._span_samples(ohw[1]))
+
+    def _span_samples(self, h: float, margin: float = 0.0) -> list[float]:
+        """Offsets across a footprint's half-extent h: from -h to h no more than drop_sample apart, and
+        the margin-widened boundary +-(h + margin). At its centre and boundary alone, a book's footprint
+        over libero_90 80's caddy compartment had its end over the 13 mm wall with the boundary sample
+        1 mm past the wall's outer face and the centre inside: the book came down on the wall's top."""
+        n = max(3, int(np.ceil(2.0 * h / self.k.drop_sample)) + 1)
+        out = set(np.round(np.linspace(-h, h, n), 6).tolist())
+        if margin > 0.0:
+            out |= {-(h + margin), h + margin}
+        return sorted(out)
 
     def _open_point_grid(self, obj: str, R_reg, p_reg, half, box) -> tuple[np.ndarray, float]:
         """The drop-point search as it stood before BRN-drop-point-footprint-as-carried: origins about
@@ -1154,10 +1316,11 @@ class Skills:
         # origins about the region's centre first -- LIBERO scores the origin -- then origins that put
         # the footprint about the centre; with the margin, then, where no spot leaves room for it (a
         # book in a compartment 7 mm longer than itself on each side), without it
-        for margin in (k.drop_margin, 0.0):
+        # the largest margin that leaves room: from the full margin straight to none, libero_90 80's book (110 mm)
+        # in its 125 mm compartment was put with its end on the divider's edge, and 3 mm of carry landed it on top
+        for margin in (k.drop_margin, k.drop_margin / 2, k.drop_margin / 4, 0.0):
             foot = [ax[0] * fx + ax[1] * fy
-                    for fx in sorted({-(ohw[0] + margin), -ohw[0], 0.0, ohw[0], ohw[0] + margin})
-                    for fy in sorted({-(ohw[1] + margin), -ohw[1], 0.0, ohw[1], ohw[1] + margin})]
+                    for fx in self._span_samples(ohw[0], margin) for fy in self._span_samples(ohw[1], margin)]
             for shift in (np.zeros(2), -c_loc):
                 for fx in np.linspace(-1, 1, k.drop_grid):
                     for fy in np.linspace(-1, 1, k.drop_grid):

@@ -48,7 +48,7 @@ class SkillTeacher:
                 # delivered and let go: its container is no longer a precondition. Asked first, a
                 # closing drawer read as shut and the done pick had it opened again, against the
                 # close step, for 500 steps (libero_10 3)
-                if goal is not None and self.satisfied(goal) and not self.skills.held(step.obj):
+                if goal is not None and self.satisfied(goal) and self.skills.let_go(step.obj):
                     continue
                 closed = self._closed_container(nxt)
                 if closed is not None:
@@ -72,9 +72,11 @@ class SkillTeacher:
             goal = self._goal_for(step)
             # a place is done when its goal holds with the object let go: LIBERO's In held for a can
             # still in the jaws over libero_10's basket, the next pick lifted it back out, and the
-            # teacher lowered and lifted it for 700 steps (tasks 0 and 7, 0 of 100)
+            # teacher lowered and lifted it for 700 steps (tasks 0 and 7, 0 of 100). Let go, not merely
+            # unheld: pressed on to the burner, libero_10 2's moka pot read unheld for a step, the plan
+            # went on to the stove's knob with the pot still in the jaws and dragged it off
             if (goal is None or not self.satisfied(goal)
-                    or (step.skill in ("place_in", "place_on") and self.skills.held(step.obj))):
+                    or (step.skill in ("place_in", "place_on") and not self.skills.let_go(step.obj))):
                 return i, step
         return len(self.plan), None
 
@@ -108,8 +110,12 @@ class SkillTeacher:
         # for the pick's descent (2 of 50)
         past = (art["qpos"] - art["thresholds"]["open"]) * art["sign"]
         away = float(np.linalg.norm(self.env.snapshot()["p_tool"] - art["handle_world"])) > HANDLE_AWAY
+        # Away from the handle, admitting the object and within open_slack of LIBERO's threshold: held to the
+        # threshold itself, libero_90 5's hand, reaching the pudding beside the open top drawer, eased it
+        # 1.3 mm past it, and the plan turned to reopening it in the middle of every pick; with no threshold
+        # at all, a shut top drawer admitted libero_goal 3's bowl through its lid (0 of 50)
         wide = (past >= min(self.skills.k.open_margin, art["open_room"] - 1e-3)
-                or (past >= 0 and away and self.skills.admits(step.obj, step.region)))
+                or (past >= -self.skills.k.open_slack and away and self.skills.admits(step.obj, step.region)))
         return None if wide else step.region
 
     def _goal_for(self, step):
