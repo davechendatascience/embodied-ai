@@ -2148,8 +2148,8 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      The drop point of a place (the origin position it carries the object to, chosen once per episode, from
-      the object's pose at that step) is the earlier search's: candidate origins on a grid about the
+      The drop point of a place (the origin position it carries the object to, chosen once per episode,
+      from the object's pose at that step) is the earlier search's: candidate origins on a grid about the
       region's centre, nearest first, the object's footprint centred on its origin as it lies, open from
       above at its centre and at its boundary widened by a declared margin -- open meaning that no
       vertical downward ray from a declared height above the region's top meets anything (the object and
@@ -2157,38 +2157,44 @@ branches:
       these hold: the region is level (one of its box axes vertical); the carry will turn the object
       (BRN-carry-turns-object-to-fit) or its box centre lies further than the fit tolerance from its
       origin in plan; and the earlier search found no point, or the object's footprint at the earlier
-      point as it will be carried -- turned, centred on its box, sampled at its centre and its boundary
-      -- is not open from above. Then candidates are searched with that carried footprint, sampled at
-      its centre, its boundary and its margin-widened boundary: origins about the region's centre, then
-      origins that put the footprint's centre about the region's centre; with the margin, then without;
-      the nearest to the centre that passes is taken, and if none passes, the earlier search's result
-      stands. "The carry will turn the object" is the turn BRN-carry-turns-object-to-fit's rule gives for the
-      object's pose at the step the point is chosen; the carry's own turn is computed from the in-hand
-      pose and is not claimed to equal it (a grasp can pitch a book so that it fits unturned). Claimed:
-      the drop point differs from the earlier search's only under the conditions above, read when it is
-      chosen;
-      and a point the carried search returns passed its test at every sampled point of the carried
-      footprint. Not claimed: that the carry turns the object as predicted; that an obstacle between
-      sampled points is seen; that the object fits the
-      region; that the carry reaches the drop point in the turned orientation; the provenance of the
-      margin, the clearance, the fit tolerance and the grid.
-    premises: [AXM-object-geometry-known, AXM-support-scannable, AXM-libero-scores-final-state,
-               AXM-grip-fixes-object-in-hand, BRN-carry-turns-object-to-fit]
+      point as it will be carried -- turned, centred on its box, sampled along each of the region's
+      horizontal axes at offsets from minus to plus its half-extent no more than a declared step apart,
+      its centre and boundary among them -- is not open from above. Then candidates are searched with that
+      carried footprint, sampled so and at its boundary widened by the margin in use: origins about the
+      region's centre, then origins that put the footprint's centre about the region's centre; with the
+      margin, then half of it, then a quarter of it, then without; the nearest to the centre that passes
+      is taken, and if none passes, the earlier search's result stands. "The carry will turn the object"
+      is the turn BRN-carry-turns-object-to-fit's rule gives for the object's pose at the step the point
+      is chosen; the carry's own turn is computed from the in-hand pose and is not claimed to equal it (a
+      grasp can pitch a book so that it fits unturned). Claimed: the drop point differs from the earlier
+      search's only under the conditions above, read when it is chosen; and a point the carried search
+      returns passed its test at every sampled point of the carried footprint. Not claimed: that the carry
+      turns the object as predicted; that an obstacle narrower than the step between sampled points is
+      seen; that the object fits the region; that the carry reaches the drop point in the turned
+      orientation; the provenance of the margin, the clearance, the fit tolerance and the grid.
+    premises: [AXM-object-geometry-known, AXM-support-scannable, AXM-libero-scores-final-state, AXM-grip-fixes-object-in-hand, BRN-carry-turns-object-to-fit]
     derivation_rule: >-
       AXM-object-geometry-known gives the object's box and its offset from the origin; AXM-grip-fixes-
       object-in-hand makes the footprint at the drop the grasped one turned by the carry's turn;
       AXM-support-scannable makes open-from-above a ray test; LIBERO scores the origin
-      (AXM-libero-scores-final-state), hence origins about the centre first. Measured: a book's box
-      centre is 12 mm from its origin; centred on the origin in libero_90 77's compartment (124 mm, the
-      book 110), its end hung 5-7 mm over the wall, between the earlier search's centre and margin
-      samples. The carried search everywhere cost success: over libero_10 3's drawer the earlier point
-      stood 22 mm clear of the cabinet's face and the carried search's centre did not (10 -> 4 of 10),
-      and over the tilted wine rack the earlier search found nothing and used the centre, the bottle's
-      cradle, where the carried one found a spot 33 mm off it (libero_goal 9 and libero_90 27, 50 -> 0
-      and 20 -> 0); hence the conditions. With them (runs/skill_v24, runs/skill_l10_v10,
-      runs/skill_l90_v6 against v22, l10_v8, l90_v4): the 30 benchmark tasks and libero_10's drawer
-      unchanged in success, libero_90 1505 -> 1537 of 1800 (books 73 +11, 78 +16, 80 +4, 75 +2; 81
-      and 83 +8 -9). evidence: CTR-teacher-reliable, CTR-teacher-settled.
+      (AXM-libero-scores-final-state), hence origins about the centre first. Measured: a book's box centre
+      is 12 mm from its origin; centred on the origin in libero_90 77's compartment (124 mm, the book
+      110), its end hung 5-7 mm over the wall, between the earlier search's centre and margin samples. The
+      carried search everywhere cost success: over libero_10 3's drawer the earlier point stood 22 mm
+      clear of the cabinet's face and the carried search's centre did not (10 -> 4 of 10), and over the
+      tilted wine rack the earlier search found nothing and used the centre, the bottle's cradle, where
+      the carried one found a spot 33 mm off it (libero_goal 9 and libero_90 27, 50 -> 0 and 20 -> 0);
+      hence the conditions. With them (runs/skill_v24, runs/skill_l10_v10, runs/skill_l90_v6 against v22,
+      l10_v8, l90_v4): the 30 benchmark tasks and libero_10's drawer unchanged in success, libero_90 1505
+      -> 1537 of 1800 (books 73 +11, 78 +16, 80 +4, 75 +2; 81 and 83 +8 -9). evidence:
+      CTR-teacher-reliable, CTR-teacher-settled. Restated 2026-09-25: sampled at centre and boundary only,
+      a book's footprint over libero_90 80's caddy compartment had its end over the 13 mm wall with the
+      boundary sample 1 mm past the wall's outer face and the centre inside, and the book came down on the
+      wall's top -- hence samples no more than a step (10 mm) apart; the 125 mm compartment left no room
+      for the 20 mm margin and the margin-free point put the 113 mm book's end on the divider's edge,
+      where 3 mm of carry landed it -- hence the stepped margin. Measured with both (and without the hold
+      latch tried beside them, which alone took libero_90 75 to 0 of 10), inits 0-9: libero_90 75 10, 80
+      7, 81 10, 83 8 of 10 (v26: 3, 5, 2, 3).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-place-onto-physical-support
