@@ -208,6 +208,17 @@ axioms:
       Read from each task's compiled model on 2026-09-24 (12,239 non-robot collision geoms;
       MjModel.geom_friction, geom_margin, geom_gap, geom_condim, geom_solref, npair).
 
+  - id: AXM-libero-objects-are-boxes
+    domain: environment
+    statement: >-
+      In all 130 LIBERO tasks this project runs, every collision geom of every object an On or In goal
+      places is a box primitive: bowls, mugs, cans, bottles, books, pans, pots and plates collide as
+      unions of boxes. Such an object touches a support along faces, edges or corners of boxes, never
+      along the smooth line of a cylinder or capsule.
+    rationale: >-
+      Read from each task's compiled model on 2026-09-24 (MjModel.geom_type of the collision geoms of
+      every placed object's root body and its children: 22 categories, all boxes).
+
   - id: AXM-servo-lead-bounds-travel
     domain: physics
     statement: >-
@@ -478,13 +489,13 @@ definitions:
     meaning: >-
       An object, held or released, rests on its intended support at a step when: every contact it has
       with a body other than the robot is with the intended support -- the body the goal region belongs
-      to, or for an On goal whose target is an object, that object -- and it has at least one; every such
-      contact's normal is within 31 deg of vertical (atan 0.6, the least contact friction here,
-      AXM-libero-contact-parameters); either those contact points' convex hull in plan has an interior
-      and the vertical through the object's centre of mass passes inside it, or they lie on one line
-      whose normals are all vertical to within 1 deg and that vertical passes within 1 mm (the contact
-      margin) of the line; and no point of it moves faster than the rest speed, 5 mm/s (|v| + |w| r, r
-      its bounding radius; sim_arm's REST_SPEED). A predicate on one step's simulator state.
+      to, or for an On goal whose target is an object, that object; every such contact's normal is
+      within 31 deg of vertical (atan 0.6, the least contact friction here,
+      AXM-libero-contact-parameters); those contact points include three not on one line, and the
+      vertical through the object's centre of mass passes strictly inside their convex hull in plan;
+      and no point of it moves faster than the rest speed, 5 mm/s (|v| + |w| r, r its bounding radius;
+      sim_arm's REST_SPEED). A predicate on one step's simulator state. An object on a single corner or
+      a single edge does not rest.
 
   - id: DEF-smooth-motion
     term: Smooth motion
@@ -726,17 +737,19 @@ lemmas:
 
   - id: LMA-clearance-bounds-motion
     statement: >-
-      Let c be the least distance mj_geomDistance reports between a rigid body's collision geoms and
-      those of the bodies of a set S, less the query's tolerance and less the two geoms' contact margins
-      (AXM-libero-contact-parameters: at most 2 mm together). If c > 0 and no body of S moves, then under
-      any motion of that body as a rigid whole in which no point of it travels as far as c, no contact
-      forms between it and a body of S. Not claimed: anything while a body of S moves.
+      Let c be the least, over pairs of a rigid body's collision geom and a collision geom of a body of
+      a set S, of the distance mj_geomDistance reports for the pair with a distmax larger than every
+      distance used -- it reports at most the true distance, the distmax itself for pairs at or beyond
+      it -- less the solver's tolerance and less that pair's two contact margins
+      (AXM-libero-contact-parameters). If c > 0 and no body of S moves, then under any motion of that body
+      as a rigid whole in which no point of it travels as far as c, no contact forms between it and a
+      body of S. Not claimed: anything while a body of S moves.
     premises: [AXM-geom-distance-exact, AXM-libero-contact-parameters, AXM-object-geometry-known]
     derivation_rule: >-
-      With S fixed, the distance from the moving body to S falls by no more than the largest
-      displacement of the body's points (the triangle inequality); a contact forms only within the
-      margins. Restated from a version that did not fix S: a stationary mug with the forearm pushing a
-      bowl of S into it.
+      With S fixed, each pair's distance falls by no more than the largest displacement of the body's
+      points (the triangle inequality), and a contact between a pair forms only within its margins.
+      Restated from a version that did not fix S (a stationary mug, the forearm pushing a bowl of S into
+      it) and one that netted a single 2 mm off every pair.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: LMA-release-when-resting-stays
@@ -748,14 +761,16 @@ lemmas:
       a later plan step moves the support (a drawer closed with the object in it) or brings another
       object or the robot into contact with it; that a goal conjunct holding at that step with the object
       at the edge of its region still holds after the residual motion; that the release was gentle.
-    premises: [AXM-static-stability, AXM-contacts-damp-residual-motion, DEF-resting]
+    premises: [AXM-static-stability, AXM-contacts-damp-residual-motion, DEF-resting, AXM-libero-objects-are-boxes]
     derivation_rule: >-
       At that step the only contacts are with the intended support, frictional enough not to slide, with
       the vertical through the centre of mass inside their hull and no point faster than the rest speed
       (DEF-resting): AXM-static-stability's condition, so nothing tips it, and AXM-contacts-damp-
       residual-motion brings it to rest inside the hull. Earlier statements were refuted: one concluded
       the goal held until the teacher finished (libero_10 closes the drawer on the bowl), one left
-      friction out of resting (a bowl on a 15 deg face with friction 0.25 slides).
+      friction out of resting (a bowl on a 15 deg face with friction 0.25 slides), one let a line of
+      contacts within 1 mm rest (a box on an edge 0.3 mm off its centre of mass tips); objects here are
+      unions of boxes (AXM-libero-objects-are-boxes), so resting now needs a hull with an interior.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: LMA-pinch-clears-the-descent
@@ -1725,7 +1740,7 @@ branches:
       than the object or at the fully open stop, else held still. (F) Otherwise, the object touches no
       body other than the robot: the jaws are commanded to hold it and the tool moves toward the drop
       point's descent, its linear speed no greater than the lower speed and no greater than
-      sqrt(2 a c_s), c_s the clearance (LMA-clearance-bounds-motion) between the object and its intended
+      sqrt(2 a max(c_s, 0)), c_s the clearance (LMA-clearance-bounds-motion) between the object and its intended
       support and a the servo's linear change bound while holding (BRN-execution-bounds-acceleration).
       (T) Otherwise: the jaws are commanded to hold it; while its tilt drop (the height its lowest box
       corner stands below its bottom face's centre) exceeds the lower phase's tolerance the tool goes
@@ -1743,7 +1758,8 @@ branches:
       is re-derivable from a later state; the provenance of the rest speed and the change bound.
     premises: [DEF-resting, LMA-contact-release-is-robust, LMA-release-when-resting-stays,
                LMA-clearance-bounds-motion, AXM-static-stability, AXM-libero-contact-parameters,
-               AXM-servo-lead-bounds-travel, BRN-execution-bounds-acceleration, BRN-carry-turns-object-to-fit]
+               AXM-servo-lead-bounds-travel, BRN-execution-bounds-acceleration, BRN-carry-turns-object-to-fit,
+               AXM-libero-objects-are-boxes]
     derivation_rule: >-
       The release logic of the three placement rules measured on 2026-09-24, restated three times
       under the verifier. The cases are tested in order, so they are exclusive, and T is the remainder,
@@ -1751,8 +1767,9 @@ branches:
       lifted. R holds on an opening aperture, on jaws wider than the object, and at the fully open stop,
       so the chatter that lifted libero_90 77's book 5 cm -- holding flickering back as the jaws opened --
       and a rim-pinched bowl wider than the open jaws both stay in R. F admits contact with the palm or
-      fingers only. DEF-resting, from AXM-static-stability and the measured friction, says when a touch
-      is a place to let go: a pot at a corner is not resting and T lowers on while it is tilted, which
+      fingers only. DEF-resting, from AXM-static-stability, the measured friction and the objects' box
+      shapes, says when a touch is a place to let go: a pot on one corner is not resting (its contacts
+      have no hull with an interior) and T lowers on while it is tilted, which
       rights it (the moka pot, 14 of 20 only when pressed on); a bottle standing on the basket's floor
       rests. LMA-release-when-resting-stays and LMA-contact-release-is-robust make a release in R, once
       nothing but the support touches it, leave it at rest and unfallen. A stopping guarantee against
