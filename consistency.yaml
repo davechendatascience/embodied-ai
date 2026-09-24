@@ -2149,29 +2149,30 @@ branches:
     claim_type: contract
     statement: >-
       The drop point of a place (the origin position it carries the object to, chosen once per episode,
-      from the object's pose at that step) is the earlier search's: candidate origins on a grid about the
-      region's centre, nearest first, the object's footprint centred on its origin as it lies, open from
-      above at its centre and at its boundary widened by a declared margin -- open meaning that no
-      vertical downward ray from a declared height above the region's top meets anything (the object and
-      the robot aside) higher than a declared clearance above that top. It is replaced only when all of
-      these hold: the region is level (one of its box axes vertical); the carry will turn the object
-      (BRN-carry-turns-object-to-fit) or its box centre lies further than the fit tolerance from its
-      origin in plan; and the earlier search found no point, or the object's footprint at the earlier
-      point as it will be carried -- turned, centred on its box, sampled along each of the region's
-      horizontal axes at offsets from minus to plus its half-extent no more than a declared step apart,
-      its centre and boundary among them -- is not open from above. Then candidates are searched with that
-      carried footprint, sampled so and at its boundary widened by the margin in use: origins about the
-      region's centre, then origins that put the footprint's centre about the region's centre; with the
-      margin, then half of it, then a quarter of it, then without; the nearest to the centre that passes
-      is taken, and if none passes, the earlier search's result stands. "The carry will turn the object"
-      is the turn BRN-carry-turns-object-to-fit's rule gives for the object's pose at the step the point
-      is chosen; the carry's own turn is computed from the in-hand pose and is not claimed to equal it (a
-      grasp can pitch a book so that it fits unturned). Claimed: the drop point differs from the earlier
-      search's only under the conditions above, read when it is chosen; and a point the carried search
-      returns passed its test at every sampled point of the carried footprint. Not claimed: that the carry
-      turns the object as predicted; that an obstacle narrower than the step between sampled points is
-      seen; that the object fits the region; that the carry reaches the drop point in the turned
-      orientation; the provenance of the margin, the clearance, the fit tolerance and the grid.
+      from the object's pose at that step), except where BRN-share-a-surface-side-by-side gives it, is the
+      earlier search's: candidate origins on a grid about the region's centre, nearest first, the object's
+      footprint centred on its origin as it lies, open from above at its centre and at its boundary
+      widened by a declared margin -- open meaning that no vertical downward ray from a declared height
+      above the region's top meets anything (the object and the robot aside) higher than a declared
+      clearance above that top. It is replaced only when all of these hold: the region is level (one of
+      its box axes vertical); the carry will turn the object (BRN-carry-turns-object-to-fit) or its box
+      centre lies further than the fit tolerance from its origin in plan; and the earlier search found no
+      point, or the object's footprint at the earlier point as it will be carried -- turned, centred on
+      its box, sampled along each of the region's horizontal axes at offsets from minus to plus its
+      half-extent no more than a declared step apart, its centre and boundary among them -- is not open
+      from above. Then candidates are searched with that carried footprint, sampled so and at its boundary
+      widened by the margin in use: origins about the region's centre, then origins that put the
+      footprint's centre about the region's centre; with the margin, then half of it, then a quarter of
+      it, then without; the nearest to the centre that passes is taken, and if none passes, the earlier
+      search's result stands. "The carry will turn the object" is the turn BRN-carry-turns-object-to-fit's
+      rule gives for the object's pose at the step the point is chosen; the carry's own turn is computed
+      from the in-hand pose and is not claimed to equal it (a grasp can pitch a book so that it fits
+      unturned). Claimed: the drop point differs from the earlier search's only under the conditions
+      above, read when it is chosen; and a point the carried search returns passed its test at every
+      sampled point of the carried footprint. Not claimed: that the carry turns the object as predicted;
+      that an obstacle narrower than the step between sampled points is seen; that the object fits the
+      region; that the carry reaches the drop point in the turned orientation; the provenance of the
+      margin, the clearance, the fit tolerance and the grid.
     premises: [AXM-object-geometry-known, AXM-support-scannable, AXM-libero-scores-final-state, AXM-grip-fixes-object-in-hand, BRN-carry-turns-object-to-fit]
     derivation_rule: >-
       AXM-object-geometry-known gives the object's box and its offset from the origin; AXM-grip-fixes-
@@ -2194,7 +2195,8 @@ branches:
       for the 20 mm margin and the margin-free point put the 113 mm book's end on the divider's edge,
       where 3 mm of carry landed it -- hence the stepped margin. Measured with both (and without the hold
       latch tried beside them, which alone took libero_90 75 to 0 of 10), inits 0-9: libero_90 75 10, 80
-      7, 81 10, 83 8 of 10 (v26: 3, 5, 2, 3).
+      7, 81 10, 83 8 of 10 (v26: 3, 5, 2, 3). Restated: the drop points BRN-share-a-surface-side-by-side
+      gives are excepted.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-place-onto-physical-support
