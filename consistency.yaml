@@ -461,10 +461,10 @@ axioms:
   - id: AXM-panda-serial-revolute
     domain: environment
     statement: >-
-      The Panda arm in the LIBERO model is a serial chain of seven hinge joints from its base to its hand,
-      each link between consecutive joints rigid, so the distance between the anchors of consecutive
-      joints never changes; the hand, its two fingers (each sliding at most 40 mm along it) and anything
-      they hold move with the last link.
+      The Panda arm in the LIBERO model is a serial chain of seven hinge joints from its base, fixed in
+      the world, to its hand, each link between consecutive joints rigid, so the distance between the
+      anchors of consecutive joints never changes; the hand, its two fingers (each sliding at most 40 mm
+      along it) and anything they hold move with the last link.
     rationale: >-
       robosuite 1.4.0's Panda model: robot0_joint1 to robot0_joint7 are hinge joints, each on the body
       that is the next one's parent, and the gripper's bodies hang from the last (MjModel.jnt_type,
@@ -850,12 +850,14 @@ lemmas:
 
   - id: LMA-joint-interpolation-bounds-travel
     statement: >-
-      Let the arm move from joints q to q' by linear interpolation in joint space. For each joint k let
-      R_k be the most, over the links m from joint k's to the last, of the sum of the distances between
-      consecutive joint anchors from k to m plus the farthest distance from joint m's anchor of any point
-      link m carries (for the last link: the hand, the fingers at any opening, a held object). Then every
-      point the arm carries traces a path no longer than the sum over k of |q'_k - q_k| R_k, and over any
-      fraction of the motion no longer than that fraction of it.
+      Let the arm move from joints q to q' by linear interpolation in joint space, its fingers' opening
+      held fixed. For each joint k let R_k be the most, over the links m from joint k's to the last, of
+      the sum of the distances between consecutive joint anchors from k to m plus the farthest distance
+      from joint m's anchor of any point link m carries (for the last link: the hand, the fingers at any
+      opening, a held object). Then every point the arm carries traces a path no longer than the sum over
+      k of |q'_k - q_k| R_k, and over any fraction of the motion no longer than that fraction of it. A
+      change of the fingers' opening is a move of its own, the arm still: a point of a finger then traces
+      at most that finger's change of slide, and nothing else moves.
     premises: [AXM-panda-serial-revolute]
     derivation_rule: >-
       A point P carried by link m moves with velocity sum over k <= m of qdot_k e_k x (P - a_k), a_k
@@ -863,7 +865,9 @@ lemmas:
       inequality through the anchors between k and m bounds by R_k, consecutive anchors lying on one
       rigid link at a fixed distance. Under linear interpolation qdot is constant, so the path's length,
       the integral of the speed, is at most sum |q'_k - q_k| R_k over the whole motion and that fraction
-      of it over any fraction.
+      of it over any fraction. With the opening fixed, the fingers are fixed to the last link. Restated:
+      an earlier statement let the fingers slide during the move, and a pad point sliding 40 mm while
+      the wrist turned a little traced more than the bound.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: LMA-sampled-penetration-detected
@@ -871,7 +875,8 @@ lemmas:
       Let the moving bodies of the kinematic world move between two consecutive samples so that every
       point of them traces at most s over the interval and at most that fraction of s over any fraction
       of it, while the other bodies stay still, every collision shape being convex. If at some
-      configuration between the two samples a moving shape penetrates a still one by more than s/2 --
+      configuration between the two samples a moving shape penetrates a still one, of a pair MuJoCo's
+      collision filters admit, by more than s/2 --
       the shortest translation separating them is longer than s/2 -- then at one of the two samples
       mj_collision reports a contact between them with negative distance. A shallower penetration
       between samples can go unreported.
@@ -1910,60 +1915,53 @@ branches:
       CTR-teacher-settled, CTR-teacher-gentle (release_gap_mm <= 5).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
-  - id: BRN-plan-through-box-world
+  - id: BRN-follow-box-world-routes
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      At the start of each episode, before its first action, the teacher simulates its whole plan in the
-      kinematic world (DEF-kinematic-world) from the current state, each step from where the one before
-      left the arm and the objects: a pick's path up, over and down to its pre-grasp and in to the
-      grasp, the fingers open to its width; a place's lift, rise to its carry height, carry turning to
-      fit, lower to the release height, then the object at rest and the open hand's retreat; a container
-      a pick waits for, and each drive, swept by its joint to the teacher's drive target with what rests
-      on a sliding part. The arm is solved every 5 cm of tool travel and joint-interpolated between, no
-      point of the arm, hand, fingers or held object tracing more than s = 2 cm between collision
-      samples (LMA-joint-interpolation-bounds-travel). Allowed contacts, each only where stated: the
-      robot with the object picked, from the pre-grasp to the grasp; the held object with what it stood
-      on, over the first 1 cm of the lift and in a slide from under an overhang; the held object with
-      the region's support at the last sample of the lower; the open hand with the object it released;
-      a driven part with its own fixture and the robot; contacts present when planning starts. A plan
-      passes when no other contact is reported at any sample and LIBERO's goal holds on the simulated end
-      state, read by writing the simulated poses into the simulator; the whole simulator state is copied
-      back after. Each step order -- the goals' pick-and-place pairs permuted when no goal's region is
-      an object another pair moves -- is tried with the teacher's own decisions first; while none
-      passes, each order is searched depth first, a later step's alternatives before an earlier one's:
-      grasps in the teacher's screen order, the other points of the region's drop grid farthest first
-      from the contact that failed, higher carries only after a contact in the carry; after a later
-      step failed, an alternative leaving the same state behind is skipped. The search stops after 60
-      simulated steps. The decisions of the first plan that passes -- else of the teacher's own plan as
-      far as its simulation went -- are pinned into the teacher's per-episode caches, which it executes
-      instead of deciding again. Claimed: (1) a plan recorded as passing had no reported contact at any
-      sample outside the allowed ones, hence no penetration deeper than s/2 = 1 cm anywhere along its
-      paths (LMA-sampled-penetration-detected), and met LIBERO's goal on its end state; (2) the plan
-      chosen is a function of the state it is planned from: the orders, the re-ranking and the stopping
-      count are fixed; (3) planning leaves the simulator's state as it found it, so an episode differs
-      from the teacher's without planning only through the decisions pinned; (4) each episode records
-      whether its plan passed, whether it was the teacher's own, and what the search changed. Not
-      claimed: that MuJoCo follows the kinematic world -- the servo's lead of up to 34 mm, slip,
-      tipping, bouncing -- which the census of its verdicts against executed outcomes measures; that a
-      candidate passes; a penetration of 1 cm or less between samples; the arm while it drives a handle
-      and backs out of it; the squeeze; the swing of an object held by its handle; pushes and
-      relocations, a plan with either not being searched; replanning during the episode.
+      When no route is in force -- at an episode's start, and the step after following one has failed --
+      the teacher asks the kinematic world (DEF-kinematic-world) for a route through the rest of its plan
+      from the state as it is: the teacher's own decisions first, then the other orders of its pick-place
+      pairs and, depth first, other grasps (the teacher's screen order, then its face grasps moved to where
+      LIBERO's human demonstrations held the object), drop points (where the demonstrations left the object,
+      then the region's grid, farthest first from a failed contact) and carry heights, up to a counted
+      budget, skipping any decision that already failed in execution this episode. A route is found when
+      its simulation meets LIBERO's goal on the end state with no contact deeper than a 12 mm graze at any
+      sample outside the allowed ones; a released object is set where something first holds it up from
+      below (a contact normal within 31 deg of vertical), and a lowered object rests only at or below its
+      region's top. Found, the route's decisions are pinned into the teacher's per-episode caches; the tool
+      then follows the route's free-space legs (approach, lift, rise, carry) toward a point 3 cm ahead along
+      each, and the teacher's own feedback laws execute its contact phases (descend and squeeze, lower,
+      seat and release) and its drives, with the pinned decisions. Following fails when the tool is 25 mm
+      off a followed leg, a held object is lost while carried, an object the route does not move has moved
+      10 mm, a released object rests 15 mm from where the route set it, or a leg overruns its budget; the
+      failing leg's decision is then banned and a new route planned, at most 12 per episode. Without a route
+      the teacher's own feedback laws act. Claimed: (1) every executed route's simulation met LIBERO's goal
+      with no reported contact deeper than 12 mm outside the allowed ones, so no penetration deeper than 22
+      mm along its simulated paths (LMA-sampled-penetration-detected); (2) the actions are the teacher's
+      twist and jaw commands through the one execution path, so demonstrations and evaluation execute them
+      alike (AXM-one-execution-path); (3) replanning is bounded: at most 12 routes an episode, each at most
+      the counted budget of simulated steps, a banned decision never tried again within the episode; (4)
+      an episode records every route it planned, why the one before it failed, and what the search changed.
+      Not claimed: that execution follows the kinematic world -- the servo's lead, slip, tipping,
+      insertion, a handle-held object's swing -- which the census of verdicts against executed outcomes and
+      the paired sweep measure; that a route exists; that following reaches the goal.
     premises: [DEF-kinematic-world, LMA-sampled-penetration-detected, LMA-joint-interpolation-bounds-travel,
                AXM-mujoco-forward-is-a-function-of-state, AXM-mujoco-integration-state,
-               AXM-grip-fixes-object-in-hand, AXM-libero-scores-final-state, AXM-one-gripper,
-               DEF-skill-contract, AXM-category-affordances-declared, AXM-servo-tracks-reachable-poses]
+               AXM-libero-scores-final-state, AXM-servo-lead-bounds-travel, AXM-grip-fixes-object-in-hand,
+               AXM-one-execution-path, AXM-one-gripper, DEF-skill-contract, AXM-libero-contact-parameters]
     derivation_rule: >-
-      The user's direction (2026-09-24): plan the scenario first in a fast world with perfect physics and
-      the whole robot, let planning pass through it to reach success before anything is executed, at a
-      cost small beside execution's. Measured on libero_10 6, initial state 0: the simulated contact of
-      the left finger with the mug lay 8 mm from where the executed finger touched it, and the mug's
-      simulated release point 3 mm from the executed one. Claim (1) is LMA-sampled-penetration-detected
-      with s = 2 cm; claim (3) holds because the state is copied back whole
-      (AXM-mujoco-integration-state) and the teacher reads nothing else the planner wrote but the caches
-      pinned. Restated from a version refuted because a drive's part was never tested (the microwave
-      door through the mug); that version also tested the hand as boxes and the arm not at all. Built on
-      branch planner. evidence: CTR-teacher-reliable, CTR-teacher-settled.
+      The user's direction (2026-09-24): first make the box world route reach success, as a subroutine,
+      then make execution match the route, and replan every time something fails. Claim (1) is
+      LMA-sampled-penetration-detected with s = 2 cm plus the 12 mm graze -- the executed hand leads its
+      reference by up to 11.7 mm in the slow phases where contacts happen (AXM-servo-lead-bounds-travel);
+      claim (2) because the follower's actions are the skills' own twist and jaw commands; claim (3) from
+      the bounds stated. Measured (branch follow): from LIBERO's 6500 initial states the kinematic world
+      finds a route in 5757; tracked leg by leg the route failed where contact decides (2 of 50 on
+      libero_10 8), and with the contact phases left to the teacher's laws, 11 of 50 against the teacher's 0
+      of 50. Replaces BRN-plan-through-box-world, the kinematic world as a critic of the teacher's own
+      route, pruned: it changed 102 succeeding episodes to fix at most 11 failing ones. evidence:
+      CTR-teacher-reliable, CTR-teacher-settled, CTR-teacher-gentle.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-pinch-for-the-whole-place
