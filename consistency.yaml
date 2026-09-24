@@ -2299,25 +2299,30 @@ branches:
       delivered, its skill commands the jaws open and a retreat and does not grasp. So a place step whose
       object is delivered but whose goal does not hold is not passed over for a later step, and at a step
       where it is selected its skill lets go rather than taking the object back; and a later plan step is
-      selected only when every earlier place step is done, which requires its object let go. A step newly
-      selected -- its index or its skill and arguments differing from the step last allowed to start --
-      starts only at a step at which no object a place released this episode, and nothing has grasped
-      since, other than that step's own object, is touched by robot geometry or has the tool point within
-      the declared margin of, or inside, its box; at a step at which one is, the retreat is commanded
-      instead. Claimed, for plans in which no later step grasps an object that an earlier place step
-      delivered: no control step selects a later plan step while an earlier place step's object is held,
-      or, being the object last held, is touched by the robot or has the tool point within the declared
-      margin of, or inside, its box, with its goal satisfied; and no control step commands a release on
-      the ground that the object is delivered while its origin is more than the declared height above its
-      target height. Not claimed: that LIBERO's predicate still holds after the release; that holding is
-      judged without error; anything of plans that re-pick a delivered object; releases commanded on other
-      grounds; that a delivered object stays delivered; that the margin keeps every finger outside the
-      object's box, or that nothing of the object lies between the fingers when a later step starts (a
-      thin part between the open pads, more than the margin from the tool point, is let go by this test);
-      that a release commanded because an earlier place step's object is delivered lets go of nothing else
-      -- an object a later step is carrying is dropped where it is; that the start gate's margin keeps a
-      released object's thin part from between the open fingers; which object the record holds when two
-      read as held at one step.
+      selected only when every earlier place step is done, which requires its object let go. The released
+      set holds each object whose release a place's skill commanded this episode, until a step at which a
+      place's skill finds it held (DEF-holding). A step starts, as DEF-skill-contract counts it, at the
+      first control step of a run of consecutive selections of it with the same arguments; at every step
+      of such a run until one passes, the step's skill is commanded only if no object in the released set
+      is touched by robot geometry or has the tool point within the declared margin of, or inside, its
+      box, and otherwise the retreat is commanded instead. Claimed, for plans in which no later step
+      grasps an object that an earlier place step delivered: no control step selects a later plan step
+      while an earlier place step's object is held, or, being the object last held, is touched by the
+      robot or has the tool point within the declared margin of, or inside, its box, with its goal
+      satisfied; and no control step commands a release on the ground that the object is delivered while
+      its origin is more than the declared height above its target height; and (c) at no control step does
+      a step's skill start -- its command first issued in a run -- while an object in the released set is
+      touched by robot geometry or has the tool point within the declared margin of, or inside, its box.
+      Not claimed: that LIBERO's predicate still holds after the release; that holding is judged without
+      error; anything of plans that re-pick a delivered object; releases commanded on other grounds; that
+      a delivered object stays delivered; that the margin keeps every finger outside the object's box, or
+      that nothing of the object lies between the fingers when a later step starts (a thin part between
+      the open pads, more than the margin from the tool point, is let go by this test); that a release
+      commanded because an earlier place step's object is delivered lets go of nothing else -- an object a
+      later step is carrying is dropped where it is; that the start gate's margin keeps a released
+      object's thin part from between the open fingers; that releases commanded by skills other than place
+      -- a drive letting go of a handle -- are gated; which object the record holds when two read as held
+      at one step.
     premises: [AXM-libero-scores-final-state, DEF-holding, DEF-skill-contract]
     derivation_rule: >-
       AXM-libero-scores-final-state makes a predicate that holds while the object is still in the jaws no
@@ -2347,7 +2352,11 @@ branches:
       named as not claimed. Restated with DEF-skill-contract's start gate built, read with the same
       stand-in over every object released and not grasped since: libero_10 6 20 of 20 (inits 0-19; 18
       without it), libero_10 0 10 and 8 9 of 10 unchanged. Narrowing the definition's gate to the stand-in
-      instead would stale 20 nodes; left for the author.
+      instead would stale 20 nodes; left for the author. Restated per the verifier: starts counted by
+      DEF-skill-contract's run, gated at every step of a new run until one passes (a resumed run
+      included); no exemption for the step's own object; the released set's events defined; start
+      guarantee (c) claimed. Measured with it: libero_10 6 19 of 20 (inits 0-19), libero_10 0 10, 2 10, 8
+      9 of 10.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-regression-planner
