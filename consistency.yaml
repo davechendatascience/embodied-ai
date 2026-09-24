@@ -2297,14 +2297,14 @@ branches:
       rather than taking the object back; and a later plan step is selected only when every earlier place
       step is done, which requires its object let go. Claimed, for plans in which no later step grasps an
       object that an earlier place step delivered: no control step selects a later plan step while an
-      earlier place step's object is held, touched by the robot, or within the declared margin of the tool
-      point, with its goal satisfied; and no control step commands a release on the ground that the object
-      is delivered while its origin is more than the declared height above its target height. Not claimed:
-      that LIBERO's predicate still holds after the release; that holding is judged without error;
-      anything of plans that re-pick a delivered object; releases commanded on other grounds; that a
-      delivered object stays delivered; that the margin keeps every finger outside the object's box, or
-      that nothing of the object lies between the fingers when a later step starts (a thin part between
-      the open pads, more than the margin from the tool point, is let go by this test).
+      earlier place step's object is held, touched by the robot, or has the tool point within the declared
+      margin of, or inside, its box, with its goal satisfied; and no control step commands a release on
+      the ground that the object is delivered while its origin is more than the declared height above its
+      target height. Not claimed: that LIBERO's predicate still holds after the release; that holding is
+      judged without error; anything of plans that re-pick a delivered object; releases commanded on other
+      grounds; that a delivered object stays delivered; that the margin keeps every finger outside the
+      object's box, or that nothing of the object lies between the fingers when a later step starts (a
+      thin part between the open pads, more than the margin from the tool point, is let go by this test).
     premises: [AXM-libero-scores-final-state, DEF-holding, DEF-skill-contract]
     derivation_rule: >-
       AXM-libero-scores-final-state makes a predicate that holds while the object is still in the jaws no
@@ -2324,6 +2324,7 @@ branches:
       it back into them. With the object let go as DEF-skill-contract's postcondition has it (the tool
       point 20 mm outside its box), libero_10 2 10 of 10 (v29: 5) and libero_10 8 9 of 10, inits 0-9.
       Restated per the verifier: the test is a stand-in for the postcondition, which it does not entail.
+      Claim worded as the test reads: the tool point against the object's box.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-regression-planner
