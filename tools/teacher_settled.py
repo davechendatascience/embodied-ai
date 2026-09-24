@@ -4,6 +4,7 @@ LIBERO's own humans leave it, after the teacher has finished.
 
   teacher_settled.py --reference                                     # the humans' final tilts, once
   teacher_settled.py --episodes 20 --seed 557 --out $OUT             # as TST-teacher-settled
+  teacher_settled.py --episodes 1 --video videos/teacher_settled     # film each episode to its end
 
 LIBERO ends an episode at the first step its goal predicate holds. On episode 0 of all 130
 tasks, 93 of the 104 objects the successful episodes placed were at that step still held,
@@ -26,6 +27,10 @@ and every free object is at rest, or until the episode's horizon. Then, per epis
                    largest final tilt among LIBERO's human demonstrations of the task (<= 0
                    passes; one-sided: the humans leave the basket's bottles on their side)
   settled          all of the above
+
+With --video, each filmed episode runs on past the teacher's end for --hold steps with the arm still
+and the jaws open, so a video shows whether what was judged settled stays so, and the last frames
+carry the verdict. Cameras change nothing the teacher reads.
 """
 from __future__ import annotations
 
@@ -110,24 +115,40 @@ def reference(suites: list[str], demos: int) -> None:
 
 # -- the episodes -----------------------------------------------------------------------------
 def _task(item: tuple) -> list[dict]:
-    suite, task, episodes, seed, horizon, ref, cores = item
+    suite, task, episodes, seed, horizon, ref, cores, video = item
     cpu = cores.get()
     try:
         os.sched_setaffinity(0, {cpu})
-        return _episodes(suite, task, episodes, seed, horizon, ref, cpu)
+        return _episodes(suite, task, episodes, seed, horizon, ref, cpu, video)
     finally:
         cores.put(cpu)
 
 
-def _episodes(suite: str, task: int, episodes: int, seed: int, horizon: int, ref: dict, cpu: int) -> list[dict]:
+def _verdict_frames(frames: list, text: str, ok: bool, n: int) -> list:
+    """The last n frames with the verdict written across them."""
+    import cv2
+    out = []
+    for f in frames[-n:]:
+        f = f.copy()
+        h = f.shape[0]
+        cv2.rectangle(f, (0, h - 34), (f.shape[1], h), (0, 110, 0) if ok else (0, 0, 150), -1)
+        cv2.putText(f, text, (8, h - 11), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
+        out.append(f)
+    return frames[:-n] + out
+
+
+def _episodes(suite: str, task: int, episodes: int, seed: int, horizon: int, ref: dict, cpu: int,
+              video: dict | None = None) -> list[dict]:
     from skill_eval import Job, _run_episode
     from screwhead.sim import contacts
     from screwhead.sim.sim_arm import REST_SPEED
     from screwhead.sim.task_env import TaskEnv
     from screwhead.teacher.refusal import Refusal
     from screwhead.teacher.skill_teacher import SkillTeacher
-    job = Job(suite, task, episodes, seed * 100 + task, cpu, 0, horizon, False, {}, "", 1, 0)
-    env = TaskEnv(suite, task, horizon=horizon, seed=job.seed, render=False)
+    video = video or {}
+    job = Job(suite, task, episodes, seed * 100 + task, cpu, 0, horizon, False, {}, video.get("dir", ""),
+              video.get("per_task", 0), video.get("px", 0))
+    env = TaskEnv(suite, task, horizon=horizon, seed=job.seed, render=bool(video))
     teacher = SkillTeacher(env)
     sc, m, d = env.scene, env.scene.m, env.scene.d
     placed = _placed(env.task_spec)
@@ -156,9 +177,11 @@ def _episodes(suite: str, task: int, episodes: int, seed: int, horizon: int, ref
                 if float(np.linalg.norm(d.qvel[a:a + 3])) + float(np.linalg.norm(d.qvel[a + 3:a + 6])) * radius[o]
                 > REST_SPEED]
 
+    from skill_eval import _frame
     rows = []
     for ep in range(episodes):
-        row, _ = _run_episode(env, teacher, job, ep, record=False)
+        film = bool(video) and ep < video.get("per_task", 0)
+        row, frames = _run_episode(env, teacher, job, ep, record=film)
         if row.get("refused"):
             rows.append(dict(task=task, episode=ep, refused=True))
             continue
@@ -171,6 +194,8 @@ def _episodes(suite: str, task: int, episodes: int, seed: int, horizon: int, ref
                 except (Refusal, NotImplementedError):
                     break
                 env.step(a)
+                if film:
+                    frames.append(_frame(env, job, teacher.phase))
                 if teacher.phase == "settle" and not touched() and not moving():
                     finished = True
                     break
@@ -189,6 +214,19 @@ def _episodes(suite: str, task: int, episodes: int, seed: int, horizon: int, ref
         why = [w for w, bad in (("never succeeded", not first), ("lost", first and not final),
                                 ("unfinished", first and not finished), ("held", bool(held)),
                                 ("moving", bool(still)), ("tipped", bool(tipped))) if bad]
+        if film and frames:
+            import imageio.v2 as imageio
+            from screwhead.sim.gripper_servo import A_OPEN, target_to_channel
+            idle = np.zeros(7)
+            idle[6] = target_to_channel(A_OPEN)
+            for _ in range(video.get("hold", 0)):               # after the verdict: nothing is scored here
+                env.step(idle)
+                frames.append(_frame(env, job, "hold (after the verdict)"))
+            text = "SETTLED" if settled else "NOT SETTLED: " + ", ".join(why)
+            frames = _verdict_frames(frames, text, settled, min(len(frames), max(video.get("hold", 0), 20)))
+            out = Path(video["dir"]) / suite / f"{suite}_t{task}_ep{ep}_{'settled' if settled else 'unsettled'}.mp4"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            imageio.mimsave(out, frames, fps=20, macro_block_size=1)
         rows.append(dict(task=task, episode=ep, refused=False, success=first, success_final=final,
                          finished=finished, released=not held, at_rest=not still,
                          tilt_excess_deg=round(float(tilt_excess), 1), settled=settled,
@@ -219,6 +257,10 @@ def main() -> int:
     ap.add_argument("--demos", type=int, default=50)
     ap.add_argument("--cpus", default=PERF)
     ap.add_argument("--out", default="")
+    ap.add_argument("--video", default="", help="film episodes into this folder, one subfolder per suite")
+    ap.add_argument("--videos-per-task", type=int, default=1)
+    ap.add_argument("--video-px", type=int, default=256)
+    ap.add_argument("--hold", type=int, default=30, help="steps filmed after the verdict with the arm still")
     args = ap.parse_args()
     if args.reference:
         reference(args.suites, args.demos)
@@ -232,7 +274,9 @@ def main() -> int:
     cores = mp.Manager().Queue()
     for c in cpus:
         cores.put(c)
-    items = [(s, t, args.episodes, args.seed, HORIZON.get(s, 600), ref, cores)
+    video = (dict(dir=str((ROOT / args.video).resolve()), per_task=args.videos_per_task, px=args.video_px,
+                  hold=args.hold) if args.video else None)
+    items = [(s, t, args.episodes, args.seed, HORIZON.get(s, 600), ref, cores, video)
              for s in args.suites for t in (args.tasks if args.tasks is not None else range(TASKS[s]))]
     trials, table = [], []
     with mp.get_context("spawn").Pool(len(cpus), maxtasksperchild=1) as pool:
