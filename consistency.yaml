@@ -1936,11 +1936,14 @@ branches:
       is: the teacher's own decisions first, then the other orders of its pick-place pairs and, depth first,
       other grasps (the teacher's screen order, then its face grasps moved to where LIBERO's human
       demonstrations held the object), drop points (where the demonstrations left the object, then the
-      region's grid: nearest its centre first, or, once a contact has failed, farthest from that contact
-      first) and carry heights, up to 120 simulated steps a search, skipping every banned decision. A grasp is
-      identified by its tool position in the robot's base frame rounded to 1 mm and its jaw axis rounded to
-      0.01, a drop point by its position in the base frame rounded to 1 mm; carry heights, orders and drives
-      have no identity and are never banned. Each leg of a simulated route is one move of
+      region's grid: nearest its centre first, or, once a contact has failed an earlier candidate of that
+      step, farthest from that contact first) and carry heights, up to 120 simulated steps a search -- a
+      simulated step being one candidate for one plan step (a pick, a place or a drive with all its legs)
+      simulated from the state before that step -- skipping every banned decision. An object's grasp is
+      identified by the object and the tool position in the robot's base frame rounded to 1 mm with the
+      tool's jaw axis (its frame's y axis, in the base frame) rounded to 0.01; an object's drop point by the
+      object and the point in the base frame rounded to 1 mm; carry heights, orders and drives have no
+      identity and are never banned. Each leg of a simulated route is one move of
       DEF-kinematic-world, checked at its samples, and names its allowed pairs: pairs in contact when planning
       starts, on every leg; the robot with the object being picked, on the advance to the grasp; the held
       object with what it stood on, on the lift's first 1 cm (a leg of its own) and a slide from under an
@@ -1954,13 +1957,16 @@ branches:
       along each, and its own feedback laws execute the contact phases (descend and squeeze, lower, seat and
       release -- ended when the object touches something besides the fingers and is let go) and the drives,
       reading the pinned decisions. Following fails when the tool is 40 mm off a followed leg, a held object
-      is lost while carried, an object the route does not move has moved 10 mm once the scene is at rest, a
-      released object rests 15 mm from where the route set it, a followed leg takes more than twice its
-      length at its speed plus 40 control steps, or a contact phase more than 160 steps for a grasp or 240
-      for a set-down. A failing leg bans its step's decision -- the grasp for a pick's legs, the drop point for
+      is lost while carried, an object the route does not move has moved 10 mm once the scene is at rest
+      (every object slower than 2 cm/s), a released object rests 15 mm from where the route set it, a
+      followed leg takes more than twice its length at its speed (approach 0.25, lift 0.06, rise 0.15,
+      carry 0.18, retreat 0.15 m/s) plus 40 control steps, or a contact phase more than 160 steps for a
+      grasp or 240 for a set-down. A failure is charged to the leg in force when it is detected, and that
+      leg bans its step's decision -- the grasp for a pick's legs, the drop point for
       a place's -- which leaves the caches and is skipped by every later search that episode, and a route is
       planned again. At most 12 routes are planned in an episode, the first included; after a search that
-      finds none, none is planned again that episode, and the teacher's own feedback laws act. Claimed: (1)
+      finds none, or after following the twelfth has failed, none is planned again that episode, and the
+      teacher's own feedback laws act. Claimed: (1)
       for every route executed: at every sample of every leg, no reported contact deeper than 12 mm between a
       body the leg moves and one it does not, outside the leg's allowed pairs; for its arm and finger legs,
       by LMA-sampled-penetration-detected with s = 2 cm, any penetration deeper than 10 mm between two
@@ -1977,27 +1983,31 @@ branches:
       on a penetration's depth from the depth MuJoCo reports; drives and drops beyond their samples; the arm
       while the teacher's laws squeeze, seat or drive; that the teacher's own laws, deciding afresh after a
       search that found nothing, avoid a banned decision; that a route exists, or that following reaches the
-      goal. Labels for DAgger come from the teacher's own laws, following off: a followed route and the bans
-      are history, and AXM-dagger-needs-markov-labels binds labels; demonstrations recorded while following
-      carry their route's history.
+      goal; that the teacher's own laws label a state by the state alone -- their per-episode caches carry
+      the state each decision was made at, the question LMA-caches-reset-per-episode leaves open. Labels for
+      DAgger come from the teacher's own laws, following off, never from a followed route: a route in force
+      and the bans are the episode's history, which AXM-dagger-needs-markov-labels forbids a label to read;
+      demonstrations recorded while following are not used as labels.
     premises: [DEF-kinematic-world, LMA-sampled-penetration-detected, LMA-joint-interpolation-bounds-travel,
-               AXM-mujoco-forward-is-a-function-of-state, AXM-mujoco-integration-state,
+               AXM-mujoco-forward-is-a-function-of-state, AXM-mujoco-reports-overlaps,
                AXM-libero-collision-shapes, AXM-libero-scores-final-state, AXM-grip-fixes-object-in-hand,
-               AXM-one-execution-path, AXM-one-gripper, DEF-skill-contract, AXM-dagger-needs-markov-labels]
+               AXM-one-execution-path, AXM-one-gripper, DEF-skill-contract, AXM-dagger-needs-markov-labels,
+               LMA-caches-reset-per-episode]
     derivation_rule: >-
       The user's direction (2026-09-24): first make the box world route reach success, as a subroutine, then
       make execution match the route, and replan every time something fails. Claim (1): the first half by
       construction; the second is LMA-sampled-penetration-detected on each arm and finger move, whose
       hypothesis DEF-kinematic-world's sampling and LMA-joint-interpolation-bounds-travel give, every
-      collision shape convex (AXM-libero-collision-shapes; meshes collide as convex hulls). The 12 mm graze
+      collision shape convex (AXM-libero-collision-shapes; each mesh collides as its convex hull,
+      AXM-mujoco-reports-overlaps). The 12 mm graze
       is calibrated, not derived: over LIBERO's protocol, where the teacher succeeded in 5709 of 6500
       episodes, a first contact no deeper than 12 mm fell in 414 succeeding episodes and 74 failing ones,
       deeper in 135 and 103. Claim (2) because the follower's actions are the skills' own twist and jaw
       commands; (3) from the bounds and the ban as stated; (4) by the log's definition. Measured (branch
-      follow at fa98930, skill_teacher:a20c3a855f): the kinematic world finds a route from 5757 of LIBERO's
-      6500 initial states; followed, LIBERO's protocol succeeded in 5844 of 6500 episodes against the
-      teacher's 5709 (186 gained, 51 lost; 5782 against 5641 within LIBERO's step limits), libero_10 8 in 39
-      of 50 against 0. Replaces
+      follow at 090e893, skill_teacher:d4a0e78c73): the kinematic world finds a route from 5757 of LIBERO's
+      6500 initial states; followed, LIBERO's protocol succeeded in 5866 of 6500 episodes against the
+      teacher's 5709 (187 gained, 30 lost; 5802 against 5641 within LIBERO's step limits), libero_10 in 425
+      of 500 against 356, libero_10 8 in 39 of 50 against 0. Replaces
       BRN-plan-through-box-world, pruned. Restated from versions doubted on eleven, then six gaps: where
       samples fall, pairs that both move, convexity, drives and drops, what a ban reaches, and what a
       failing leg bans. evidence: CTR-teacher-reliable, CTR-teacher-settled, CTR-teacher-gentle.
