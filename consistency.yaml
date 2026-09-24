@@ -2411,6 +2411,68 @@ branches:
       lookup, two gaps on the state's inputs and the approach rule).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-place-enters-roofed-target-level
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Vertical is the world's z axis and 'in plan' is the projection onto the world's horizontal plane;
+      poses and the scene's collision geometry are read from each step's state
+      (AXM-grip-fixes-object-in-hand, AXM-mujoco-forward-is-a-function-of-state). At every control step of
+      a place, given the placed object, the place's drop point, the region's box (its centre, axes and
+      half-extents) and the place's carry height, the skill decides whether the target is roofed and how
+      to enter it. The object is measured as it would rest level: its most upright axis is the one of its
+      box's axes nearest the vertical, ties to the first; its height is twice its half-extent along that
+      axis, its reach its largest half-extent across it plus a declared margin, and its rest height puts
+      its lowest point a declared clearance above the first surface met straight down, from the region's
+      centre height, under its centre at the drop point, the object's own body excluded. When that ray
+      meets nothing, the target is not roofed at that step. The target is roofed at a step when some
+      colliding geom other than the robot's and the object's lies within that reach of the drop point in
+      plan, with its bottom above the object's top at rest and below the carry height plus the object's
+      height. The directions are the region's box axes within a declared angle of horizontal, each
+      projected onto the horizontal plane and normalised, in the order of the region's axes, each with +
+      before -. For a direction u, the entry point E is the drop point at the rest height moved along u by
+      the distance to the region's face plus the object's largest level half-extent plus a declared
+      margin. The object is in u's corridor when its origin is within a declared distance, in plan, of the
+      line through the drop point along u, from that distance before the drop point to that distance
+      beyond E, and no higher than E plus a declared band. A direction is kept when the object is in its
+      corridor, or else when a disc of the object's least level half-extent plus a margin, swept level
+      from the drop point to E over the height band from its lowest point at rest plus the clearance to
+      its top at rest, meets no colliding geom other than the robot's and the object's. Taken is the first
+      direction, in the order above, whose corridor holds the object; if none does, the kept direction
+      whose E is nearest the robot's base in plan, ties to the first in that order. 'Over' a point means
+      within a declared distance of it in plan. For a roofed target with a direction taken, the command
+      is: in the corridor and not over the drop point, level toward over the drop point, the object turned
+      about the vertical so its longest level axis lies along u; in the corridor and over the drop point,
+      the place's own lower and release (BRN-place-onto-physical-support); not in the corridor, over E and
+      above E's height plus the band, toward E; otherwise the place's own lift and carry with E as the
+      carry's destination. A target not roofed at a step, or roofed with no direction kept, is placed at
+      that step as before. Claimed: (1) at every step at which the target is roofed, a direction is taken,
+      and the object is in that direction's corridor and not over the drop point, the commanded tool
+      translation has no vertical component; (2) whether the target is roofed, which direction is taken,
+      and which of the four commands applies are, at every step, functions of that step's state, the
+      placed object, the drop point, the region's box, the carry height and declared constants; (3) the
+      drop point, and the lower and release over it, are the place's own. Not claimed: that the object
+      reaches the corridor, that the target stays roofed while the object is in it, that the hand clears
+      the roof, that the object fits the opening, rests upright, or stays in the region; anything of the
+      place's own lift, carry, lower and release beyond what BRN-place-onto-physical-support states.
+    premises: [BRN-place-onto-physical-support, AXM-object-geometry-known, AXM-grip-fixes-object-in-hand, AXM-mujoco-forward-is-a-function-of-state]
+    derivation_rule: >-
+      Every roofed target in LIBERO failed for the teacher, whose place comes straight down over the drop
+      point: the shelf's two layers (libero_90 40, 42, 86, 88, 89: 0 of 50 each in the teacher-alone sweep
+      v25) and the microwave's heating region (libero_10 9, 0 of 50). LIBERO's humans enter each of them
+      level, along the region's horizontal y axis (the object's path over its last 12 cm before release:
+      medians 0.92, 0.98, 0.88, 0.92 and 0.98 of the unit direction, 20 demonstrations each). Built and
+      traced on libero_90 40: measured by its box as it swung, a pan hanging 10 deg from its handle
+      reached 1 mm past the roof's underside, stopped counting as roofed and was lifted back out -- hence
+      the object is measured as it rests; re-swept every step, the band flickered mid-entry -- hence a
+      direction holding the object in its corridor is taken first; the shelf's visual mesh spans its
+      openings -- hence colliding geoms only. With the law, the teacher alone: libero_90 40 10 of 10,
+      libero_90 42 6 of 10 (inits 0-9). Restated four times per the verifier: (1) holds only where the
+      target is roofed, of the tool's translation, distances in plan; (2) names its inputs and declares
+      the tie-breaks; the lower and release apply only in the corridor over the drop point; a ray meeting
+      nothing leaves the target unroofed.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:
