@@ -219,6 +219,18 @@ axioms:
       Read from each task's compiled model on 2026-09-24 (MjModel.geom_type of the collision geoms of
       every placed object's root body and its children: 22 categories, all boxes).
 
+  - id: AXM-libero-collision-shapes
+    domain: environment
+    statement: >-
+      In the models of all 130 LIBERO tasks this project runs, the collision geoms that are not the
+      robot's are boxes (12,003), cylinders (88), capsules (18) and one floor plane per task; the robot's
+      are meshes (1,300) and boxes (260). Each geom's collision shape lies inside the box aligned with
+      its frame whose half-extents are its size (a cylinder's radius and half-height, a capsule's radius
+      and half-length plus radius, a mesh's vertex extents).
+    rationale: >-
+      Read from each task's compiled model on 2026-09-24 (MjModel.geom_type of every collision geom),
+      after AXM-libero-objects-are-boxes showed the placed objects alone.
+
   - id: AXM-servo-lead-bounds-travel
     domain: physics
     statement: >-
@@ -497,6 +509,18 @@ definitions:
       sim_arm's REST_SPEED). A predicate on one step's simulator state. An object on a single corner or
       a single edge does not rest.
 
+  - id: DEF-box-world
+    term: Box world
+    meaning: >-
+      The teacher's own plan-time model of a state, perfect physics assumed. Every collision geom that is
+      not the robot's is its bounding box aligned with its frame (AXM-libero-collision-shapes; a box geom
+      is itself), the floor its plane; the robot's hand and fingers likewise, each grown on every side by
+      the servo's lead bound for the phase (AXM-servo-lead-bounds-travel: 34.3 mm, 11.7 mm when lowering)
+      plus the contact margins (AXM-libero-contact-parameters). Bodies move only as the plan moves them:
+      a grasped object rigidly with the tool, an articulated part along its joint as the plan drives it;
+      every other body stays exactly where it is -- nothing is pushed, falls or slides. Two bodies
+      collide in the box world when a box of one overlaps a box of the other.
+
   - id: DEF-smooth-motion
     term: Smooth motion
     meaning: >-
@@ -750,6 +774,36 @@ lemmas:
       points (the triangle inequality), and a contact between a pair forms only within its margins.
       Restated from a version that did not fix S (a stationary mug, the forearm pushing a bowl of S into
       it) and one that netted a single 2 mm off every pair.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: LMA-separating-axis-boxes
+    statement: >-
+      Two oriented boxes are disjoint if and only if their projections are disjoint on at least one of
+      fifteen axes: the three face normals of each box and the nine cross products of an edge direction
+      of one with an edge direction of the other (a cross product of parallel edges, of zero length,
+      separating nothing). So box-world collision between two boxes is decided exactly by fifteen
+      interval tests.
+    premises: [DEF-box-world]
+    derivation_rule: >-
+      The separating axis theorem for convex polyhedra: two disjoint convex polyhedra have a separating
+      plane parallel to a face of one or to an edge of each; for boxes those normals are the fifteen
+      axes, and projections on an axis are intervals.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: LMA-swept-box-conservative
+    statement: >-
+      If a box moves rigidly from one pose to another along a path on which no point of it travels
+      farther than d from where it started, then at every pose along that path the box lies inside the
+      starting box grown by d on every side (each half-extent plus d). So a moving box that at each of a
+      path's samples, grown by the largest point travel to the next sample, overlaps no other box,
+      overlaps none anywhere along the path -- however thin the other box, and whatever the samples'
+      spacing.
+    premises: [DEF-box-world]
+    derivation_rule: >-
+      Every point of the moving box stays within d of its starting position, so within d of the
+      starting box; the starting box grown by d on every side contains every point within d of it.
+      This is the property the paired-ray lemma lacked: a feature between two samples is covered by the
+      grown box, not missed between rays.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: LMA-release-when-resting-stays
@@ -1777,6 +1831,44 @@ branches:
       the commanded twist (AXM-servo-lead-bounds-travel). When built it replaces the second ground of
       BRN-place-onto-physical-support and its handle-held exception. Not yet implemented. evidence:
       CTR-teacher-settled, CTR-teacher-gentle (release_gap_mm <= 5).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-plan-in-box-world
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Before a pick's approach to its grasp and a place's carry and lower begin, the skill evaluates the
+      step's planned tool path in the box world (DEF-box-world): the straight segments between the
+      phase targets the step will command, sampled so that no point of the hand, the fingers or the held
+      object travels farther than the grow distance d between samples; at each sample those boxes, grown
+      by the phase's lead bound and by d (LMA-swept-box-conservative), are tested with the fifteen-axis
+      test (LMA-separating-axis-boxes) against the boxes of every body other than the robot, the object
+      being picked or held, and the step's target and its support. If one overlaps, the step is not
+      begun as planned; the plan is repaired, in this order: (1) another grasp the reach screen passes,
+      or a higher carry, whose path passes the same test; (2) if the blocking body is an object whose
+      category the affordance table declares moved by pick and no goal names it, a relocate step first,
+      moving it to a free spot (DEF-skill-contract) that the same test passes for its own carry; (3)
+      otherwise the step is begun as before and the blocking body is recorded. Claimed: a step begun
+      after a repair of kind (1) or (2) has a planned path that collides with nothing in the box world at
+      plan time; a relocate step never moves an object a goal names or the step's target or support;
+      the test is exact for box geoms and conservative for the rest (AXM-libero-collision-shapes).
+      Not claimed: freedom from collision in the simulator (the box world assumes perfect physics, and
+      the executed path deviates from the planned one by the servo's lead, covered only up to its
+      measured bound); that a repair exists; the arm's links above the hand, which are not tested (a
+      named future extension); that a relocated object stays where it is put.
+    premises: [DEF-box-world, LMA-separating-axis-boxes, LMA-swept-box-conservative, AXM-libero-collision-shapes,
+               AXM-libero-objects-are-boxes, AXM-servo-lead-bounds-travel, AXM-libero-contact-parameters,
+               AXM-grip-fixes-object-in-hand, AXM-category-affordances-declared, DEF-skill-contract]
+    derivation_rule: >-
+      The user's request (2026-09-24): plan the scenario first in a fast idealized world, perfect physics
+      assumed, and route around what blocks. Measured blockers: the mug in the microwave door's swing
+      pushed in 36 of libero_10 9's 50 failures; the cabinet top over a drawer in 34 blocked reaches
+      (libero_90 2, 5, 8). All placed objects collide as boxes and fixtures almost all do, so the box
+      world is exact for them and conservative for the rest; the grow distance makes sampling safe;
+      the servo's measured lead makes the plan-to-execution gap part of the test rather than an
+      assumption. A plan repaired by (1) or (2) passed the test at every sample, so by the two lemmas it
+      collides with nothing in the box world. Not yet implemented. evidence: CTR-teacher-reliable,
+      CTR-teacher-settled.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-pinch-for-the-whole-place
