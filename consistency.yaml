@@ -2300,20 +2300,24 @@ branches:
       over for a later step, and at a step where it is selected its skill lets go rather than taking the
       object back; and a later plan step is selected only when every earlier place step is done, which
       requires its object let go. The released set holds each object whose release a place's skill
-      commanded this episode, until a step at which a place's skill finds it held (DEF-holding). The
-      planner's candidate at a step is the first plan step in order that is not done. It selects that
-      candidate -- and a step starts, as DEF-skill-contract counts it, at the first control step of a run
-      of consecutive selections of it with the same arguments -- only if the candidate was selected at the
-      previous step with the same arguments, or no object in the released set is touched by robot geometry
-      or has the tool point within the declared margin of, or inside, its box; otherwise it selects no
-      plan step and commands the retreat. The released set is read after that step's removals and before
-      that step's commanded releases. Claimed, for plans in which no later step grasps an object that an
-      earlier place step delivered: no control step selects a later plan step while an earlier place
-      step's object is held, or, being the object last held, is touched by the robot or has the tool point
-      within the declared margin of, or inside, its box, with its goal satisfied; and no control step
-      commands a release on the ground that the object is delivered while its origin is more than the
-      declared height above its target height; and (c) at no control step does a plan step start, as
-      DEF-skill-contract counts it, while an object in the released set is touched by robot geometry or
+      commanded this episode, until a step at which DEF-holding's test, read by a place's skill or by the
+      start gate below, finds it held; the gate, at each step at which the candidate was not selected at
+      the previous step with the same arguments, first reads that test for every object in the set and
+      removes each one found held -- so an object released and then grasped again, by a pick or any other
+      skill, leaves the set at the first such step at which it reads held. The planner's candidate at a
+      step is the first plan step in order that is not done. It selects that candidate -- and a step
+      starts, as DEF-skill-contract counts it, at the first control step of a run of consecutive
+      selections of it with the same arguments -- only if the candidate was selected at the previous step
+      with the same arguments, or no object in the released set is touched by robot geometry or has the
+      tool point within the declared margin of, or inside, its box; otherwise it selects no plan step and
+      commands the retreat. The released set is read after that step's removals, the gate's own included,
+      and before that step's commanded releases. Claimed, for plans in which no later step grasps an
+      object that an earlier place step delivered: no control step selects a later plan step while an
+      earlier place step's object is held, or, being the object last held, is touched by the robot or has
+      the tool point within the declared margin of, or inside, its box, with its goal satisfied; and no
+      control step commands a release on the ground that the object is delivered while its origin is more
+      than the declared height above its target height; and (c) at no control step does a plan step start,
+      as DEF-skill-contract counts it, while an object in the released set is touched by robot geometry or
       has the tool point within the declared margin of, or inside, its box. Not claimed: that LIBERO's
       predicate still holds after the release; that holding is judged without error; anything of plans
       that re-pick a delivered object; releases commanded on other grounds; that a delivered object stays
@@ -2360,7 +2364,12 @@ branches:
       included); no exemption for the step's own object; the released set's events defined; start
       guarantee (c) claimed. Measured with it: libero_10 6 19 of 20 (inits 0-19), libero_10 0 10, 2 10, 8
       9 of 10. Restated per the verifier: while the gate fails the planner selects no plan step (so no
-      start, as the contract counts it, happens), the set's read order stated.
+      start, as the contract counts it, happens), the set's read order stated. Restated after the sweep
+      v34 (the gate as above, libero_goal 3 50 -> 13 of 50): the set lost an object only when a place
+      found it held, so a bowl relocated clear of the drawer, opened past and picked again stayed in the
+      set, the place_in step that followed its pick was gated with the bowl in the jaws, and the retreat
+      dropped it, 37 times of 50. DEF-skill-contract exempts what a skill has grasped since; the gate now
+      removes what it reads held.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-regression-planner
