@@ -1,0 +1,171 @@
+{
+ "date": "2026-09-25",
+ "criterion": "every trial of an episode in which the teacher followed a route the box world (kinematic world) planned: the paired sweeps v2, v4, v5 (RUN-0257..0271, conditions.follow = true) and the eight follow-mode check runs (RUN-0272..0279, whose trial files carry a followed plan log in all 400 episodes). Chosen by run, not by outcome: every trial of those runs, whatever its outcome.",
+ "verdict": "quarantined",
+ "why": "The box-world route plan is abandoned (consistency.yaml 3f7b651 prunes its declarations; main reverted to 0dfc2d0's code). These trials measured the teacher executing through that plan's follower, not the skill teacher alone, so they are set aside from the teacher's contracts; they stay in the ledger with this reason.",
+ "reviewer": "claude (one pass, all runs)",
+ "runs": {
+  "RUN-0257": {
+   "n": 1500,
+   "uri": "runs/skill_follow_v2/libero_goal.trials.json",
+   "outcomes": {
+    "pass": 1500
+   }
+  },
+  "RUN-0258": {
+   "n": 1500,
+   "uri": "runs/skill_follow_v2/libero_spatial.trials.json",
+   "outcomes": {
+    "pass": 1500
+   }
+  },
+  "RUN-0259": {
+   "n": 1500,
+   "uri": "runs/skill_follow_v2/libero_object.trials.json",
+   "outcomes": {
+    "pass": 1500
+   }
+  },
+  "RUN-0260": {
+   "n": 1500,
+   "uri": "runs/skill_follow_v2/libero_10.trials.json",
+   "outcomes": {
+    "pass": 1500
+   }
+  },
+  "RUN-0261": {
+   "n": 13500,
+   "uri": "runs/skill_follow_v2/libero_90.trials.json",
+   "outcomes": {
+    "pass": 13500
+   }
+  },
+  "RUN-0262": {
+   "n": 1500,
+   "uri": "runs/skill_follow_v4/libero_goal.trials.json",
+   "outcomes": {
+    "pass": 1500
+   }
+  },
+  "RUN-0263": {
+   "n": 1500,
+   "uri": "runs/skill_follow_v4/libero_spatial.trials.json",
+   "outcomes": {
+    "pass": 1500
+   }
+  },
+  "RUN-0264": {
+   "n": 1500,
+   "uri": "runs/skill_follow_v4/libero_object.trials.json",
+   "outcomes": {
+    "pass": 1500
+   }
+  },
+  "RUN-0265": {
+   "n": 1500,
+   "uri": "runs/skill_follow_v4/libero_10.trials.json",
+   "outcomes": {
+    "pass": 1500
+   }
+  },
+  "RUN-0266": {
+   "n": 13500,
+   "uri": "runs/skill_follow_v4/libero_90.trials.json",
+   "outcomes": {
+    "pass": 13500
+   }
+  },
+  "RUN-0267": {
+   "n": 1500,
+   "uri": "runs/skill_follow_v5/libero_goal.trials.json",
+   "outcomes": {
+    "pass": 1500
+   }
+  },
+  "RUN-0268": {
+   "n": 1500,
+   "uri": "runs/skill_follow_v5/libero_spatial.trials.json",
+   "outcomes": {
+    "pass": 1500
+   }
+  },
+  "RUN-0269": {
+   "n": 1500,
+   "uri": "runs/skill_follow_v5/libero_object.trials.json",
+   "outcomes": {
+    "pass": 1500
+   }
+  },
+  "RUN-0270": {
+   "n": 1500,
+   "uri": "runs/skill_follow_v5/libero_10.trials.json",
+   "outcomes": {
+    "pass": 1500
+   }
+  },
+  "RUN-0271": {
+   "n": 13500,
+   "uri": "runs/skill_follow_v5/libero_90.trials.json",
+   "outcomes": {
+    "pass": 13500
+   }
+  },
+  "RUN-0272": {
+   "n": 150,
+   "uri": "/home/edge-host/Documents/GitHub/embodied_ai/runs/follow_checks/l90_55",
+   "outcomes": {
+    "pass": 150
+   }
+  },
+  "RUN-0273": {
+   "n": 150,
+   "uri": "/home/edge-host/Documents/GitHub/embodied_ai/runs/follow_checks/l90_55b",
+   "outcomes": {
+    "pass": 150
+   }
+  },
+  "RUN-0274": {
+   "n": 150,
+   "uri": "/home/edge-host/Documents/GitHub/embodied_ai/runs/follow_checks/l90_55c",
+   "outcomes": {
+    "pass": 150
+   }
+  },
+  "RUN-0275": {
+   "n": 150,
+   "uri": "/home/edge-host/Documents/GitHub/embodied_ai/runs/follow_checks/l90_55d",
+   "outcomes": {
+    "pass": 150
+   }
+  },
+  "RUN-0276": {
+   "n": 150,
+   "uri": "/home/edge-host/Documents/GitHub/embodied_ai/runs/follow_checks/l10_7",
+   "outcomes": {
+    "pass": 150
+   }
+  },
+  "RUN-0277": {
+   "n": 150,
+   "uri": "/home/edge-host/Documents/GitHub/embodied_ai/runs/follow_checks/l90_75_e",
+   "outcomes": {
+    "pass": 150
+   }
+  },
+  "RUN-0278": {
+   "n": 150,
+   "uri": "/home/edge-host/Documents/GitHub/embodied_ai/runs/follow_checks/l90_55_e",
+   "outcomes": {
+    "pass": 150
+   }
+  },
+  "RUN-0279": {
+   "n": 150,
+   "uri": "/home/edge-host/Documents/GitHub/embodied_ai/runs/follow_checks/cache_before",
+   "outcomes": {
+    "pass": 150
+   }
+  }
+ },
+ "evidence_ids": 59700
+}
