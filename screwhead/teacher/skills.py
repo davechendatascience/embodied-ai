@@ -206,6 +206,7 @@ class Skills:
         self._clearing: dict[tuple, str | None] = {}
         self._let_go: dict[str, bool] = {}          # objects this episode's releases have let go
         self._released_at: dict[tuple, np.ndarray] = {}  # a roofed entry's release target, per (object, region)
+        self._last_held: str | None = None           # the object held() last found in the jaws
         self._withdraw: tuple | None = None          # after a roofed release: (entry direction, tool point out)
 
     # -- commands -------------------------------------------------------------------------
@@ -240,6 +241,7 @@ class Skills:
         if ep != self._episode:
             self._episode = ep
             self._withdraw = None
+            self._last_held = None
             for cache in (self._grasp_cache, self._handle_cache, self.grasp_log,
                           self._drop_cache, self._carry_cache, self._spots, self._clearing, self._let_go,
                           self._released_at):
@@ -348,8 +350,11 @@ class Skills:
             return False
         if len(contacts.finger_sides(m, d, bid)) < 2:
             return False
-        return (abs(self.env.snapshot()["aperture_rate"]) < self.k.squeeze_rate
-                or contacts.only_gripper(m, d, bid))
+        if (abs(self.env.snapshot()["aperture_rate"]) < self.k.squeeze_rate
+                or contacts.only_gripper(m, d, bid)):
+            self._last_held = obj                      # let_go's strict test is for this one
+            return True
+        return False
 
     def let_go(self, obj: str) -> bool:
         """Out of the hand as DEF-skill-contract's release postcondition has it: not held, and no robot
@@ -358,6 +363,10 @@ class Skills:
         the stove's knob and the hand dragged the moka pot off the burner."""
         if self.held(obj):
             return False
+        if obj != self._last_held:
+            # only the object last in the jaws: an earlier one the hand brushes while carrying the next is
+            # not taken back up as undone
+            return True
         m, d = self.scene.m, self.scene.d
         try:
             bid = self.scene.body_id(obj)
