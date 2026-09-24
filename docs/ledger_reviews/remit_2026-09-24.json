@@ -1,0 +1,1178 @@
+[
+ {
+  "id": "TRL-0001",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "Gap rests on the declarations: \"'executable only if every pose meets DEF's thresholds' does not follow from the axiom's vague bound\"; reach.py/sim_arm.py cites only illustrate."
+ },
+ {
+  "id": "TRL-0002",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"the two exclusions rest on empirical/simulator facts not among the premises\" names missing premises; code cites are illustrative."
+ },
+ {
+  "id": "TRL-0003",
+  "outcome": "falsified",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Falsification rests on code: 'the running teacher computes _risen=0.01 ... (skills.py:302-305,345-349; centre cached at 168)'."
+ },
+ {
+  "id": "TRL-0004",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"'makes episodes reproducible' is a sufficiency claim needing more\" with the missing premise named (fixture placement the only non-deterministic input)."
+ },
+ {
+  "id": "TRL-0005",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"The premises are normative (why observers must be read-only), not a proof that they are\" -- a non-entailment from the declarations; the call-order detail is supplementary."
+ },
+ {
+  "id": "TRL-0006",
+  "outcome": "falsified",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample is a code path: 'reach.py:186 returns lo = target_z + 0.05 unchecked ... reach.py:185 never calls collides()'."
+ },
+ {
+  "id": "TRL-0007",
+  "outcome": "falsified",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample is a code path: 'skills.py:482 calls reach.choose(..., extra=...) without strict=True ... returns cands[0] forced (reach.py:99-103)'."
+ },
+ {
+  "id": "TRL-0008",
+  "outcome": "gap",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "The failing assumption is established from code: window bound equals reach opening 'grip_margin 0.012 (skills.py:64,456)', finger_sides 'contacts.py:66-75'."
+ },
+ {
+  "id": "TRL-0009",
+  "outcome": "falsified",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample audits the tooling: 'teacher_report.py:107-114 runs skill_eval with check=False ... skill_eval.py:238-239'."
+ },
+ {
+  "id": "TRL-0010",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"'only if every pose is DEF-reachable' holds only if DEF's thresholds equal the physical failure point\" -- missing premise from the declarations."
+ },
+ {
+  "id": "TRL-0011",
+  "outcome": "falsified",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Refutation reads the implementation: 'Skills.held (skills.py:223-238) ... decides from jaw speed'."
+ },
+ {
+  "id": "TRL-0012",
+  "outcome": "falsified",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample is cached code behaviour: 'Carry height cached per (obj, region) ... (skills.py:409-414) with q[:2] as the pick stop (reach.py:182)'."
+ },
+ {
+  "id": "TRL-0013",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "Gap named from the declarations: 'Neither premise excludes other RNG consumers' / 'supported by measurement, not by deduction'."
+ },
+ {
+  "id": "TRL-0014",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"Premises are norms\" -- the read-only property is not entailed by normative premises; the call-site search is extra."
+ },
+ {
+  "id": "TRL-0015",
+  "outcome": "falsified",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample is code: 'reach.py:186 returns lo unchecked ... No fixture-penetration check (reach.py:185)'."
+ },
+ {
+  "id": "TRL-0016",
+  "outcome": "falsified",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample is code: 'reach.choose called without strict (skills.py:482) ... returns cands[0] forced'."
+ },
+ {
+  "id": "TRL-0017",
+  "outcome": "falsified",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Refutation from code: 'The contact term counts every geom of the drawer body ... (contacts.py:187-196; skills.py:445; scene.py:162)'."
+ },
+ {
+  "id": "TRL-0018",
+  "outcome": "gap",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "The missing premise is motivated only by code: 'EpisodeLog runs inside the same try as the teacher (skill_eval.py:50,62,71,101-106)'."
+ },
+ {
+  "id": "TRL-0019",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"The axiom supports only 'a path through a pose with sigma or margin near zero is not tracked'\" vs DEF's hard bars -- a declaration-level gap."
+ },
+ {
+  "id": "TRL-0020",
+  "outcome": "falsified",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "\"false as a statement about this system\" -- shown via 'Skills.held (skills.py:235-238) ... pick() switches to lift (skills.py:277-281)'."
+ },
+ {
+  "id": "TRL-0021",
+  "outcome": "falsified",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample is cached code paths: '_carry_cache keyed (obj, region) is never invalidated (skills.py:409-414)'."
+ },
+ {
+  "id": "TRL-0022",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness argued from code: 'Settle and replay both seed numpy's global RNG ... (task_env.py:126 ...); bddl_base_domain.py:757 vs 758'."
+ },
+ {
+  "id": "TRL-0023",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Gap is a judgement of implementation fidelity: \"guaranteed only by call order and current_step's structure\" (skill_eval.py:56,62; skill_teacher.py:54)."
+ },
+ {
+  "id": "TRL-0024",
+  "outcome": "falsified",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample is code: 'reach.py:186 returns lo when no height passes ... no collides()'."
+ },
+ {
+  "id": "TRL-0025",
+  "outcome": "falsified",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample is code: 'choose without strict (skills.py:482) returns cands[0] forced ... (reach.py:99-103)'."
+ },
+ {
+  "id": "TRL-0026",
+  "outcome": "gap",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "The failing premise is established from code: 'a[body] is the joint's body, scene.py:145,152 ... (skills.py:64,456) ... gripper_servo.py:52'."
+ },
+ {
+  "id": "TRL-0027",
+  "outcome": "gap",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "\"two derivation steps misdescribe the code\" -- gap rests on episode_log.py/skills.py/skill_eval.py/teacher_report.py behaviour."
+ },
+ {
+  "id": "TRL-0029",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"Necessity fails within the premises\": constructed from DEF-gentle-placement (release 2 mm above exact touchdown; speed measured only at release)."
+ },
+ {
+  "id": "TRL-0030",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Falsification needs the controller implementation: 'JOINT_POSITION controller has interpolation null ... (joint_pos.py:240-243, libero_env.py:216-217)'."
+ },
+ {
+  "id": "TRL-0031",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"Without that premise the derivation contradicts LMA-touchdown-from-scan-and-hand's own caveat\"; missing premise named."
+ },
+ {
+  "id": "TRL-0032",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "CE (1) is from the declared rule: 'Bounding each command within 0.1 m/s of the measured velocity does not bound consecutive commands ... a 0.2 m/s step'."
+ },
+ {
+  "id": "TRL-0033",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness checked in code: '_handle_frame carries R_h0/app0 ... (skills.py:545-548, 600-603) ... _drive clips dq (skills.py:585-587)'."
+ },
+ {
+  "id": "TRL-0034",
+  "outcome": "falsified",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample traces code paths: 'act() takes the articulate branch (skill_teacher.py:127-128), which never calls leave_handle'."
+ },
+ {
+  "id": "TRL-0036",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"A contact trigger is necessary only if scan+grip error exceeds the 5 mm budget; no premise bounds that error from below.\""
+ },
+ {
+  "id": "TRL-0037",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"'DEF bounds a' misses the load that matters (CoM acceleration plus moment) and accelerations not caused by commands\" -- declaration-level gap."
+ },
+ {
+  "id": "TRL-0038",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"'Touchdown pose known before the grasp' contradicts the premise that it depends on the actual in-hand offset\"."
+ },
+ {
+  "id": "TRL-0040",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness checked in code: '_handle_frame returns the cached frame ... (skills.py:542-548,597-603; scene.py:144-150)'."
+ },
+ {
+  "id": "TRL-0041",
+  "outcome": "falsified",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Refutation from call sites: 'Called only in the pick branch (skill_teacher.py:116-122)'."
+ },
+ {
+  "id": "TRL-0042",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "Missing premises named from the declarations: 'AXM-grip-fixes-object-in-hand supplies poses only'; flat underside/support unstated."
+ },
+ {
+  "id": "TRL-0043",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"DEF-gentle-placement constrains only the release instant; a height-triggered release meets it\" -- counterexample from the definition."
+ },
+ {
+  "id": "TRL-0044",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"DEF-smooth-motion bounds commanded linear velocity changes ... the bridge is not a premise\" -- declaration-level gap."
+ },
+ {
+  "id": "TRL-0046",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "Missing premise named: 'measured velocity equals the previous command'; \"'Smooth when' is a sufficiency claim that does not follow\"."
+ },
+ {
+  "id": "TRL-0047",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness checked in code: '_handle_frame caches (R_h0, w, app0, q0) ... (skills.py:534-548,597-603)'."
+ },
+ {
+  "id": "TRL-0048",
+  "outcome": "falsified",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample from code: 'never calls leave_handle (only call site: pick branch, skill_teacher.py:120)'."
+ },
+ {
+  "id": "TRL-0052",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "CE (2) stands on the goals and declared affordance: 'On(b1,b2) first ... covers the rim b2's only declared grasp needs (held_by: rim)'."
+ },
+ {
+  "id": "TRL-0056",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"The derivation excludes only scene-relative values; object-intrinsic geometry ... could properly go in the table unless AXM-object-geometry-known (not cited)\"."
+ },
+ {
+  "id": "TRL-0067",
+  "outcome": "gap",
+  "currently_amended_invalid": true,
+  "verdict": "IN_REMIT",
+  "reason": "Cycle derived from the branch's declared contracts: 'held(o) <- pick needs hand-empty <- park needs held(o)' -- the antecedent is false from the declarations."
+ },
+ {
+  "id": "TRL-0068",
+  "outcome": "gap",
+  "currently_amended_invalid": true,
+  "verdict": "IN_REMIT",
+  "reason": "\"DEF-plan assumes a unique achiever per predicate, but uncrowded has two ... with no state-determined choice\" -- from the declarations."
+ },
+ {
+  "id": "TRL-0069",
+  "outcome": "gap",
+  "currently_amended_invalid": true,
+  "verdict": "IN_REMIT",
+  "reason": "\"'Executed behaviour depends on history' is consistent with the premises through the branch's own macro skill\"; clearing.spot remark is supplementary."
+ },
+ {
+  "id": "TRL-0073",
+  "outcome": "falsified",
+  "currently_amended_invalid": true,
+  "verdict": "IN_REMIT",
+  "reason": "Declared contracts decide it: 'no declared skill achieves graspable' and 'drive declares only Open as its effect, and Open does not imply admits'."
+ },
+ {
+  "id": "TRL-0074",
+  "outcome": "gap",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Gap rests on code: 'clearing.crowds is evaluated on the container's footprint at its open target ... graspable depends on the destination (via=via_for(region))'."
+ },
+ {
+  "id": "TRL-0075",
+  "outcome": "gap",
+  "currently_amended_invalid": true,
+  "verdict": "IN_REMIT",
+  "reason": "\"uncrowded is never defined\" -- a missing definition in the declarations; clearing.crowds detail is illustrative."
+ },
+ {
+  "id": "TRL-0078",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample reads LIBERO code: 'SiteObjectState.check_contact returns True, base_object_states.py' (contradicting the axiom as then stated)."
+ },
+ {
+  "id": "TRL-0079",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample from running and reading robosuite: 'JointPositionController, whose __init__ caches joint state ... substep 0 uses that stale cache'."
+ },
+ {
+  "id": "TRL-0082",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness checked against implementation: 'each term is gated by the same _eval_predicate _check_success conjoins ... 240/240 episodes'."
+ },
+ {
+  "id": "TRL-0084",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness is a code audit: 'No task-keyed term; all 30 goal forms handled (in(obj, object) raises, unused)'."
+ },
+ {
+  "id": "TRL-0086",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample is measured servo behaviour: 'the servo's pose reference sat 78 mm below the tool ... moved the tool -0.7 mm vs +26.3 mm'."
+ },
+ {
+  "id": "TRL-0087",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "Gap includes declaration-level holes in the declared reward: 'disturbing other objects is free', 'uneven units', 'the mean of the stochastic policy is not what PPO optimised'."
+ },
+ {
+  "id": "TRL-0091",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Gap rests on measured runs: 'the lead clip binds in free motion ... (libero_goal 0: 15-16 of 74 steps ...)'."
+ },
+ {
+  "id": "TRL-0094",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample from probing LIBERO/MuJoCo: 'LIBERO accepts the bowl ... at q = -0.13 ... mj_geomDistance reads 0'."
+ },
+ {
+  "id": "TRL-0095",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Gap rests on measured implementation behaviour: 'on the live LIBERO model native CCD returns false zeros ... wrong at 10-44 of 48'."
+ },
+ {
+  "id": "TRL-0096",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"d ignores obstacles, so objects resting against a wall sit in local minima\" -- follows from the declared loss; per-task numbers illustrate."
+ },
+ {
+  "id": "TRL-0097",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample needs the implemented check: 'the speed check reads only the origin's linear speed' (REST_SPEED), shown in simulation."
+ },
+ {
+  "id": "TRL-0098",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "From the declared observation list: 'Fixture joint rates and object velocities are unobserved' -- two indistinguishable states end differently."
+ },
+ {
+  "id": "TRL-0099",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "From the declared reward terms: 'No reward term sees the released object (smoothness reads the tool, contact only the robot or held object)'."
+ },
+ {
+  "id": "TRL-0103",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample from running PrivilegedEnv: '_compatible_init_state returns None on an unsettled redraw and reset() recurses'."
+ },
+ {
+  "id": "TRL-0106",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample is measured lag plus robosuite internals: 'robosuite runs forward-then-step on each substep and never forwards after the last one'."
+ },
+ {
+  "id": "TRL-0107",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness rests on robosuite code and runs: '(robosuite/utils/observables.py:226) ... left closed-loop episodes bit-identical'."
+ },
+ {
+  "id": "TRL-0109",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "Algebra on the declared objective: 'at gamma = 1 with truncation bootstrapped, time costs nothing, and slowing any execution by k divides its smoothness cost by ~k^3'."
+ },
+ {
+  "id": "TRL-0110",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "Declared reward term: 'kappa compares against the previous gripper level, unobserved' -- reward not a function of (o, a, o')."
+ },
+ {
+  "id": "TRL-0115",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "\"Random impulses break settled both ways\" is shown only by simulation (0-6 of 16 seeds; knob inertia 1, damping 1)."
+ },
+ {
+  "id": "TRL-0116",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "Wording-level gaps: 'Psi as worded prices the libero_goal 3 drawer joint' and 'every body except the moved object includes robot links'."
+ },
+ {
+  "id": "TRL-0117",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample from code and runs: 'restore list omits robosuite's timestep (base.py:376,429) and model.site_rgba ... 456 agentview pixels changed'."
+ },
+ {
+  "id": "TRL-0124",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Holes are code/measurement findings: 'scripted_teacher.py:233', settle ramp '0.0372 rad', EGL re-renders, repro formulas in skill_eval/distill."
+ },
+ {
+  "id": "TRL-0127",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness from runs: '150 open-loop steps ... max |d| = 0'; requirements found in code (teacher_env.py:260)."
+ },
+ {
+  "id": "TRL-0129",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Gap rests on measured regressions: '5 tasks x inits 0-3 20/20 -> 18/20 ... libero_object 1 8/8 -> 3/8'."
+ },
+ {
+  "id": "TRL-0130",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample is a measured probe: '444 of 444 unwinds exceed the claimed 40 N m per-substep torque change'."
+ },
+ {
+  "id": "TRL-0133",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "From the declarations: 'settled(s) never asks for rest at s, and for In on a site region LIBERO checks containment only' (as AXM-libero-scores-final-state states)."
+ },
+ {
+  "id": "TRL-0134",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness established by runs: 'zeroing the warmstart changed 0/99 verdicts ... episodes of 134 and 277 steps were bit-identical'."
+ },
+ {
+  "id": "TRL-0135",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"The objective leaves the settling transient unpriced for every containment-only goal\" -- from the declared objective and axiom."
+ },
+ {
+  "id": "TRL-0137",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness is implementation measurement: 'numba and numpy agree to 3.1e-16 ... matches unpruned brute force'."
+ },
+ {
+  "id": "TRL-0138",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Gap rests on probing LIBERO: 'LIBERO accepts non-penetrating perches from origin F + 0.0328 ... (0/2, 0/7, 0/12)'."
+ },
+ {
+  "id": "TRL-0139",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample is a measured episode: 'libero_goal 8 ep0 ... 1.77026 -> 1.77521 m/s^2'."
+ },
+ {
+  "id": "TRL-0140",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness from runs and code: 'bit-identical to the current servo (1 named, 11 extra) ... provided the non-binding branch keeps servo.py:122'."
+ },
+ {
+  "id": "TRL-0142",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness from runs: 'lead at command time max 0.10000000000000009 rad ... cos >= 0.9999999999999997 on all 1486 scaled steps'."
+ },
+ {
+  "id": "TRL-0143",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness from runs and code: '0 mismatches over 9599 non-scaled steps ... (episode_log.py:71,221,286-289)'."
+ },
+ {
+  "id": "TRL-0144",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Overclaims shown by measurement: 'the arm trails the reference by up to 0.1913 rad ... hides 10 genuine IK failures'."
+ },
+ {
+  "id": "TRL-0145",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Gap is a code audit of trial writers: 'teacher_motion.py:106,117 records no seed ... distill.py:421,425'."
+ },
+ {
+  "id": "TRL-0148",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness from runs: 'equals a fresh forced observation at 160/160 executes'."
+ },
+ {
+  "id": "TRL-0151",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample is a measured press on flat_stove_1_burner: '0.43-0.46 m/s peak ... 13.6-15.1 m/s^2'."
+ },
+ {
+  "id": "TRL-0152",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"The unwind clause is presented ('so') as following from the command-time bounds, which say nothing about how fast a stored lead unwinds\"."
+ },
+ {
+  "id": "TRL-0154",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "CE names a declaration-level cause: 'a + b double-counts where both act, and b rewards touching any part of the parent object' (instances are measured)."
+ },
+ {
+  "id": "TRL-0155",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "From the statement: \"'MIN_TERM ... no verdict depends on its value' is false for the loss a learner descends: max(d, M) replaces d wherever d < M\"."
+ },
+ {
+  "id": "TRL-0157",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness from runs: 'success 10/10 vs 9/10 ... non-binding branch 0 mismatches over 2403 steps'."
+ },
+ {
+  "id": "TRL-0158",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "\"Nothing substantive beyond what was measured; references sim_arm.py:50,97 and servo.py:43,116,122 check out\"."
+ },
+ {
+  "id": "TRL-0159",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Negation check rests on measurement and code: 'up to 0.0503 at max_lag 0.05 ... servo.py:56's comment'."
+ },
+ {
+  "id": "TRL-0160",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample is a simulated state: 'cream cheese wedged in the bowl ... v6-settled 0/300'; the claim's settled clause is not quoted."
+ },
+ {
+  "id": "TRL-0161",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"Not every number has a declared source\" plus declaration-level holes ('Condition (b) needs the start state', unstated 'vertical speed')."
+ },
+ {
+  "id": "TRL-0162",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample is measured execution: 'substep acceleration p95 2.87-2.89 m/s^2 at requested 0.15-0.30 m/s'."
+ },
+ {
+  "id": "TRL-0163",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "Arithmetic on the declared loss: 'loss 0.19925 + M ... 0.05184 + 2M; ... the order flipping at M = 0.1474'."
+ },
+ {
+  "id": "TRL-0166",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness from replays and code: 'teacher_motion trials reproduce ... (teacher_motion.py:106-118, distill.py:267)'."
+ },
+ {
+  "id": "TRL-0167",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Gap from code: 'record_rollout.py:137-140 builds only PrivilegedEnv + ScriptedTeacher'."
+ },
+ {
+  "id": "TRL-0168",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Gap from code: 'teacher_revision hashes only scripted_teacher.py, distill.py:249 ... distill.py:312'."
+ },
+ {
+  "id": "TRL-0169",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness from runs and a code audit: 'joint error 3.8e-12 ... list complete (sim_arm.py:122,249-256, ...)'."
+ },
+ {
+  "id": "TRL-0173",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "\"Nothing beyond what was measured\"; relies on LIBERO code (articulated_objects.py:181-182) and measured d."
+ },
+ {
+  "id": "TRL-0175",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample from code and runs: 'record_rollout builds ScriptedTeacher(env) with v_min_approach at its default 0 (record_rollout.py:139)'."
+ },
+ {
+  "id": "TRL-0177",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"holds only for changes inside the hash, which the claim does not define\" -- a declaration-level gap; file list illustrates."
+ },
+ {
+  "id": "TRL-0178",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness from runs: 'max |q - q_placed| during the hold <= 3.2e-9 rad ... the anchor alone gives identical numbers'."
+ },
+ {
+  "id": "TRL-0180",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "Wording gap: \"'The ledger's teacher and student contracts' does not clearly include CTR-randomization-preserves-instruction\" (declarations, not code)."
+ },
+ {
+  "id": "TRL-0181",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample from code and runs: 'SimArm.chain (sim_arm.py:96) is parsed from $ROBOT_ASSETS/panda/robot.xml ... runs 144 steps'."
+ },
+ {
+  "id": "TRL-0182",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "Wording gap: \"'every module both environments and the episode runners import' does not say which closure\"; settings list ambiguities."
+ },
+ {
+  "id": "TRL-0183",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Gap from repo history and runtime: '4 of 35 commits touching the closure did' and scripts 'run under python3 (belief.yaml:1238,1247)'."
+ },
+ {
+  "id": "TRL-0184",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness checked in code: 'component-belief reads keys with repro.get(k) (model.py:103) ... token_data.py:330-334'."
+ },
+ {
+  "id": "TRL-0185",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"'checkpoints record the execution hash they were trained under' has no source: training runs no simulator\" -- the claim names no source."
+ },
+ {
+  "id": "TRL-0187",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample is measured implementation: 'the gripper servo's 3 mm band makes the aperture chatter (gripper_servo.py:42) ... 19 of 55'."
+ },
+ {
+  "id": "TRL-0188",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Gap from code: 'GripperScan measures only reach and palm (scan.py:42-61) ... skills.py:334'."
+ },
+ {
+  "id": "TRL-0190",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness from runs: 'bit-identical over 200 steps (md5 6b9216a985f7)'."
+ },
+ {
+  "id": "TRL-0191",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "\"Nothing beyond what was measured; line references exact at HEAD (scripted_teacher.py:233-235, skills.py:151-156)\"."
+ },
+ {
+  "id": "TRL-0192",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness is a code search: 'No other cross-episode state found (Reach._geom_mask model-only ... skills.py:517)'."
+ },
+ {
+  "id": "TRL-0193",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness from runs: 'Reads never changed the simulated state (0 of 600 steps ...)'."
+ },
+ {
+  "id": "TRL-0194",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Gap from runs and code: 'a different frame at 2 of 600 steps ... (teacher_env.py:204-205)'."
+ },
+ {
+  "id": "TRL-0196",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample from robosuite internals and runs: 'robosuite writes ctrl only inside grip_action ... (sim_arm.py:129, layouts.py:222-235)'."
+ },
+ {
+  "id": "TRL-0197",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Gap from code: 'rotation error below at_rot = 0.10 rad (skills.py:49, 324) ... max_grip = 0.075 (skills.py:69)'."
+ },
+ {
+  "id": "TRL-0198",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "\"The implementation also lifts when the object touches only the gripper (3 of 43 held onsets)\"."
+ },
+ {
+  "id": "TRL-0199",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample from an implemented hash and runs: 'OPENBLAS_CORETYPE=ARMV8 changes the state bits ... editing robosuite's installed panda_gripper.xml'."
+ },
+ {
+  "id": "TRL-0200",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "The declaration-level point is only non-entailment; the falsification rests on measurement: 'worker 0's action differs by up to 2.35e-5 when batched'."
+ },
+ {
+  "id": "TRL-0201",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "Self-described 'Wording gaps': \"'Episode index' needs defining\" is a gap in the declaration (items (1)-(2) are code comparisons)."
+ },
+ {
+  "id": "TRL-0202",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness from ~97k measured periods and code (base_controller.py:141-153, single_arm.py:268-272)."
+ },
+ {
+  "id": "TRL-0203",
+  "outcome": "falsified",
+  "currently_amended_invalid": true,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample from code and runs: 'robosuite updates observables every substep (base.py:392 ...) ... diverges at step 1 in 13/13'."
+ },
+ {
+  "id": "TRL-0204",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Gap rests on timing measurements: '11.55 -> 4.09 ms ... repo full execute() 2.14x'."
+ },
+ {
+  "id": "TRL-0205",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample from runs and code: 'The missing field is TwistServo.V_prev (servo.py:49, 72-81) ... diverges at step 0 in 9/10'."
+ },
+ {
+  "id": "TRL-0206",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "Claim (4): 'numbers the search needs are not sourced' as AXM-parameters-derived requires, and the ranking independence is 'asserted, not shown'."
+ },
+ {
+  "id": "TRL-0207",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"Internal inconsistencies\" among the claim, design doc and cited premises; 'Premises needed but not cited'."
+ },
+ {
+  "id": "TRL-0208",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness from recorded episodes: '5,475 states ... 0 violations'; 'the lemma survives because it defines v_max by measurement'."
+ },
+ {
+  "id": "TRL-0211",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "From the statement: 'At a state LIBERO already accepts ... with rho_g no longer zeroed the bound demands (rho_g + 0)/v_max > 0 steps'."
+ },
+ {
+  "id": "TRL-0212",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "Holes read from the statement: '(iii) restricts only the origin, so the object can spin about its origin', accepted s, and the libero_goal 3 exclusion."
+ },
+ {
+  "id": "TRL-0214",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexamples from code and runs: 'settle.py places the pyramid's edges at mu cos(pi/8)', 'PYRAMID_EDGES = 8, COINCIDENT = 1e-9'."
+ },
+ {
+  "id": "TRL-0215",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "Declaration-level gaps: 'The keep-filter drops half of DEF-smooth-motion', 'BRN-execution-bounds-acceleration is cited but not a premise', theta must be frozen."
+ },
+ {
+  "id": "TRL-0217",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample from runs: 'robosuite's cached mass matrix is Fortran-ordered ... QVEL differs by 4.3e-19'."
+ },
+ {
+  "id": "TRL-0218",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"The premises justify including ... but do not entail sufficiency: nothing among them covers the servo or ramp state\"."
+ },
+ {
+  "id": "TRL-0220",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "From the premise's statement: \"The seed is built from 'the execution state' of BRN-execution-state-restore, which includes TaskEnv.t\"."
+ },
+ {
+  "id": "TRL-0221",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "From the declared rollout: 'every rollout starts a fresh release watch at the restored state', so an executed release is judged by an unexecuted continuation."
+ },
+ {
+  "id": "TRL-0223",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"AXM-libero-resamples-fixtures (a premise) says every reset changes the fixture poses, so limiting the body-pose copy to 'another instance' contradicts it\"."
+ },
+ {
+  "id": "TRL-0224",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"'Sufficiency by measurement' generalizes a universal claim from finite samples, and no premise says the lean control period reads only the saved items\"."
+ },
+ {
+  "id": "TRL-0226",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness from scripted simulation: '14 accepted descents, 290 states ... No state had a ratio below 1'."
+ },
+ {
+  "id": "TRL-0227",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Hole rests on LIBERO's model and probes: 'flat_stove_1: 18 of 20 contact geoms on the knob ... flipped LIBERO from reject to accept'."
+ },
+ {
+  "id": "TRL-0228",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Gap rests on measured vacuity: '(i)-(iii) held on 0 of 290 scripted states ... vacuously true for every simulated plan examined'."
+ },
+ {
+  "id": "TRL-0229",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Gap rests on reproduction and search over 145 episodes (settled false positive/negative found in simulation)."
+ },
+ {
+  "id": "TRL-0230",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Gap from re-measurement and code: 'MuJoCo slid a 0.92 mu state', 'the code checks downward speed only'."
+ },
+ {
+  "id": "TRL-0231",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "Quotes the statement against itself: \"'decides from the simulated state alone' is false for release: the watch keeps history\" (the declared 16-substep window)."
+ },
+ {
+  "id": "TRL-0232",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample from code and runs: 'omits servo.py's scale_lead branch ... max deviation from exp([V] t) 527 mm'."
+ },
+ {
+  "id": "TRL-0235",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness from simulation: '71,400 poses ... LIBERO's verdict changed 0 times'."
+ },
+ {
+  "id": "TRL-0236",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "Entailment chain from the declarations: 'steps x v_max >= tool path >= rho_g + origin path >= rho_g + D* >= rho_g + d/2'; the LIBERO read only settles wording."
+ },
+ {
+  "id": "TRL-0237",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample checks the statement's numbers against logs and runs: 'there were 14 accepted descents holding 290 rejected states'."
+ },
+ {
+  "id": "TRL-0238",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Soundness from re-runs at HEAD 28fd126: 'pytest 3/3 ... 24/24 ... 16/16'."
+ },
+ {
+  "id": "TRL-0239",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"the premises do not cover the servo and ramp state, whether MuJoCo's integration state is everything a step reads\" -- declaration-level gap."
+ },
+ {
+  "id": "TRL-0241",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "CE (a) from the statement: \"'the execution state without the step counter' still contains mjSTATE_INTEGRATION\" whose time is a step counter, and pi_theta receives it."
+ },
+ {
+  "id": "TRL-0242",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "From the declared key and keep-filter: 'the key gives the loss no entry, the keep-filter's finish() decides it a release'."
+ },
+ {
+  "id": "TRL-0243",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"'Without the step counter' contradicts the time field\"; missing definitions (handle geom and r, tie rule, re-anchor under scale_lead)."
+ },
+ {
+  "id": "TRL-0244",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample from logs and a scripted impulse simulation: 'the source has 542 judged non-violations', 'settled(watch) is true at period 19'."
+ },
+ {
+  "id": "TRL-0245",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Counterexample reads code: 'period_end reads that state without advancing count, and the next substep(0) re-reads' plus a scripted sweep."
+ },
+ {
+  "id": "TRL-0246",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "OUT_OF_REMIT",
+  "reason": "Gap from runs: 'replaying recorded actions ... 74 periods had an unnamed body's change and 72 went unflagged'."
+ },
+ {
+  "id": "TRL-0247",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "Explicitly from the declarations: 'reviewed this claim from the declarations alone ... constructed from the cited premises'."
+ },
+ {
+  "id": "TRL-0266",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"Compliance of an artifact with a requirement is implementation fidelity, not entailment\"; missing premise named."
+ },
+ {
+  "id": "TRL-0287",
+  "outcome": "gap",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"The premises establish one of the four\" -- the opening sentence claims more than the declarations give."
+ },
+ {
+  "id": "TRL-0371",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"The claimed property follows from the claim's own definitions\"; fidelity is set aside as 'implementation fidelity, not entailment'."
+ },
+ {
+  "id": "TRL-0383",
+  "outcome": "sound",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"The claimed invariant is the contrapositive of the stated rule ... No clause needs the implementation to be judged.\""
+ },
+ {
+  "id": "TRL-0412",
+  "outcome": "falsified",
+  "currently_amended_invalid": false,
+  "verdict": "IN_REMIT",
+  "reason": "\"The scenario satisfies every premise and uses only the claim's ordering rule; no knowledge of the code is needed.\""
+ }
+]
