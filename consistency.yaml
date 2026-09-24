@@ -2472,39 +2472,39 @@ branches:
       none does, the kept direction whose moved centre is nearest the robot's base in plan, ties to the
       first in that order. 'Over' a point means within a declared distance of it in plan. For a roofed
       target with a direction taken, the place's drop point is at the entry's rest height, and the command
-      is: in the corridor and not over the drop point, the tool's translation along the offset from the
-      object's origin to the drop point at that height; not in the corridor, over E and above E's height
-      plus the band, the tool's translation along the offset from the object's origin to E; otherwise, not
-      in the corridor, the place's own slide and lift, their rotation goal unchanged, and its carry, with
-      E as their destination; in the corridor and over the drop point, the place's own lower and release
-      toward the drop point at that height (BRN-place-onto-physical-support). Those two commands, the
-      carry and the lower turn the tool toward the entry frame. At every step at which the place finds the
-      object held, it first clears the records below; when it then commands the release with a direction
-      taken, it records, for the object and region, the drop point at the entry's rest height, and a
-      withdrawal: u and the tool point then moved along u by E's distance from the drop point; both
-      records are also cleared at an episode's start. While the object is not held and a release is
-      recorded, the place's target -- what its delivered test reads -- is the recorded point. While a
-      withdrawal is recorded and no placed object is held, the retreat commands the tool, its rotation
-      goal unchanged, toward the point level with it along u at the withdrawal point's distance along u,
-      until that distance is within the over distance; then it clears the withdrawal and retreats as
-      before. A target not roofed at a step, or roofed with no direction kept, is placed at that step as
-      before. Claimed: (1) at every step at which the target is roofed, a direction is taken, and the
-      object is in that direction's corridor and not over the drop point, the tool is commanded along the
-      offset from the object's origin to the drop point at the entry's rest height; (2) at every step at
-      which the object is held, whether the target is roofed, whether the object is laid, which direction
-      and entry frame are taken, and which of the commands above applies are functions of that step's
-      state, the placed object, the drop point, the region's box, the carry height, the arm's joint ranges
-      and declared constants; (3) for a laid object with a direction taken, the object carried at the
-      entry frame at its rest height at the drop point has its top, plus the clearance, at or below the
-      roof of that step; (4) while a withdrawal is recorded, no placed object is held and the withdrawal
-      point's distance along u exceeds the over distance, the retreat's commanded translation has no
-      vertical component; (5) the drop point in plan is the place's own. Not claimed: that the object
-      reaches the corridor; that the roof, the laid decision or the direction stay the same while the
-      object is in the corridor; that the tool reaches the entry frame or tracks the commanded height;
-      that the hand or arm clears the roof, the table or other objects; that the object fits the opening
-      across its width, rests level, or stays in the region after release; that the withdrawal leaves the
-      object undisturbed; anything of the place's own lift, carry, lower and release beyond what
-      BRN-place-onto-physical-support states.
+      is, by four cases: (a) in the corridor and not over the drop point, the tool's translation along the
+      offset from the object's origin to the drop point at that height; (b) not in the corridor, over E
+      and above E's height plus the band, the tool's translation along the offset from the object's origin
+      to E; (c) otherwise not in the corridor, the place's own slide and lift, their rotation goal
+      unchanged, and its carry, with E as their destination; (d) in the corridor and over the drop point,
+      the place's own lower and release toward the drop point at that height
+      (BRN-place-onto-physical-support). The commands of (a) and (b), the carry and the lower turn the
+      tool toward the entry frame. At every step at which the place finds the object held, it first clears
+      the records below; when it then commands the release with a direction taken, it records, for the
+      object and region, the drop point at the entry's rest height, and a withdrawal: u and the tool point
+      then moved along u by E's distance from the drop point; both records are also cleared at an
+      episode's start. While the object is not held and a release is recorded, the place's target -- what
+      its delivered test reads -- is the recorded point. While a withdrawal is recorded and no placed
+      object is held, the retreat commands the tool, its rotation goal unchanged, toward the point level
+      with it along u at the withdrawal point's distance along u, until that distance is within the over
+      distance; then it clears the withdrawal and retreats as before. A target not roofed at a step, or
+      roofed with no direction kept, is placed at that step as before. Claimed: (1) at every step at which
+      the target is roofed, a direction is taken, and the object is in that direction's corridor and not
+      over the drop point, the tool is commanded along the offset from the object's origin to the drop
+      point at the entry's rest height; (2) at every step at which the object is held, whether the target
+      is roofed, whether the object is laid, which direction and entry frame are taken, and which of the
+      four cases (a) to (d) applies are functions of that step's state, the placed object, the drop point,
+      the region's box, the carry height, the arm's joint ranges and declared constants; (3) for a laid
+      object with a direction taken, the object carried at the entry frame at its rest height at the drop
+      point has its top, plus the clearance, at or below the roof of that step; (4) while a withdrawal is
+      recorded, no placed object is held and the withdrawal point's distance along u exceeds the over
+      distance, the retreat's commanded translation has no vertical component; (5) the drop point in plan
+      is the place's own. Not claimed: that the object reaches the corridor; that the roof, the laid
+      decision or the direction stay the same while the object is in the corridor; that the tool reaches
+      the entry frame or tracks the commanded height; that the hand or arm clears the roof, the table or
+      other objects; that the object fits the opening across its width, rests level, or stays in the
+      region after release; that the withdrawal leaves the object undisturbed; anything of the place's own
+      lift, carry, lower and release beyond what BRN-place-onto-physical-support states.
     premises: [BRN-place-onto-physical-support, AXM-object-geometry-known, AXM-grip-fixes-object-in-hand, AXM-mujoco-forward-is-a-function-of-state]
     derivation_rule: >-
       Every roofed target in LIBERO failed for the teacher, whose place comes straight down over the drop
@@ -2536,10 +2536,11 @@ branches:
       fixture seed 555, success: libero_90 40 10, 42 6, 86 9, 88 10, 89 0 of 10; fixture seed 557, settled
       (TST-teacher-settled) 40 7, 42 5, 86 3, 88 10 of 10, success 10, 5, 5, 10. libero_10 9 stays 0 of
       10. Not solved: 89 (under the bottom layer the hand meets the table; the humans insert at 32 deg and
-      let the book drop), and a descent at E onto a book standing on the table (86). Restated twice per
-      the verifier: the arm's joint ranges named as constants and inputs, ties and bounds declared, claim
-      (2) held to the steps the object is held; the commands' moving point named (the tool, by the
-      object's origin's offset), the rest height single-valued, the records' order within a step stated.
+      let the book drop), and a descent at E onto a book standing on the table (86). Restated three times
+      per the verifier: the arm's joint ranges named as constants and inputs, ties and bounds declared,
+      claim (2) held to the steps the object is held; the commands' moving point named (the tool, by the
+      object's origin's offset), the rest height single-valued, the records' order within a step stated;
+      claim (2) of the four cases, not of the place's own phases.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 policies:
