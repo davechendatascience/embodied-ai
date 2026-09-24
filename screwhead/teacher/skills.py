@@ -20,7 +20,9 @@ Kept from the spatial programs, because they were measured there:
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -34,6 +36,17 @@ from .reach import Reach
 from .refusal import Refusal
 
 MIN_TWIST_DIST = 0.001    # m: nearer than this, the speed floor does not apply
+# where LIBERO's humans held the tool relative to the microwave's door while they swung it, against the
+# door's angle (tools/door_survey.py; BRN-swing-door-as-the-humans)
+SWING_TABLE = Path(__file__).with_name("door_swing.json")
+_swing_rows: dict | None = None
+
+
+def swing_rows() -> dict:
+    global _swing_rows
+    if _swing_rows is None:
+        _swing_rows = json.loads(SWING_TABLE.read_text())["modes"]
+    return _swing_rows
 FALLING = 0.05            # m/s: an object let go and moving faster has not landed yet
 
 
@@ -146,6 +159,9 @@ class SkillConfig:
     push_close_pitch: float = 0.785     # rad the fingers point from straight down toward the push: down
     #                                     (0), the forearm met the cabinet top 4 cm short of closed; level
     #                                     (pi/2), the push pose was out of reach in 44 of 50
+    swing_lead: float = 0.10       # rad past the door's angle the swing's target is taken at, once engaged
+    swing_engage: float = 0.015    # m from the humans' pose at the door's present angle: engaged (the palm on
+    #                                the handle as theirs); farther, the tool goes there first, no lead
     drive_lead_rot: float = 0.06   # rad a hinge drive may lead the handle (< at_rot): leading by the
     #                                whole remaining turn spun the tool at w_max while the knob, damped,
     #                                followed at a fifth of that -- the jaws were pried open and let go
@@ -945,6 +961,8 @@ class Skills:
         k = self.k
         R, p = s["R_tool"], s["p_tool"]
         a = self.scene.articulation(region)
+        if a["category"] == "microwave":                 # its door (BRN-swing-door-as-the-humans)
+            return self._swing(a, mode, s)
         if mode == "open" and a["jnt_type"] == 2 and self._hookable(a):
             return self._hook(a, s)
         if mode == "close" and a["jnt_type"] == 2:
@@ -1062,6 +1080,70 @@ class Skills:
             rejected=choice.get("rejected", {}), score=choice.get("score"),
             approach=[round(float(v), 2) for v in app], jaw=[round(float(v), 2) for v in R_h[:, 1]],
             width_mm=round(1000 * float(w), 1), handle_geom=self.scene.m.geom_id2name(a["handle_geom"]))
+
+    def _door_panel(self, a: dict) -> tuple[float, float]:
+        """(the least y of the door's panel in the door body's frame -- its face on the handle's side --,
+        the top of the door's geoms, base frame). The panel is the door body's box geom."""
+        m, d = self.scene.m, self.scene.d
+        b = a["body"]
+        face, top = 0.0, -np.inf
+        for g in range(m.ngeom):
+            if int(m.geom_bodyid[g]) != b or not (m.geom_contype[g] or m.geom_conaffinity[g]):
+                continue
+            c, Rg, hl = geom_world_box(m, d, g, self.scene.base)
+            top = max(top, float(c[2] + (np.abs(Rg) @ hl)[2]))
+            if int(m.geom_type[g]) == 6:
+                face = float(m.geom_pos[g][1] - m.geom_size[g][1])
+        return face, top
+
+    def _swing(self, a: dict, mode: str, s: dict) -> np.ndarray:
+        """Swing a door as LIBERO's humans do, all 50 of libero_90 35 (BRN-swing-door-as-the-humans):
+        nothing grasped, the jaws open throughout, the tool at the pose the humans held relative to the
+        door at the angle swing_lead past its present one -- opening, from the handle's side past the
+        free edge to the end of their front-side table, then from behind the panel; closing, from the
+        handle's side. Re-aimed from the door's pose every step; far from the target, over the door's
+        top to it. Grasped and carried along the arc instead, the handle slipped at -0.41 rad of the
+        -1.3 LIBERO asks (libero_90 35, 0 of 50)."""
+        k = self.k
+        R, p = s["R_tool"], s["p_tool"]
+        d = self.scene.d
+        b = a["body"]
+        Rd = d.xmat[b].reshape(3, 3).copy()
+        pd = d.xpos[b] - self.scene.base
+        q, sign = float(a["qpos"]), float(a["sign"])
+        face, top = self._door_panel(a)
+        rows = swing_rows()
+        if mode in ("open", "on"):
+            front = rows["open"]["front"]
+            switch = max(front, key=lambda e: e["q"] * sign)["q"]    # its angle farthest open
+            before = (q - switch) * sign < 0                  # not yet as far open as the front-side table
+            on_front = float((Rd.T @ (p - pd))[1]) < face
+            table = front if (before and on_front) else rows["open"]["behind"]
+            lead = sign * k.swing_lead
+        else:
+            table = rows["close"]["front"]
+            lead = -sign * k.swing_lead
+        anchor, axis = np.asarray(a["anchor"], float), np.asarray(a["axis"], float)
+
+        def held_at(qt: float):
+            """The humans' tool pose relative to the door at angle qt, the door turned there."""
+            # nearest angle; a tie to the entry nearer the closed end
+            e = min(table, key=lambda r: (abs(r["q"] - qt), r["q"] * sign))
+            turn = axis_rot(axis, qt - q)
+            Rd_t, pd_t = turn @ Rd, anchor + turn @ (pd - anchor)
+            return Rd_t @ np.asarray(e["R"], float), pd_t + Rd_t @ np.asarray(e["p"], float)
+        R_t, p_t = held_at(q)
+        # engaged -- where the humans' hand is at this angle -- the target runs ahead by the lead, which drags
+        # the door; not yet engaged, the hand goes to that pose first: led from the start, the palm came
+        # down in front of the handle's bar and pushed the door shut (libero_90 35)
+        if float(np.linalg.norm(p - p_t)) < k.swing_engage and rot_angle(R.T @ R_t) < k.at_rot:
+            R_t, p_t = held_at(q + lead)
+        leg = self.path_to(R, p, R_t, p_t, top + k.lift_dz)
+        if leg is not None:
+            self.phase, R_g, target = leg
+            return self.action(self.twist_to(R, p, R_g, target), A_OPEN)
+        self.phase = "swing"
+        return self.action(self.twist_to(R, p, R_t, p_t, v_max=k.drive_speed, v_min=k.drive_speed_min), A_OPEN)
 
     def _hook_frame(self, a: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
         """(bar centre, opening direction in plan, the bar's long axis, the bar's top) now."""

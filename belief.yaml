@@ -305,6 +305,9 @@ components:
       - tests/test_task_spec.py             # a push category is planned as a push, everything else picked
       - tests/test_support_below.py         # the support ray meets the top of what an object rests on
       - tests/test_frames.py
+      - screwhead/teacher/door_swing.json   # the humans' poses on the microwave's door, by its angle
+      - tools/door_survey.py               # builds door_swing.json from LIBERO's human demos
+      - tests/test_door_swing.py           # the table BRN-swing-door-as-the-humans reads is well formed
 
   - id: CMP-vision-encoder
     purpose: Frozen DINOv2-base patch tokens (8x8 per camera) as the student's visual input
