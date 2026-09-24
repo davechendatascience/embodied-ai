@@ -1516,10 +1516,12 @@ tests:
     cost: 5.0
     timeout_s: 1800
 
+  # Seed 556, not the sweeps' 555: the teacher is deterministic per seed and revision, so on
+  # 555 every episode of this test was one a sweep had already ingested (RUN-0245: 600 of 600).
   - id: TST-teacher-reliability
     layer: e2e
     targets: [CMP-skill-library]
-    run: python3 tools/teacher_report.py --suites libero_object libero_spatial libero_goal --episodes 20 --out $OUT
+    run: python3 tools/teacher_report.py --suites libero_object libero_spatial libero_goal --episodes 20 --seed 556 --out $OUT
     metrics: [success, refused, release_gap_mm, drop_count]
     capture: [task, task_suite, teacher_revision, mechanism]
     cost: 80.0

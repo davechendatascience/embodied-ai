@@ -3,7 +3,7 @@
 
   teacher_report.py --suites libero_object libero_spatial libero_goal --episodes 20
   teacher_report.py --from runs/evidence            # re-read trials already collected
-  teacher_report.py --episodes 20 --out $OUT        # as component-belief's TST-teacher-reliability
+  teacher_report.py --episodes 20 --seed 556 --out $OUT   # as component-belief's TST-teacher-reliability
 
 A sweep prints successes per task, which at five episodes is a coin-flip away from
 anything. This prints, per task, the success rate with a 94% interval and the MECHANISM
@@ -155,10 +155,10 @@ def grade(lo: float) -> str:
     return "reliable" if lo >= RELIABLE_LO else ("marginal" if lo >= MARGINAL_LO else "broken")
 
 
-def collect(suite: str, episodes: int, horizon: int, out: Path) -> Path:
+def collect(suite: str, episodes: int, horizon: int, seed: int, out: Path) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
     cmd = [".venv-libero/bin/python", "tools/skill_eval.py", "--suite", suite,
-           "--episodes", str(episodes), "--horizon", str(horizon), "--cpus", PERF,
+           "--episodes", str(episodes), "--horizon", str(horizon), "--seed", str(seed), "--cpus", PERF,
            "--trials", str(out)]
     env = {"HF_HUB_OFFLINE": "1", "PYTHONPATH": "third_party/LIBERO:.", "MUJOCO_GL": "egl",
            "PATH": "/usr/bin:/bin", "HOME": str(Path.home())}
@@ -263,6 +263,8 @@ def _parse() -> argparse.Namespace:
     ap.add_argument("--suites", nargs="*", default=["libero_object", "libero_spatial", "libero_goal"])
     ap.add_argument("--episodes", type=int, default=20)
     ap.add_argument("--horizon", type=int, default=500)
+    ap.add_argument("--seed", type=int, default=555,
+                    help="skill_eval's seed; a test run on the sweeps' seed re-observes their episodes")
     ap.add_argument("--evidence", default="runs/evidence/reliability")
     ap.add_argument("--from", dest="reuse", default="", help="read existing trials, do not run")
     ap.add_argument("--ingest", action="store_true")
@@ -285,7 +287,7 @@ def _gather(args) -> list[dict]:
         path = ROOT / (args.reuse or args.evidence) / f"{suite}.trials.json"
         if not args.reuse:
             print(f"[run] {suite}: {args.episodes} episodes x {SUITE_TASKS.get(suite, 10)} tasks", flush=True)
-            collect(suite, args.episodes, args.horizon, path)
+            collect(suite, args.episodes, args.horizon, args.seed, path)
         if not path.exists():
             print(f"  (no trials at {path})")
             continue
