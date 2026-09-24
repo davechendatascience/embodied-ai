@@ -525,7 +525,7 @@ class Skills:
         held = np.r_[c[:2] + u[:2] * k.push_lead * radius, z_push]
         # the jaws along the motion, one finger leading: of the two frames that do it, the one the
         # wrist is nearer to now -- a function of the state, and no half turn of the wrist
-        frames = self._by_wrist(R, (top_down(u), top_down(-u)))
+        frames = sorted((top_down(u), top_down(-u)), key=lambda Rc: rot_angle(R.T @ Rc))
         R_push = frames[0]
         off = (p - held)[:2]
         along = float(off @ u[:2])
@@ -1296,10 +1296,12 @@ class Skills:
         return self.action(self.twist_to(R, p, R_t, p_t, v_max=k.drive_speed, v_min=k.drive_speed_min), A_OPEN)
 
     def _by_wrist(self, R: np.ndarray, frames) -> list:
-        """Two tool frames the open jaws make equal -- the same approach, the jaw axis either way along a
-        line -- ordered: those the last joint reaches by turning within its range first, the nearer turn
-        first among them. By turn alone the hook of libero_90 23's top drawer took the frame 2.88 rad
-        into a 2.90 rad joint and the arm drifted clamped for 450 steps; the other was 0.3 rad from zero."""
+        """Two tool frames made equal -- the same approach, the jaw axis either way along a line --
+        ordered: those the last joint reaches by turning within its range first, the nearer turn first
+        among them. Unused by the four open-jaw laws (the push, the hook, the front hook, the push-close),
+        which take the nearer turn alone: under this order libero_90 6's front hook left a frame whose turn
+        read 0.19 rad inside the limit for one 129 deg away, stalled 50 deg short of it, and 43 of 50
+        opened the drawer where 50 had; libero_90 23, which it was for, stayed 13 of 50."""
         lo, hi = self.env.servo._np.limits[-1]
         q7 = float(self.scene.d.qpos[self.env.joint_indexes[-1]])
 
@@ -1337,7 +1339,7 @@ class Skills:
         k = self.k
         R, p = s["R_tool"], s["p_tool"]
         c, u, _bar, top = self._hook_frame(a)
-        R_hook = self._by_wrist(R, (top_down(u), top_down(-u)))[0]
+        R_hook = min((top_down(u), top_down(-u)), key=lambda Rc: rot_angle(R.T @ Rc))
         hook = c + u * k.hook_lead + Z * k.hook_above
         off = p - hook
         along = float(off @ u)
@@ -1370,7 +1372,7 @@ class Skills:
             y = jaw - z * float(jaw @ z)
             y = y / np.linalg.norm(y)
             return np.column_stack([np.cross(y, z), y, z])
-        R_f = self._by_wrist(R, (frame(bar), frame(-bar)))[0]
+        R_f = min((frame(bar), frame(-bar)), key=lambda Rc: rot_angle(R.T @ Rc))
         hook = c + Z * k.front_hook_above
         off = p - hook
         along = float(off @ u)                               # > 0: in front of the hook point
@@ -1408,7 +1410,7 @@ class Skills:
             y = jaw - z * float(jaw @ z)
             y = y / np.linalg.norm(y)
             return np.column_stack([np.cross(y, z), y, z])
-        R_push = self._by_wrist(R, (fist(bar), fist(-bar)))[0]
+        R_push = min((fist(bar), fist(-bar)), key=lambda Rc: rot_angle(R.T @ Rc))
         push = c + u * k.push_close_lead
         off = p - push
         along = float(off @ u)                               # > 0: still in front of the push point
