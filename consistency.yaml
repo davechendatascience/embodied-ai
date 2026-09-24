@@ -218,18 +218,6 @@ axioms:
       Read from each task's compiled model on 2026-09-24 (MjModel.geom_type of the collision geoms of
       every placed object's root body and its children: 22 categories, all boxes).
 
-  - id: AXM-libero-collision-shapes
-    domain: environment
-    statement: >-
-      In the models of all 130 LIBERO tasks this project runs, the collision geoms that are not the
-      robot's are boxes (12,003), cylinders (88), capsules (18) and one floor plane per task; the robot's
-      are meshes (1,300) and boxes (260). Each geom's collision shape lies inside the box aligned with
-      its frame whose half-extents are its size (a cylinder's radius and half-height, a capsule's radius
-      and half-length plus radius, a mesh's vertex extents).
-    rationale: >-
-      Read from each task's compiled model on 2026-09-24 (MjModel.geom_type of every collision geom),
-      after AXM-libero-objects-are-boxes showed the placed objects alone.
-
   - id: AXM-servo-lead-bounds-travel
     domain: physics
     statement: >-
@@ -458,31 +446,6 @@ axioms:
       MuJoCo's documentation of the state-component bits (mjtState); measured across processes
       and instances with the model's body poses equal (TRL-0217, TRL-0238).
 
-  - id: AXM-panda-serial-revolute
-    domain: environment
-    statement: >-
-      The Panda arm in the LIBERO model is a serial chain of seven hinge joints from its base, fixed in
-      the world, to its hand, each link between consecutive joints rigid, so the distance between the
-      anchors of consecutive joints never changes; the hand, its two fingers (each sliding at most 40 mm
-      along it) and anything they hold move with the last link.
-    rationale: >-
-      robosuite 1.4.0's Panda model: robot0_joint1 to robot0_joint7 are hinge joints, each on the body
-      that is the next one's parent, and the gripper's bodies hang from the last (MjModel.jnt_type,
-      body_parentid, and the finger joints' range).
-
-  - id: AXM-mujoco-reports-overlaps
-    domain: environment
-    statement: >-
-      For two collision geoms whose pair MuJoCo's contype, conaffinity and parent filters admit, if
-      their collision shapes overlap -- primitives as themselves, each mesh as its convex hull -- then
-      mj_collision, run on that configuration, reports a contact between them with negative distance.
-      A pair the filters exclude never exerts contact force in MuJoCo either.
-    rationale: >-
-      MuJoCo's collision pipeline: the broad phase's bounding volumes contain the shapes, so an
-      overlapping pair reaches the narrow phase, whose convex collision functions return the
-      penetration of overlapping shapes as contacts with negative distance; the simulation's contact
-      forces are computed only for the contacts it returns.
-
   - id: AXM-parameters-derived
     domain: requirement
     statement: >-
@@ -532,42 +495,6 @@ definitions:
       and no point of it moves faster than the rest speed, 5 mm/s (|v| + |w| r, r its bounding radius;
       sim_arm's REST_SPEED). A predicate on one step's simulator state. An object on a single corner or
       a single edge does not rest.
-
-  - id: DEF-box-world
-    term: Box world
-    meaning: >-
-      The teacher's own plan-time model of a state, perfect physics assumed: the tool follows the
-      planned path exactly, a grasped object rides rigidly with it, an articulated part moves only along
-      its joint as a drive moves it, an object set down comes straight down to rest on the first box
-      beneath it or the floor, and nothing else moves -- nothing is pushed, tips, slides or bounces.
-      Every collision geom that is not the robot's is its bounding box aligned with its frame
-      (AXM-libero-collision-shapes; a box geom is itself); the floor is its plane, which a box meets when
-      its lowest corner is below it; the robot's hand and fingers are their geoms' boxes likewise. Two
-      bodies collide in the box world when a box of one overlaps a box of the other, or one meets the
-      floor. How far MuJoCo departs from it is measured, not assumed.
-
-  - id: DEF-kinematic-world
-    term: Kinematic world
-    meaning: >-
-      The teacher's plan-time model of a state, perfect physics and perfect tracking assumed. One thing moves
-      at a time: the arm, with what the hand holds rigidly, from the joints inverse kinematics gives a tool
-      pose at every 5 cm of its path to the next, joint-interpolated between, each finger's slide fixed; or
-      the fingers alone, each at a constant rate, the arm still; or an articulated part along its joint, with
-      what rests on a sliding part; or a released object, straight down until something holds it up from
-      below -- a contact whose normal, from the support to the object, lies within 31 deg of vertical; a
-      steeper touch holds nothing up -- and there it stays; nothing else moves, nothing is pushed, tips,
-      slides or bounces. While a part is driven the arm does not move in the kinematic world: how the hand
-      goes with the handle is the teacher's law's, not the model's. A move is checked at samples: an arm
-      move at the tool poses inverse kinematics solved and between them at joint-interpolated
-      configurations no more than 2 cm of sum_k |dq_k| R_k apart (LMA-joint-interpolation-bounds-travel's
-      R_k); a finger move at openings no more than 2 cm of either finger's slide apart; a slide's part at
-      no more than 2 cm of travel apart, a hinge's at no more than 2 cm of arc at a bound on its farthest
-      point from the axis; a released object only where it stops. A region's top is the highest point of
-      its box. Every body collides with its own collision geoms as MuJoCo collides them,
-      the robot's links, hand and fingers included: two bodies collide at a configuration when mj_collision,
-      run on that configuration written into the simulator (AXM-mujoco-forward-is-a-function-of-state),
-      reports a contact between them with negative distance. How far execution departs from it is measured,
-      not assumed. The planner's world; DEF-box-world, which models the hand as boxes and not the arm, is not.
 
   - id: DEF-smooth-motion
     term: Smooth motion
@@ -822,82 +749,6 @@ lemmas:
       points (the triangle inequality), and a contact between a pair forms only within its margins.
       Restated from a version that did not fix S (a stationary mug, the forearm pushing a bowl of S into
       it) and one that netted a single 2 mm off every pair.
-    sufficiency: {n_min: 3, min_consensus: 0.8}
-
-  - id: LMA-separating-axis-boxes
-    statement: >-
-      Two oriented boxes are disjoint if and only if their projections are disjoint on at least one of
-      fifteen axes: the three face normals of each box and the nine cross products of an edge direction
-      of one with an edge direction of the other (a cross product of parallel edges, of zero length,
-      separating nothing). So box-world collision between two boxes is decided exactly by fifteen
-      interval tests.
-    premises: [DEF-box-world]
-    derivation_rule: >-
-      The separating axis theorem for convex polyhedra: two disjoint convex polyhedra have a separating
-      plane parallel to a face of one or to an edge of each; for boxes those normals are the fifteen
-      axes, and projections on an axis are intervals.
-    sufficiency: {n_min: 3, min_consensus: 0.8}
-
-  - id: LMA-swept-box-conservative
-    statement: >-
-      Let a box move rigidly from one sample of a path to the next, and let d bound the length of the
-      path every point of it traces between the two samples (for a straight move turning at a steady rate
-      about one axis, the translation plus the turn's angle times the farthest distance of any of the
-      box's points from that axis). Then at every pose between the samples the box lies inside its box
-      at the first sample grown by d on every side. So if, at every sample of a path, the box grown by
-      its d to the next sample overlaps no box that stays still meanwhile, it overlaps none anywhere
-      along the path, however thin those boxes and whatever the samples' spacing.
-    premises: [DEF-box-world]
-    derivation_rule: >-
-      A point that traces a path of length at most d stays within d of where it started, so the box
-      stays within d of its starting box, which the box grown by d on every side contains. Restated: an
-      earlier statement bounded only each point's displacement at the next sample, and a box 40 mm from
-      the turning axis, turned 180 deg while moving 80 mm, returns near where it began while passing 40
-      mm to the side mid-way.
-    sufficiency: {n_min: 3, min_consensus: 0.8}
-
-  - id: LMA-joint-interpolation-bounds-travel
-    statement: >-
-      Let the arm move from joints q to q' by linear interpolation in joint space, each finger's slide held
-      fixed. For each joint k let R_k be the most, over the links m from joint k's to the last, of the sum of
-      the distances between consecutive joint anchors from k to m plus the farthest distance from joint m's
-      anchor of any point link m carries (for the last link: the hand, the fingers at any slide, a held
-      object). Then every point the arm carries traces a path no longer than the sum over k of |q'_k - q_k|
-      R_k, and over any fraction of the motion no longer than that fraction of it. A move of the fingers
-      alone -- the arm still, each finger's slide changing at a constant rate -- moves a point of a finger
-      along a path no longer than that finger's change of slide, and over any fraction of the move no longer
-      than that fraction of it; in the kinematic world nothing else moves with them, a released object
-      staying where it is until the move ends.
-    premises: [AXM-panda-serial-revolute, DEF-kinematic-world]
-    derivation_rule: >-
-      A point P carried by link m moves with velocity sum over k <= m of qdot_k e_k x (P - a_k), a_k joint
-      k's anchor and e_k its unit axis; |e_k x (P - a_k)| <= |P - a_k|, which the triangle inequality through
-      the anchors between k and m bounds by R_k, consecutive anchors lying on one rigid link at a fixed
-      distance. Under linear interpolation qdot is constant, so the path's length, the integral of the speed,
-      is at most sum |q'_k - q_k| R_k over the whole motion and that fraction of it over any fraction. With
-      each finger's slide fixed, the fingers are fixed to the last link. A finger slides along a straight
-      line at a constant rate, so its points trace their slide's change, proportionally; DEF-kinematic-world
-      moves nothing that nothing moves. Restated twice: once the fingers slid during the move (a pad point
-      sliding 40 mm while the wrist turned a little traced more than the bound), then only the opening was
-      held fixed and both fingers shifted 10 mm the same way.
-    sufficiency: {n_min: 3, min_consensus: 0.8}
-
-  - id: LMA-sampled-penetration-detected
-    statement: >-
-      Let the moving bodies of the kinematic world move between two consecutive samples so that every
-      point of them traces at most s over the interval and at most that fraction of s over any fraction
-      of it, while the other bodies stay still, every collision shape being convex. If at some
-      configuration between the two samples a moving shape penetrates a still one, of a pair MuJoCo's
-      collision filters admit, by more than s/2 --
-      the shortest translation separating them is longer than s/2 -- then at one of the two samples
-      mj_collision reports a contact between them with negative distance. A shallower penetration
-      between samples can go unreported.
-    premises: [DEF-kinematic-world, LMA-joint-interpolation-bounds-travel, AXM-mujoco-reports-overlaps]
-    derivation_rule: >-
-      The configuration lies within half the interval of one sample, so every point of the moving shape
-      is within s/2 of where it is at that sample; a rigid displacement that moves no point more than
-      s/2 changes the penetration depth of two convex shapes by at most s/2, so they still overlap at
-      that sample, and AXM-mujoco-reports-overlaps makes that a reported contact.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: LMA-release-when-resting-stays
@@ -1925,92 +1776,6 @@ branches:
       the commanded twist (AXM-servo-lead-bounds-travel). When built it replaces the second ground of
       BRN-place-onto-physical-support and its handle-held exception. Not yet implemented. evidence:
       CTR-teacher-settled, CTR-teacher-gentle (release_gap_mm <= 5).
-    sufficiency: {n_min: 3, min_consensus: 0.8}
-
-  - id: BRN-follow-box-world-routes
-    subject: CMP-skill-library
-    claim_type: contract
-    statement: >-
-      At an episode's start, and at the step after following a route has failed, the teacher asks the
-      kinematic world (DEF-kinematic-world) for a route through the rest of its plan from the state as it
-      is: the teacher's own decisions first, then the other orders of its pick-place pairs and, depth first,
-      other grasps (the teacher's screen order, then its face grasps moved to where LIBERO's human
-      demonstrations held the object), drop points (where the demonstrations left the object, then the
-      region's grid: nearest its centre first, or, once a contact has failed an earlier candidate of that
-      step, farthest from that contact first) and carry heights, up to 120 simulated steps a search -- a
-      simulated step being one candidate for one plan step (a pick, a place or a drive with all its legs)
-      simulated from the state before that step -- skipping every banned decision. An object's grasp is
-      identified by the object and the tool position in the robot's base frame rounded to 1 mm with the
-      tool's jaw axis (its frame's y axis, in the base frame) rounded to 0.01; an object's drop point by the
-      object and the point in the base frame rounded to 1 mm; carry heights, orders and drives have no
-      identity and are never banned. Each leg of a simulated route is one move of
-      DEF-kinematic-world, checked at its samples, and names its allowed pairs: pairs in contact when planning
-      starts, on every leg; the robot with the object being picked, on the advance to the grasp; the held
-      object with what it stood on, on the lift's first 1 cm (a leg of its own) and a slide from under an
-      overhang; the open fingers with the object they released, on the jaws' opening and the retreat; the
-      driven part with its own fixture and the robot, on its drive. A route is found when, at every sample of
-      every leg, no contact between a body that moves on that leg and one that does not is reported deeper
-      than 12 mm outside the leg's allowed pairs, a lowered object resting only on its region's support at or
-      below the region's top, and LIBERO's goal holds on the simulated end state. Found, its decisions are
-      pinned into the teacher's per-episode caches; the teacher follows the route's arm legs through free
-      space (approach, lift, rise, carry, and the retreat after every set-down) toward a point 3 cm ahead
-      along each, and its own feedback laws execute the contact phases (descend and squeeze, lower, seat and
-      release -- ended when the object touches something besides the fingers and is let go) and the drives,
-      reading the pinned decisions. Following fails when the tool is 40 mm off a followed leg, a held object
-      is lost while carried, an object the route does not move has moved 10 mm once the scene is at rest
-      (every object slower than 2 cm/s), a released object rests 15 mm from where the route set it, a
-      followed leg takes more than twice its length at its speed (approach 0.25, lift 0.06, rise 0.15,
-      carry 0.18, retreat 0.15 m/s) plus 40 control steps, or a contact phase more than 160 steps for a
-      grasp or 240 for a set-down. A failure is charged to the leg in force when it is detected, and that
-      leg bans its step's decision -- the grasp for a pick's legs, the drop point for
-      a place's -- which leaves the caches and is skipped by every later search that episode, and a route is
-      planned again. At most 12 routes are planned in an episode, the first included; after a search that
-      finds none, or after following the twelfth has failed, none is planned again that episode, and the
-      teacher's own feedback laws act. Claimed: (1)
-      for every route executed: at every sample of every leg, no reported contact deeper than 12 mm between a
-      body the leg moves and one it does not, outside the leg's allowed pairs; for its arm and finger legs,
-      by LMA-sampled-penetration-detected with s = 2 cm, any penetration deeper than 10 mm between two
-      samples, of a moving shape into a still one, of a pair the filters admit and the leg does not allow,
-      is a reported contact at one of them; and LIBERO's goal on its simulated end state; (2) the actions are
-      the teacher's twist and jaw commands through the one execution path (AXM-one-execution-path); (3) at
-      most 12 routes an episode, each search at most 120 simulated steps, and no search tries a banned
-      decision again that episode; (4) the episode's plan log records every route planned: its step, where
-      in the plan, whether one was found, the failure that preceded it, and the decisions in which it differs
-      from the teacher's own. Not claimed: that execution follows the kinematic world -- the servo's lead (up
-      to 34.3 mm, 11.7 mm in a lower), slip, tipping, insertion, a handle-held object's swing -- which the
-      census of verdicts against executed outcomes and the paired sweep measure; pairs that both move on a
-      leg -- the arm's links with each other, a held object with the arm, one finger with the other; a bound
-      on a penetration's depth from the depth MuJoCo reports; drives and drops beyond their samples; the arm
-      while the teacher's laws squeeze, seat or drive; that the teacher's own laws, deciding afresh after a
-      search that found nothing, avoid a banned decision; that a route exists, or that following reaches the
-      goal; that the teacher's own laws label a state by the state alone -- their per-episode caches carry
-      the state each decision was made at, the question LMA-caches-reset-per-episode leaves open. Labels for
-      DAgger come from the teacher's own laws, following off, never from a followed route: a route in force
-      and the bans are the episode's history, which AXM-dagger-needs-markov-labels forbids a label to read;
-      demonstrations recorded while following are not used as labels.
-    premises: [DEF-kinematic-world, LMA-sampled-penetration-detected, LMA-joint-interpolation-bounds-travel,
-               AXM-mujoco-forward-is-a-function-of-state, AXM-mujoco-reports-overlaps,
-               AXM-libero-collision-shapes, AXM-libero-scores-final-state, AXM-grip-fixes-object-in-hand,
-               AXM-one-execution-path, AXM-one-gripper, DEF-skill-contract, AXM-dagger-needs-markov-labels,
-               LMA-caches-reset-per-episode]
-    derivation_rule: >-
-      The user's direction (2026-09-24): first make the box world route reach success, as a subroutine, then
-      make execution match the route, and replan every time something fails. Claim (1): the first half by
-      construction; the second is LMA-sampled-penetration-detected on each arm and finger move, whose
-      hypothesis DEF-kinematic-world's sampling and LMA-joint-interpolation-bounds-travel give, every
-      collision shape convex (AXM-libero-collision-shapes; each mesh collides as its convex hull,
-      AXM-mujoco-reports-overlaps). The 12 mm graze
-      is calibrated, not derived: over LIBERO's protocol, where the teacher succeeded in 5709 of 6500
-      episodes, a first contact no deeper than 12 mm fell in 414 succeeding episodes and 74 failing ones,
-      deeper in 135 and 103. Claim (2) because the follower's actions are the skills' own twist and jaw
-      commands; (3) from the bounds and the ban as stated; (4) by the log's definition. Measured (branch
-      follow at 090e893, skill_teacher:d4a0e78c73): the kinematic world finds a route from 5757 of LIBERO's
-      6500 initial states; followed, LIBERO's protocol succeeded in 5866 of 6500 episodes against the
-      teacher's 5709 (187 gained, 30 lost; 5802 against 5641 within LIBERO's step limits), libero_10 in 425
-      of 500 against 356, libero_10 8 in 39 of 50 against 0. Replaces
-      BRN-plan-through-box-world, pruned. Restated from versions doubted on eleven, then six gaps: where
-      samples fall, pairs that both move, convexity, drives and drops, what a ban reaches, and what a
-      failing leg bans. evidence: CTR-teacher-reliable, CTR-teacher-settled, CTR-teacher-gentle.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-pinch-for-the-whole-place
