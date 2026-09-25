@@ -44,6 +44,10 @@ a 50 Hz loop at all.
 
 ### GR00T N1.6 — `third_party/Isaac-GR00T`
 
+The checkout was removed on 2026-09-25 to save disk. The paths below are at
+github.com/NVIDIA/Isaac-GR00T commit 5dc80c4; the robocasa checkout it was read beside was at
+github.com/robocasa/robocasa commit 921c9a5.
+
 - Eagle VLM backbone (`gr00t/model/modules/eagle_backbone.py`) + DiT flow-matching
   action head (`modules/dit.py`, `modules/flowmatching_modules.py`).
 - `max_state_dim = 29`, `max_action_dim = 29`, `max_num_embodiments = 32`
