@@ -136,6 +136,9 @@ What the matrix taught beyond the counts:
 
 ### Understanding the 18 failures (traced step by step, 2026-09-26)
 
+*Superseded the same day: this matrix ran on disturbed scenes (next section), and its "revised order" rested
+on a torque explanation the re-run does not support. Kept as the record of what was first concluded.*
+
 The diagnostics' first-cut labels were read against per-phase traces of every failure (saturated joints, tracking
 error, joint speed, the robot's contacts with the scene):
 
@@ -197,7 +200,34 @@ first; the 6-joint UR5e drew its fixtures from a shifted stream). With both, iiw
 object exactly where the Panda's reset does on 40 of 40 tasks; the UR5e on 18, and differs by more than 5 mm on 3
 (libero_10 0, 1, 7), where the recorded state puts a ketchup bottle 29 mm inside the table and how it is ejected
 depends on the simulated system's joint count -- identical fixtures and objects at placement, different after.
-The matrix is to be re-run on this start before the failures are re-traced.
+### The matrix on the Panda's scene (2c371d4, 2026-09-26)
+
+| arm | spatial | object | goal | libero_10 | total | before the start fix |
+|---|---|---|---|---|---|---|
+| Panda | 10 | 10 | 10 | 10 | 40 | 40 |
+| UR5e | 10 | 10 | 8 | 9 | 37 | 38 |
+| iiwa | 10 | 10 | 8 | 10 | 38 | 36 |
+| Kinova3 | 9 | 10 | 9 | 7 | 35 | 32 |
+| Jaco | 9 | 10 | 10 | 7 | 36 | 36 |
+
+Traced per phase (torque saturation, joint gap to the servo's reference, joint speed, contacts, self-contacts,
+limit clamps), 13 of the 14 failures end the same way: the servo's joint lead sits at its cap (92-99.7 mrad of
+100) while no joint moves (0.01 rad/s), for 98 to 746 consecutive steps, until the horizon. What holds the arm:
+
+| held by | episodes |
+|---|---|
+| a scene body the skill does not mean to touch: the cabinet base, the wine rack, the cabinet, the microwave, a neighbouring bottle | UR5e goal 5 and libero_10 3; Kinova3 goal 4, libero_10 3 and 9 |
+| the hand on its own target during the grasp descent (the moka pot) | Kinova3 and Jaco libero_10 2; Jaco libero_10 8 (mixed) |
+| the arm against itself (gripper on the forearm or a link) | UR5e goal 0; iiwa goal 2; Jaco libero_10 9 |
+| a joint limit, after a grasp forced with no feasible candidate | iiwa goal 7 (frozen: 1.6 mrad, 590 clamps); Kinova3 and Jaco spatial 4 |
+
+Calibrated on the expert: over the Panda's 40 successful episodes the servo is pinned (lead at >= 95 mrad, every
+joint under 0.05 rad/s) on 5 of 7160 steps, one run of 5 while lowering the moka pot. A pinned run of more than a
+few periods is therefore not part of how the teacher works on the Panda; on the other arms it is how every failure
+but one ends. The teacher cannot tell the motion it commands from the motion executed: a blocked phase waits out
+the horizon. Saturation in free motion does occur (the Jaco's wrist, joint 6, on 19 of 21 and 24 of 24 steps of
+the approach phases at 0.8-0.9 rad/s), but those phases finish; what ends the failed episodes is the servo pressing
+on something that does not give.
 
 ## 5. What has to hold (for the ledger)
 
