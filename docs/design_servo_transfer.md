@@ -137,6 +137,20 @@ restated to answer its design concerns (re-verification pending):
   needs no self-contact at any depth there), and whether the UR5e's fold happens at a probed configuration at
   all or only while the servo tracks between them.
 
+Re-verified the same night: `BRN-servo-keeps-clearance` proven 3 of 3 as restated; `BRN-reach-screen-grades-self-contact`
+doubted on one gap. To pick up next:
+
+- **The screen's fingers.** A probed configuration fixes the arm's joints only, so the self-contact test does
+  not say where the fingers are. State that the gripper's joints hold their value at screen time (or name the
+  opening screened at each pose), and list as not claimed a fold that appears only at another opening -- an
+  open fingertip meeting the forearm at a pre-grasp pose when the screen ran closed.
+- **Bodies bolted together.** Two robot bodies joined through a body with no joint (the last arm link and the
+  gripper's root, say) are neither the same body nor neighbours in the tree, so the servo would guard them on
+  every step: overlapping, they leave no feasible step and switch the damper off everywhere; merely close, they
+  cap the flange's speed and episodes stop being bit-identical. Exclude pairs with no joint between them.
+- **`DEF-reachable-pose`** says "this is the teacher's screen"; once self-contact is graded its fixture clause
+  should read "nor itself". Changing it makes the nodes that cite it stale.
+
 The other two statements of this section are not branches: that a non-redundant arm's IK branches are finite
 and a local step keeps its branch is a lemma that needs a kinematics premise, and that the embodiment is a
 declared input is a property of the code, for a component-belief contract.
