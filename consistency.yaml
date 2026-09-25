@@ -1899,15 +1899,16 @@ branches:
       are never commanded closed -- so DEF-skill-contract's release postcondition, which is of what a
       skill grasped, asks nothing of it; its disengagement is that what follows leaves upward before
       anything else: after each drag of a bar, until the finger meshes' reach below the tool point first
-      lies a declared height over that bar's top, every skill but the drive dragging that bar moves the
-      tool straight up, jaws open; once that height is reached the leave is done for that drag, and skills
-      act as they would; the drag holds nothing and every skill after it rises first, so nothing is held
-      while the leave runs. A drawer whose bar has something over it is opened by the pinch drive
-      (BRN-drive-tracks-the-handle). Not claimed: that the finger engages the bar when the drag starts at
-      the gate's edge -- the gate decides when the drag starts, and no claim here depends on its width;
-      that the drag cannot slip or stall -- a stalled drag re-enters, and nothing bounds how often -- or
-      that the offsets fit a bar of a section other than these two.
-    premises: [AXM-object-geometry-known, AXM-panda-gripper-geometry, AXM-handle-shares-body, DEF-skill-contract, AXM-libero-joint-bands, AXM-parameters-derived, BRN-drive-tracks-the-handle, BRN-open-precondition-reads-the-running-drive]
+      lies a declared height over that bar's top, every skill but the drive dragging that bar is
+      pre-empted -- the step's command is the leave's, the tool straight up, jaws open, and it is not a
+      step of the skill pre-empted; once that height is reached the leave is done for that drag, and
+      skills act as they would; the drag holds nothing and every skill after it rises first, so nothing is
+      held while the leave runs. A drawer whose bar has something over it is not hooked. Not claimed: that
+      the finger engages the bar when the drag starts at the gate's edge -- the gate decides when the drag
+      starts, and no claim here depends on its width; that the drag cannot slip or stall -- a stalled drag
+      re-enters, and nothing bounds how often -- or that the offsets fit a bar of a section other than
+      these two.
+    premises: [AXM-object-geometry-known, AXM-panda-gripper-geometry, AXM-handle-shares-body, DEF-skill-contract, AXM-libero-joint-bands, AXM-parameters-derived, BRN-open-precondition-reads-the-running-drive]
     derivation_rule: >-
       LIBERO's 50 human demonstrations of libero_goal 3, replayed from their recorded states, all open the
       top drawer this way: jaws open 77-80 mm and never commanded closed, pointing straight down, jaw axis
@@ -1929,9 +1930,15 @@ branches:
       the release postcondition asks nothing of it and the upward leave is its disengagement; under
       AXM-parameters-derived the drag gate (4 mm) was set by hand, the one datum being that 17 mm off the
       hook height the finger swept over the bar, and it carries no claim -- whether the finger engages at
-      its edge is disclaimed; the two bars measured are both in the scope the disclaimer leaves. Restated
-      again per the verifier: 'within the corridor' is some point of the circle within it; the leave runs
-      while nothing is held; the pinch drive and the fill's margin are cited.
+      its edge is disclaimed -- nor, measured, the verdicts: at 2, 4 and 6 mm libero_goal 3, libero_90 7
+      and libero_90 23 opened their drawers in 10 of 10 inits each (30 of 30 at every width); the corridor
+      and the leave's height are free parameters every claim here holds for, at any positive value; the
+      two bars measured are both in the scope the disclaimer leaves. Restated again per the verifier:
+      'within the corridor' is some point of the circle within it; the leave runs while nothing is held;
+      the pinch drive and the fill's margin are cited. Restated again per the verifier: the leave
+      pre-empts a skill's step rather than being one of its steps, so no other branch's claim about its
+      own command is read at those steps; a covered bar is only said not to be hooked, citing nothing
+      about how it is opened.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-rim-pinch-as-deep-as-the-palm
