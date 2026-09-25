@@ -2849,6 +2849,59 @@ branches:
       screen's blocking bodies exclude the robot's.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-leave-a-roof-level-first
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Vertical is the world's z axis and 'in plan' the projection onto the horizontal plane; the tool's
+      pose and the scene's geometry are read from each step's state (AXM-grip-fixes-object-in-hand,
+      AXM-mujoco-forward-is-a-function-of-state), and which geoms are the robot's and which collide are
+      constants of the model. The articulate skill's approach leg -- the way each of its modes that uses
+      one (the hinged door's swing, the hook, the front hook and the press) reaches the point its mode
+      starts from, with the crossing plane the mode declares -- is, up to this branch: done when the tool
+      is within a declared funnel of that point in plan, or below the plane less a declared band and
+      within a declared distance of it in plan, the mode's own command then following; otherwise, below
+      the plane less the band, straight up to the plane; otherwise over, at the plane, toward the point. A
+      colliding geom of the scene other than the robot's lies over the hand at a point in plan when some
+      part of its box lies within a declared radius of that point in plan and its bottom is more than a
+      declared height above the tool point. With this branch, at every step at which an approach leg is
+      computed with the tool below the crossing plane less the band and some colliding geom lies over the
+      hand at the tool point, the leg's command is instead the tool, its rotation goal its present one,
+      toward the first point at the tool point's height -- among those at distances of a declared step
+      times 1, 2, ... up to a declared maximum from the tool point in plan, nearest first, and at each
+      distance in a declared number of directions evenly spaced counter-clockwise from the world's x axis
+      -- over which no colliding geom lies over the hand and to which a disc of the radius, swept level in
+      plan from the tool point, meets no colliding geom over the height band from a declared distance
+      below the tool point to a declared distance above it, other than the robot's and those of bodies
+      with a colliding geom that already meets the disc at the tool point in that band; the jaws are
+      commanded as the mode commands them. Where no such point exists, the leg is as before. Claimed: (1)
+      at every step at which this rule gives the command, the commanded target is at the tool point's
+      height; (2) whether this rule gives the command at a step, and its target, are functions of that
+      step's tool pose and scene geometry, the leg's crossing plane and start point, and declared
+      constants; (3) at steps at which the tool is not below the plane less the band, nothing lies over
+      the hand at the tool point, or no point qualifies, the leg acts as before; (4) the target, where one
+      is taken, had no colliding geom over the hand at it, and the level sweep to it met no colliding geom
+      in the band other than those excepted, as read at that step. Not claimed: that the sweep between its
+      samples, or the geoms it excepts, leave the hand's way clear; that the tool tracks the level
+      command; that the mode's own command after the leg is clear; that the target stays uncovered as the
+      scene moves; anything of skills other than the articulate skill.
+    premises: [AXM-object-geometry-known, AXM-grip-fixes-object-in-hand, AXM-mujoco-forward-is-a-function-of-state]
+    derivation_rule: >-
+      libero_90 23 (close the bottom drawer, then open the top one) failed 37 of 50 in v35: the press that
+      closed the bottom drawer left the tool 3.4 cm up, under the top drawer's bar (its bottom 17 cm up, 9
+      mm away in plan) and within the column-leave distance of the hook point, so the hook's approach leg
+      counted as done and the hook drove straight up into the bar, touching the top drawer, and the servo
+      clamped at the plane. Left level first to the nearest point with nothing over the hand, inits 0-19:
+      libero_90 23 11 of 20 (v35 5; won 6, lost 0); unchanged per episode on libero_90 2, 5 and 24,
+      libero_goal 0 and 3 and libero_10 3 (inits 0-9 each); libero_90 8 2 of 10 (v35 3: init 5 perturbed,
+      a leave during the drawer's reopening mid-pick changed the pick that followed). The sweep excepts
+      what the hand already touches: from the pressed bar, every direction's sweep met the bar itself and
+      no way out was found. Colliding geoms only: a visual mesh (the shelf's) spans its openings. The
+      remaining failures stall in the hook's final approach with the servo clamping, a separate mechanism.
+      Supersedes the staged statement, which acted before any skill and was doubted for that scope (the
+      start step, precedence with other teacher rules, the tool pose's source).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:
