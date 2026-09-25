@@ -2824,31 +2824,33 @@ branches:
       u is an entry of that branch's list of directions -- a region axis and a sign -- and u's level frame
       at a step is u's entry frame for a laid object as that branch defines it (pitched by at most its lay
       pitch) or, at a step at which a later branch states that it replaces that frame for u, the frame
-      that branch puts in its place. A declared inverse-kinematics solver's result is a function of its
-      start joints, its target pose and the arm's joint ranges alone; the scene's body tree and each
-      body's joint types are constants of its model. A set of tool poses is fixed-blocked at a step when,
-      for some pose of it, the solver, started from the arm's joints as read at that step, does not
-      converge to it, or the arm put at the solution in the simulator, with the jaws at their present
-      opening, has a contact at negative distance between a robot geom and a geom of a body that is not
-      the robot's, has no free joint of its own, and is neither the placed object nor a body whose parent
-      is it; each such screen writes the arm's joints and the jaws, runs the forward computation, reads
-      the contacts and restores everything it wrote before anything else reads the simulator
-      (AXM-mujoco-forward-is-a-function-of-state). The steep drop point for u at a step is the point in
-      plan whose offset from the region's centre along u equals the region's box half-extent along the
-      region axis u was built from less a declared depth, and whose component across u is the drop
-      point's. For each pitch of a declared list, each pitch below a quarter turn, the steep frame at that
-      pitch is built as that branch builds a pitch's frame. For a frame F and a point D in plan at which
-      the object, carried at F, has a rest height, F's poses at D are the tool at F placed so that the
-      object, carried at F, has its origin at E -- computed as that branch computes it, from D and F --
-      and at D at that rest height. The steep decision for a placed object, region and direction u is made
-      once per episode, at the first step at which the place evaluates u with the object laid and u has a
-      level frame at which the object has a rest height at the drop point: when the level frame's poses at
-      the drop point are fixed-blocked, it is the first pitch of the list, in order, at which the object
-      carried at the steep frame has a rest height at the steep drop point and the steep frame's poses
-      there are not fixed-blocked; otherwise, or where no pitch qualifies, it is level. At that step and
-      each later step of the episode at which u is evaluated with the object laid and u has a level frame,
-      where the decision is a pitch, u's entry frame is instead the steep frame at that pitch if the
-      object carried at it has a rest height at the steep drop point, and u has no entry frame at that
+      that branch puts in its place; such a branch is one that states the frame it puts in place as a
+      function of its own recorded decisions and of that step's state, placed object, region's box, drop
+      point and carry height, the arm's joint ranges and declared constants. A declared inverse-kinematics
+      solver's result is a function of its start joints, its target pose and the arm's joint ranges alone;
+      the scene's body tree and each body's joint types are constants of its model. A set of tool poses is
+      fixed-blocked at a step when, for some pose of it, the solver, started from the arm's joints as read
+      at that step, does not converge to it, or the arm put at the solution in the simulator, with the
+      jaws at their present opening, has a contact at negative distance between a robot geom and a geom of
+      a body that is not the robot's, has no free joint of its own, and is neither the placed object nor a
+      body whose parent is it; each such screen writes the arm's joints and the jaws, runs the forward
+      computation, reads the contacts and restores everything it wrote before anything else reads the
+      simulator (AXM-mujoco-forward-is-a-function-of-state). The steep drop point for u at a step is the
+      point in plan whose offset from the region's centre along u equals the region's box half-extent
+      along the region axis u was built from less a declared depth, and whose component across u is the
+      drop point's. For each pitch of a declared list, each pitch below a quarter turn, the steep frame at
+      that pitch is built as that branch builds a pitch's frame. For a frame F and a point D in plan at
+      which the object, carried at F, has a rest height, F's poses at D are the tool at F placed so that
+      the object, carried at F, has its origin at E -- computed as that branch computes it, from D and F
+      -- and at D at that rest height. The steep decision for a placed object, region and direction u is
+      made once per episode, at the first step at which the place evaluates u with the object laid and u
+      has a level frame at which the object has a rest height at the drop point: when the level frame's
+      poses at the drop point are fixed-blocked, it is the first pitch of the list, in order, at which the
+      object carried at the steep frame has a rest height at the steep drop point and the steep frame's
+      poses there are not fixed-blocked; otherwise, or where no pitch qualifies, it is level. At that step
+      and each later step of the episode at which u is evaluated with the object laid and u has a level
+      frame, where the decision is a pitch, u's entry frame is instead the steep frame at that pitch if
+      the object carried at it has a rest height at the steep drop point, and u has no entry frame at that
       step if not; no roof fit is required of a steep frame; the steep drop point replaces the drop point
       for u wherever that branch reads it (the corridor, E, the four cases and the recorded release
       point), and the swept height band's top is the lower of the object's top and the roof. At every step
@@ -2924,7 +2926,9 @@ branches:
       (BRN-laid-entry-crosses-pitched) may put a frame of its own in the place of u's level frame: the
       decision screens the frame in force. Restated per the verifier: where a later branch's frame stands
       in for u's level frame, that branch's recorded decisions -- made at earlier steps -- are among the
-      inputs of the steep decision and of each direction's frame (claims (4) and (6)).
+      inputs of the steep decision and of each direction's frame (claims (4) and (6)). Restated again per
+      the verifier: a branch that replaces u's level frame is one that states its frame as such a
+      function, which claims (4) and (6) use.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-leave-a-roof-level-first
@@ -3125,23 +3129,26 @@ branches:
       colliding geom other than the robot's and the object's -- a direction with an entry frame is kept,
       instead, when the same sweep -- over each direction's entry frame, E and band as that direction has
       them at that step, the place's own or as a branch that states it replaces them for that direction
-      has them (BRN-place-steep-laid-entry by its recorded decision, or another), none of which depends on
-      the direction taken -- meets no colliding geom other than the robot's, the object's and those of
-      loose bodies; the direction taken is then chosen among the directions so kept by that branch's rule
-      for choosing among kept directions. This replaces, at such steps, the place's own decision of the
-      direction taken, as BRN-place-enters-roofed-target-level allows a later branch to, and with it the
-      entry frame, drop point, corridor, E and case that branch derives from the direction. At every other
-      step nothing changes. Claimed: (1) at every step at which that branch keeps some direction, this
-      branch leaves the direction taken unchanged; (2) where a direction is kept by this branch, its sweep
-      met no colliding geom of a body that is not loose, other than the robot's and the object's, at that
-      step; (3) whether this branch keeps a direction at a step, and which is taken, are functions of that
-      step's state, the placed object, the drop point, the region's box, the carry height, the recorded
-      decisions and records of every branch that states it replaces the place's entry frame, level frame,
-      drop point or E for a direction (BRN-place-steep-laid-entry's among them), the arm's joint ranges,
-      the scene's body tree and joint types, and declared constants; (4) where neither that branch nor
-      this one keeps a direction, the target is placed as that branch states. Not claimed: that the loose
-      bodies the sweep meets stay where they are, upright, or out of the region; that the object reaches
-      the corridor or the drop point; that the hand or arm clears anything.
+      has them -- BRN-place-steep-laid-entry by its recorded decision, or another branch that states what
+      it puts in their place as a function of its own recorded decisions and records and of that step's
+      state, placed object, drop point, region's box and carry height, the arm's joint ranges and declared
+      constants, and not of the direction taken -- meets no colliding geom other than the robot's, the
+      object's and those of loose bodies; the direction taken is then chosen among the directions so kept
+      by that branch's rule for choosing among kept directions. This replaces, at such steps, the place's
+      own decision of the direction taken, as BRN-place-enters-roofed-target-level allows a later branch
+      to, and with it the entry frame, drop point, corridor, E and case that branch derives from the
+      direction. At every other step nothing changes. Claimed: (1) at every step at which that branch
+      keeps some direction, this branch leaves the direction taken unchanged; (2) where a direction is
+      kept by this branch, its sweep met no colliding geom of a body that is not loose, other than the
+      robot's and the object's, at that step; (3) whether this branch keeps a direction at a step, and
+      which is taken, are functions of that step's state, the placed object, the drop point, the region's
+      box, the carry height, the recorded decisions and records of every branch that states it replaces
+      the place's entry frame, level frame, drop point or E for a direction (BRN-place-steep-laid-entry's
+      among them), the arm's joint ranges, the scene's body tree and joint types, and declared constants;
+      (4) where neither that branch nor this one keeps a direction, the target is placed as that branch
+      states. Not claimed: that the loose bodies the sweep meets stay where they are, upright, or out of
+      the region; that the object reaches the corridor or the drop point; that the hand or arm clears
+      anything.
     premises: [BRN-place-enters-roofed-target-level, BRN-place-steep-laid-entry, AXM-mujoco-forward-is-a-function-of-state, AXM-object-geometry-known]
     derivation_rule: >-
       libero_90 42 (put the frying pan under the cabinet shelf) failed 21 of 50 in v37: the roof was
@@ -3161,7 +3168,8 @@ branches:
       in libero_90 42, 89 or libero_10 9. Restated per the verifier: the sweep reads each direction's
       frame, E and band as any branch replacing them leaves them, and the records those branches keep are
       among claim (3)'s inputs (a crossing pitch or a go-shallow record changes a direction's corridor and
-      sweep).
+      sweep). Restated again per the verifier: the replacing branches the sweep reads are those that state
+      their replacements as such functions, not of the direction taken, which claim (3) uses.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-place-lays-along-tilted-region
@@ -3346,13 +3354,14 @@ branches:
       height there, u has no entry frame. Claimed: (1) for such a direction the drop point for u lies on
       the line through the place's drop point along u, and its offset from the region's centre along u,
       read at that step, is the greater of the place's drop point's offset and that half-extent less the
-      depth; (2) where that offset already reaches that half-extent less the depth, or the region is not
-      closed above, or the go-shallow record is not set, or the object is laid, this branch leaves the
-      drop point for u as it is without this branch; (3) whether the region is closed above is fixed for
-      the episode from the step the drop point is chosen, and the go-shallow record changes only where a
-      later branch states that it sets or clears it. Not claimed: that the object fits across the opening
-      or rests where it is released; that LIBERO's containment holds along the region's other axes; that a
-      door or lid closes over the object; the provenance of the depth.
+      depth; (2) where that offset already reaches that half-extent less the depth, or the object is laid,
+      or -- at a step with no observer -- the region is not closed above or the go-shallow record is not
+      set, or -- at an observer's step -- the region is not closed above as the observer counts it, this
+      branch leaves the drop point for u as it is without this branch; (3) whether the region is closed
+      above is fixed for the episode from the step the drop point is chosen, and the go-shallow record
+      changes only where a later branch states that it sets or clears it. Not claimed: that the object
+      fits across the opening or rests where it is released; that LIBERO's containment holds along the
+      region's other axes; that a door or lid closes over the object; the provenance of the depth.
     premises: [BRN-place-enters-roofed-target-level, BRN-drop-point-footprint-as-carried, LMA-caches-reset-per-episode]
     derivation_rule: >-
       The microwave's heating region has no point open from above -- its roof covers all of it -- so the
@@ -3371,7 +3380,8 @@ branches:
       region was closed above moved libero_90 42's pan, which the grasp screen had passed at the centre,
       to the shelf's front edge (49 -> 43 of 50 in v41); gone in shallow only where the grasp was screened
       there, 43 -> 49 (v42), and libero_10 9 kept its mug in shallow (44 -> 49 in v44 with the door
-      table).
+      table). Restated per the verifier: claim (2)'s conditions are stated for steps with and without an
+      observer.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-grasp-screened-at-roofed-release
