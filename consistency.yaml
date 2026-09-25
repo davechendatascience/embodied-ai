@@ -3324,8 +3324,13 @@ branches:
       that point is the drop-point search's (not BRN-share-a-surface-side-by-side's) and the search -- its
       earlier search and, where BRN-drop-point-footprint-as-carried runs it, its carried search -- found
       no candidate open from above; this is recorded then, with the drop point, and cleared at an
-      episode's start. For a direction u, at a step at which the object is not laid, when the region is
-      closed above, the drop point for u -- which this branch states it replaces -- is the place's drop
+      episode's start. The go-shallow record for the object and region is cleared at an episode's start
+      and is set or cleared only where a later branch states that it sets or clears it; where none has set
+      it, it is not set. At a step at which a later branch evaluates the place's rule as an observer and
+      states how it counts closed above, the condition below -- the region closed above and the go-shallow
+      record set -- is instead that the region is closed above as that branch counts it. For a direction
+      u, at a step at which the object is not laid, when the region is closed above and the go-shallow
+      record is set, the drop point for u -- which this branch states it replaces -- is the place's drop
       point moved along u by the amount, where positive, by which its offset from the region's centre
       along u falls short of the region's half-extent along the region's axis u is taken from less a
       declared depth, zero or more and at most that half-extent; the rest height, bottom, top, entry point
@@ -3334,11 +3339,12 @@ branches:
       the line through the place's drop point along u, and its offset from the region's centre along u,
       read at that step, is the greater of the place's drop point's offset and that half-extent less the
       depth; (2) where that offset already reaches that half-extent less the depth, or the region is not
-      closed above, or the object is laid, this branch leaves the drop point for u as it is without this
-      branch; (3) whether the region is closed above is fixed for the episode from the step the drop point
-      is chosen. Not claimed: that the object fits across the opening or rests where it is released; that
-      LIBERO's containment holds along the region's other axes; that a door or lid closes over the object;
-      the provenance of the depth.
+      closed above, or the go-shallow record is not set, or the object is laid, this branch leaves the
+      drop point for u as it is without this branch; (3) whether the region is closed above is fixed for
+      the episode from the step the drop point is chosen, and the go-shallow record changes only where a
+      later branch states that it sets or clears it. Not claimed: that the object fits across the opening
+      or rests where it is released; that LIBERO's containment holds along the region's other axes; that a
+      door or lid closes over the object; the provenance of the depth.
     premises: [BRN-place-enters-roofed-target-level, BRN-drop-point-footprint-as-carried, LMA-caches-reset-per-episode]
     derivation_rule: >-
       The microwave's heating region has no point open from above -- its roof covers all of it -- so the
@@ -3353,7 +3359,11 @@ branches:
       no point open from above, whatever point it then returns; claim (1) states the offset exactly, read
       at the step, since a region on a drawer can move after its drop point is chosen. Restated per the
       verifier: claim (2) says this branch leaves the drop point alone there, since for a laid object
-      BRN-place-steep-laid-entry may replace it.
+      BRN-place-steep-laid-entry may replace it. Restated for the go-shallow record: shallow wherever the
+      region was closed above moved libero_90 42's pan, which the grasp screen had passed at the centre,
+      to the shelf's front edge (49 -> 43 of 50 in v41); gone in shallow only where the grasp was screened
+      there, 43 -> 49 (v42), and libero_10 9 kept its mug in shallow (44 -> 49 in v44 with the door
+      table).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-grasp-screened-at-roofed-release
@@ -3369,29 +3379,45 @@ branches:
       place clearance, each read from the region's box and the object's box at the step it is used; a
       candidate grasp is a tool frame and a grasp point for the object as it lies. When a grasp is chosen
       for an object that the plan's next step places into a region, the reach screen also judges each
-      candidate at a release pose. Before this branch that pose was the candidate's frame at the
-      region-derived drop point -- the drop-point search's point, computed at that step and not recorded,
-      at the region-derived target height -- plus the candidate's offset from the object's origin. The
-      place's decision rule is now evaluated at that step as an observer: on the object's present pose
-      relative to the present tool frame, with that point as the drop point, the region-derived height
-      plus twice the object's vertical half-extent as the carry height, the region counted closed above
-      exactly when that search found no point open from above, and no steep decision made -- a direction
-      with no recorded steep choice is taken at its level entry frame -- writing no record. Where it finds
-      the target roofed, the object not laid, and a direction taken -- whose entry frame is then the
-      present tool frame turned about the vertical -- the release pose, which this branch states it
-      replaces for the grasp screen, is the candidate's frame turned by that same turn, at the direction's
-      drop point at the entry's rest height plus the candidate's offset from the object's origin turned
-      the same way; elsewhere it is as before. Claimed: (1) the release pose judged for a candidate is a
-      function of that step's state, the object, the region, the candidate, the recorded steep choices and
-      declared constants; (2) where the observer finds a roofed target, the object not laid, with a
-      direction taken, the release pose's frame is the candidate's turned about the vertical by the
-      entry's turn, and its point lies at the entry's rest height over the direction's drop point offset
-      by the candidate's turned offset; (3) elsewhere -- no roof, no direction taken, or the object laid
-      -- the release pose is the one judged before; (4) judging it records nothing the place reads. Not
-      claimed: that the place takes the same direction or entry frame when it runs; that the object lies
-      in the hand as it lay relative to the candidate; that a grasp passing reaches the release pose, or
-      that the path in is clear; that the screen's rejections are not conservative.
-    premises: [BRN-place-enters-roofed-target-level, BRN-place-steep-laid-entry, BRN-roofed-entry-goes-in-shallow, BRN-drop-point-footprint-as-carried, BRN-place-onto-physical-support, DEF-reachable-pose, AXM-mujoco-forward-is-a-function-of-state, AXM-grip-fixes-object-in-hand, AXM-object-geometry-known]
+      candidate at a release pose, under one of the screens below. Before this branch that pose was the
+      candidate's frame at the region-derived drop point -- the drop-point search's point, computed at
+      that step and not recorded, at the region-derived target height -- plus the candidate's offset from
+      the object's origin. The place's decision rule is now evaluated at that step as an observer, closed
+      above counted as the screen states: on the object's present pose relative to the present tool frame,
+      with that point as the drop point, the region-derived height plus twice the object's vertical
+      half-extent as the carry height, and no steep decision made -- a direction with no recorded steep
+      choice is taken at its level entry frame -- writing no record. A screen's release pose for a
+      candidate, which this branch states it replaces for the grasp screen, is: where the screen's
+      observer finds the target roofed, the object not laid, and a direction taken -- whose entry frame is
+      then the present tool frame turned about the vertical -- the candidate's frame turned by that same
+      turn, at the direction's drop point at the entry's rest height plus the candidate's offset from the
+      object's origin turned the same way; elsewhere the pose before this branch. The screens, in this
+      order: the centre screen, whose observer counts the region not closed above; the shallow screen,
+      whose observer counts it closed above, offered only where the centre screen's observer found the
+      target roofed, the object not laid and a direction taken, and that search found no point open from
+      above; and the over screen, whose release pose is the pose before this branch for every candidate,
+      offered only where the centre screen's observer found the target roofed, the object not laid and a
+      direction taken. The grasp is chosen as BRN-pinch-leans-when-upright-unreachable states the choice,
+      the reach screen judging each candidate also at its release pose under the first screen offered, in
+      that order, under which some tier has a candidate that passes; a screen after the first is evaluated
+      only where those before it gave no tier a candidate that passes; where no screen does, the grasp is
+      chosen as before this branch with the centre screen's release poses. The go-shallow record
+      (BRN-roofed-entry-goes-in-shallow) for the object and region is set when the grasp is chosen under
+      the shallow screen and cleared when it is chosen otherwise. Claimed: (1) the release pose judged for
+      a candidate under each screen is a function of that step's state, the object, the region, the
+      candidate, the recorded steep choices and declared constants; (2) under the centre and shallow
+      screens, where the screen's observer finds a roofed target, the object not laid, with a direction
+      taken, the release pose's frame is the candidate's turned about the vertical by the entry's turn,
+      and its point lies at the entry's rest height over the direction's drop point offset by the
+      candidate's turned offset; (3) where the centre screen's observer finds no roof, no direction taken,
+      or the object laid, the release pose is the one judged before this branch and no other screen is
+      offered; (4) where some tier has a candidate that passes under the centre screen, the grasp chosen
+      is the one chosen with the centre screen alone; (5) after a grasp is chosen the go-shallow record is
+      set exactly when it was chosen under the shallow screen, and judging records nothing else the place
+      reads. Not claimed: that the place takes the same direction or entry frame when it runs; that the
+      object lies in the hand as it lay relative to the candidate; that a grasp passing reaches the
+      release pose, or that the path in is clear; that the screen's rejections are not conservative.
+    premises: [BRN-place-enters-roofed-target-level, BRN-place-steep-laid-entry, BRN-roofed-entry-goes-in-shallow, BRN-drop-point-footprint-as-carried, BRN-place-onto-physical-support, BRN-pinch-leans-when-upright-unreachable, DEF-reachable-pose, AXM-mujoco-forward-is-a-function-of-state, AXM-grip-fixes-object-in-hand, AXM-object-geometry-known]
     derivation_rule: >-
       Screened at the region-derived height -- over the microwave's heating region, 5 cm below the top of
       its box -- the top pinch on libero_10 9's mug put the hand on the microwave's roof and passed;
@@ -3405,7 +3431,13 @@ branches:
       steep decision and its record are BRN-place-steep-laid-entry's, cited; the drop-point search and the
       region-derived height are cited as functions of what claim (1) lists. Restated per the verifier: the
       region-derived height is stated from the region's and the object's boxes, read at the step; the
-      replacement is for an object not laid.
+      replacement is for an object not laid. Restated for the ordered screens: with the drop point moved
+      in wherever the region was closed above, libero_90 42's pan, whose grasp passed at the centre, was
+      let go on the shelf's front edge (49 -> 43 of 50 in v41); screened at the centre first, and gone in
+      shallow only where no tier passed there and one did at the shallow release, 43 -> 49 (v42), and
+      libero_10 9's mug still goes in shallow (44 -> 49 in v44, with the door table). The later screens
+      are built only where the earlier ones pass nothing; built for every choice (v42) the outcomes were
+      the same, 6420 of 6500.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-pick-turns-before-descending
