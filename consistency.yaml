@@ -2868,24 +2868,26 @@ branches:
       decision was made, each as computed at that step; (3) the steep drop point's plan offset from the
       region's centre along u is that half-extent less the depth, and its component across u is the drop
       point's; (4) the steep decision is a function of the state at the step it is made, the placed
-      object, the region's box, the drop point and the carry height at that step, the arm's joint ranges
-      and declared constants; and at each step, which frame each evaluated direction has is a function of
-      the recorded decisions and of that step's state, placed object, region's box, drop point and carry
-      height, the joint ranges and declared constants; (5) the recorded steep withdrawal point's plan
-      offset from the region's centre along u is the smaller of the tool point's at the release and the
-      box's extent along u plus the margin; (6) where a steep frame is taken,
-      BRN-place-enters-roofed-target-level's claims (1) and (4) hold with the steep drop point in place of
-      the drop point, and its claim (2) with the recorded decisions among its arguments; its claims (3)
-      and (5) are not claimed there -- the drop point in plan the place's lower and release read is the
-      steep drop point, whose component across u is the place's own (claim (3)). Not claimed: that the
-      object carried at a steep frame fits under the roof, or passes under it untouched; that the sweep
-      checks anything where the band from the object's bottom plus the clearance to the roof is empty;
-      that the steep drop point lies inside the region's face where the region axis u was built from is
-      not horizontal; that the part of the object outside the face stays clear of anything; that the servo
-      reaches a screened configuration, that anything between the screened poses is clear, or that poses
-      screened at the decision step stay clear at later steps; that a level frame's poses touching only
-      loose bodies are safe (they keep the level frame); that the object rests level or stays in the
-      region after release.
+      object, the region's box, the drop point and the carry height at that step, the recorded decisions
+      of any later branch that states it replaces u's level frame, the arm's joint ranges and declared
+      constants; and at each step, which frame each evaluated direction has is a function of the recorded
+      decisions -- this branch's and those of any later branch that states it replaces u's level frame --
+      and of that step's state, placed object, region's box, drop point and carry height, the joint ranges
+      and declared constants; (5) the recorded steep withdrawal point's plan offset from the region's
+      centre along u is the smaller of the tool point's at the release and the box's extent along u plus
+      the margin; (6) where a steep frame is taken, BRN-place-enters-roofed-target-level's claims (1) and
+      (4) hold with the steep drop point in place of the drop point, and its claim (2) with the recorded
+      decisions -- this branch's and those of any later branch that states it replaces u's level frame --
+      among its arguments; its claims (3) and (5) are not claimed there -- the drop point in plan the
+      place's lower and release read is the steep drop point, whose component across u is the place's own
+      (claim (3)). Not claimed: that the object carried at a steep frame fits under the roof, or passes
+      under it untouched; that the sweep checks anything where the band from the object's bottom plus the
+      clearance to the roof is empty; that the steep drop point lies inside the region's face where the
+      region axis u was built from is not horizontal; that the part of the object outside the face stays
+      clear of anything; that the servo reaches a screened configuration, that anything between the
+      screened poses is clear, or that poses screened at the decision step stay clear at later steps; that
+      a level frame's poses touching only loose bodies are safe (they keep the level frame); that the
+      object rests level or stays in the region after release.
     premises: [BRN-place-enters-roofed-target-level, AXM-mujoco-forward-is-a-function-of-state, AXM-object-geometry-known]
     derivation_rule: >-
       BRN-place-enters-roofed-target-level disclaims that the hand or arm clears the table: libero_90 89
@@ -2920,7 +2922,9 @@ branches:
       screen's blocking bodies exclude the robot's. Restated after BRN-place-enters-roofed-target-level's
       carve-out: this branch states what it replaces. Restated so that a later branch
       (BRN-laid-entry-crosses-pitched) may put a frame of its own in the place of u's level frame: the
-      decision screens the frame in force.
+      decision screens the frame in force. Restated per the verifier: where a later branch's frame stands
+      in for u's level frame, that branch's recorded decisions -- made at earlier steps -- are among the
+      inputs of the steep decision and of each direction's frame (claims (4) and (6)).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-leave-a-roof-level-first
@@ -3120,23 +3124,24 @@ branches:
       with an entry frame has the object in its corridor, and every such direction's level sweep meets a
       colliding geom other than the robot's and the object's -- a direction with an entry frame is kept,
       instead, when the same sweep -- over each direction's entry frame, E and band as that direction has
-      them at that step, the place's own or as BRN-place-steep-laid-entry replaces them for that direction
-      by its recorded decision, which does not depend on the direction taken -- meets no colliding geom
-      other than the robot's, the object's and those of loose bodies; the direction taken is then chosen
-      among the directions so kept by that branch's rule for choosing among kept directions. This
-      replaces, at such steps, the place's own decision of the direction taken, as
-      BRN-place-enters-roofed-target-level allows a later branch to, and with it the entry frame, drop
-      point, corridor, E and case that branch derives from the direction. At every other step nothing
-      changes. Claimed: (1) at every step at which that branch keeps some direction, this branch leaves
-      the direction taken unchanged; (2) where a direction is kept by this branch, its sweep met no
-      colliding geom of a body that is not loose, other than the robot's and the object's, at that step;
-      (3) whether this branch keeps a direction at a step, and which is taken, are functions of that
-      step's state, the placed object, the drop point, the region's box, the carry height,
-      BRN-place-steep-laid-entry's recorded decisions, the arm's joint ranges, the scene's body tree and
-      joint types, and declared constants; (4) where neither that branch nor this one keeps a direction,
-      the target is placed as that branch states. Not claimed: that the loose bodies the sweep meets stay
-      where they are, upright, or out of the region; that the object reaches the corridor or the drop
-      point; that the hand or arm clears anything.
+      them at that step, the place's own or as a branch that states it replaces them for that direction
+      has them (BRN-place-steep-laid-entry by its recorded decision, or another), none of which depends on
+      the direction taken -- meets no colliding geom other than the robot's, the object's and those of
+      loose bodies; the direction taken is then chosen among the directions so kept by that branch's rule
+      for choosing among kept directions. This replaces, at such steps, the place's own decision of the
+      direction taken, as BRN-place-enters-roofed-target-level allows a later branch to, and with it the
+      entry frame, drop point, corridor, E and case that branch derives from the direction. At every other
+      step nothing changes. Claimed: (1) at every step at which that branch keeps some direction, this
+      branch leaves the direction taken unchanged; (2) where a direction is kept by this branch, its sweep
+      met no colliding geom of a body that is not loose, other than the robot's and the object's, at that
+      step; (3) whether this branch keeps a direction at a step, and which is taken, are functions of that
+      step's state, the placed object, the drop point, the region's box, the carry height, the recorded
+      decisions and records of every branch that states it replaces the place's entry frame, level frame,
+      drop point or E for a direction (BRN-place-steep-laid-entry's among them), the arm's joint ranges,
+      the scene's body tree and joint types, and declared constants; (4) where neither that branch nor
+      this one keeps a direction, the target is placed as that branch states. Not claimed: that the loose
+      bodies the sweep meets stay where they are, upright, or out of the region; that the object reaches
+      the corridor or the drop point; that the hand or arm clears anything.
     premises: [BRN-place-enters-roofed-target-level, BRN-place-steep-laid-entry, AXM-mujoco-forward-is-a-function-of-state, AXM-object-geometry-known]
     derivation_rule: >-
       libero_90 42 (put the frying pan under the cabinet shelf) failed 21 of 50 in v37: the roof was
@@ -3153,7 +3158,10 @@ branches:
       frame as the place's own or as BRN-place-steep-laid-entry replaces it by its recorded per-direction
       decision, which does not depend on the direction taken (a premise now); claim (1) says this branch
       leaves the direction unchanged where that branch keeps one. No roof-owning furniture is free-jointed
-      in libero_90 42, 89 or libero_10 9.
+      in libero_90 42, 89 or libero_10 9. Restated per the verifier: the sweep reads each direction's
+      frame, E and band as any branch replacing them leaves them, and the records those branches keep are
+      among claim (3)'s inputs (a crossing pitch or a go-shallow record changes a direction's corridor and
+      sweep).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-place-lays-along-tilted-region
