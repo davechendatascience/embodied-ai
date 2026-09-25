@@ -36,7 +36,8 @@ SETTLE_CHUNK = 5              # then in chunks of this many, until at rest
 SETTLE_ROUNDS = 10            # at most this many chunks
 
 
-ROBOT_MODEL = {"Panda": "panda", "UR5e": "ur5e"}   # robosuite's arm name -> its model in screwhead/assets/robots
+ROBOT_MODEL = {"Panda": "panda", "UR5e": "ur5e", "IIWA": "iiwa", "Jaco": "jaco", "Kinova3": "kinova3"}
+#               robosuite's arm name -> its model in screwhead/assets/robots
 
 
 @dataclass(frozen=True)
@@ -89,9 +90,10 @@ class SimArm:
 
         from .gripper_servo import GripperServo
         from ..geometry.interface import ActionSpec
-        from .libero_env import build_chain, check_loaded_model, gripper_geom, register_ur5e
+        from .libero_env import build_chain, check_loaded_model, gripper_geom, register_arm, register_ur5e
         from .servo import TwistServo
         register_ur5e()
+        register_arm(ex.robot)
         assert ex.gripper_mode in ("command", "target"), ex.gripper_mode
         self.execution = ex                 # kept whole: an episode record replays through it
         self.kp, self.gripper_mode, self.settle_steps = ex.kp, ex.gripper_mode, ex.settle_steps
@@ -195,7 +197,53 @@ class SimArm:
             raw, _, done, _ = self.env.step(cmd)
         self.t += 1
         self.raw = raw
+        if getattr(self, "diag", None) is not None:
+            self._observe_servo(raw)
         return raw, bool(done)
+
+    # -- servo diagnostics (an observer: reads the state, writes nothing) --------------------------
+    def enable_diagnostics(self) -> None:
+        """Start a fresh per-episode record of how the servo tracked: the joint gap to its reference, joints at
+        their torque limit, self-contacts between robot bodies that are not neighbours, re-anchors."""
+        m = self.env.sim.model._model
+        robot = np.array([contacts.is_robot(contacts.body_name(self.env.sim.model, b)) for b in range(m.nbody)])
+        gripper = np.array([contacts.body_name(self.env.sim.model, b).startswith("gripper0") for b in range(m.nbody)])
+        self.diag = dict(steps=0, gap_max=0.0, gap_sum=0.0, sat_steps=0, self_steps=0, pairs={},
+                         reanchors0=self.servo.reanchors, clamps0=self.servo.limit_clamps,
+                         _robot=robot, _gripper=gripper, _parent=np.array(m.body_parentid))
+
+    def _observe_servo(self, raw: dict) -> None:
+        dg = self.diag
+        q = np.asarray(raw["robot0_joint_pos"], float)
+        gap = float(np.max(np.abs(np.asarray(self.servo.ref, float) - q))) if self.servo.ref is not None else 0.0
+        dg["steps"] += 1
+        dg["gap_max"] = max(dg["gap_max"], gap)
+        dg["gap_sum"] += gap
+        lo, hi = self.robot.torque_limits
+        tau = np.asarray(self.robot.torques, float)
+        if np.any(np.abs(tau) >= 0.999 * np.minimum(np.abs(lo), np.abs(hi))):
+            dg["sat_steps"] += 1
+        m, d = self.env.sim.model._model, self.env.sim.data._data
+        par, rob, grip = dg["_parent"], dg["_robot"], dg["_gripper"]
+        hit = False
+        for c in d.contact[:d.ncon]:
+            b1, b2 = int(m.geom_bodyid[c.geom1]), int(m.geom_bodyid[c.geom2])
+            if c.dist >= 0 or not (rob[b1] and rob[b2]) or b1 == b2 or par[b1] == b2 or par[b2] == b1 \
+                    or (grip[b1] and grip[b2]):
+                continue
+            key = "|".join(sorted((contacts.body_name(self.env.sim.model, b1), contacts.body_name(self.env.sim.model, b2))))
+            dg["pairs"][key] = dg["pairs"].get(key, 0) + 1
+            hit = True
+        dg["self_steps"] += int(hit)
+
+    def diagnostics(self) -> dict:
+        """The episode's servo record, summarized."""
+        dg = self.diag
+        n = max(1, dg["steps"])
+        return dict(steps=dg["steps"], gap_max_rad=round(dg["gap_max"], 4), gap_mean_rad=round(dg["gap_sum"] / n, 4),
+                    torque_saturated_steps=dg["sat_steps"], self_contact_steps=dg["self_steps"],
+                    self_pairs=dict(sorted(dg["pairs"].items(), key=lambda kv: -kv[1])[:4]),
+                    reanchors=self.servo.reanchors - dg["reanchors0"], limit_clamps=self.servo.limit_clamps - dg["clamps0"])
 
     def _advance(self, cmd: np.ndarray, substep=None) -> None:
         """One control period of env.step's physics without its bookkeeping, then one forward.

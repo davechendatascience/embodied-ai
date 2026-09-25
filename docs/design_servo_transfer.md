@@ -171,6 +171,17 @@ identical. Before a student runs on this servo, the exempt set has to be somethi
 The first keeps the student's action space as it is; the second is more general and more to learn. This is
 the first decision of the servo-transfer work that changes the student, so it is taken before step 3 is built.
 
+**Decided 2026-09-26: per-intent state rules.** Each intended contact is its own rule, computed from the state
+alone and so the same for the teacher and the student: the body between the open jaws, within the pads'
+reach; the handle or joint body the tool point is at; the support under the tool's column during a deep pinch;
+the container whose interior the tool is inside; and the object held. Chosen over a single "finger zone"
+exemption for precision -- a fingertip striking a wall stays guarded -- at the price of more rules, each to be
+stated as a branch and verified. Each rule is measured against the teacher's own intended contacts: on the
+Panda, an exemption set that blocks any contact the teacher makes today is wrong.
+
+**Decided 2026-09-26: measure first.** Step 1 (diagnostics) and step 6 (the cross-embodiment matrix) come before
+any fix, so the fixes are chosen by how many episodes each failure mechanism costs on which arm.
+
 ## 6. Risks and open questions
 
 - **Exemptions decide everything.** A clearance margin that is right for a free carry is wrong for a hook that

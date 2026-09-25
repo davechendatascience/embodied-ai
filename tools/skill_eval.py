@@ -45,6 +45,9 @@ class Job:
     video_px: int
     stride: int = 1      # this job's episodes are ep_offset, ep_offset + stride, ... of one stream
     init_order: bool = False   # LIBERO's protocol: episode e starts from initial state e (mod their number)
+    robot: str = "Panda"       # the embodiment (Execution.robot, Execution.gripper)
+    gripper: str = "PandaGripper"
+    diagnostics: bool = False  # record the servo's tracking per episode (SimArm.diagnostics) in its trial
 
 
 def _observe(errors: list, fn, *args):
@@ -172,11 +175,12 @@ def _worker(remote, job_fields: dict) -> None:
     torch.set_num_threads(1)
     sys.path.insert(0, str(ROOT))
     from screwhead.teacher.skill_teacher import SkillTeacher
+    from screwhead.sim.sim_arm import Execution
     from screwhead.sim.task_env import StartNoise, TaskEnv
     # cameras only for video: the teacher reads no image, trajectories are identical either way, and
     # ten workers rendering every step held the GPU at 33-39% and the box at 93-95 C
     env = TaskEnv(job.suite, job.task, horizon=job.horizon, seed=job.seed, render=bool(job.video),
-                  start=StartNoise(**job.start))
+                  start=StartNoise(**job.start), execution=Execution(robot=job.robot, gripper=job.gripper))
     teacher = SkillTeacher(env)
     teacher.skills.reach.refuse_when_empty = job.refuse
     videos = 0
@@ -185,8 +189,12 @@ def _worker(remote, job_fields: dict) -> None:
             for _ in range(job.ep_offset if ep == 0 else job.stride - 1):
                 env.skip_episode()
         record = bool(job.video) and videos < job.max_videos
+        if job.diagnostics:
+            env.enable_diagnostics()
         try:
             row, frames = _run_episode(env, teacher, job, ep, record)
+            if job.diagnostics:
+                row.setdefault("detail", {})["servo"] = env.diagnostics()
         except Exception as e:  # noqa: BLE001  a worker boundary: a crash is one failed, recorded
             #                     episode, not a lost worker -- one diagnostic TypeError once
             #                     silently removed all 20 episodes of a task from an assessment
@@ -236,6 +244,9 @@ def _parse() -> argparse.Namespace:
     ap.add_argument("--video", default="")
     ap.add_argument("--max-videos", type=int, default=1)
     ap.add_argument("--video-px", type=int, default=0, help="record at this size, with a caption (0: the 128 px observation cameras)")
+    ap.add_argument("--robot", default="Panda", help="the arm, by robosuite's name (Panda, UR5e, IIWA, Jaco, Kinova3)")
+    ap.add_argument("--gripper", default="PandaGripper", help="the gripper, by robosuite's name")
+    ap.add_argument("--diagnostics", action="store_true", help="record the servo's tracking per episode in its trial")
     ap.add_argument("--trials", default="")
     ap.add_argument("-v", "--verbose", action="store_true",
                     help="timeline, events, grasp, and the false predicate term for every failure")
@@ -258,14 +269,16 @@ def _jobs(args) -> list[Job]:
                 jobs.append(Job(args.suite, t, n, args.seed * 100 + t, cpus[len(jobs) % len(cpus)], j,
                                 args.horizon, args.refuse, start, args.video,
                                 args.max_videos, args.video_px, stride=args.interleave,
-                                init_order=args.init_order))
+                                init_order=args.init_order, robot=args.robot, gripper=args.gripper,
+                                diagnostics=args.diagnostics))
         for j in range(args.split if args.interleave <= 1 else 0):
             n = min(per, args.episodes - j * per)
             if n > 0:
                 seed = args.seed * 100 + t if args.split == 1 else (args.seed * 100 + t) * 1000 + j
                 jobs.append(Job(args.suite, t, n, seed, cpus[len(jobs) % len(cpus)], j * per,
                                 args.horizon, args.refuse, start, args.video,
-                                args.max_videos, args.video_px, init_order=args.init_order))
+                                args.max_videos, args.video_px, init_order=args.init_order, robot=args.robot,
+                                gripper=args.gripper, diagnostics=args.diagnostics))
     return jobs
 
 
@@ -385,6 +398,9 @@ def _write_trials(rows: list[dict], args, rev: str) -> None:
     # invisible and averages it with the teacher it replaced. teacher_code() walks the import
     # closure, so a new file in the teacher enters the hash by itself.
     Path(args.trials).parent.mkdir(parents=True, exist_ok=True)
+    # the embodiment, recorded only where it is not the Panda with its gripper, so Panda trials keep their format
+    embodiment = ({} if (args.robot, args.gripper) == ("Panda", "PandaGripper")
+                  else {"robot": args.robot, "gripper": args.gripper})
     Path(args.trials).write_text(json.dumps({"trials": [
         {"metrics": dict({"refused": True} if r.get("refused") else
                          {"success": r["success"], "refused": False},
@@ -395,7 +411,7 @@ def _write_trials(rows: list[dict], args, rev: str) -> None:
          "detail": dict(r.get("detail", {}), episode=r["episode"], steps=r["steps"], language=r["language"]),
          "repro": {"seed": args.seed * 100 + r["task"], "task": r["task"], "task_suite": args.suite,
                    "episode": r["episode"], "horizon": args.horizon, "init_index": r.get("init_index"),
-                   "teacher_revision": rev}} for r in rows]}, indent=1))
+                   "teacher_revision": rev, **embodiment}} for r in rows]}, indent=1))
     written = json.loads(Path(args.trials).read_text())["trials"]
     leaked = [t for t in written if t["metrics"].get("refused") and "success" in t["metrics"]]
     assert not leaked, (f"{len(leaked)} refused trials carry a success metric; they would be "

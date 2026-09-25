@@ -134,6 +134,37 @@ def register_ur5e():
     return MountedUR5e
 
 
+_REGISTERED: set[str] = set()
+
+
+def register_arm(name: str) -> None:
+    """Register robosuite's own arm `name` (IIWA, Jaco, Kinova3) with LIBERO, as register_ur5e does the UR5e:
+    a table-mounted variant standing where MountedPanda stands, and a floor variant whose base offsets are
+    LIBERO's own floor Panda's. The arm's model, joint start and controller stay robosuite's; only its mount and
+    base placement change. The UR5e keeps its own registration."""
+    if name == "UR5e":
+        register_ur5e()
+        return
+    if name == "Panda" or name in _REGISTERED:      # LIBERO's own Pandas stay as LIBERO registers them
+        return
+    import robosuite.models.robots as models
+    from robosuite.robots import ROBOT_CLASS_MAPPING
+    from robosuite.robots.single_arm import SingleArm
+    base = getattr(models, name)
+    table = register_ur5e().base_xpos_offset.fget(None)     # the same table offsets as the mounted UR5e
+
+    def _floor(self):
+        import libero.libero.envs.robots.on_the_ground_panda as G
+        return G.OnTheGroundPanda.base_xpos_offset.fget(self)
+
+    def _const(value):
+        return property(lambda _self: value)
+    mounted = type(f"Mounted{name}", (base,), {"default_mount": _const("RethinkMount"), "base_xpos_offset": _const(table)})
+    floor = type(f"OnTheGround{name}", (mounted,), {"default_mount": _const(None), "base_xpos_offset": property(_floor)})
+    ROBOT_CLASS_MAPPING.update({mounted.__name__: SingleArm, floor.__name__: SingleArm})
+    _REGISTERED.add(name)
+
+
 def _joint_blocks(sim):
     m = sim.model
     robot, objs = [], []
