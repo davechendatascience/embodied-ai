@@ -2747,6 +2747,108 @@ branches:
       BRN-drop-point-footprint-as-carried excepts the drop points this rule gives.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-place-steep-laid-entry
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Terms are BRN-place-enters-roofed-target-level's. At a step at which the place decides a roofed
+      target's entry, it evaluates the directions in that branch's order and stops at the first whose
+      corridor holds the object -- the direction that branch then takes -- or after the last; a direction
+      u is an entry of that branch's list of directions -- a region axis and a sign -- and u's level frame
+      at a step is u's entry frame for a laid object as that branch defines it (pitched by at most its lay
+      pitch). A declared inverse-kinematics solver's result is a function of its start joints, its target
+      pose and the arm's joint ranges alone; the scene's body tree and each body's joint types are
+      constants of its model. A set of tool poses is fixed-blocked at a step when, for some pose of it,
+      the solver, started from the arm's joints as read at that step, does not converge to it, or the arm
+      put at the solution in the simulator, with the jaws at their present opening, has a contact at
+      negative distance between a robot geom and a geom of a body that is not the robot's, has no free
+      joint of its own, and is neither the placed object nor a body whose parent is it; each such screen
+      writes the arm's joints and the jaws, runs the forward computation, reads the contacts and restores
+      everything it wrote before anything else reads the simulator
+      (AXM-mujoco-forward-is-a-function-of-state). The steep drop point for u at a step is the point in
+      plan whose offset from the region's centre along u equals the region's box half-extent along the
+      region axis u was built from less a declared depth, and whose component across u is the drop
+      point's. For each pitch of a declared list, each pitch below a quarter turn, the steep frame at that
+      pitch is built as that branch builds a pitch's frame. For a frame F and a point D in plan at which
+      the object, carried at F, has a rest height, F's poses at D are the tool at F placed so that the
+      object, carried at F, has its origin at E -- computed as that branch computes it, from D and F --
+      and at D at that rest height. The steep decision for a placed object, region and direction u is made
+      once per episode, at the first step at which the place evaluates u with the object laid and u has a
+      level frame at which the object has a rest height at the drop point: when the level frame's poses at
+      the drop point are fixed-blocked, it is the first pitch of the list, in order, at which the object
+      carried at the steep frame has a rest height at the steep drop point and the steep frame's poses
+      there are not fixed-blocked; otherwise, or where no pitch qualifies, it is level. At that step and
+      each later step of the episode at which u is evaluated with the object laid and u has a level frame,
+      where the decision is a pitch, u's entry frame is instead the steep frame at that pitch if the
+      object carried at it has a rest height at the steep drop point, and u has no entry frame at that
+      step if not; no roof fit is required of a steep frame; the steep drop point replaces the drop point
+      for u wherever that branch reads it (the corridor, E, the four cases and the recorded release
+      point), and the swept height band's top is the lower of the object's top and the roof. When the
+      place commands the release with a steep frame taken, the withdrawal it records -- here a push in,
+      toward the region -- is, in place of that branch's, the direction -u and the tool point moved along
+      -u by the amount by which the tool point's plan offset from the region's centre along u exceeds the
+      region box's extent along u (the sum of its half-extents times the magnitudes of its axes'
+      components along u) plus a declared margin, or by zero where it does not; the retreat reads it as
+      that branch states. Claimed: (1) at every step at which the object is held and is not laid, or is
+      laid and no evaluated direction has a recorded pitch decision, whether the target is roofed, whether
+      the object is laid, the direction and entry frame taken, the case and the command are as
+      BRN-place-enters-roofed-target-level states; (2) where a steep frame is taken at a step, the level
+      frame's poses at the drop point were fixed-blocked, and the decision's steep poses were not, at the
+      step the decision was made, each as computed at that step; (3) the steep drop point's plan offset
+      from the region's centre along u is that half-extent less the depth, and its component across u is
+      the drop point's; (4) the steep decision is a function of the state at the step it is made, the
+      placed object, the region's box, the drop point and the carry height at that step, the arm's joint
+      ranges and declared constants; and at each step, which frame each evaluated direction has is a
+      function of the recorded decisions and of that step's state, placed object, region's box, drop point
+      and carry height, the joint ranges and declared constants; (5) the recorded steep withdrawal point's
+      plan offset from the region's centre along u is the smaller of the tool point's at the release and
+      the box's extent along u plus the margin; (6) where a steep frame is taken,
+      BRN-place-enters-roofed-target-level's claims (1) and (4) hold with the steep drop point in place of
+      the drop point, and its claim (2) with the recorded decisions among its arguments; its claims (3)
+      and (5) are not claimed there -- the drop point in plan the place's lower and release read is the
+      steep drop point, whose component across u is the place's own (claim (3)). Not claimed: that the
+      object carried at a steep frame fits under the roof, or passes under it untouched; that the sweep
+      checks anything where the band from the object's bottom plus the clearance to the roof is empty;
+      that the steep drop point lies inside the region's face where the region axis u was built from is
+      not horizontal; that the part of the object outside the face stays clear of anything; that the servo
+      reaches a screened configuration, that anything between the screened poses is clear, or that poses
+      screened at the decision step stay clear at later steps; that a level frame's poses touching only
+      loose bodies are safe (they keep the level frame); that the object rests level or stays in the
+      region after release.
+    premises: [BRN-place-enters-roofed-target-level, AXM-mujoco-forward-is-a-function-of-state, AXM-object-geometry-known]
+    derivation_rule: >-
+      BRN-place-enters-roofed-target-level disclaims that the hand or arm clears the table: libero_90 89
+      (the book under the shelf's bottom layer, a 71 mm opening between the table and the middle board)
+      failed 50 of 50 in v33, the level laid entry lowering at E with the hand's jaws vertical, its
+      collision mesh reaching 10.4 cm along them, into the table, and the wrist on to the standing middle
+      book: screened, both level poses of the shelf's open side put the hand into the table (inits 0 and
+      1; the other sides' did not converge). LIBERO's humans enter it steeply: over 20 demonstrations the
+      approach pitched 23 to 37 deg down (median 32), the book's origin -- at its leading edge -- 0.8 to
+      4.5 cm past the face, and every demonstration ending, at the first success, with the book still
+      held. With the steep entry (pitches 0.45, 0.55, 0.65, 0.75 rad, depth 5 cm, margin 2 cm), inits 0-9:
+      libero_90 89 10 of 10 (v33 0); 88 10 and 86 9 of 10, identical per episode to v33 (their level poses
+      touch only loose bodies or nothing). A screen on any contact instead of fixed bodies moved 88 to the
+      steep entry and broke it (10 -> 0). TST-teacher-settled (seed 557, 10 episodes): 89 success_final 10
+      of 10, released, at rest and finished 10 of 10, and 'tipped' 10 of 10 by 13.6 deg -- the book lies
+      flat, 90 deg from standing, while the reference's largest final tilt, 76.4 deg, is of the humans'
+      book still held mid-insertion; 88 settled 10 of 10. The withdrawals measured: drawn out along u,
+      lost 10 of 10 (the released book dragged back past the face); back along the approach, lost 10 of
+      10; pushed in the whole entry distance (the level entry's rule for a laid object), the hand went
+      under the board and stayed there, unfinished 10 of 10; pushed in until the tool point is 2 cm
+      outside the face, kept 10 of 10. Restated per the verifier: the screens are made once, as one
+      decision per placed object, region and direction recorded at a step the statement defines, and every
+      claim about them is about that step; the level frame, the solver, penetration and the order of
+      evaluation are defined; that branch's claims the steep frame changes are named. Restated per the
+      verifier: the parent's claim (5) is among those a steep frame changes; claim (1) is of steps at
+      which no evaluated direction has a steep frame; the body tree and joint types the screen reads are
+      model constants; the empty band and a tilted region axis are disclaimed. Restated per the verifier:
+      claim (1) is of steps at which no evaluated direction has a recorded pitch decision; the parent's
+      claims (3) and (5) are not claimed where a steep frame is taken; 'no free joint' is the body's own.
+      Restated per the verifier: claim (1) is of steps at which the object is held, and names what it
+      covers; directions are entries of the parent's list; the steep pitches are below a quarter turn; the
+      screen's blocking bodies exclude the robot's.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:
