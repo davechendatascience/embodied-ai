@@ -3480,25 +3480,28 @@ branches:
       candidate on its own, the choice from the first tier with a candidate that passes) and
       BRN-rim-pinch-as-deep-as-the-palm's (a grasp across a body, and the screen's choice within a set it
       judges: clean candidates where any is, else all it can witness, then its conditioning bars and list
-      order). The face tier offers top-down grasps across the object's body, the jaw axis along one of the
-      object's box's level axes. A candidate the screen passes that is not clean is touching. A face pinch
-      turned by a yaw is the face pinch's tool frame turned about the vertical by that yaw, its grasp
-      point unchanged, its opening the object's extent along the turned jaw axis through that point where
-      that is measured, else the box's width across those faces over the cosine of the yaw; it is offered
-      only where the face tier offers the square pinch and that width over the cosine of the yaw, plus the
-      grip margin, is at most the maximum jaw opening. The declared yaws lie strictly between minus and
-      plus a quarter turn and are taken in a declared order. At a choice at which the face tier is the
-      first tier, in the declared order, with a candidate that passes -- so that without this rule the
-      grasp chosen is the one the screen takes from it -- and that one is touching, the face pinches
-      turned by each declared yaw, in that order, are screened as one set; if one of them passes and the
-      one the screen takes from that set is clean, the choice takes it in place of the touching one;
-      otherwise the choice is as before. Claimed: (1) a turned candidate's approach is straight down, its
-      grasp point is that of the face pinch it turns, and its jaw axis is level and at the yaw from that
-      pinch's jaw axis; (2) the grasp chosen differs from the one chosen without this rule only where that
-      one is a touching face pinch, and then it is a clean turned face pinch; (3) at a choice at which the
-      face tier's pick is clean, or no face pinch passes, the choice is as before. Not claimed: that a
-      turned pinch holds the object as the square one would; that the loose body a square pinch touches
-      would have stopped it; that the turned set's pick is the one the humans take.
+      order). The face tier offers top-down grasps across the object's body with the jaw axis along one of
+      the object's box's level axes -- its square pinches, approach straight down and jaw axis level --
+      and whatever candidates a later branch adds to it; a face-tier candidate is any of these. A
+      candidate the screen passes that is not clean is touching. A square pinch turned by a yaw is the
+      square pinch's tool frame turned about the vertical by that yaw, its grasp point unchanged, its
+      opening the object's extent along the turned jaw axis through that point where that is measured,
+      else the box's width across those faces over the cosine of the yaw; it is offered only where the
+      face tier offers the square pinch and that width over the cosine of the yaw, plus the grip margin,
+      is at most the maximum jaw opening. The declared yaws lie strictly between minus and plus a quarter
+      turn and are taken in a declared order. At a choice at which the face tier is the first tier, in the
+      declared order, with a candidate that passes -- so that without this rule the grasp chosen is the
+      one the screen takes from it -- and that one is touching -- whichever face-tier candidate it is --
+      the square pinches turned by each declared yaw, in that order, are screened as one set; if one of
+      them passes and the one the screen takes from that set is clean, the choice takes it in place of the
+      touching one; otherwise the choice is as before. Claimed: (1) a turned candidate's approach is
+      straight down, its grasp point is that of the square pinch it turns, and its jaw axis is level and
+      at the yaw from that pinch's jaw axis; (2) the grasp chosen differs from the one chosen without this
+      rule only where that one is a touching face-tier candidate, and then it is a clean turned square
+      pinch; (3) at a choice at which the face tier's pick is clean, or no face-tier candidate passes, the
+      choice is as before. Not claimed: that a turned pinch holds the object as the square one would, or
+      as a leaned pick it replaces would; that the loose body a square pinch touches would have stopped
+      it; that the turned set's pick is the one the humans take.
     premises: [BRN-pinch-leans-when-upright-unreachable, BRN-rim-pinch-as-deep-as-the-palm, DEF-reachable-pose, AXM-object-geometry-known, AXM-panda-gripper-geometry]
     derivation_rule: >-
       libero_10 1's cream cheese box (82 x 42 x 18 mm) fits the jaws only across its short axis, and
@@ -3512,7 +3515,10 @@ branches:
       square one, so a choice that was clean is unchanged. Restated per the verifier: the rule applies
       only where the face tier is the first tier that passes, so the grasp it replaces is the one chosen
       without it; the screen's clean-first choice is BRN-rim-pinch-as-deep-as-the-palm's, restated to
-      state it. Restated per the verifier: touching is whatever passes and is not clean.
+      state it. Restated per the verifier: touching is whatever passes and is not clean. Restated per the
+      verifier of BRN-face-pinch-leans-toward-the-base, which adds leaned forms to the face tier: the rule
+      fires on the face tier's pick whichever candidate it is, and turns the square pinches only, as it
+      always did; no behaviour changes.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-handle-offered-after-upright
