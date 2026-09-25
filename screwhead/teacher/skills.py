@@ -111,6 +111,11 @@ class SkillConfig:
     #                                humans into the shelf's bottom layer pitch 23-37 deg (libero_90 89)
     steep_depth: float = 0.05      # m the origin goes past the region's face by the steep entry (humans 0.8-4.5 cm)
     steep_margin: float = 0.02     # m outside the face the tool point stops when it pushes in after the release
+    tip_angle: float = 0.78        # rad an object resting too tall for its region is tipped before release: the
+    #                                humans release libero_90 32's ketchup tilted, approach 49 deg down (median)
+    tip_done: float = 0.10         # rad from the tipped frame at which the tip is done
+    tip_stall: int = 20            # steps without tip_progress of rotation after which the tip is done
+    tip_progress: float = 0.01     # rad
     at_place_xy: float = 0.04      # a released object this close to its target is left there
     at_place_dz: float = 0.03
     at_place_above: float = 0.03   # ... and no higher than this above it: with no bound, a bowl 8 cm
@@ -216,6 +221,7 @@ class Skills:
         self._spots: dict[str, tuple] = {}         # synthetic regions: where a crowded object goes
         self._clearing: dict[tuple, str | None] = {}
         self._entry_choice: dict = {}              # BRN-place-steep-laid-entry's decision per (obj, region, side)
+        self._tip: dict = {}                       # BRN-place-tips-a-standing-misfit: (obj, region) -> the tip
         self._let_go: dict[str, bool] = {}          # objects this episode's releases have let go
         self._released_at: dict[tuple, np.ndarray] = {}  # a roofed entry's release target, per (object, region)
         self._last_held: str | None = None           # the object held() last found in the jaws
@@ -256,7 +262,7 @@ class Skills:
             self._last_held = None
             for cache in (self._grasp_cache, self._handle_cache, self.grasp_log,
                           self._drop_cache, self._carry_cache, self._spots, self._clearing, self._let_go,
-                          self._released_at, self._entry_choice):
+                          self._released_at, self._entry_choice, self._tip):
                 cache.clear()
 
     def grasp_for(self, obj: str, via: np.ndarray | None = None,
@@ -523,7 +529,14 @@ class Skills:
         R_g, p_g, width = self.grasp_for(obj, via, place)
         app = self.approach_for(obj)
         open_to = min(k.max_grip, width + k.grip_margin)
-        if self.held(obj):
+        holding = self.held(obj)
+        if not holding:
+            # taken again after a tip let it go, by the plan's pick or the place's: a new place, a new tip if it needs
+            # one. A tip not yet done is kept: held reads false for a step mid-tip, the plan turns to the pick, and
+            # cleared there the next held step tipped again from the half-tipped pose (libero_90 32, 19 -> 14 of 20)
+            for key in [key for key, tip in self._tip.items() if key[0] == obj and tip.get("done")]:
+                del self._tip[key]
+        if holding:
             self.phase = "lift"
             slow = self._risen(obj) < k.slow_lift_dz
             return self.action(self.twist_to(R, p, R_g, p + Z * k.lift_dz,
@@ -779,6 +792,8 @@ class Skills:
         self._let_go[obj] = False                       # in the hand: nothing has been let go
         self._released_at.pop((obj, region), None)      # nor released under a roof
         self._withdraw = None
+        if (obj, region) in self._tip:                  # BRN-place-tips-a-standing-misfit, before anything else
+            return self._tipping(obj, region, R, p)
         carry_z = self._carry_height(obj, region, q, target_q, R, p)
         entry = self._level_entry(obj, region, q, target_q, carry_z, R, p)
         R_entry, steep = None, False
@@ -847,6 +862,16 @@ class Skills:
             step = delta if not inside or float(np.linalg.norm(delta[:2])) <= k.lower_align else np.r_[delta[:2], 0.0]
             return self.action(self.twist_to(R, p, R_fit, p + step, v_max=k.lower_speed,
                                              v_min=k.lower_speed_min), 0.0)
+        if inside and R_entry is None and resting:
+            R_reg, p_reg, half = self.region_pose(region)
+            if float(q[2]) > float(p_reg[2]) + self._region_up(R_reg, half):
+                # BRN-place-tips-a-standing-misfit: resting upright with its origin over the region box's top, LIBERO's
+                # In can never hold (the box has no slack above); tipped toward the region's long axis, then let go.
+                # Released standing, libero_90 32's ketchup stayed standing in the drawer (1 of 50 in v35)
+                tip = self._tip_plan(obj, R_reg, p_reg, half, R, p)
+                if tip is not None:
+                    self._tip[(obj, region)] = tip
+                    return self._tipping(obj, region, R, p)
         self.phase = "release"
         self._let_go[obj] = True
         if R_entry is not None:
@@ -864,6 +889,46 @@ class Skills:
                 extent = float(np.abs(R_reg.T @ u) @ np.abs(np.asarray(half, float)))
                 push = max(0.0, float((p - p_reg)[:2] @ u[:2]) - (extent + k.steep_margin))
                 self._withdraw = (np.asarray(-u, float), p - u * push)
+        return self.action(np.zeros(6), A_OPEN)
+
+    def _tip_plan(self, obj: str, R_reg, p_reg, half, R: np.ndarray, p: np.ndarray) -> dict | None:
+        """The tip: the tool rotated by tip_angle about a horizontal axis through the object's lowest box corner,
+        carrying up toward the region's longest horizontal axis, signed toward the region's centre from that
+        corner; the tool's pose at the start and the progress record. None where no region axis is near level."""
+        box = self.scene.object_box(obj)
+        signs = np.array([[a, b, c] for a in (-1, 1) for b in (-1, 1) for c in (-1, 1)], float).T
+        corners = box.world_centre[:, None] + (box.R * box.half) @ signs
+        pivot = corners[:, int(np.argmin(corners[2]))].copy()
+        flat = [i for i in range(3) if abs(float(R_reg[2, i])) < VERTICAL_COS]
+        if not flat:
+            return None
+        longest = max(flat, key=lambda i: (abs(float(half[i])), -i))
+        la = np.array([R_reg[0, longest], R_reg[1, longest], 0.0])
+        la = la / np.linalg.norm(la)
+        side = 1.0 if float((np.asarray(p_reg, float) - pivot)[:2] @ la[:2]) >= 0 else -1.0
+        turn = axis_rot(np.cross(Z, side * la), self.k.tip_angle)
+        return dict(R_goal=turn @ R, p_goal=pivot + turn @ (np.asarray(p, float) - pivot), best=np.inf, idle=0)
+
+    def _tipping(self, obj: str, region: str, R: np.ndarray, p: np.ndarray) -> np.ndarray:
+        """Toward the tipped pose until within tip_done of its rotation, or until the rotation has not improved by
+        tip_progress for tip_stall steps; then the release."""
+        k, tip = self.k, self._tip[(obj, region)]
+        if tip.get("done"):                             # tipped: the jaws open while it is still held
+            self.phase = "release"
+            self._let_go[obj] = True
+            return self.action(np.zeros(6), A_OPEN)
+        err = rot_angle(R.T @ tip["R_goal"])
+        if err < tip["best"] - k.tip_progress:
+            tip["best"], tip["idle"] = err, 0
+        else:
+            tip["idle"] += 1
+        if err > k.tip_done and tip["idle"] < k.tip_stall:
+            self.phase = "tip"
+            return self.action(self.twist_to(R, p, tip["R_goal"], tip["p_goal"], v_max=k.lower_speed,
+                                             v_min=k.lower_speed_min), 0.0)
+        tip["done"] = True
+        self.phase = "release"
+        self._let_go[obj] = True
         return self.action(np.zeros(6), A_OPEN)
 
     def _own_bodies(self, obj: str) -> set[int]:
