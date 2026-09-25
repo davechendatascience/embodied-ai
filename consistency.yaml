@@ -2862,9 +2862,10 @@ branches:
       is within a declared funnel of that point in plan, or below the plane less a declared band and
       within a declared distance of it in plan, the mode's own command then following; otherwise, below
       the plane less the band, straight up to the plane; otherwise over, at the plane, toward the point. A
-      colliding geom of the scene other than the robot's lies over the hand at a point in plan when some
-      part of its box lies within a declared radius of that point in plan and its bottom is more than a
-      declared height above the tool point. With this branch, at every step at which an approach leg is
+      colliding geom of the scene other than the robot's lies over the hand at a point in plan, for a leg,
+      when some part of its box lies within a declared radius of that point in plan and its bottom is more
+      than a declared height above the tool point and below the height of the leg's start point -- between
+      the hand and where the leg must take it. With this branch, at every step at which an approach leg is
       computed with the tool below the crossing plane less the band and some colliding geom lies over the
       hand at the tool point, the leg's command is instead the tool, its rotation goal its present one,
       toward the first point at the tool point's height -- among those at distances of a declared step
@@ -2899,7 +2900,11 @@ branches:
       no way out was found. Colliding geoms only: a visual mesh (the shelf's) spans its openings. The
       remaining failures stall in the hook's final approach with the servo clamping, a separate mechanism.
       Supersedes the staged statement, which acted before any skill and was doubted for that scope (the
-      start step, precedence with other teacher rules, the tool pose's source).
+      start step, precedence with other teacher rules, the tool pose's source). Restated after the sweep
+      v36 (the rule as first declared: libero_90 23 13 -> 33 of 50, libero_90 35 50 -> 0): the swing
+      computes its leg at every step, engaged or not, and the microwave's top lies over its door's handle
+      -- where the swing must take the hand -- so the rule sent the hand out from under it at every step.
+      What lies over the hand now counts only below the leg's start point's height.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 policies:
