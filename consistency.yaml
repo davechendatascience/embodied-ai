@@ -96,6 +96,22 @@ axioms:
       body_pos and body_quat -- all 10 libero_spatial tasks re-sample body_quat too, and
       libero_object re-samples nothing (TRL-0240).
 
+  - id: AXM-libero-init-states-record-a-panda
+    domain: environment
+    statement: >-
+      LIBERO's initial states are flattened MuJoCo states recorded with LIBERO's Panda and its
+      PandaGripper: the time, then qpos -- the Panda's seven arm joints and its two finger joints
+      first, then every object joint in the model's joint order -- then qvel in the same order. With
+      another arm registered as this project registers it (UR5e, IIWA, Kinova3 or Jaco), the robot's
+      base body stands at exactly the world pose the Panda's base stands at, in every one of the 130
+      tasks, so a pose given in the Panda's base frame is the same world pose in that arm's base
+      frame.
+    rationale: >-
+      The layout is the one the object remap relies on: copied as that block, the objects' joints at
+      placement match the recorded state on every arm. Measured 2026-09-26: robot0_base world position
+      and quaternion identical to the Panda's (difference exactly 0) for the four arms in all 130
+      tasks, at four distinct Panda base poses across the scenes.
+
   - id: AXM-libero-soft-reset-state
     domain: environment
     statement: >-
