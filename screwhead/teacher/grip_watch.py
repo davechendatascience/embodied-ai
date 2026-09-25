@@ -79,9 +79,9 @@ class GripWatch:
                     self.drops += 1
                     self.drop_phases.append(ph)
                     del self.pending[o]
-            if self.held[o] and not h and t - self.last_release > RELEASE_WINDOW:
-                if support_gap(sk.scene, sk.planner, o) > DROP_GAP:
-                    self.pending[o] = (t, z, self.prev_phase)
+            if (self.held[o] and not h and t - self.last_release > RELEASE_WINDOW
+                    and support_gap(sk.scene, sk.planner, o) > DROP_GAP):
+                self.pending[o] = (t, z, self.prev_phase)
             self.held[o] = h
         self.releasing = releasing
         self.prev_phase = self.teacher.phase

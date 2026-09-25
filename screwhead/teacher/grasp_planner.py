@@ -67,7 +67,7 @@ class GraspPlanner:
         return self._gripper
 
     # -- tiers --------------------------------------------------------------------------
-    def handles(self, obj: str, box, floor: float) -> list:
+    def handles(self, obj: str, floor: float) -> list:
         """Top-down grasps on an object's handle: the collision geoms lying out from its origin
         (HANDLE_OUTER), jaws across each geom's thinnest horizontal axis, at points along a long one."""
         m, d = self.scene.m, self.scene.d
@@ -127,6 +127,11 @@ class GraspPlanner:
         # drawer had no reachable pinch at all and was forced (libero_spatial 4, 49 -> 8 of 50); there
         # the palm's depth meets the cabinet in every layout, and the usual depth let the bowl pivot
         # out of the pads as it left the drawer floor (2 of 50)
+        # the face pinches also leaned toward the robot's base, the wrist away from it, after the upright ones:
+        # the screen takes one only where it reaches a conditioning bar no upright one does. libero_90 62's
+        # dressing, 24 cm from the base, was pinched upright with the elbow at its stop 6 cm above the grasp
+        # (4 of 50); LIBERO's humans lean 3-11 deg that way (8 of 8), and so leaned it went 4 of 4
+        faces = faces + self.leaned(faces, np.zeros(3), tilts=self.k.base_lean_tilts)   # the base is the frame's origin
         parts = deep + middle + shallow
         # the same pinches leaned off the vertical about the wall's tangent, the wrist away from the object's
         # centre, least lean first: LIBERO's humans take libero_90 8's bowl, under the open top drawer, by
@@ -137,7 +142,7 @@ class GraspPlanner:
         if not (faces or parts or sides):
             d0 = box.width_axes()[0][1] if box.width_axes() else np.array([1.0, 0.0, 0.0])
             faces = self.at(box.world_centre, half_h, d0, self.k.max_grip - self.k.grip_margin, floor=floor)
-        handles = self.handles(obj, box, floor) if "handle" in (held_by, also_held_by) else []
+        handles = self.handles(obj, floor) if "handle" in (held_by, also_held_by) else []
         handles_leaned = self.leaned(handles, self.scene.body_pose(obj)[1])
         # a category held by its handle is offered the handle first (affordances.yaml held_by); one also held by it,
         # after its upright tiers and before the leaned wall pinches (also_held_by): libero_10 9's mug, leaned by its
@@ -163,12 +168,12 @@ class GraspPlanner:
                     out += self.at(box.world_centre, half_h, axis_rot(Z, yaw) @ d, wt, body=bid, floor=floor)
         return out
 
-    def leaned(self, cands: list, centre: np.ndarray) -> list:
+    def leaned(self, cands: list, centre: np.ndarray, tilts=None) -> list:
         """Top-down grasps leaned off the vertical by each of lean_tilts, least first: turned about the
         level axis square to the line from the object's centre out to the grasp point, the wrist moving
         out along that line -- about a rim pinch's tangent, about a handle pinch's jaw."""
         out = []
-        for tilt in self.k.lean_tilts:
+        for tilt in (self.k.lean_tilts if tilts is None else tilts):
             for R, p, w, _app in cands:
                 r = np.asarray(p - centre, float)[:2]
                 n = float(np.linalg.norm(r))

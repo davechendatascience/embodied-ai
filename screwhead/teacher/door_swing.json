@@ -1221,5 +1221,10 @@
    ],
    "behind": []
   }
- }
+ },
+ "mode_demos": {
+  "open": 50,
+  "close": 100
+ },
+ "mode_demos_note": "demonstrations behind each mode's rows: open from libero_90 35; close from libero_90 33 and libero_10 9"
 }

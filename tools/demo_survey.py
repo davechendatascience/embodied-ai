@@ -40,6 +40,7 @@ DATASETS = ROOT / "third_party/LIBERO/libero/datasets"
 UNHELD_MOVE = 0.02        # m: an object moved this far with no grasp holding it was pushed or knocked
 JOINT_MOVE = {2: 0.02, 3: 0.1}   # slide (m), hinge (rad): a joint that moved this far was driven
 SETTLE = 8                # steps after the close command at which the jaws are read as closed
+TOP_DOWN_COS = 0.9        # an approach within about 25 deg of straight down counts as top-down
 SITE = "gripper0_grip_site"
 
 
@@ -80,11 +81,10 @@ class Replay:
         for b in range(self.M.nbody):
             if int(self.M.body_jntnum[b]) == 0 and self.M.body(b).name.endswith("_main"):
                 self.static[self.M.body(b).name] = b
-        self.base_pose = {n: (self.M.body_pos[b].copy(), self.M.body_quat[b].copy()) for n, b in self.static.items()}
 
     def fixtures_from(self, xml: str) -> None:
         for name, b in self.static.items():
-            m = re.search(r'<body[^>]*name="%s"[^>]*>' % re.escape(name), xml)
+            m = re.search(rf'<body[^>]*name="{re.escape(name)}"[^>]*>', xml)
             if m is None:
                 continue
             pos = re.search(r'pos="([^"]+)"', m.group(0))
@@ -151,7 +151,7 @@ def survey_demo(r: Replay, e) -> dict:
             Ro, po = r.sc.body_pose(obj)
             row["grasp_in_object_mm"] = np.round(1000 * (Ro.T @ (pt - po)), 1).tolist()
             r.at(S[o_])
-            Rt1, pt1 = r.tool()
+            Rt1, _pt1 = r.tool()
             row["approach_released"] = np.round(Rt1[:, 2], 2).tolist()
             if a is not None:
                 z_rel = float(S[o_, 1 + a + 2]); z_end = float(S[-1, 1 + a + 2])
@@ -210,7 +210,7 @@ def summarise(task: int, name: str, demos: list[dict]) -> list[str]:
         tr = [g.get("tilt_released") for g in obj_g if g.get("tilt_released") is not None]
         gio = np.array([g["grasp_in_object_mm"] for g in obj_g])
         lg = [g.get("let_go_above_end_mm") for g in obj_g if g.get("let_go_above_end_mm") is not None]
-        top = float(np.mean(app[:, 2] < -0.9))
+        top = float(np.mean(app[:, 2] < -TOP_DOWN_COS))
         out.append(f"  object grasps {len(obj_g)}: approach mean {np.round(app.mean(0), 2).tolist()} "
                    f"(top-down in {top:.0%}), at release {np.round(app_r.mean(0), 2).tolist()}; "
                    f"aperture median {np.median([g['aperture_mm'] for g in obj_g]):.1f} mm")

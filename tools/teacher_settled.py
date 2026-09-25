@@ -119,7 +119,7 @@ def _task(item: tuple) -> list[dict]:
     cpu = cores.get()
     try:
         os.sched_setaffinity(0, {cpu})
-        return _episodes(suite, task, episodes, seed, horizon, ref, cpu, video, init_order)
+        return _episodes((suite, task, episodes, seed, horizon), ref, cpu, video, init_order)
     finally:
         cores.put(cpu)
 
@@ -137,47 +137,105 @@ def _verdict_frames(frames: list, text: str, ok: bool, n: int) -> list:
     return frames[:-n] + out
 
 
-def _episodes(suite: str, task: int, episodes: int, seed: int, horizon: int, ref: dict, cpu: int,
-              video: dict | None = None, init_order: bool = False) -> list[dict]:
-    from skill_eval import Job, _run_episode
-    from screwhead.sim import contacts
-    from screwhead.sim.sim_arm import REST_SPEED
-    from screwhead.sim.task_env import TaskEnv
+class _Watch:
+    """The placed objects of an episode's task: which the robot touches, which still move, how far each is tipped
+    past the humans' own final tilt."""
+
+    def __init__(self, env, placed: list):
+        from screwhead.sim import contacts
+        from screwhead.sim.sim_arm import REST_SPEED
+        self.contacts, self.rest_speed = contacts, REST_SPEED
+        sc, m = env.scene, env.scene.m
+        self.m, self.d, self.placed = m, env.scene.d, placed
+        self.dof, self.radius, self.owner = {}, {}, {}
+        for o in env.task_spec.objects:
+            j = _free_joint(m, sc, o)
+            if j is None:
+                continue
+            self.dof[o] = int(m.jnt_dofadr[j])
+            self.radius[o] = float(np.linalg.norm(sc.object_box(o).half))
+            self.owner[int(m.jnt_bodyid[j])] = o
+        self.qadr = {o: int(m.jnt_qposadr[_free_joint(m, sc, o)]) for o in placed if o in self.dof}
+
+    def of(self, b: int) -> str | None:
+        while b > 0:
+            if b in self.owner:
+                return self.owner[b]
+            b = int(self.m.body_parentid[b])
+        return None
+
+    def touched(self) -> set[str]:
+        return {self.of(b) for b in self.contacts.robot_contacts(self.m, self.d, penetrating=False)} & set(self.placed)
+
+    def moving(self) -> list[str]:
+        d = self.d
+        return [o for o, a in self.dof.items()
+                if float(np.linalg.norm(d.qvel[a:a + 3])) + float(np.linalg.norm(d.qvel[a + 3:a + 6])) * self.radius[o]
+                > self.rest_speed]
+
+    def tilts(self, humans_of) -> tuple[list, list]:
+        """(each placed object's tilt past the humans' largest final tilt, the ones tipped past it)."""
+        excess, tipped = [], []
+        for o in self.placed:
+            humans = humans_of(o)
+            if o in self.qadr and humans:
+                tilt = _tilt(self.d.qpos[self.qadr[o] + 3: self.qadr[o] + 7])
+                excess.append(tilt - max(humans))
+                if excess[-1] > 0:
+                    tipped.append(f"{o} {tilt:.0f}>{max(humans):.0f}")
+        return excess, tipped
+
+
+def _settle(env, teacher, horizon: int, watch: _Watch, film: tuple | None) -> bool:
+    """Run on after the first success until the teacher has settled with nothing touched or moving; whether it did."""
     from screwhead.teacher.refusal import Refusal
+    from skill_eval import _frame
+    while env.t < horizon:
+        s = env.snapshot()
+        try:
+            a = teacher.act(dict(s, success=False))
+        except (Refusal, NotImplementedError):
+            return False
+        env.step(a)
+        if film is not None:
+            film[1].append(_frame(env, film[0], teacher.phase))
+        if teacher.phase == "settle" and not watch.touched() and not watch.moving():
+            return True
+    return False
+
+
+def _film(env, job, frames: list, video: dict, where: tuple, verdict: tuple) -> None:
+    """Hold after the verdict, write it across the last frames, save the clip."""
+    import imageio.v2 as imageio
+    from screwhead.sim.gripper_servo import A_OPEN, target_to_channel
+    from skill_eval import _frame
+    suite, task, ep = where
+    settled, why = verdict
+    idle = np.zeros(7)
+    idle[6] = target_to_channel(A_OPEN)
+    for _ in range(video.get("hold", 0)):               # after the verdict: nothing is scored here
+        env.step(idle)
+        frames.append(_frame(env, job, "hold (after the verdict)"))
+    text = "SETTLED" if settled else "NOT SETTLED: " + ", ".join(why)
+    frames = _verdict_frames(frames, text, settled, min(len(frames), max(video.get("hold", 0), 20)))
+    out = Path(video["dir"]) / suite / f"{suite}_t{task}_ep{ep}_{'settled' if settled else 'unsettled'}.mp4"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    imageio.mimsave(out, frames, fps=20, macro_block_size=1)
+
+
+def _episodes(run: tuple, ref: dict, cpu: int, video: dict | None = None, init_order: bool = False) -> list[dict]:
+    """run: (suite, task, episodes, seed, horizon)."""
+    from skill_eval import Job, _run_episode
+    from screwhead.sim.task_env import TaskEnv
     from screwhead.teacher.skill_teacher import SkillTeacher
+    suite, task, episodes, seed, horizon = run
     video = video or {}
     job = Job(suite, task, episodes, seed * 100 + task, cpu, 0, horizon, False, {}, video.get("dir", ""),
               video.get("per_task", 0), video.get("px", 0), init_order=init_order)
     env = TaskEnv(suite, task, horizon=horizon, seed=job.seed, render=bool(video))
     teacher = SkillTeacher(env)
-    sc, m, d = env.scene, env.scene.m, env.scene.d
     placed = _placed(env.task_spec)
-    dof, radius, owner = {}, {}, {}
-    for o in env.task_spec.objects:
-        j = _free_joint(m, sc, o)
-        if j is None:
-            continue
-        dof[o] = int(m.jnt_dofadr[j])
-        radius[o] = float(np.linalg.norm(sc.object_box(o).half))
-        owner[int(m.jnt_bodyid[j])] = o
-    qadr = {o: int(m.jnt_qposadr[_free_joint(m, sc, o)]) for o in placed if o in dof}
-
-    def of(b: int) -> str | None:
-        while b > 0:
-            if b in owner:
-                return owner[b]
-            b = int(m.body_parentid[b])
-        return None
-
-    def touched() -> set[str]:
-        return {of(b) for b in contacts.robot_contacts(m, d, penetrating=False)} & set(placed)
-
-    def moving() -> list[str]:
-        return [o for o, a in dof.items()
-                if float(np.linalg.norm(d.qvel[a:a + 3])) + float(np.linalg.norm(d.qvel[a + 3:a + 6])) * radius[o]
-                > REST_SPEED]
-
-    from skill_eval import _frame
+    watch = _Watch(env, placed)
     rows = []
     for ep in range(episodes):
         film = bool(video) and ep < video.get("per_task", 0)
@@ -185,29 +243,10 @@ def _episodes(suite: str, task: int, episodes: int, seed: int, horizon: int, ref
         if row.get("refused"):
             rows.append(dict(task=task, episode=ep, refused=True))
             continue
-        first, t_first, finished = bool(row["success"]), env.t, False
-        if first:
-            while env.t < horizon:
-                s = env.snapshot()
-                try:
-                    a = teacher.act(dict(s, success=False))
-                except (Refusal, NotImplementedError):
-                    break
-                env.step(a)
-                if film:
-                    frames.append(_frame(env, job, teacher.phase))
-                if teacher.phase == "settle" and not touched() and not moving():
-                    finished = True
-                    break
-        held, still = touched(), moving()
-        excess, tipped = [], []
-        for o in placed:
-            humans = (ref.get(suite, {}).get(str(task), {}) or {}).get(o)
-            if o in qadr and humans:
-                tilt = _tilt(d.qpos[qadr[o] + 3: qadr[o] + 7])
-                excess.append(tilt - max(humans))
-                if excess[-1] > 0:
-                    tipped.append(f"{o} {tilt:.0f}>{max(humans):.0f}")
+        first, t_first = bool(row["success"]), env.t
+        finished = first and _settle(env, teacher, horizon, watch, (job, frames) if film else None)
+        held, still = watch.touched(), watch.moving()
+        excess, tipped = watch.tilts(lambda o: (ref.get(suite, {}).get(str(task), {}) or {}).get(o))
         final = env.success()
         tilt_excess = max(excess) if excess else 0.0
         settled = first and final and finished and not held and not still and tilt_excess <= 0
@@ -215,18 +254,7 @@ def _episodes(suite: str, task: int, episodes: int, seed: int, horizon: int, ref
                                 ("unfinished", first and not finished), ("held", bool(held)),
                                 ("moving", bool(still)), ("tipped", bool(tipped))) if bad]
         if film and frames:
-            import imageio.v2 as imageio
-            from screwhead.sim.gripper_servo import A_OPEN, target_to_channel
-            idle = np.zeros(7)
-            idle[6] = target_to_channel(A_OPEN)
-            for _ in range(video.get("hold", 0)):               # after the verdict: nothing is scored here
-                env.step(idle)
-                frames.append(_frame(env, job, "hold (after the verdict)"))
-            text = "SETTLED" if settled else "NOT SETTLED: " + ", ".join(why)
-            frames = _verdict_frames(frames, text, settled, min(len(frames), max(video.get("hold", 0), 20)))
-            out = Path(video["dir"]) / suite / f"{suite}_t{task}_ep{ep}_{'settled' if settled else 'unsettled'}.mp4"
-            out.parent.mkdir(parents=True, exist_ok=True)
-            imageio.mimsave(out, frames, fps=20, macro_block_size=1)
+            _film(env, job, frames, video, (suite, task, ep), (settled, why))
         rows.append(dict(task=task, episode=ep, refused=False, init_index=getattr(env, "init_index", None),
                          success=first, success_final=final,
                          finished=finished, released=not held, at_rest=not still,

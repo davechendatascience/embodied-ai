@@ -23,8 +23,8 @@ class Script:
     def __init__(self, rows, gap=0.05):
         self.rows, self.i, self.t = rows, 0, 0
         box = types.SimpleNamespace(R=np.eye(3), half=np.full(3, 0.01), world_centre=np.zeros(3))
-        self.scene = types.SimpleNamespace(object_box=lambda o: self._box(box))
-        self.skills = types.SimpleNamespace(held=lambda o: self.rows[self.i][0], scene=self.scene,
+        self.scene = types.SimpleNamespace(object_box=lambda _o: self._box(box))
+        self.skills = types.SimpleNamespace(held=lambda _o: self.rows[self.i][0], scene=self.scene,
                                             planner=None)
         self.plan = [types.SimpleNamespace(obj="bowl")]
         self.gap = gap
@@ -40,7 +40,7 @@ class Script:
 
 def run(rows, gap=0.05):
     s = Script(rows, gap)
-    grip_watch.support_gap = lambda scene, planner, obj: s.gap
+    grip_watch.support_gap = lambda *_args: s.gap
     w = GripWatch(s, s)
     for i in range(len(rows)):
         s.i, s.t = i, i

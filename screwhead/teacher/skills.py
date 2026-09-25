@@ -28,7 +28,7 @@ import numpy as np
 
 from ..sim import contacts
 from .clearing import Clearing
-from ..geometry.frames import Z, axis_rot, pose, rot_angle, rotvec, top_down
+from ..geometry.frames import EPS_DIR, Z, axis_rot, pose, rot_angle, rotvec, top_down
 from .grasp_planner import GraspPlanner
 from ..sim.gripper_servo import A_OPEN, target_to_channel
 from ..sim.scene import VERTICAL_COS, geom_world_box
@@ -44,11 +44,20 @@ _swing_rows: dict | None = None
 
 
 def swing_rows() -> dict:
+    """The humans' door table per mode, each row kept only where at least as many frames fell in its bin as there
+    are demonstrations behind that mode -- one frame per demonstration on average. The closing table's widest bin
+    held 31 frames of 100 demonstrations, the humans' hands still arriving: met there, the hand came down on the
+    door's handle bar (libero_90 33 and libero_10 9, the doors opened 2.07-2.11 rad; 9 episodes)."""
     global _swing_rows
     if _swing_rows is None:
-        _swing_rows = json.loads(SWING_TABLE.read_text())["modes"]
+        table = json.loads(SWING_TABLE.read_text())
+        demos = table.get("mode_demos", {})
+        _swing_rows = {mode: {side: ([r for r in rows if r.get("n", 0) >= demos.get(mode, 0)] or rows)
+                              for side, rows in sides.items()}
+                       for mode, sides in table["modes"].items()}
     return _swing_rows
 FALLING = 0.05            # m/s: an object let go and moving faster has not landed yet
+PARALLEL_SIN = 1e-9       # the sine below which two axes are taken as parallel
 
 
 @dataclass(frozen=True)
@@ -63,6 +72,7 @@ class SkillConfig:
     approach: float = 0.10         # pre-grasp distance before the grasp, along the approach
     funnel_xy: float = 0.02        # lateral error at which the approach is back at full height
     funnel_rot: float = 0.15       # rad, same for rotation
+    turn_rot: float = 0.15         # rad off the grasp's frame over the column before the pick turns first (BRN-pick-turns-before-descending)
     at_rot: float = 0.10           # rad: squeeze only this well aligned
     descend_margin: float = 0.02   # still "on the axis" this far beyond the pre-grasp
     column_leave: float = 0.05     # below the crossing plane, go back up only this far off
@@ -165,6 +175,7 @@ class SkillConfig:
     #                                 17 mm off it the finger swept over the bar
     roofed_depth: float = 0.02     # m past a fully roofed region's face an upright object's origin is left
     face_yaws: tuple = (0.17, -0.17, 0.35, -0.35, 0.52, -0.52)  # rad a face pinch that touches a loose object is turned
+    base_lean_tilts: tuple = (0.1, 0.2)  # rad a face pinch is also offered leaned toward the robot's base
     lean_tilts: tuple = (0.2, 0.35, 0.5, 0.65, 0.8)  # rad a rim pinch is leaned off vertical when no upright one is reachable
     hook_leave_above: float = 0.02  # m the fingertips rise over the hooked bar's top before the next skill moves
     # closing a drawer by pushing its bar (libero_10 3: LIBERO's humans close the bottom drawer with
@@ -233,6 +244,7 @@ class Skills:
         self._withdraw: tuple | None = None          # after a roofed release: (entry direction, tool point out)
         self._hooked: set[int] = set()               # bars a hook dragged this episode, not yet risen clear of
         self._closed_above: dict[tuple, bool] = {}    # (obj, region): no spot of the region open from above
+        self._go_shallow: dict[tuple, bool] = {}      # (obj, region): the grasp was screened at the shallow release
 
     # -- commands -------------------------------------------------------------------------
     def twist_to(self, R, p, R_goal, p_goal, v_max=None, v_min=None):
@@ -269,7 +281,8 @@ class Skills:
             self._last_held = None
             for cache in (self._grasp_cache, self._handle_cache, self.grasp_log,
                           self._drop_cache, self._carry_cache, self._spots, self._clearing, self._let_go,
-                          self._released_at, self._entry_choice, self._tip, self._hooked, self._closed_above):
+                          self._released_at, self._entry_choice, self._tip, self._hooked, self._closed_above,
+                          self._go_shallow):
                 cache.clear()
 
     def grasp_for(self, obj: str, via: np.ndarray | None = None,
@@ -287,20 +300,37 @@ class Skills:
         tiers = self.planner.tiers(obj, box, self._held_by(obj), self._also_held_by(obj))
         extra = self._release_probe(obj, *place) if place is not None else None
         chosen, used = None, ""
-        for name, tier in tiers:
-            chosen = self.reach.choose(tier, via, allow=bid, extra=extra)
+        # where a roofed entry lets go first; if no tier passes there, where it was screened before, over the target,
+        # before a grasp is forced -- libero_90 42's pan passed nowhere at the shelf's bottom layer and was taken by a
+        # forced grasp (49 -> 43 of 50) (BRN-grasp-screened-at-roofed-release)
+        # built only when the ones before find nothing, and only for an upright roofed target: elsewhere they are the
+        # first screen again, and built eagerly they took libero_10 from 480 to 1325 s a sweep
+        screens = [("centre", lambda: extra)]
+        if place is not None and place[1] and getattr(extra, "roofed", False):
+            if extra.closed:
+                screens.append(("shallow", lambda: self._release_probe(obj, *place, shallow=True)))
+            screens.append(("over", lambda: self._release_probe(obj, *place, roofed=False)))
+        for label, make in screens:
+            screen = make()
+            if place is not None:
+                # BRN-roofed-entry-goes-in-shallow: the place goes in shallow only where the grasp was screened there
+                self._go_shallow[(obj, place[0])] = label == "shallow"
+            for name, tier in tiers:
+                chosen = self.reach.choose(tier, via, allow=bid, extra=screen)
+                if chosen is not None:
+                    used = name
+                    if name == "faces" and not self.reach.last_choice.get("clean"):
+                        # the pinch square to the faces touches a loose object: turned about the vertical, a clean one
+                        # is taken instead -- only a clean one (BRN-face-pinch-turns-off-a-neighbour)
+                        kept = self.reach.last_choice
+                        turned = self.planner.faces_turned(obj, box)
+                        alt = self.reach.choose(turned, via, allow=bid, extra=screen) if turned else None
+                        if alt is not None and self.reach.last_choice.get("clean"):
+                            chosen, used = alt, "faces_turned"
+                        else:
+                            self.reach.last_choice = kept
+                    break
             if chosen is not None:
-                used = name
-                if name == "faces" and not self.reach.last_choice.get("clean"):
-                    # the pinch square to the faces touches a loose object: turned about the vertical, a clean one is
-                    # taken instead -- only a clean one (BRN-face-pinch-turns-off-a-neighbour)
-                    kept = self.reach.last_choice
-                    turned = self.planner.faces_turned(obj, box)
-                    alt = self.reach.choose(turned, via, allow=bid, extra=extra) if turned else None
-                    if alt is not None and self.reach.last_choice.get("clean"):
-                        chosen, used = alt, "faces_turned"
-                    else:
-                        self.reach.last_choice = kept
                 break
         if chosen is None:
             # Every tier came up empty. Refusing is what DEF-witness-or-refusal asks, and it is off
@@ -598,7 +628,7 @@ class Skills:
         once the wrist is within funnel_rot of that frame; until then turned toward it at the tool's height. Turned on
         the way down, libero_90 8's hand came down 40 deg off the grasp's yaw and its corner met the open top drawer
         (9 of 17 failures)."""
-        if rot_angle(R.T @ R_g) > self.k.funnel_rot and float(p[2]) > float(start[2]) + self.k.plane_band:
+        if rot_angle(R.T @ R_g) > self.k.turn_rot and float(p[2]) > float(start[2]) + self.k.plane_band:
             self.phase = "turn"
             return self.action(self.twist_to(R, p, R_g, np.array([start[0], start[1], p[2]])), open_to)
         self.phase = "down"
@@ -736,10 +766,10 @@ class Skills:
         box = self.scene.object_box(obj)
         ext = np.abs(box.R) @ box.half
         c = box.world_centre
-        bottom, top = float(c[2] - ext[2]), float(c[2] + ext[2])
+        top = float(c[2] + ext[2])
         _R_reg, p_reg, _half = self.region_pose(region)
         d = (p_reg - c)[:2]
-        if np.linalg.norm(d) < 1e-6:
+        if np.linalg.norm(d) < EPS_DIR:
             self.phase = "hold"
             return self.action(np.zeros(6), k.push_open)
         u = np.r_[d / np.linalg.norm(d), 0.0]
@@ -792,6 +822,16 @@ class Skills:
         return max(tops) if tops else float(c[2] - (np.abs(box.R) @ box.half)[2])
 
     # -- place -----------------------------------------------------------------------------------
+    def _taken_back(self, obj: str, q: np.ndarray, target_q: np.ndarray) -> bool:
+        """Not held: the place's own not-held law applies -- settle where placed, wait out its own release's fall, else
+        take it back -- unless the jaws are still round it before this law released it and away from the place: a flicker
+        of held(), which the place carries on through. Lowered into the top drawer, libero_90 32's ketchup nudged the
+        jaws, held() read false for a step, the place took it back mid-lower, the hand lifted off and came down on the
+        standing bottle (4 of 7 failures carried on through it)."""
+        if self.at_place(q, target_q) or self._let_go.get(obj):
+            return True
+        return self.let_go(obj)
+
     def place(self, obj: str, region: str, s: dict, inside: bool) -> np.ndarray:
         """Carry a held object over the region and release it there.
 
@@ -801,64 +841,24 @@ class Skills:
         k = self.k
         R, p = s["R_tool"], s["p_tool"]
         q, target_q = self.place_target(obj, region, inside)
-        if not self.held(obj):
-            if self.at_place(q, target_q):     # let go of it, do not take it back
-                self.phase = "settle"
-                return self.retreat(s)
-            if self._let_go.get(obj) and self._falling(obj):
-                # let go by this law's own release and still falling: judged once it lands. Taken back
-                # mid-fall, the jaws came down on libero_90 55's soup as it reached the tray and threw it
-                # 1.2 m. Only after a release: a grip that flickers against a compartment wall while the
-                # lower moves at 15 cm/s is not a fall, and waiting there opened the jaws on libero_90
-                # 75's book (18 of 50 lost)
-                self.phase = "settle"
-                return self.retreat(s)
-            self.phase = "regrasp"
-            return self.pick(obj, s, via=self.via_for(region), place=(region, inside))
+        if not self.held(obj) and self._taken_back(obj, q, target_q):
+            return self._not_held(obj, region, s, inside, (q, target_q))
         self._let_go[obj] = False                       # in the hand: nothing has been let go
         self._released_at.pop((obj, region), None)      # nor released under a roof
         self._withdraw = None
         if (obj, region) in self._tip:                  # BRN-place-tips-a-standing-misfit, before anything else
             return self._tipping(obj, region, R, p)
         carry_z = self._carry_height(obj, region, q, target_q, R, p)
-        entry = self._level_entry(obj, region, q, target_q, carry_z, R, p)
-        R_entry, steep = None, False
+        entry = self._level_entry(obj, region, q, target_q, carry_z, (R, p))
+        R_entry = None if entry is None else entry[2]
         if entry is not None:                          # BRN-place-enters-roofed-target-level
-            u, E, R_entry, xy, steep = entry
-            target_q = np.r_[xy, E[2]]                 # the drop point at the entry's (rest) height
-            rel = q - target_q
-            t = float(rel[:2] @ u[:2])                 # along the entry line, out from the drop point
-            lat = float(np.linalg.norm(rel[:2] - u[:2] * t))
-            d_out = float((E - target_q)[:2] @ u[:2])
-            corridor = (lat <= k.entry_line and -k.entry_line <= t <= d_out + k.entry_line
-                        and q[2] <= E[2] + k.plane_band)
-            over_drop = float(np.linalg.norm(rel[:2])) <= k.over_xy
-            R_fit = R_entry                            # its long axis along the entry, or laid
-            if corridor and not over_drop:
-                # under the roof, to the drop point at the entry's height: its height held, not only level.
-                # Commanded level, the arm sagged as it reached in -- libero_90 88's tool fell 22 mm, the
-                # book's edge met the shelf's floor and the jaws, eased open, let it go mid-entry
-                self.phase = "insert"
-                return self.action(self.twist_to(R, p, R_fit, p + (target_q - q), v_max=k.lower_speed,
-                                                 v_min=k.lower_speed_min), 0.0)
-            if not corridor and float(np.linalg.norm((q - E)[:2])) <= k.over_xy and q[2] > E[2] + k.plane_band:
-                self.phase = "lower"                   # outside the region, down to the entry's height
-                return self.action(self.twist_to(R, p, R_fit, p + (E - q), v_max=k.lower_speed,
-                                                 v_min=k.lower_speed_min), 0.0)
-            if not corridor:
-                target_q = E                           # not yet entering: carried to over the entry point
+            act, target_q = self._entry_command(entry, q, (R, p))
+            if act is not None:
+                return act
         delta = target_q - q
         over = float(np.linalg.norm(delta[:2]))
         if over > k.over_xy and q[2] < carry_z - k.plane_band:
-            exit_q = self._overhang_exit(obj, q)
-            if exit_q is not None:                     # BRN-lift-leaves-overhang
-                self.phase = "slide"
-                goal = p + np.array([exit_q[0] - q[0], exit_q[1] - q[1], 0.0])
-                return self.action(self.twist_to(R, p, R, goal, v_max=k.carry_speed), 0.0)
-            self.phase = "lift"
-            slow = self._risen(obj) < k.slow_lift_dz
-            return self.action(self.twist_to(R, p, R, p + Z * (carry_z - q[2]),
-                                             v_max=k.slow_lift_speed if slow else k.carry_speed), 0.0)
+            return self._lift_command(obj, q, carry_z, (R, p))
         R_fit = self._fit_yaw(obj, region, R) if R_entry is None else R_entry
         if R_entry is None:
             R_lay = self._lay_along_tilted(obj, region, R)
@@ -902,9 +902,77 @@ class Skills:
                 if tip is not None:
                     self._tip[(obj, region)] = tip
                     return self._tipping(obj, region, R, p)
+        return self._release(obj, region, entry, target_q, p)
+
+    def _not_held(self, obj: str, region: str, s: dict, inside: bool, place: tuple) -> np.ndarray:
+        """The place's not-held law: settle where placed; wait out the fall of what its own release let go; else
+        take it back."""
+        q, target_q = place
+        if self.at_place(q, target_q):     # let go of it, do not take it back
+            self.phase = "settle"
+            return self.retreat(s)
+        if self._let_go.get(obj) and self._falling(obj):
+            # let go by this law's own release and still falling: judged once it lands. Taken back
+            # mid-fall, the jaws came down on libero_90 55's soup as it reached the tray and threw it
+            # 1.2 m. Only after a release: a grip that flickers against a compartment wall while the
+            # lower moves at 15 cm/s is not a fall, and waiting there opened the jaws on libero_90
+            # 75's book (18 of 50 lost)
+            self.phase = "settle"
+            return self.retreat(s)
+        self.phase = "regrasp"
+        return self.pick(obj, s, via=self.via_for(region), place=(region, inside))
+
+    def _entry_command(self, entry: tuple, q: np.ndarray, tool: tuple) -> tuple:
+        """BRN-place-enters-roofed-target-level's cases (a) and (b) as (command, target); else (None, the target the
+        place goes on with -- the drop point at the entry's height in the corridor, E outside it)."""
+        k = self.k
+        R, p = tool
+        u, E, R_entry, xy, _steep = entry
+        target_q = np.r_[xy, E[2]]                 # the drop point at the entry's (rest) height
+        rel = q - target_q
+        t = float(rel[:2] @ u[:2])                 # along the entry line, out from the drop point
+        lat = float(np.linalg.norm(rel[:2] - u[:2] * t))
+        d_out = float((E - target_q)[:2] @ u[:2])
+        corridor = (lat <= k.entry_line and -k.entry_line <= t <= d_out + k.entry_line
+                    and q[2] <= E[2] + k.plane_band)
+        over_drop = float(np.linalg.norm(rel[:2])) <= k.over_xy
+        R_fit = R_entry                            # its long axis along the entry, or laid
+        if corridor and not over_drop:
+            # under the roof, to the drop point at the entry's height: its height held, not only level.
+            # Commanded level, the arm sagged as it reached in -- libero_90 88's tool fell 22 mm, the
+            # book's edge met the shelf's floor and the jaws, eased open, let it go mid-entry
+            self.phase = "insert"
+            return self.action(self.twist_to(R, p, R_fit, p + (target_q - q), v_max=k.lower_speed,
+                                             v_min=k.lower_speed_min), 0.0), target_q
+        if not corridor and float(np.linalg.norm((q - E)[:2])) <= k.over_xy and q[2] > E[2] + k.plane_band:
+            self.phase = "lower"                   # outside the region, down to the entry's height
+            return self.action(self.twist_to(R, p, R_fit, p + (E - q), v_max=k.lower_speed,
+                                             v_min=k.lower_speed_min), 0.0), target_q
+        return None, (target_q if corridor else E)   # not yet entering: carried to over the entry point
+
+    def _lift_command(self, obj: str, q: np.ndarray, carry_z: float, tool: tuple) -> np.ndarray:
+        """Below the carry height and away from the drop point: level out from under an overhang first
+        (BRN-lift-leaves-overhang), else up."""
+        k = self.k
+        R, p = tool
+        exit_q = self._overhang_exit(obj, q)
+        if exit_q is not None:                     # BRN-lift-leaves-overhang
+            self.phase = "slide"
+            goal = p + np.array([exit_q[0] - q[0], exit_q[1] - q[1], 0.0])
+            return self.action(self.twist_to(R, p, R, goal, v_max=k.carry_speed), 0.0)
+        self.phase = "lift"
+        slow = self._risen(obj) < k.slow_lift_dz
+        return self.action(self.twist_to(R, p, R, p + Z * (carry_z - q[2]),
+                                         v_max=k.slow_lift_speed if slow else k.carry_speed), 0.0)
+
+    def _release(self, obj: str, region: str, entry: tuple | None, target_q: np.ndarray, p: np.ndarray) -> np.ndarray:
+        """Open the jaws, recording the release -- and, after a roofed entry, where it let go and how the hand
+        withdraws."""
+        k = self.k
         self.phase = "release"
         self._let_go[obj] = True
-        if R_entry is not None:
+        if entry is not None:
+            u, E, R_entry, _xy, steep = entry
             self._released_at[(obj, region)] = np.asarray(target_q, float).copy()
             # the hand leaves level, as far as the object came in: out along the entry; a laid object's lower
             # finger is under it, and drawn out it dragged libero_90 88's book to the shelf's edge (settled 1 of
@@ -938,7 +1006,7 @@ class Skills:
         la = la if float(la @ n) >= 0 else -la
         ax = np.cross(la, n)
         sn = float(np.linalg.norm(ax))
-        if sn <= 1e-9:
+        if sn <= PARALLEL_SIN:
             return R
         return axis_rot(ax / sn, float(np.arctan2(sn, float(la @ n)))) @ R
 
@@ -994,13 +1062,6 @@ class Skills:
                 out.add(b)
         return out
 
-    def _covered(self, xy: np.ndarray, radius: float, z_lo: float, z_hi: float, ignore: set[int]) -> bool:
-        """Some geom (the robot's aside, and bodies in `ignore`) whose bottom lies between z_lo and z_hi
-        comes within `radius` of `xy` in plan: something over it, below z_hi."""
-        _pos, _rad, bottoms, _tops, keep = self.reach._geoms_now()
-        near = self.reach._footprint_distance(np.asarray(xy, float)[None])[:, 0] < radius
-        return bool((near & keep & self._solid(ignore) & (bottoms > z_lo) & (bottoms < z_hi)).any())
-
     def _roof(self, xy: np.ndarray, radius: float, z_lo: float, z_top: float, z_hi: float,
               ignore: set[int]) -> float | None:
         """The lowest bottom below z_hi of the colliding geoms (the robot's aside, and bodies in
@@ -1033,18 +1094,6 @@ class Skills:
         near = self.reach._footprint_distance(line).min(1) < radius
         return not bool((near & keep & self._solid(ignore) & (bottoms < z_hi) & (tops > z_lo)).any())
 
-    def _rest_under(self, obj: str, box, q: np.ndarray, xy: np.ndarray, z_from: float) -> float | None:
-        """The origin height at which the object, carried as it is, has the lowest point of its box
-        place_clearance above the first surface met straight down from z_from under its centre at the drop
-        point xy -- the lowest point, not its bottom face's centre: a pan hanging 4.6 deg from its handle
-        reaches 14 mm below that, into the shelf's board."""
-        centre = np.asarray(xy, float)[:2] + (box.world_centre - q)[:2]
-        _g, dist = self.planner.ray_scene(np.array([centre[0], centre[1], z_from]), -Z, self.scene.body_id(obj))
-        if dist < 0:
-            return None
-        low = float(box.world_centre[2] - (np.abs(box.R) @ box.half)[2])
-        return z_from - dist + float(q[2]) - low + self.k.place_clearance
-
     def _fixed_blocked(self, obj: str, R_try: np.ndarray, q_t: np.ndarray, origins: list) -> bool:
         """BRN-place-steep-laid-entry's screen: the tool at frame R_try placed so the held object's origin is at
         each point is not reached by inverse kinematics from the joints now, or puts the arm, jaws as they are,
@@ -1058,7 +1107,7 @@ class Skills:
         return not bool(all(conv)) or any(self.reach.collides(t, bid, ap) == 2 for t in th)
 
     def _level_entry(self, obj: str, region: str, q: np.ndarray, target_q: np.ndarray, carry_z: float,
-                     R: np.ndarray, p: np.ndarray, decide: bool = True, closed_above: bool | None = None):
+                     tool: tuple, decide: bool = True, closed_above: bool | None = None):
         """A roofed target's level entry (BRN-place-enters-roofed-target-level): None when nothing lies
         over the object's footprint at the target between its bottom resting there and its top carried;
         else (u, E, R_entry, xy): u the outward entry direction, E the origin's entry point at its rest
@@ -1071,207 +1120,7 @@ class Skills:
         along the entry, jaws up and down, pitched down by up to lay_pitch as far as the opening allows,
         as the humans lay the shelf's books (56 of 60 demonstrations of libero_90 86, 88 and 89 release the
         book with its thickness up)."""
-        k = self.k
-        box = self.scene.object_box(obj)
-        R_reg, p_reg, half = self.region_pose(region)
-        half = np.abs(np.asarray(half, float))
-        mine = self._own_bodies(obj)
-        closed = self._closed_above.get((obj, region), False) if closed_above is None else closed_above
-        Rb_t, c_t, q_t = R.T @ box.R, R.T @ (box.world_centre - p), R.T @ (q - p)   # the object in the tool
-
-        def measure(Rv):
-            """The object hanging from the tool at frame Rv: (box axes, centre from origin, half extents
-            in the world, its height along its most upright axis, its level (half, axis) pairs, its lowest
-            point below the origin)."""
-            Rb = Rv @ Rb_t
-            off = Rv @ (c_t - q_t)
-            ext = np.abs(Rb) @ box.half
-            up = int(np.argmax(np.abs(Rb[2])))
-            level = [(float(box.half[i]), Rb[:, i]) for i in range(3) if i != up]
-            return Rb, off, ext, 2.0 * float(box.half[up]), level, float(ext[2] - off[2])
-
-        def rest_z(xy, off, low):
-            centre = np.asarray(xy, float) + off[:2]
-            _g, dist = self.planner.ray_scene(np.array([centre[0], centre[1], float(p_reg[2])]), -Z,
-                                              self.scene.body_id(obj))
-            return None if dist < 0 else float(p_reg[2]) - dist + low + k.place_clearance
-
-        # measured hanging from a downward grasp, the jaws as they are: the same whatever the tool's turn now
-        jaw = np.array([R[0, 1], R[1, 1], 0.0])
-        jaw = jaw / np.linalg.norm(jaw) if np.linalg.norm(jaw) > 1e-6 else np.array([0.0, 1.0, 0.0])
-        R_down = np.column_stack([np.cross(jaw, -Z), jaw, -Z])
-        _Rb, off, ext, height, level, low = measure(R_down)
-        r = max(h for h, _a in level) + k.exit_margin
-
-        def roof_at(xy):
-            """(covered, the lowest roof over the footprint at xy, the object's rest there), or None."""
-            rest = rest_z(xy, off, low)
-            if rest is None:
-                return None
-            c = np.r_[xy, rest] + off
-            lo = rest - low + k.place_clearance           # above the object's resting bottom
-            roof = self._roof(c[:2], r, lo, rest - low + height, carry_z + height, mine)
-            return roof is not None, roof, rest
-
-        loose: set[int] = set()                   # BRN-roofed-entry-past-loose-objects' second pass
-
-        def entry_at(xy, past_loose=False):
-            """(u, E, R_entry, entering) for the drop point xy: the side the object is already entering
-            along, else the clear side whose entry point is nearest the base; None when no side is."""
-            roofed = roof_at(xy)
-            if roofed is None:
-                return None
-            _cov, roof, rest = roofed
-            c = np.r_[xy, rest] + off
-            bottom_t = rest - low
-            top_t = bottom_t + height
-            laid = roof is not None and top_t + k.place_clearance > roof  # too tall to go under it upright
-            best = None
-            for j in range(3):
-                axis = np.asarray(R_reg[:, j], float)
-                if abs(float(axis[2])) >= VERTICAL_COS:
-                    continue                              # the region's vertical axis
-                for sgn in (1.0, -1.0):
-                    u = sgn * np.array([axis[0], axis[1], 0.0])
-                    n = float(np.linalg.norm(u))
-                    if n < 1e-6:
-                        continue
-                    u /= n
-                    xy_side, steep = xy, False
-                    if laid:
-                        # pitched down as far as lay_pitch as the opening allows, as the humans' hands are:
-                        # level, the wrist trailing behind the tool at its height sat on the next book on the
-                        # table (libero_90 88). Jaws up and down: of the two, the one the last joint reaches
-                        # within its range (by the jaws' nearer sign, libero_90 88's wrist sat 0.01 rad from
-                        # its limit 19 deg short of the frame)
-                        fit = None
-                        for pitch in k.lay_pitch * np.linspace(1.0, 0.0, 5):
-                            app = np.cos(pitch) * -u - np.sin(pitch) * Z
-                            frames = []
-                            for y in (Z, -Z):
-                                y = y - (y @ app) * app
-                                y = y / np.linalg.norm(y)
-                                frames.append(np.column_stack([np.cross(y, app), y, app]))
-                            R_try = self._by_wrist(R, frames)[0]
-                            Rb_e, off_e, ext_e, _h, _lv, low_e = measure(R_try)
-                            height_e = 2.0 * float(ext_e[2])  # pitched: its full vertical extent
-                            rest_e = rest_z(xy, off_e, low_e)
-                            if rest_e is not None and rest_e - low_e + height_e + k.place_clearance <= roof:
-                                fit = (R_try, Rb_e, off_e, height_e, low_e, rest_e)
-                                break
-
-                        def entry_origin(Rb_c, off_c, rest_c, xy_c):
-                            """E for a frame and drop point: as below, from the object's box centre at rest."""
-                            c_c = np.r_[xy_c, rest_c] + off_c
-                            face_c = float(half[j]) - float((c_c - p_reg) @ (sgn * axis))
-                            return np.r_[xy_c, rest_c] + u * (max(face_c, 0.0) + float(abs(u @ Rb_c) @ box.half)
-                                                             + k.entry_margin)
-                        def steep_frame(pitch):
-                            """The steep frame at a pitch and the object carried at it at the steep drop point, or
-                            None where it has no rest height there."""
-                            app = np.cos(pitch) * -u - np.sin(pitch) * Z
-                            frames = []
-                            for y in (Z, -Z):
-                                y = y - (y @ app) * app
-                                y = y / np.linalg.norm(y)
-                                frames.append(np.column_stack([np.cross(y, app), y, app]))
-                            R_try = self._by_wrist(R, frames)[0]
-                            Rb_s, off_s, ext_s, _h, _lv, low_s = measure(R_try)
-                            rest_s = rest_z(xy_s, off_s, low_s)
-                            return None if rest_s is None else (R_try, Rb_s, off_s, 2.0 * float(ext_s[2]), low_s, rest_s)
-                        xy_s = np.asarray(xy, float) + u[:2] * ((float(half[j]) - k.steep_depth)
-                                                                - float((np.asarray(xy, float) - p_reg[:2]) @ u[:2]))
-                        choice_key = (obj, region, j, sgn)
-                        if decide and fit is not None and choice_key not in self._entry_choice:
-                            # BRN-place-steep-laid-entry, decided once per episode: level, the hand went into the
-                            # table under the shelf's bottom layer (libero_90 89, 0 of 50); steeper, and only its
-                            # front part in, as the humans do
-                            choice = None
-                            if self._fixed_blocked(obj, fit[0], q_t, [entry_origin(fit[1], fit[2], fit[5], xy),
-                                                                      np.r_[xy, fit[5]]]):
-                                for i_p, pitch in enumerate(k.steep_pitches):
-                                    st = steep_frame(pitch)
-                                    if st is not None and not self._fixed_blocked(
-                                            obj, st[0], q_t, [entry_origin(st[1], st[2], st[5], xy_s),
-                                                              np.r_[xy_s, st[5]]]):
-                                        choice = i_p
-                                        break
-                            self._entry_choice[choice_key] = choice
-                        if fit is not None and self._entry_choice.get(choice_key) is not None:
-                            fit = steep_frame(k.steep_pitches[self._entry_choice[choice_key]])
-                            xy_side, steep = xy_s, True
-                        if fit is None:
-                            continue                      # laid, still too tall
-                        R_entry, Rb_e, off_e, height_e, low_e, rest_e = fit
-                        along = float(abs(u @ Rb_e) @ box.half)
-                        across = float(abs(np.array([-u[1], u[0], 0.0]) @ Rb_e) @ box.half)
-                        c_e = np.r_[xy_side, rest_e] + off_e
-                        bot_e, top_e = rest_e - low_e, rest_e - low_e + height_e
-                    else:
-                        # turned about the vertical so its longest level axis lies along the entry: a pan goes
-                        # in pan first, its handle out behind it, through an opening its length does not fit
-                        # across
-                        long_half, long_axis = max(level, key=lambda e: e[0])
-                        la = np.array([long_axis[0], long_axis[1], 0.0]) / max(float(np.linalg.norm(long_axis[:2])), 1e-9)
-                        turn = float(np.arctan2(la[0] * u[1] - la[1] * u[0], la @ u))
-                        if abs(turn) > np.pi / 2:
-                            turn -= np.sign(turn) * np.pi
-                        R_entry = axis_rot(Z, turn) @ R
-                        along, across = long_half, min(h for h, _a in level)
-                        rest_e, c_e, bot_e, top_e = rest, c, bottom_t, top_t
-                        # no deeper than roofed_depth past the face where no spot is open from above: at the centre,
-                        # the microwave's mug had the hand inside the opening and met its top (libero_10 9); the
-                        # humans leave it 36-53 mm in
-                        out = (float(half[j]) - k.roofed_depth) - float((np.asarray(xy, float) - p_reg[:2]) @ u[:2])
-                        if closed and out > 0.0:
-                            xy_side = np.asarray(xy, float) + u[:2] * out
-                            rest_e = rest_z(xy_side, off, low)
-                            if rest_e is None:
-                                continue
-                            c_e = np.r_[xy_side, rest_e] + off
-                            bot_e, top_e = rest_e - low, rest_e - low + height
-                    face = float(half[j]) - float((c_e - p_reg) @ (sgn * axis))
-                    d_out = max(face, 0.0) + along + k.entry_margin
-                    e_c = c_e + u * d_out
-                    E = np.r_[xy_side, rest_e] + u * d_out
-                    # already in this side's corridor -- on its line, between the drop point and the entry
-                    # point, at the entry's height -- it is this side: re-swept every step, a pan hanging from
-                    # its handle flickered in and out of the band and was lifted back out of the shelf
-                    rel = q - np.r_[xy_side, rest_e]
-                    t = float(rel[:2] @ u[:2])
-                    # and the tool behind it along u, within 45 deg of u from the drop point: near the drop point
-                    # the object lies in every direction's corridor, and libero_90 88's book, entered along -y, was
-                    # taken as entering along +y and the hand withdrew into the shelf
-                    tr = np.asarray(p[:2], float) - np.asarray(xy_side, float)
-                    t_tool = float(tr @ u[:2])
-                    behind = t_tool >= float(np.linalg.norm(tr - u[:2] * t_tool))
-                    inside = (behind and float(np.linalg.norm(rel[:2] - u[:2] * t)) <= k.entry_line
-                              and -k.entry_line <= t <= d_out + k.entry_line and float(q[2]) <= float(E[2]) + k.plane_band)
-                    if inside:
-                        return u, E, R_entry, True, xy_side, steep
-                    # steep, the swept band stops at the roof: what stands above it stays outside the face
-                    if not self._level_clear(c_e[:2], e_c[:2], across + k.exit_margin, bot_e + k.place_clearance,
-                                             min(top_e, roof) if steep else top_e, (mine | loose) if past_loose else mine):
-                        continue
-                    dist = float(np.linalg.norm(e_c[:2]))  # the robot's base is the frame's origin
-                    if best is None or dist < best[0]:
-                        best = (dist, u, E, R_entry, xy_side, steep)
-            return None if best is None else (best[1], best[2], best[3], False, best[4], best[5])
-
-        xy0 = np.asarray(target_q[:2], float)
-        roofed = roof_at(xy0)
-        if roofed is None or not roofed[0]:
-            return None                                   # placed as an unroofed target
-        found = entry_at(xy0)
-        if found is None:
-            # BRN-roofed-entry-past-loose-objects: no side's sweep clear, one met only by loose objects is still a
-            # way in. Placed as unroofed instead, libero_90 42's pan, its front sweep met only by a bowl's rim 4 mm
-            # into its band, was lowered on to the shelf's top board (29 of 50; past the bowl, 49)
-            loose = {b for b in range(self.scene.m.nbody) if contacts.is_movable(self.scene.m, b)}
-            found = entry_at(xy0, past_loose=True)
-        if found is None:
-            return None
-        return found[0], found[1], found[2], found[4], found[5]
+        return _LevelEntry(self, obj, region, q, carry_z, tool, decide, closed_above).decide_entry(target_q)
 
     def _fit_yaw(self, obj: str, region: str, R: np.ndarray) -> np.ndarray:
         """The tool turned about the vertical so the held object's footprint fits the region's: unturned
@@ -1345,7 +1194,7 @@ class Skills:
         spec = getattr(self.env, "task_spec", None)
         return also_held_by((getattr(spec, "objects", {}) or {}).get(obj))
 
-    def _release_probe(self, obj: str, region: str, inside: bool):
+    def _release_probe(self, obj: str, region: str, inside: bool, roofed: bool = True, shallow: bool = False):
         """For a grasp candidate, the tool pose where it will let go: the drop point, computed now
         and not cached (the container may still be shut), plus the candidate's offset in the hand.
         Screened like the via: libero_10 3's bowl went into the bottom drawer with the hand's long
@@ -1364,18 +1213,22 @@ class Skills:
             target = self._region_top(R_reg, p_reg, half)
             target[:2] = xy
             target[2] += half_h - centre_off + self.k.place_clearance
-        if inside:
+        if inside and roofed:
             # a roofed target is let go where its level entry lets go (BRN-place-enters-roofed-target-level), turned as
             # it enters: screened over the target, the microwave's top pinch put the hand on the microwave's roof and
             # passed, and the hand met the opening's top as the mug went in (libero_10 9, 0 of 50)
             s = self.env.snapshot()
-            entry = self._level_entry(obj, region, q, target, float(target[2]) + 2.0 * half_h, s["R_tool"], s["p_tool"],
-                                      decide=False, closed_above=not np.isfinite(_d))
+            entry = self._level_entry(obj, region, q, target, float(target[2]) + 2.0 * half_h, (s["R_tool"], s["p_tool"]),
+                                      decide=False, closed_above=shallow and not np.isfinite(_d))
             turn = None if entry is None else entry[2] @ s["R_tool"].T
             if turn is not None and float(turn[2, 2]) > 1.0 - 1e-6:   # upright: the grasp turned about the vertical
                 rest = np.r_[entry[3], entry[1][2]]                    # (a laid entry's frame is its own: screened as before)
-                return lambda cand: [pose(turn @ cand[0], rest + turn @ (cand[1] - q))]
-        return lambda cand: [pose(cand[0], target + (cand[1] - q))]
+                probe = lambda cand: [pose(turn @ cand[0], rest + turn @ (cand[1] - q))]
+                probe.roofed, probe.closed = True, not np.isfinite(_d)
+                return probe
+        probe = lambda cand: [pose(cand[0], target + (cand[1] - q))]
+        probe.roofed, probe.closed = False, False
+        return probe
 
     def place_target(self, obj: str, region: str, inside: bool,
                      decide: bool = True) -> tuple[np.ndarray, np.ndarray] | None:
@@ -2074,3 +1927,248 @@ class Skills:
             return R, p + a["axis"] * dq
         Rr = axis_rot(a["axis"], dq)                               # hinge: turn about the anchor
         return Rr @ R, a["anchor"] + Rr @ (p - a["anchor"])
+
+
+class _LevelEntry:
+    """BRN-place-enters-roofed-target-level's decision rule at one step: what its helpers share -- the object as it
+    hangs in the tool now, the region, the roof test's reach and the records the rule reads and writes."""
+
+    def __init__(self, sk: Skills, obj: str, region: str, q: np.ndarray, carry_z: float, tool: tuple,
+                 decide: bool, closed_above: bool | None):
+        self.sk, self.k = sk, sk.k
+        self.obj, self.region, self.q, self.carry_z, self.decide = obj, region, q, carry_z, decide
+        self.R, self.p = tool
+        self.box = sk.scene.object_box(obj)
+        self.R_reg, self.p_reg, half = sk.region_pose(region)
+        self.half = np.abs(np.asarray(half, float))
+        self.mine = sk._own_bodies(obj)
+        self.loose: set[int] = set()              # BRN-roofed-entry-past-loose-objects' second pass
+        self.closed = (sk._closed_above.get((obj, region), False) and sk._go_shallow.get((obj, region), False)
+                       if closed_above is None else closed_above)
+        R, p, box = self.R, self.p, self.box
+        self.Rb_t, self.c_t, self.q_t = R.T @ box.R, R.T @ (box.world_centre - p), R.T @ (q - p)   # the object in the tool
+        # measured hanging from a downward grasp, the jaws as they are: the same whatever the tool's turn now
+        jaw = np.array([R[0, 1], R[1, 1], 0.0])
+        jaw = jaw / np.linalg.norm(jaw) if np.linalg.norm(jaw) > EPS_DIR else np.array([0.0, 1.0, 0.0])
+        R_down = np.column_stack([np.cross(jaw, -Z), jaw, -Z])
+        _Rb, self.off, _ext, self.height, self.level, self.low = self.measure(R_down)
+        self.r = max(h for h, _a in self.level) + self.k.exit_margin
+
+    def measure(self, Rv: np.ndarray):
+        """The object hanging from the tool at frame Rv: (box axes, centre from origin, half extents in the world,
+        its height along its most upright axis, its level (half, axis) pairs, its lowest point below the origin)."""
+        Rb = Rv @ self.Rb_t
+        off = Rv @ (self.c_t - self.q_t)
+        ext = np.abs(Rb) @ self.box.half
+        up = int(np.argmax(np.abs(Rb[2])))
+        level = [(float(self.box.half[i]), Rb[:, i]) for i in range(3) if i != up]
+        return Rb, off, ext, 2.0 * float(self.box.half[up]), level, float(ext[2] - off[2])
+
+    def rest_z(self, xy, off: np.ndarray, low: float) -> float | None:
+        centre = np.asarray(xy, float) + off[:2]
+        _g, dist = self.sk.planner.ray_scene(np.array([centre[0], centre[1], float(self.p_reg[2])]), -Z,
+                                             self.sk.scene.body_id(self.obj))
+        return None if dist < 0 else float(self.p_reg[2]) - dist + low + self.k.place_clearance
+
+    def roof_at(self, xy):
+        """(covered, the lowest roof over the footprint at xy, the object's rest there), or None."""
+        rest = self.rest_z(xy, self.off, self.low)
+        if rest is None:
+            return None
+        c = np.r_[xy, rest] + self.off
+        lo = rest - self.low + self.k.place_clearance           # above the object's resting bottom
+        roof = self.sk._roof(c[:2], self.r, lo, rest - self.low + self.height, self.carry_z + self.height, self.mine)
+        return roof is not None, roof, rest
+
+    def sides(self):
+        """The directions: each level axis of the region, + before -, as (axis index, sign, axis, u)."""
+        for j in range(3):
+            axis = np.asarray(self.R_reg[:, j], float)
+            if abs(float(axis[2])) >= VERTICAL_COS:
+                continue                              # the region's vertical axis
+            for sgn in (1.0, -1.0):
+                u = sgn * np.array([axis[0], axis[1], 0.0])
+                n = float(np.linalg.norm(u))
+                if n < EPS_DIR:
+                    continue
+                yield j, sgn, axis, u / n
+
+    def pitched(self, u: np.ndarray, pitch: float) -> np.ndarray:
+        """The tool frame pitched down by pitch from level along -u, jaws up and down, the one the wrist order puts
+        first."""
+        app = np.cos(pitch) * -u - np.sin(pitch) * Z
+        frames = []
+        for y in (Z, -Z):
+            y = y - (y @ app) * app
+            y = y / np.linalg.norm(y)
+            frames.append(np.column_stack([np.cross(y, app), y, app]))
+        return self.sk._by_wrist(self.R, frames)[0]
+
+    def laid_fit(self, xy, u: np.ndarray, roof: float):
+        """Pitched down as far as lay_pitch as the opening allows, as the humans' hands are: level, the wrist
+        trailing behind the tool at its height sat on the next book on the table (libero_90 88). Jaws up and down:
+        of the two, the one the last joint reaches within its range (by the jaws' nearer sign, libero_90 88's wrist
+        sat 0.01 rad from its limit 19 deg short of the frame)."""
+        for pitch in self.k.lay_pitch * np.linspace(1.0, 0.0, 5):
+            R_try = self.pitched(u, pitch)
+            Rb_e, off_e, ext_e, _h, _lv, low_e = self.measure(R_try)
+            height_e = 2.0 * float(ext_e[2])  # pitched: its full vertical extent
+            rest_e = self.rest_z(xy, off_e, low_e)
+            if rest_e is not None and rest_e - low_e + height_e + self.k.place_clearance <= roof:
+                return R_try, Rb_e, off_e, height_e, low_e, rest_e
+        return None
+
+    def steep_frame(self, u: np.ndarray, xy_s, pitch: float):
+        """The steep frame at a pitch and the object carried at it at the steep drop point, or None where it has no
+        rest height there."""
+        R_try = self.pitched(u, pitch)
+        Rb_s, off_s, ext_s, _h, _lv, low_s = self.measure(R_try)
+        rest_s = self.rest_z(xy_s, off_s, low_s)
+        return None if rest_s is None else (R_try, Rb_s, off_s, 2.0 * float(ext_s[2]), low_s, rest_s)
+
+    def entry_origin(self, side: tuple, Rb_c: np.ndarray, off_c: np.ndarray, rest_c: float, xy_c):
+        """E for a frame and drop point: from the object's box centre at rest out past the region's face."""
+        j, sgn, axis, u = side
+        c_c = np.r_[xy_c, rest_c] + off_c
+        face_c = float(self.half[j]) - float((c_c - self.p_reg) @ (sgn * axis))
+        return np.r_[xy_c, rest_c] + u * (max(face_c, 0.0) + float(abs(u @ Rb_c) @ self.box.half) + self.k.entry_margin)
+
+    def steep_choice(self, side: tuple, xy, xy_s, fit) -> int | None:
+        """BRN-place-steep-laid-entry, decided once per episode: level, the hand went into the table under the
+        shelf's bottom layer (libero_90 89, 0 of 50); steeper, and only its front part in, as the humans do. The
+        recorded choice, deciding it first when this is the place's own rule and none is recorded."""
+        j, sgn, _axis, u = side
+        key = (self.obj, self.region, j, sgn)
+        sk = self.sk
+        if self.decide and fit is not None and key not in sk._entry_choice:
+            choice = None
+            if sk._fixed_blocked(self.obj, fit[0], self.q_t, [self.entry_origin(side, fit[1], fit[2], fit[5], xy),
+                                                              np.r_[xy, fit[5]]]):
+                for i_p, pitch in enumerate(self.k.steep_pitches):
+                    st = self.steep_frame(u, xy_s, pitch)
+                    if st is not None and not sk._fixed_blocked(
+                            self.obj, st[0], self.q_t, [self.entry_origin(side, st[1], st[2], st[5], xy_s),
+                                                        np.r_[xy_s, st[5]]]):
+                        choice = i_p
+                        break
+            sk._entry_choice[key] = choice
+        return sk._entry_choice.get(key)
+
+    def laid_side(self, side: tuple, xy, roof: float):
+        """(entry frame, along, across, box centre at rest, bottom, top, rest height, drop point, steep) for a laid
+        object entering along this side, or None where it is still too tall."""
+        j, _sgn, _axis, u = side
+        fit = self.laid_fit(xy, u, roof)
+        xy_s = np.asarray(xy, float) + u[:2] * ((float(self.half[j]) - self.k.steep_depth)
+                                                - float((np.asarray(xy, float) - self.p_reg[:2]) @ u[:2]))
+        xy_side, steep = xy, False
+        choice = self.steep_choice(side, xy, xy_s, fit)
+        if fit is not None and choice is not None:
+            fit = self.steep_frame(u, xy_s, self.k.steep_pitches[choice])
+            xy_side, steep = xy_s, True
+        if fit is None:
+            return None                           # laid, still too tall
+        R_entry, Rb_e, off_e, height_e, low_e, rest_e = fit
+        along = float(abs(u @ Rb_e) @ self.box.half)
+        across = float(abs(np.array([-u[1], u[0], 0.0]) @ Rb_e) @ self.box.half)
+        c_e = np.r_[xy_side, rest_e] + off_e
+        return R_entry, along, across, c_e, rest_e - low_e, rest_e - low_e + height_e, rest_e, xy_side, steep
+
+    def upright_side(self, side: tuple, xy, rest: float):
+        """The same for an object that goes in upright: turned about the vertical so its longest level axis lies
+        along the entry -- a pan goes in pan first, its handle out behind it, through an opening its length does
+        not fit across."""
+        j, _sgn, _axis, u = side
+        long_half, long_axis = max(self.level, key=lambda e: e[0])
+        la = np.array([long_axis[0], long_axis[1], 0.0]) / max(float(np.linalg.norm(long_axis[:2])), 1e-9)
+        turn = float(np.arctan2(la[0] * u[1] - la[1] * u[0], la @ u))
+        if abs(turn) > np.pi / 2:
+            turn -= np.sign(turn) * np.pi
+        R_entry = axis_rot(Z, turn) @ self.R
+        along, across = long_half, min(h for h, _a in self.level)
+        xy_side, rest_e, c_e = xy, rest, np.r_[xy, rest] + self.off
+        # no deeper than roofed_depth past the face where no spot is open from above: at the centre, the microwave's
+        # mug had the hand inside the opening and met its top (libero_10 9); the humans leave it 36-53 mm in
+        out = (float(self.half[j]) - self.k.roofed_depth) - float((np.asarray(xy, float) - self.p_reg[:2]) @ u[:2])
+        if self.closed and out > 0.0:
+            xy_side = np.asarray(xy, float) + u[:2] * out
+            rest_e = self.rest_z(xy_side, self.off, self.low)
+            if rest_e is None:
+                return None
+            c_e = np.r_[xy_side, rest_e] + self.off
+        return R_entry, along, across, c_e, rest_e - self.low, rest_e - self.low + self.height, rest_e, xy_side, False
+
+    def in_corridor(self, u: np.ndarray, xy_side, rest_e: float, d_out: float, E: np.ndarray) -> bool:
+        """Already in this side's corridor -- on its line, between the drop point and the entry point, at the entry's
+        height -- it is this side: re-swept every step, a pan hanging from its handle flickered in and out of the
+        band and was lifted back out of the shelf. And the tool behind it along u, within 45 deg of u from the drop
+        point: near the drop point the object lies in every direction's corridor, and libero_90 88's book, entered
+        along -y, was taken as entering along +y and the hand withdrew into the shelf."""
+        k, q = self.k, self.q
+        rel = q - np.r_[xy_side, rest_e]
+        t = float(rel[:2] @ u[:2])
+        tr = np.asarray(self.p[:2], float) - np.asarray(xy_side, float)
+        t_tool = float(tr @ u[:2])
+        behind = t_tool >= float(np.linalg.norm(tr - u[:2] * t_tool))
+        return (behind and float(np.linalg.norm(rel[:2] - u[:2] * t)) <= k.entry_line
+                and -k.entry_line <= t <= d_out + k.entry_line and float(q[2]) <= float(E[2]) + k.plane_band)
+
+    def side_at(self, side: tuple, xy, roofed: tuple, laid: bool, past_loose: bool):
+        """("in", entry) where the object is in this side's corridor; ("kept", (distance of the moved centre from
+        the base, entry...)) where its sweep out is clear; None otherwise."""
+        j, sgn, axis, u = side
+        _cov, roof, rest = roofed
+        got = self.laid_side(side, xy, roof) if laid else self.upright_side(side, xy, rest)
+        if got is None:
+            return None
+        R_entry, along, across, c_e, bot_e, top_e, rest_e, xy_side, steep = got
+        face = float(self.half[j]) - float((c_e - self.p_reg) @ (sgn * axis))
+        d_out = max(face, 0.0) + along + self.k.entry_margin
+        e_c = c_e + u * d_out
+        E = np.r_[xy_side, rest_e] + u * d_out
+        if self.in_corridor(u, xy_side, rest_e, d_out, E):
+            return "in", (u, E, R_entry, True, xy_side, steep)
+        # steep, the swept band stops at the roof: what stands above it stays outside the face
+        band_top = min(top_e, roof) if steep else top_e
+        ignore = (self.mine | self.loose) if past_loose else self.mine
+        if not self.sk._level_clear(c_e[:2], e_c[:2], across + self.k.exit_margin, bot_e + self.k.place_clearance,
+                                    band_top, ignore):
+            return None
+        return "kept", (float(np.linalg.norm(e_c[:2])), u, E, R_entry, xy_side, steep)   # the base is the origin
+
+    def entry_at(self, xy, past_loose: bool = False):
+        """(u, E, R_entry, entering, drop point, steep) for the drop point xy: the side the object is already
+        entering along, else the clear side whose entry point is nearest the base; None when no side is."""
+        roofed = self.roof_at(xy)
+        if roofed is None:
+            return None
+        _cov, roof, rest = roofed
+        top_t = rest - self.low + self.height
+        laid = roof is not None and top_t + self.k.place_clearance > roof  # too tall to go under it upright
+        best = None
+        for side in self.sides():
+            got = self.side_at(side, xy, roofed, laid, past_loose)
+            if got is None:
+                continue
+            kind, val = got
+            if kind == "in":
+                return val
+            if best is None or val[0] < best[0]:
+                best = val
+        return None if best is None else (best[1], best[2], best[3], False, best[4], best[5])
+
+    def decide_entry(self, target_q: np.ndarray):
+        xy0 = np.asarray(target_q[:2], float)
+        roofed = self.roof_at(xy0)
+        if roofed is None or not roofed[0]:
+            return None                                   # placed as an unroofed target
+        found = self.entry_at(xy0)
+        if found is None:
+            # BRN-roofed-entry-past-loose-objects: no side's sweep clear, one met only by loose objects is still a
+            # way in. Placed as unroofed instead, libero_90 42's pan, its front sweep met only by a bowl's rim 4 mm
+            # into its band, was lowered on to the shelf's top board (29 of 50; past the bowl, 49)
+            self.loose = {b for b in range(self.sk.scene.m.nbody) if contacts.is_movable(self.sk.scene.m, b)}
+            found = self.entry_at(xy0, past_loose=True)
+        if found is None:
+            return None
+        return found[0], found[1], found[2], found[4], found[5]
