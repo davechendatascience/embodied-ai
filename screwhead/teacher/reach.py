@@ -57,16 +57,44 @@ class Reach:
         self._geom_mask: np.ndarray | None = None
         self._geom_half: np.ndarray | None = None
         self._geom_centre: np.ndarray | None = None
+        # what solve() and collides() answered at this step, by pose and by configuration: the release
+        # screens re-judge the same grasps (grasp, column, approach probes) with only the release pose
+        # changed, and re-solving them doubled the teacher's time per step (libero_10 9: 17-20 -> 36-41
+        # ms, 3 -> 8 screen calls). Each row of the solve depends only on its own pose and the start
+        # joints, and a screen restores what it writes, so an answer holds until the state moves.
+        self._memo_state: tuple | None = None
+        self._ik_memo: dict[bytes, tuple] = {}
+        self._grade_memo: dict[tuple, int] = {}
+
+    def _fresh(self) -> None:
+        """Forget the step's answers once the state they were read from has moved on: another episode,
+        simulated time advanced, or the arm's joints changed."""
+        state = (getattr(self.env, "episode", None), float(self.env.env.sim.data.time),
+                 np.asarray(self.env.raw["robot0_joint_pos"], float).tobytes())
+        if state != self._memo_state:
+            self._memo_state = state
+            self._ik_memo.clear()
+            self._grade_memo.clear()
 
     # -- primitives -----------------------------------------------------------------------
     def solve(self, Ts: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """(joints, converged, smallest singular value, joint margin) per pose, from here."""
-        c = NpChain.of(self.env.chain)
-        q0 = np.asarray(self.env.raw["robot0_joint_pos"], float)
-        res = solve_ik(c, np.stack(Ts), q0[None], **IK)
-        th = res["theta"]
-        margin = np.minimum(th - c.limits[:, 0], c.limits[:, 1] - th).min(1)
-        return th, res["converged"], sigma_min(c, th), margin
+        self._fresh()
+        keys = [np.asarray(T, float).tobytes() for T in Ts]
+        todo = list(dict.fromkeys(k for k in keys if k not in self._ik_memo))
+        if todo:
+            c = NpChain.of(self.env.chain)
+            q0 = np.asarray(self.env.raw["robot0_joint_pos"], float)
+            first = {k: i for i, k in reversed(list(enumerate(keys)))}
+            res = solve_ik(c, np.stack([Ts[first[k]] for k in todo]), q0[None], **IK)
+            th = res["theta"]
+            margin = np.minimum(th - c.limits[:, 0], c.limits[:, 1] - th).min(1)
+            sig = sigma_min(c, th)
+            for j, k in enumerate(todo):
+                self._ik_memo[k] = (th[j], bool(res["converged"][j]), float(sig[j]), float(margin[j]))
+        rows = [self._ik_memo[k] for k in keys]
+        return (np.stack([r[0] for r in rows]), np.array([r[1] for r in rows]),
+                np.array([r[2] for r in rows]), np.array([r[3] for r in rows]))
 
     def all_reachable(self, Ts: list[np.ndarray]) -> bool:
         """Every pose converges with DEF-reachable-pose's conditioning and joint margin."""
@@ -80,6 +108,10 @@ class Reach:
         The fingers go where the grasp will have them: screened fully open (77 mm), every
         rim grasp on the bowl in the drawer hit the drawer walls and none was feasible.
         """
+        self._fresh()
+        key = (np.asarray(theta, float).tobytes(), int(allow), None if aperture is None else float(aperture))
+        if key in self._grade_memo:
+            return self._grade_memo[key]
         sim = self.env.env.sim
         qpos, qvel = sim.data.qpos.copy(), sim.data.qvel.copy()
         sim.data.qpos[self.env.joint_indexes] = np.asarray(theta, float)
@@ -90,6 +122,7 @@ class Reach:
         sim.data.qpos[:] = qpos
         sim.data.qvel[:] = qvel
         sim.forward()
+        self._grade_memo[key] = grade
         return grade
 
     # -- choosing a grasp -------------------------------------------------------------------
