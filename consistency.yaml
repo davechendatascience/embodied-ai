@@ -2566,23 +2566,26 @@ branches:
       the tool, its rotation goal unchanged, toward the point level with it along the withdrawal's
       direction at the withdrawal point's distance along it, until that distance is within the over
       distance; then it clears the withdrawal and retreats as before. A target not roofed at a step, or
-      roofed with no direction kept, is placed at that step as before. Claimed: (1) at every step at which
-      the object is held, the target is roofed, a direction is taken, and the object is in that
-      direction's corridor and not over the drop point, the tool is commanded along the offset from the
-      object's origin to the drop point at the entry's rest height; (2) at every step at which the object
-      is held, whether the target is roofed, whether the object is laid, which direction and entry frame
-      are taken, and which of the four cases (a) to (d) applies are functions of that step's state, the
-      placed object, the drop point, the region's box, the carry height, the arm's joint ranges and
-      declared constants; (3) for a laid object with a direction taken, the object carried at the entry
-      frame at its rest height at the drop point has its top, plus the clearance, at or below the roof of
-      that step; (4) while a withdrawal is recorded, no placed object is held and the withdrawal point's
-      distance along its direction exceeds the over distance, the retreat's commanded translation has no
-      vertical component; (5) the drop point in plan is the place's own. Not claimed: that the object
-      reaches the corridor; that the roof, the laid decision or the direction stay the same while the
-      object is in the corridor; that the tool reaches the entry frame or tracks the commanded height;
-      that the hand or arm clears the roof, the table or other objects; that the object fits the opening
-      across its width, rests level, or stays in the region after release; that the withdrawal leaves the
-      object undisturbed; anything of the place's own lift, carry, lower and release beyond what
+      roofed with no direction kept, is placed at that step as before. The commands stated here are the
+      place's own; at a step at which a later branch states that it replaces the place's command, that
+      branch governs that step instead. Claimed: (1) at every step at which the object is held, the target
+      is roofed, a direction is taken, and the object is in that direction's corridor and not over the
+      drop point, the place's own command -- this branch's, before any later branch that states it
+      replaces the place's command at that step -- is the tool along the offset from the object's origin
+      to the drop point at the entry's rest height; (2) at every step at which the object is held, whether
+      the target is roofed, whether the object is laid, which direction and entry frame are taken, and
+      which of the four cases (a) to (d) applies are functions of that step's state, the placed object,
+      the drop point, the region's box, the carry height, the arm's joint ranges and declared constants;
+      (3) for a laid object with a direction taken, the object carried at the entry frame at its rest
+      height at the drop point has its top, plus the clearance, at or below the roof of that step; (4)
+      while a withdrawal is recorded, no placed object is held and the withdrawal point's distance along
+      its direction exceeds the over distance, the retreat's commanded translation has no vertical
+      component; (5) the drop point in plan is the place's own. Not claimed: that the object reaches the
+      corridor; that the roof, the laid decision or the direction stay the same while the object is in the
+      corridor; that the tool reaches the entry frame or tracks the commanded height; that the hand or arm
+      clears the roof, the table or other objects; that the object fits the opening across its width,
+      rests level, or stays in the region after release; that the withdrawal leaves the object
+      undisturbed; anything of the place's own lift, carry, lower and release beyond what
       BRN-place-onto-physical-support states.
     premises: [BRN-place-onto-physical-support, AXM-object-geometry-known, AXM-grip-fixes-object-in-hand, AXM-mujoco-forward-is-a-function-of-state]
     derivation_rule: >-
@@ -2626,7 +2629,9 @@ branches:
       as along +y and the hand withdrew into the shelf -- hence the tool behind the drop point; drawn out
       along the entry, a laid book's lower finger, under it, dragged it to the shelf's edge (settled 1 of
       10), pushed in it seated (88 8, 86 3 of 10 settled, seed 557), while the pan drawn out settled 10 of
-      10 (40, where the first direction's withdrawal gave 7).
+      10 (40, where the first direction's withdrawal gave 7). Restated 2026-09-25: claim (1) and the
+      commands are the place's own, so that a branch replacing the place's command at a step
+      (BRN-place-tips-a-standing-misfit, while a tip is recorded) does not contradict it.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-pick-descends-beside-overhang
