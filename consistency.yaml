@@ -2907,6 +2907,41 @@ branches:
       What lies over the hand now counts only below the leg's start point's height.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-place-in-aligns-before-descending
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Terms are BRN-place-onto-physical-support's; poses are read from each step's state
+      (AXM-mujoco-forward-is-a-function-of-state). A place is a place_in when its plan step asks for the
+      object in the region (LIBERO's In), a place_on when on it. The place's lower phase, up to this
+      branch, commands at each of its steps the tool's translation along the offset from the object's
+      origin to the drop point at the target height, with the phase's rotation goal and declared speeds,
+      until the phase ends as that branch states -- including a roofed entry's own lower toward its drop
+      point. With this branch, at every lower-phase step of a place_in at which the object's origin is
+      more than a declared distance from the drop point in plan, the commanded translation is instead the
+      horizontal part of that offset, the tool's height held, with the same rotation goal and speeds; at
+      every other lower-phase step, and at every step of a place_on, the lower is as before. Claimed: (1)
+      at every lower-phase step of a place_in at which the origin is more than the declared distance from
+      the drop point in plan, the commanded translation has no vertical component and its horizontal part
+      is the offset's; (2) at every other step the command is as before this branch; (3) whether the
+      height is held at a step is a function of that step's state, the placed object, the place's kind,
+      the drop point and declared constants. Not claimed: that the object comes within the declared
+      distance of the drop point, or clears the region's walls as it descends; that the lower phase ends;
+      that the servo holds the height it is commanded to.
+    premises: [BRN-place-onto-physical-support, AXM-mujoco-forward-is-a-function-of-state, AXM-object-geometry-known]
+    derivation_rule: >-
+      Lowered and moved toward the drop point at once, libero_90 80's book (110 mm) went down between the
+      caddy's compartment walls (126 mm apart; its drop point, from BRN-drop-point-footprint-as-carried,
+      centred its box there with 6 mm each side) 7-10 mm short of its point in plan -- the servo lagging
+      the command -- touched the wall, and came to rest on it, the grasp lost; 80 15 and 83 17 of 20 in
+      v36 (inits 0-19). The height held until the origin is within 4 mm in plan: 80 20 and 83 20 of 20
+      (won 5 and 3, lost none). Applied to every place, libero_10 8's moka pots, pressed on to the burner
+      (place_on), went 2 lost and 1 won of 10; restricted to place_in, libero_10 8 unchanged. With it (and
+      BRN-place-tips-a-standing-misfit and BRN-leave-a-roof-level-first as built), libero_90's 90 tasks,
+      inits 0-4: 440 of 450 against v36's 427, none lost; libero_spatial, libero_object and libero_goal
+      inits 0-9 unchanged per episode.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:
