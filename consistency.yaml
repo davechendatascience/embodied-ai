@@ -1887,14 +1887,12 @@ branches:
       Something of the scene is over a drawer's bar when a geom other than the robot's and the drawer's
       own body's -- colliding or not -- has its bottom above the bar's top and some point of its plan
       bounding circle within a declared corridor distance, in plan, of the bar's centre where the bar sits
-      with the drawer closed. A sliding drawer whose bar has nothing over it -- among LIBERO's, the wooden
-      cabinet's top drawer, the bar the offsets were measured on, 15 x 16 mm across and 89 mm long, and
-      the white cabinet's top drawer, 16 x 16 mm across and 88 mm long -- is opened without grasping its
-      handle: the jaws wide open and pointing down, the jaw axis along the opening direction, the measured
-      tool lowered straight down to a point on the opening side of the bar and above it, and only when the
-      measured tool is within a declared gate of that height is it dragged along the opening direction at
-      the drive speed toward a point at that height, the point re-derived from the bar's pose every
-      control step. It stops when LIBERO's Open holds past its threshold by the fill's margin
+      with the drawer closed. A sliding drawer whose bar has nothing over it is opened without grasping
+      its handle: the jaws wide open and pointing down, the jaw axis along the opening direction, the
+      measured tool lowered straight down to a point on the opening side of the bar and above it, and only
+      when the measured tool is within a declared gate of that height is it dragged along the opening
+      direction at the drive speed toward a point at that height, the point re-derived from the bar's pose
+      every control step. It stops when LIBERO's Open holds past its threshold by the fill's margin
       (BRN-open-precondition-reads-the-running-drive's margin clause). The hook grasps nothing -- its jaws
       are never commanded closed -- so DEF-skill-contract's release postcondition, which is of what a
       skill grasped, asks nothing of it; its disengagement is that what follows leaves upward before
@@ -1906,8 +1904,9 @@ branches:
       held while the leave runs. A drawer whose bar has something over it is not hooked. Not claimed: that
       the finger engages the bar when the drag starts at the gate's edge -- the gate decides when the drag
       starts, and no claim here depends on its width; that the drag cannot slip or stall -- a stalled drag
-      re-enters, and nothing bounds how often -- or that the offsets fit a bar of a section other than
-      these two.
+      re-enters, and nothing bounds how often -- or that the offsets fit a bar of a section other than the
+      wooden cabinet's top bar, on which they were measured (15 x 16 mm across, 89 mm long), and the white
+      cabinet's (16 x 16 mm, 88 mm).
     premises: [AXM-object-geometry-known, AXM-panda-gripper-geometry, AXM-handle-shares-body, DEF-skill-contract, AXM-libero-joint-bands, AXM-parameters-derived, BRN-open-precondition-reads-the-running-drive]
     derivation_rule: >-
       LIBERO's 50 human demonstrations of libero_goal 3, replayed from their recorded states, all open the
@@ -1931,14 +1930,18 @@ branches:
       AXM-parameters-derived the drag gate (4 mm) was set by hand, the one datum being that 17 mm off the
       hook height the finger swept over the bar, and it carries no claim -- whether the finger engages at
       its edge is disclaimed -- nor, measured, the verdicts: at 2, 4 and 6 mm libero_goal 3, libero_90 7
-      and libero_90 23 opened their drawers in 10 of 10 inits each (30 of 30 at every width); the corridor
-      and the leave's height are free parameters every claim here holds for, at any positive value; the
-      two bars measured are both in the scope the disclaimer leaves. Restated again per the verifier:
-      'within the corridor' is some point of the circle within it; the leave runs while nothing is held;
-      the pinch drive and the fill's margin are cited. Restated again per the verifier: the leave
-      pre-empts a skill's step rather than being one of its steps, so no other branch's claim about its
-      own command is read at those steps; a covered bar is only said not to be hooked, citing nothing
-      about how it is opened.
+      and libero_90 23 opened their drawers in 10 of 10 inits each (30 of 30 at every width); the
+      corridor, which decides whether a bar counts as covered, measured too: at 10, 15 and 20 mm
+      libero_goal 0 (its middle bar under the top drawer's) and libero_goal 3, libero_90 7 and 23 (top
+      bars) each went 5 of 5 (20 of 20 at every width); the leave's height is a free parameter every claim
+      here holds for, at any positive value; the two bars measured are both in the scope the disclaimer
+      leaves. Restated again per the verifier: 'within the corridor' is some point of the circle within
+      it; the leave runs while nothing is held; the pinch drive and the fill's margin are cited. Restated
+      again per the verifier: the leave pre-empts a skill's step rather than being one of its steps, so no
+      other branch's claim about its own command is read at those steps; a covered bar is only said not to
+      be hooked, citing nothing about how it is opened. Restated again per the verifier: which bars have
+      nothing over them is read per step, not asserted of the named cabinets, and the corridor's width is
+      measured.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-rim-pinch-as-deep-as-the-palm
