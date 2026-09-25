@@ -2589,14 +2589,15 @@ branches:
       for a laid object with a direction taken, the object carried at the place's own entry frame at its
       rest height at the place's own drop point has its top, plus the clearance, at or below the roof of
       that step; (4) while a withdrawal is recorded, no placed object is held and the withdrawal point's
-      distance along its direction exceeds the over distance, the retreat's commanded translation has no
-      vertical component; (5) the place's own drop point in plan is the place's drop point. Not claimed:
-      that the object reaches the corridor; that the roof, the laid decision or the direction stay the
-      same while the object is in the corridor; that the tool reaches the entry frame or tracks the
-      commanded height; that the hand or arm clears the roof, the table or other objects; that the object
-      fits the opening across its width, rests level, or stays in the region after release; that the
-      withdrawal leaves the object undisturbed; anything of the place's own lift, carry, lower and release
-      beyond what BRN-place-onto-physical-support states.
+      distance along its direction exceeds the over distance, the place's own retreat command -- this
+      branch's, before any later branch that states it replaces the place's command at that step -- has a
+      commanded translation with no vertical component; (5) the place's own drop point in plan is the
+      place's drop point. Not claimed: that the object reaches the corridor; that the roof, the laid
+      decision or the direction stay the same while the object is in the corridor; that the tool reaches
+      the entry frame or tracks the commanded height; that the hand or arm clears the roof, the table or
+      other objects; that the object fits the opening across its width, rests level, or stays in the
+      region after release; that the withdrawal leaves the object undisturbed; anything of the place's own
+      lift, carry, lower and release beyond what BRN-place-onto-physical-support states.
     premises: [BRN-place-onto-physical-support, AXM-object-geometry-known, AXM-grip-fixes-object-in-hand, AXM-mujoco-forward-is-a-function-of-state]
     derivation_rule: >-
       Every roofed target in LIBERO failed for the teacher, whose place comes straight down over the drop
@@ -2647,7 +2648,8 @@ branches:
       replacements do not contradict them. Restated so that a later branch may replace the grasp screen's
       release pose for a roofed target: screened at the region-derived height, the microwave's top pinch
       put the hand on the microwave's roof and passed, and the hand met the opening's top as the mug went
-      in (libero_10 9, 0 of 50).
+      in (libero_10 9, 0 of 50). Restated per the verifier: claim (4) is of the place's own retreat
+      command, as claims (1), (2), (3) and (5) are of the place's own.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-pick-descends-beside-overhang
