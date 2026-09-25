@@ -2071,37 +2071,40 @@ branches:
       measured or declared, the grasp planner offers, as a tier tried before every other, top-down grasps
       on the object's handle geoms: those collision geoms whose bounding-box centre lies at least a
       declared fraction of the farthest such centre's plan distance from the object's origin. For each
-      handle geom it considers the horizontal axes of the geom's bounding box (in the geom's current
-      pose) whose extent plus a declared grip margin is at most a declared maximum jaw opening; a geom
-      with no such axis offers no candidate. Otherwise the jaw axis is the considered axis most nearly
+      handle geom it considers the horizontal axes of the geom's bounding box (in the geom's current pose)
+      whose extent plus a declared grip margin is at most a declared maximum jaw opening; a geom with no
+      such axis offers no candidate. Otherwise the jaw axis is the considered axis most nearly
       perpendicular to the plan direction from the object's origin to the geom's centre, and when the
       box's most nearly radial horizontal axis is longer than three times the chosen axis's extent, the
-      grasp points are spread along that radial axis. For any other category the tiers offered are
-      exactly those offered before. Claimed: no handle candidate is offered for an object whose category
-      is not so declared, and every handle candidate's jaw axis is, among the considered axes of its
-      geom, the one most nearly perpendicular to that geom's radial direction. Not claimed: that the
-      handle tier yields a reachable grasp, that the grasp holds, or that the outlying geoms are the
-      handle in every asset; behaviour when a geom's centre coincides with the object's origin in plan.
+      grasp points are spread along that radial axis. For any other category this branch offers no handle
+      tier; the other tiers are as the grasp planner's other branches state. Claimed: no handle candidate
+      is offered for an object whose category is not so declared, and every handle candidate's jaw axis
+      is, among the considered axes of its geom, the one most nearly perpendicular to that geom's radial
+      direction. Not claimed: that the handle tier yields a reachable grasp, that the grasp holds, or that
+      the outlying geoms are the handle in every asset; behaviour when a geom's centre coincides with the
+      object's origin in plan.
     premises: [AXM-category-affordances-declared, AXM-object-geometry-known, AXM-panda-gripper-geometry,
                AXM-parameters-derived]
     derivation_rule: >-
       AXM-category-affordances-declared is where held_by comes from and why only evidence-backed values
       gate anything; AXM-object-geometry-known supplies each geom's box and pose. The two claimed clauses
       read none of the tier's numbers: the gate reads only the table, the perpendicular rule only the
-      considered axes and the radial direction. Which candidates the tier offers does depend on them,
-      and under AXM-parameters-derived their provenance is: the maximum jaw opening (75 mm) and the grip
-      margin (12 mm) were set by hand with the first skill teacher, below the Panda's 80 mm stroke and
-      not traced to the model; the handle fraction (0.6), the spread factor (3) and the points along a
-      spread axis (1/4, 1/2 and 3/4 of it) were set by hand for this tier. Measured against the fraction
-      (geom centres from the object's origin in plan, libero_90 18 and libero_10 2): the frying pan's
-      handle geoms lie at 112.7-192.6 mm of 192.6 (0.59-1.00), its dish's at most 97.1 (0.50); the moka
-      pot's handle geoms at 41.6-75.5 mm of 75.5 (0.55-1.00), its body's at most 35.9 (0.48). 0.6 lies
-      outside (0.50, 0.55], the interval that separates both, and leaves out the nearest handle geom of
-      each. Measured with the tier: LIBERO's humans hold the frying pan by its handle in 100% of 152
-      grasps (141-156 mm out, jaws 27-29 mm) and the moka pot by its handle (51-58 mm off its axis, jaws
-      22-23 mm); libero_90 18, 21 and 41 (pan) 4/5/4 -> 20/20/20 of 20 and libero_10 2 (moka pot) 9 ->
-      15 of 20. Choosing the thinnest axis instead sent the moka pot's jaw line through its body (105
-      mm; task 2 0 of 20). evidence: CTR-teacher-reliable.
+      considered axes and the radial direction. Which candidates the tier offers does depend on them, and
+      under AXM-parameters-derived their provenance is: the maximum jaw opening (75 mm) and the grip
+      margin (12 mm) were set by hand with the first skill teacher, below the Panda's 80 mm stroke and not
+      traced to the model; the handle fraction (0.6), the spread factor (3) and the points along a spread
+      axis (1/4, 1/2 and 3/4 of it) were set by hand for this tier. Measured against the fraction (geom
+      centres from the object's origin in plan, libero_90 18 and libero_10 2): the frying pan's handle
+      geoms lie at 112.7-192.6 mm of 192.6 (0.59-1.00), its dish's at most 97.1 (0.50); the moka pot's
+      handle geoms at 41.6-75.5 mm of 75.5 (0.55-1.00), its body's at most 35.9 (0.48). 0.6 lies outside
+      (0.50, 0.55], the interval that separates both, and leaves out the nearest handle geom of each.
+      Measured with the tier: LIBERO's humans hold the frying pan by its handle in 100% of 152 grasps
+      (141-156 mm out, jaws 27-29 mm) and the moka pot by its handle (51-58 mm off its axis, jaws 22-23
+      mm); libero_90 18, 21 and 41 (pan) 4/5/4 -> 20/20/20 of 20 and libero_10 2 (moka pot) 9 -> 15 of 20.
+      Choosing the thinnest axis instead sent the moka pot's jaw line through its body (105 mm; task 2 0
+      of 20). evidence: CTR-teacher-reliable. Restated so that later branches may add tiers
+      (BRN-pinch-leans-when-upright-unreachable): the clause fixed every other category's tiers to those
+      before this branch, which a tier added for every category contradicts.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-carry-turns-object-to-fit
@@ -2552,47 +2555,48 @@ branches:
       direction taken, at a step at which the object is held, the place's drop point is at the entry's
       rest height -- which replaces the region-derived target height in BRN-place-onto-physical-support's
       first ground and, for the delivered test, is what the recorded point below carries; the carry height
-      and the grasp screen keep the region-derived height -- and the command is, by four cases: (a) in the
-      corridor and not over the drop point, the tool's translation along the offset from the object's
-      origin to the drop point at that height; (b) not in the corridor, over E and above E's height plus
-      the band, the tool's translation along the offset from the object's origin to E; (c) otherwise not
-      in the corridor, the place's own slide and lift, their rotation goal unchanged, and its carry, with
-      E as their destination; (d) in the corridor and over the drop point, the place's own lower and
-      release toward the drop point at that height (BRN-place-onto-physical-support). The commands of (a)
-      and (b), the carry and the lower turn the tool toward the entry frame. At every step at which the
-      place finds the object held, it first clears the records below; when it then commands the release
-      with a direction taken, it records, for the object and region, the drop point at the entry's rest
-      height, and a withdrawal: a direction -- u, or -u when the entry frame's approach lies within 45
-      degrees of level (a laid object) -- and the tool point then moved along that direction by E's
-      distance from the drop point; both records are also cleared at an episode's start. While the object
-      is not held and a release is recorded, the place's target -- what its delivered test reads -- is the
-      recorded point. While a withdrawal is recorded and no placed object is held, the retreat commands
-      the tool, its rotation goal unchanged, toward the point level with it along the withdrawal's
-      direction at the withdrawal point's distance along it, until that distance is within the over
-      distance; then it clears the withdrawal and retreats as before. A target not roofed at a step, or
-      roofed with no direction kept, is placed at that step as before. The decisions, entry frames, drop
-      points, records and commands stated here are the place's own; at a step at which a later branch
-      states that it replaces any of them -- the place's command, or its entry frame, drop point or
-      records for a direction -- that branch governs what it replaces at that step instead. Claimed: (1)
-      at every step at which the object is held, the target is roofed, a direction is taken, and the
-      object is in that direction's corridor and not over the drop point, the place's own command -- this
-      branch's, before any later branch that states it replaces the place's command at that step -- is the
-      tool along the offset from the object's origin to the drop point at the entry's rest height; (2) at
-      every step at which the object is held, the place's own decisions -- whether the target is roofed,
-      whether the object is laid, which direction and entry frame are taken, and which of the four cases
-      (a) to (d) applies -- are functions of that step's state, the placed object, the drop point, the
-      region's box, the carry height, the arm's joint ranges and declared constants; (3) for a laid object
-      with a direction taken, the object carried at the place's own entry frame at its rest height at the
-      place's own drop point has its top, plus the clearance, at or below the roof of that step; (4) while
-      a withdrawal is recorded, no placed object is held and the withdrawal point's distance along its
-      direction exceeds the over distance, the retreat's commanded translation has no vertical component;
-      (5) the place's own drop point in plan is the place's drop point. Not claimed: that the object
-      reaches the corridor; that the roof, the laid decision or the direction stay the same while the
-      object is in the corridor; that the tool reaches the entry frame or tracks the commanded height;
-      that the hand or arm clears the roof, the table or other objects; that the object fits the opening
-      across its width, rests level, or stays in the region after release; that the withdrawal leaves the
-      object undisturbed; anything of the place's own lift, carry, lower and release beyond what
-      BRN-place-onto-physical-support states.
+      keeps the region-derived height, and the grasp screen keeps it except where a later branch states
+      that it replaces the grasp screen's release pose for a roofed target -- and the command is, by four
+      cases: (a) in the corridor and not over the drop point, the tool's translation along the offset from
+      the object's origin to the drop point at that height; (b) not in the corridor, over E and above E's
+      height plus the band, the tool's translation along the offset from the object's origin to E; (c)
+      otherwise not in the corridor, the place's own slide and lift, their rotation goal unchanged, and
+      its carry, with E as their destination; (d) in the corridor and over the drop point, the place's own
+      lower and release toward the drop point at that height (BRN-place-onto-physical-support). The
+      commands of (a) and (b), the carry and the lower turn the tool toward the entry frame. At every step
+      at which the place finds the object held, it first clears the records below; when it then commands
+      the release with a direction taken, it records, for the object and region, the drop point at the
+      entry's rest height, and a withdrawal: a direction -- u, or -u when the entry frame's approach lies
+      within 45 degrees of level (a laid object) -- and the tool point then moved along that direction by
+      E's distance from the drop point; both records are also cleared at an episode's start. While the
+      object is not held and a release is recorded, the place's target -- what its delivered test reads --
+      is the recorded point. While a withdrawal is recorded and no placed object is held, the retreat
+      commands the tool, its rotation goal unchanged, toward the point level with it along the
+      withdrawal's direction at the withdrawal point's distance along it, until that distance is within
+      the over distance; then it clears the withdrawal and retreats as before. A target not roofed at a
+      step, or roofed with no direction kept, is placed at that step as before. The decisions, entry
+      frames, drop points, records and commands stated here are the place's own; at a step at which a
+      later branch states that it replaces any of them -- the place's command, or its entry frame, drop
+      point or records for a direction -- that branch governs what it replaces at that step instead.
+      Claimed: (1) at every step at which the object is held, the target is roofed, a direction is taken,
+      and the object is in that direction's corridor and not over the drop point, the place's own command
+      -- this branch's, before any later branch that states it replaces the place's command at that step
+      -- is the tool along the offset from the object's origin to the drop point at the entry's rest
+      height; (2) at every step at which the object is held, the place's own decisions -- whether the
+      target is roofed, whether the object is laid, which direction and entry frame are taken, and which
+      of the four cases (a) to (d) applies -- are functions of that step's state, the placed object, the
+      drop point, the region's box, the carry height, the arm's joint ranges and declared constants; (3)
+      for a laid object with a direction taken, the object carried at the place's own entry frame at its
+      rest height at the place's own drop point has its top, plus the clearance, at or below the roof of
+      that step; (4) while a withdrawal is recorded, no placed object is held and the withdrawal point's
+      distance along its direction exceeds the over distance, the retreat's commanded translation has no
+      vertical component; (5) the place's own drop point in plan is the place's drop point. Not claimed:
+      that the object reaches the corridor; that the roof, the laid decision or the direction stay the
+      same while the object is in the corridor; that the tool reaches the entry frame or tracks the
+      commanded height; that the hand or arm clears the roof, the table or other objects; that the object
+      fits the opening across its width, rests level, or stays in the region after release; that the
+      withdrawal leaves the object undisturbed; anything of the place's own lift, carry, lower and release
+      beyond what BRN-place-onto-physical-support states.
     premises: [BRN-place-onto-physical-support, AXM-object-geometry-known, AXM-grip-fixes-object-in-hand, AXM-mujoco-forward-is-a-function-of-state]
     derivation_rule: >-
       Every roofed target in LIBERO failed for the teacher, whose place comes straight down over the drop
@@ -2640,7 +2644,10 @@ branches:
       (BRN-place-tips-a-standing-misfit, while a tip is recorded) does not contradict it. Restated again
       the same day: the carve-out covers the entry frames, drop points and records as well as the
       commands, and claims (2), (3) and (5) are of the place's own, so that BRN-place-steep-laid-entry's
-      replacements do not contradict them.
+      replacements do not contradict them. Restated so that a later branch may replace the grasp screen's
+      release pose for a roofed target: screened at the region-derived height, the microwave's top pinch
+      put the hand on the microwave's roof and passed, and the hand met the opening's top as the mug went
+      in (libero_10 9, 0 of 50).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-pick-descends-beside-overhang
