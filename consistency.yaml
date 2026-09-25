@@ -2108,40 +2108,44 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      At every carry and lower step of a place skill, the skill reads the held object's own bounding
-      box (in the object's frame, current pose) and the target region's box (the region site's current
-      pose and size, or, for a region that is an object, that object's box). Its horizontal axes are the
-      box axes whose vertical component is below a declared bound. If the region box does not have
-      exactly two horizontal axes, or the object's box has none, the commanded tool orientation is the
-      current one. Otherwise the skill computes the object's plan extents along the region's two
-      horizontal axes; if they fit with no tolerance (each within the region's extent), the commanded
-      orientation is the current one. If not, with theta a smallest turn about the vertical laying the
-      object's longest horizontal axis (the first in box order among equals) along the region's longer
-      horizontal axis (the first among equals), ties between turns of equal size broken toward the
-      positive turn, the commanded orientation is the current one turned by theta if the object's extents
-      so turned fit within the region's extent plus a declared tolerance, and the current one if not.
-      Claimed: the skill never commands a turn about the vertical at a step at which the object's
-      footprint, as computed, already fits the region with no tolerance, and every turn it commands is
-      that tie-broken smallest aligning turn. Not claimed: that the object ends inside the region, that
-      the turn is executed exactly, that it is collision-free, that the grasp screen checked the turned
-      pose, or that the rule never alternates between turns at successive steps.
+      At every carry and lower step of a place skill, the skill reads the held object's own bounding box
+      (in the object's frame, current pose) and the target region's box (the region site's current pose
+      and size, or, for a region that is an object, that object's box). Its horizontal axes are the box
+      axes whose vertical component is below a declared bound. If the region box does not have exactly two
+      horizontal axes, or the object's box has none, the commanded tool orientation is the current one.
+      Otherwise the skill computes the object's plan extents along the region's two horizontal axes; if
+      they fit with no tolerance (each within the region's extent), the commanded orientation is the
+      current one. If not, with theta a smallest turn about the vertical laying the object's longest
+      horizontal axis (the first in box order among equals) along the region's longer horizontal axis (the
+      first among equals), ties between turns of equal size broken toward the positive turn, the commanded
+      orientation is the current one turned by theta if the object's extents so turned fit within the
+      region's extent plus a declared tolerance, and the current one if not. The orientation commanded
+      here is the place's own; at a step at which a later branch states that it replaces the place's
+      commanded orientation, that branch governs that step instead. Claimed: the place's own commanded
+      orientation is never turned about the vertical at a step at which the object's footprint, as
+      computed, already fits the region with no tolerance, and every turn in it is that tie-broken
+      smallest aligning turn. Not claimed: that the object ends inside the region, that the turn is
+      executed exactly, that it is collision-free, that the grasp screen checked the turned pose, or that
+      the rule never alternates between turns at successive steps.
     premises: [AXM-object-geometry-known, AXM-libero-scores-final-state, AXM-grip-fixes-object-in-hand,
                DEF-skill-contract]
     derivation_rule: >-
       AXM-object-geometry-known gives the object's box; AXM-libero-scores-final-state, which has LIBERO
       evaluate In and On on region sites and support objects in the simulator state, gives the region's
       live pose and size; AXM-grip-fixes-object-in-hand makes the object turn with the tool. Measured:
-      carried as grasped, libero_90's book (110 x 29 mm) came down across a caddy compartment 56 mm
-      wide (124 long), caught its wall and was lost; LIBERO's humans end with the book along the
-      compartment. With the turn, libero_90 73 0 -> 9, 78 0 -> 4, 81 0 -> 8 of 20 (runs/skill_l90_v3).
-      Restated from a version that left the object unturned when it fitted within the tolerance:
-      libero_90 77's book came down turned 15 deg, 56.5 mm across a 55.5 mm compartment -- inside the
-      5 mm tolerance -- and its corner landed on the wall (TST-teacher-settled RUN-0247, 77 settled 1 of
-      20). With this rule and BRN-drop-point-footprint-as-carried, libero_90 73 8 -> 19, 78 2 -> 18 of 20
-      (runs/skill_l90_v6 against v4), the 30 benchmark tasks unchanged episode for episode in success,
-      and libero_10 2 one episode lost (19 of seed 55502). A first version read the region's axes 0
-      and 1 as horizontal; the caddy's regions have their local y vertical, and nothing turned.
-      evidence: CTR-teacher-reliable, CTR-teacher-settled.
+      carried as grasped, libero_90's book (110 x 29 mm) came down across a caddy compartment 56 mm wide
+      (124 long), caught its wall and was lost; LIBERO's humans end with the book along the compartment.
+      With the turn, libero_90 73 0 -> 9, 78 0 -> 4, 81 0 -> 8 of 20 (runs/skill_l90_v3). Restated from a
+      version that left the object unturned when it fitted within the tolerance: libero_90 77's book came
+      down turned 15 deg, 56.5 mm across a 55.5 mm compartment -- inside the 5 mm tolerance -- and its
+      corner landed on the wall (TST-teacher-settled RUN-0247, 77 settled 1 of 20). With this rule and
+      BRN-drop-point-footprint-as-carried, libero_90 73 8 -> 19, 78 2 -> 18 of 20 (runs/skill_l90_v6
+      against v4), the 30 benchmark tasks unchanged episode for episode in success, and libero_10 2 one
+      episode lost (19 of seed 55502). A first version read the region's axes 0 and 1 as horizontal; the
+      caddy's regions have their local y vertical, and nothing turned. evidence: CTR-teacher-reliable,
+      CTR-teacher-settled. Restated 2026-09-25: the orientation is the place's own, so a later branch
+      replacing it at some steps (a region with no vertical axis: the wine rack) does not contradict the
+      claims.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-drop-point-footprint-as-carried
