@@ -2111,44 +2111,69 @@ branches:
       For an object whose category the affordance table declares held_by: handle with evidence tagged
       measured or declared, the grasp planner offers, as a tier tried before every other, top-down grasps
       on the object's handle geoms: those collision geoms whose bounding-box centre lies at least a
-      declared fraction of the farthest such centre's plan distance from the object's origin. For each
-      handle geom it considers the horizontal axes of the geom's bounding box (in the geom's current pose)
-      whose extent plus a declared grip margin is at most a declared maximum jaw opening; a geom with no
-      such axis offers no candidate. Otherwise the jaw axis is the considered axis most nearly
-      perpendicular to the plan direction from the object's origin to the geom's centre, and when the
-      box's most nearly radial horizontal axis is longer than three times the chosen axis's extent, the
-      grasp points are spread along that radial axis. For any other category this branch offers no handle
-      tier: a later branch may offer the handle candidates, formed as here, to a category declared
-      otherwise and states where; the other tiers are as the grasp planner's other branches state.
-      Claimed: this branch offers no handle candidate for an object whose category is not so declared, and
-      every handle candidate's jaw axis is, among the considered axes of its geom, the one most nearly
-      perpendicular to that geom's radial direction. Not claimed: that the handle tier yields a reachable
-      grasp, that the grasp holds, or that the outlying geoms are the handle in every asset; behaviour
-      when a geom's centre coincides with the object's origin in plan.
+      declared fraction of the farthest such centre's plan distance from the object's origin, and on the
+      farthest centre's side of the origin -- the plan direction from the origin to the geom's centre has
+      a positive dot product with the plan direction to the farthest centre -- and not covered: no other
+      collision geom of the object has a world-axis-aligned bounding box whose plan extent contains the
+      geom's centre and whose bottom lies above the top of the geom's own box. For each handle geom it
+      considers the horizontal axes of the geom's bounding box (in the geom's current pose) whose extent
+      plus a declared grip margin is at most a declared maximum jaw opening; a geom with no such axis
+      offers no candidate. Otherwise the jaw axis is the considered axis most nearly perpendicular to the
+      plan direction from the object's origin to the geom's centre, and when the box's most nearly radial
+      horizontal axis is longer than three times the chosen axis's extent, the grasp points are spread
+      along that radial axis. For any other category this branch offers no handle tier: a later branch may
+      offer the handle candidates, formed as here, to a category declared otherwise and states where; the
+      other tiers are as the grasp planner's other branches state. Claimed: this branch offers no handle
+      candidate for an object whose category is not so declared; every handle candidate's jaw axis is,
+      among the considered axes of its geom, the one most nearly perpendicular to that geom's radial
+      direction; and every handle candidate lies on a geom whose centre is on the farthest centre's side
+      of the origin and that no other geom of the object covers, as defined above. Not claimed: that the
+      handle tier yields a reachable grasp, that the grasp holds, or that the outlying geoms on that side
+      are the handle in every asset -- an object with handles on opposite sides is offered those on the
+      farthest one's side only; behaviour when a geom's centre coincides with the object's origin in plan.
     premises: [AXM-category-affordances-declared, AXM-object-geometry-known, AXM-panda-gripper-geometry,
                AXM-parameters-derived]
     derivation_rule: >-
       AXM-category-affordances-declared is where held_by comes from and why only evidence-backed values
-      gate anything; AXM-object-geometry-known supplies each geom's box and pose. The two claimed clauses
-      read none of the tier's numbers: the gate reads only the table, the perpendicular rule only the
-      considered axes and the radial direction. Which candidates the tier offers does depend on them, and
-      under AXM-parameters-derived their provenance is: the maximum jaw opening (75 mm) and the grip
-      margin (12 mm) were set by hand with the first skill teacher, below the Panda's 80 mm stroke and not
-      traced to the model; the handle fraction (0.6), the spread factor (3) and the points along a spread
-      axis (1/4, 1/2 and 3/4 of it) were set by hand for this tier. Measured against the fraction (geom
+      gate anything; AXM-object-geometry-known supplies each geom's box and pose. The three claimed
+      clauses read none of the tier's numbers: the gate reads only the table, the perpendicular rule only
+      the considered axes and the radial direction, the side rule only the two plan directions. Which
+      candidates the tier offers does depend on them, and under AXM-parameters-derived their provenance
+      is: the maximum jaw opening (75 mm) and the grip margin (12 mm) were set by hand with the first
+      skill teacher, below the Panda's 80 mm stroke and not traced to the model; the handle fraction
+      (0.6), the spread factor (3) and the points along a spread axis (1/4, 1/2 and 3/4 of it) were set by
+      hand for this tier; the side and covered rules have no constant. Measured against the fraction (geom
       centres from the object's origin in plan, libero_90 18 and libero_10 2): the frying pan's handle
       geoms lie at 112.7-192.6 mm of 192.6 (0.59-1.00), its dish's at most 97.1 (0.50); the moka pot's
       handle geoms at 41.6-75.5 mm of 75.5 (0.55-1.00), its body's at most 35.9 (0.48). 0.6 lies outside
       (0.50, 0.55], the interval that separates both, and leaves out the nearest handle geom of each.
-      Measured with the tier: LIBERO's humans hold the frying pan by its handle in 100% of 152 grasps
-      (141-156 mm out, jaws 27-29 mm) and the moka pot by its handle (51-58 mm off its axis, jaws 22-23
-      mm); libero_90 18, 21 and 41 (pan) 4/5/4 -> 20/20/20 of 20 and libero_10 2 (moka pot) 9 -> 15 of 20.
-      Choosing the thinnest axis instead sent the moka pot's jaw line through its body (105 mm; task 2 0
-      of 20). evidence: CTR-teacher-reliable. Restated so that later branches may add tiers
+      Measured against the side (libero_10 8 and 9, libero_90 42, initial state 0): the moka pot's spout
+      tip lies 49.1 mm out (0.65 of 75.5), past the fraction, on the side opposite its handle, and was its
+      nearest geom offered: in 12 initial states of libero_10 8, 23 of the 24 pot grasps held the spout
+      (object y -37 to -52 mm; the humans hold the handle, +51 mm), and the second pot fell from it
+      mid-carry in 18 of 50 episodes, every one of the task's 11 failures (v42). The yellow-and-white mug
+      has 22 geoms past the fraction, 19 of them the cup's wall segments all round it; on its handle's
+      side, 3. The frying pan's 2 are both on its handle's side, unchanged. Measured with the tier:
+      LIBERO's humans hold the frying pan by its handle in 100% of 152 grasps (141-156 mm out, jaws 27-29
+      mm) and the moka pot by its handle (51-58 mm off its axis, jaws 22-23 mm); libero_90 18, 21 and 41
+      (pan) 4/5/4 -> 20/20/20 of 20 and libero_10 2 (moka pot) 9 -> 15 of 20. Choosing the thinnest axis
+      instead sent the moka pot's jaw line through its body (105 mm; task 2 0 of 20). With the side rule
+      alone, libero_10 8 went 39 -> 40 of 50 (9 won, 8 lost): the nearest handle geom was then the
+      handle's lower bar, 57.6 mm out against the upper bar's 58.3, directly under it, and taken from
+      above the palm came down on the upper bar; the humans hold the handle's top, 43 mm above the pot's
+      origin. With the covered bar left out too, the upper bar (58 mm above the origin) is the first
+      candidate, and 11 of 12 initial states tried (the 8 lost, 2 still failing and 2 won) succeeded, in
+      329-759 steps where the spout grasp took 530-660; libero_10 2 and 4, libero_90 19, 34, 38, 68 and 76
+      (the other moka pot and mug tasks) were 350 of 350 with the side rule (libero_10 9 48 of 50, 44 in
+      v42). The mug's lower handle attachment is covered and left out; the frying pan's 4 points are
+      unchanged. evidence: CTR-teacher-reliable. Restated so that later branches may add tiers
       (BRN-pinch-leans-when-upright-unreachable): the clause fixed every other category's tiers to those
       before this branch, which a tier added for every category contradicts. Restated again: a later
       branch (BRN-handle-offered-after-upright) offers the handle candidates, formed as here, to a
-      category that declares its handle a second hold; this branch's claim is of what it offers.
+      category that declares its handle a second hold; this branch's claim is of what it offers. In the
+      full sweep (v48, commit 40c3a81): libero_10 8 39 -> 43 of 50 (10 won, 6 lost), libero_10 9 49 -> 48;
+      libero_10 2 and 4 and libero_90 19, 34, 38, 68 and 76 unchanged at 50, the frying-pan tasks
+      unchanged. Restated a third time for the side rule and the covered rule, which have no constant.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-carry-turns-object-to-fit
@@ -3737,6 +3762,68 @@ branches:
       (the task a held latch had taken from 3 to 0). Restated per the verifier: claim (1) is of steps at
       which the release is not recorded -- after its own release, an object that slides off may be taken
       back as before; 'at the place' is defined.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-laid-entry-crosses-pitched
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Terms are BRN-place-enters-roofed-target-level's (a pitch's frame, laid, the roof, the clearance,
+      rest height, bottom, vertical extent, the drop point, E, u's entry frame) and
+      BRN-place-steep-laid-entry's (u's level frame, fixed-blocked, a frame's poses at a point, the steep
+      decision). For a placed object, region and direction u, the crossing decision is made once per
+      episode, at the first step at which the place decides the target's entry and evaluates u with the
+      object laid: it is the first pitch of a declared list of crossing pitches, each below a quarter
+      turn, taken in the list's order, whose pitch's frame F satisfies all of: the object carried at F has
+      a rest height at the drop point; its bottom there plus its vertical extent plus the clearance is at
+      or below the roof; and F's poses at the drop point are not fixed-blocked. Where no pitch of the list
+      does, the decision is none. At that step and at each later step of the episode at which u is
+      evaluated with the object laid, where the decision is a pitch and the object carried at that pitch's
+      frame has a rest height at the drop point and fits under that step's roof as above, u's level frame
+      is that pitch's frame, in place of the frame BRN-place-enters-roofed-target-level takes from its
+      lay-pitch ladder; everywhere else u's level frame is as that branch states. At a step at which both
+      are made, the crossing decision is made before the steep decision, and the steep decision reads u's
+      level frame as this branch leaves it. This branch replaces the place's own entry frame for u where
+      it states so, and through it E and the command, as BRN-place-enters-roofed-target-level allows a
+      later branch to. Claimed: (1) where a crossing pitch's frame is u's level frame at a step and u's
+      entry frame is that level frame, the object carried at it at its rest height at the drop point has
+      its top plus the clearance at or below that step's roof; (2) the crossing decision is a function of
+      the state at the step it is made, the placed object, the region's box, the drop point and the carry
+      height at that step, the arm's joint ranges and declared constants; and at each step, u's level
+      frame is a function of the recorded decision and of that step's state, placed object, region's box,
+      drop point and carry height, the joint ranges and declared constants; (3) where the crossing
+      decision is a pitch and the steep decision is made at the same step, the steep decision is level;
+      (4) where the crossing decision is none, u's level frame is at every step as it is without this
+      branch. Not claimed: that the place's decisions and command for u, or the steps at which other
+      directions are first evaluated and their decisions made, are as without this branch where the
+      crossing decision is none (a crossing frame on another direction changes that direction's corridor,
+      and so which directions are evaluated at a step); that a crossing frame keeps the hand or arm clear
+      of what stands in front of the region; that the tool reaches the crossing frame or tracks it; that
+      the object rests level or stays in the region after release; that poses screened at the decision
+      step stay clear at later steps.
+    premises: [BRN-place-enters-roofed-target-level, BRN-place-steep-laid-entry, AXM-mujoco-forward-is-a-function-of-state, AXM-object-geometry-known]
+    derivation_rule: >-
+      Claim (1) is BRN-place-enters-roofed-target-level's roof fit applied to a frame the decision itself
+      required to fit, re-checked at each step before it is used. Claim (2) holds because the decision
+      reads the step's state through the premises' rest heights, roof and fixed-blocked screen
+      (AXM-mujoco-forward-is-a-function-of-state, whose screen restores what it writes) and the list is
+      declared. Claim (3): the steep decision is level when the level frame's poses at the drop point are
+      not fixed-blocked, the level frame being the one a later branch puts in place of the lay-ladder
+      frame where it states so (BRN-place-steep-laid-entry, restated for this branch); at the decision
+      step the crossing pitch was chosen because its frame's poses there were not fixed-blocked, the same
+      poses under the same state. Claim (4): with no decision the replacement never applies. Evidence,
+      measured: LIBERO's humans cross the shelf's face with the book pitched down 23 deg (median of 20
+      demonstrations, 5-45) in libero_90 86, 31 deg (10-52) in 88 and 44 deg (32-57) in 89, and release it
+      at 9 deg (the lay pitch, 0.15 rad). At the lay pitch the hand, 21 cm across its jaws held up and
+      down, came down at E on the book standing in front of the shelf (the arm touching at E and at every
+      height up to 9 cm above it, in 8 of 8 initial states of 86 sampled; in 88 only below 6 cm), was
+      pushed 23 mm off the entry line, lifted and came down again, to the horizon: 86 42 of 50 in v42.
+      With the crossing pitches (0.5, 0.4, 0.3 rad), 86's 8 failing initial states succeeded in 8 (in
+      168-186 steps), and 88's first ten in 10. Pitched 0.5 rad with no screen, 88's level poses were
+      fixed-blocked, its steep decision fired and the book went on to the shelf's top board: 1 of 20.
+      evidence: CTR-teacher-reliable. Restated per the verifier: claim (4) is of u's level frame only -- a
+      crossing frame on an earlier direction can change which directions are evaluated at a step, and so
+      the step at which a later direction's steep decision is made (refuted as first stated).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 policies:
