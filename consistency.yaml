@@ -2955,6 +2955,99 @@ branches:
       inits 0-9 unchanged per episode.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-place-tips-a-standing-misfit
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Terms are BRN-place-onto-physical-support's and BRN-place-enters-roofed-target-level's; poses,
+      contacts and the scene's geometry are read from each step's state
+      (AXM-mujoco-forward-is-a-function-of-state). A place is a place_in when its plan step asks for the
+      object in the region (LIBERO's In), a place_on when on it. While the place finds the object held it
+      commands, before this branch, as follows: the carry, the lift and the lower move the tool at
+      declared speeds with a declared holding jaw command, and the lower phase ends, and the release --
+      jaws open, no motion -- is commanded, as BRN-place-onto-physical-support and
+      BRN-place-enters-roofed-target-level state; where it finds the object not held and neither leaves it
+      (the object at its target) nor waits for it (falling after the place's own release), it commands the
+      pick of the object -- the place takes it again. The region box's top is its centre's height plus its
+      vertical extent, the sum of its half-extents times the magnitudes of its axes' vertical components.
+      For a place_in, at a step at which the object is held, no roofed-entry direction is taken, the
+      object is not one the affordance table declares held by its handle and touches something besides the
+      fingers, and the place would command the release, where the object's origin is higher than the
+      region box's top, some region box axis lies within BRN-place-enters-roofed-target-level's declared
+      angle (below a quarter turn) of horizontal, and no tip is recorded for the object and region, the
+      place records one instead of releasing: its pivot is the lowest corner of the object's box (the
+      first, in a declared order of the corners, at the least height); its axis is the horizontal unit
+      vector the vertical crossed with s times a, where a is the horizontal projection, normalised, of the
+      region's box axis within that angle of horizontal with the largest half-extent (ties to the first),
+      and s is +1 where the region's centre lies at or beyond the pivot along a in plan, else -1; its goal
+      is the tool pose at that step rotated about that axis through the pivot by a declared tip angle
+      below a quarter turn. Where no region box axis lies within that angle, no tip is recorded and the
+      place releases. At every step at which the place finds the object held while a tip is recorded for
+      it and the region -- the recording step included -- before any other of its commands: while the tip
+      is not done, the command is the tool toward the goal at the lower phase's speeds with the holding
+      jaw command, until the angle of the rotation from the tool's frame to the goal's is within a
+      declared angle, or, counting only such steps, has not become a declared positive amount smaller than
+      its least value so far for a declared number of consecutive ones; the tip is then done, and at that
+      step and every later such step the command is the release. At such steps this branch's command
+      replaces the place's own under BRN-place-onto-physical-support and
+      BRN-place-enters-roofed-target-level, whatever those would command -- a roofed-entry direction taken
+      there included -- and the tip's release records nothing else (no roofed-entry release point or
+      withdrawal). A held step, below, is a step at which the place of that object and region finds the
+      object held. The tip record is cleared at an episode's start and, once the tip is done, at any step
+      at which a pick of the object acts with the object not held -- the place taking it again is one; a
+      tip not yet done is kept through such steps, and steps at which the place finds the object not held
+      otherwise leave the record and its count unchanged. Claimed: (1) a tip is recorded only at a step at
+      which the object is held, the place is a place_in, no roofed-entry direction is taken, the object is
+      not declared held by its handle and touches something besides the fingers, the release would be
+      commanded, and the object's origin is above the region box's top; (2) the goal is the tool pose at
+      that step rotated rigidly about a horizontal axis through the pivot by the tip angle, a rotation
+      about that axis by a positive angle carrying the vertical toward s times a; (3) at every held step
+      while a tip is recorded and not done, the recording step included, the command is toward the goal
+      with the holding jaw command, and at every held step after it is done, while its record is kept, the
+      command is the release; (4) a tip is done within (the smallest integer at least a half turn divided
+      by the declared amount, plus two) times (the declared number of steps plus one) held steps with the
+      tip recorded; (5) whether a tip is recorded at a step, and its pivot, axis and goal, are functions
+      of that step's state, the placed object, the place's kind, the region's box, the drop point, the
+      carry height, the region-derived target height, the place's phase at that step (whether it would
+      command the release), the arm's joint ranges, the record's presence and declared constants. Not
+      claimed: that the object lies down, lands inside the region or satisfies LIBERO's In after the
+      release; that the path of the tip is clear; that a held reading lost mid-tip does not end it through
+      the place's not-held rules; that a tip is needed wherever one is recorded; anything of place_on
+      places; BRN-place-onto-physical-support's and BRN-place-enters-roofed-target-level's claims about
+      the command, at steps at which a tip is recorded for the object and region.
+    premises: [BRN-place-onto-physical-support, BRN-place-enters-roofed-target-level, AXM-libero-scores-final-state, AXM-object-geometry-known, AXM-category-affordances-declared, AXM-mujoco-forward-is-a-function-of-state, DEF-holding]
+    derivation_rule: >-
+      LIBERO's In(o, region) for a site region is containment of o's origin in the site's box
+      (AXM-libero-scores-final-state), and the box has no slack above: LIBERO's in_box takes the upper
+      bound as the site's position plus its size and lowers only the lower bound, by 1 cm. An object that
+      rests upright with its origin above the box's top therefore never satisfies In where it stands.
+      libero_90 32 (put the ketchup in the top drawer): the bottle stands 146 mm tall, grasped at its cap;
+      lowered upright on to the drawer's floor (BRN-place-onto-physical-support) its origin rested at
+      0.225 m against the box's top at 0.209, the release was not delivered, and the plan took it again
+      (v35 1 of 50; v33's 11 were bottles that fell over). LIBERO's humans release it tilted -- the
+      approach 49 deg below level (median of 20), 1 of 20 laid, the bottle's centre 0.18-0.26 m -- and it
+      falls into the drawer. Tipped 0.78 rad about its lowest corner toward the drawer's long axis, then
+      released: libero_90 32 19 of 20, inits 0-19, in the first build (the failure in the pick, before any
+      place), TST-teacher-settled (seed 557) 10 of 10; as stated here, 16 of 20 (the failures a tip
+      interleaved with the plan turning to the pick or to reopening the drawer). Tilted during the carry
+      instead, the bottle swung about the tool point, the target read as roofed and the entry point moved
+      14 cm off the drawer (0 of 5). A blocked tip never finished (1 of 5 before the stall rule): it ends
+      when its rotation stops improving. Restated per the verifier: the stall count runs over held steps
+      with the tip recorded; the place's commands this branch reads (its speeds and holding jaw command,
+      place_in and place_on, taking the object again, the recording step's command) are named; (5) lists
+      the drop point, the carry height, the joint ranges, the place's kind and the record; the axis angle
+      is the roofed entry's, with no tip where no axis qualifies. Restated per the verifier: (5) lists the
+      place's phase and the region-derived target height; a done record is cleared by any pick of the
+      unheld object, not only the place's own, so a later place of the same object does not release at
+      once -- a record not yet done is kept, since cleared on the pick a held reading lost for one step
+      mid-tip sent the plan to its pick and the next held step tipped again from the half-tipped pose
+      (libero_90 32 14 of 20; kept, 16 of 20, inits 0-19); the tip's release records nothing else.
+      Restated per the verifier: claim (3)'s release holds while the done record is kept. Restated per the
+      verifier: at steps with a tip recorded the tip's command replaces the place's own, a roofed entry's
+      included, and the parent branches' claims about the command are not claimed there; a held step is
+      one at which that place finds the object held.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:
