@@ -23,26 +23,25 @@ most current work is on the demonstrations it learns from.
 
 A geometry-driven demonstration policy (`screwhead/teacher/`) that reads a task's goal from its
 bddl and the scene's geometry from the simulator, and labels any state a student reaches (DAgger).
-Status at v44 (commit 2fd4c8f) on LIBERO's protocol -- each task's 50 initial states in order, 600
-steps (libero_10 800) -- in `runs/skill_v44`:
+Status at v48 (commit 40c3a81) on LIBERO's protocol -- each task's 50 initial states in order, 600
+steps (libero_10 800) -- in `runs/skill_v48`:
 
 | suite | at 600 steps (libero_10 800) | within LIBERO's step limit |
 |---|---|---|
 | libero_spatial (limit 220) | 495 / 500 | 479 / 500 |
 | libero_object (limit 280) | 500 / 500 | 500 / 500 |
 | libero_goal (limit 300) | 500 / 500 | 461 / 500 |
-| libero_10 (limit 520) | 478 / 500 | 472 / 500 |
-| libero_90 (limit 400) | 4460 / 4500 | 4422 / 4500 |
-| all 130 tasks | 6433 / 6500 (99.0%) | 6334 / 6500 (97.4%) |
+| libero_10 (limit 520) | 481 / 500 | 477 / 500 |
+| libero_90 (limit 400) | 4468 / 4500 | 4437 / 4500 |
+| all 130 tasks | 6444 / 6500 (99.1%) | 6354 / 6500 (97.8%) |
 
-121 of the 130 tasks succeed in at least 48 of 50. Below that: libero_90 32 (35), libero_10 8 (39),
-libero_90 86 (42), libero_10 1 (43), libero_90 24 (44), libero_spatial 4 (45), libero_10 3, libero_90 5
-and 8 (47).
+122 of the 130 tasks succeed in at least 48 of 50. Below that: libero_90 32 (35), libero_10 1 and 8 (43),
+libero_90 24 (44), libero_spatial 4 (45), libero_10 3, libero_90 5 and 8 (47).
 
 LIBERO scores the first step its goal holds. Scored instead after the teacher has finished -- the
 placed object released, at rest, and no more tipped than LIBERO's own human demonstrations leave it
 (`CTR-teacher-settled`, `tools/teacher_settled.py`, 20 episodes per task at seed 557) -- the teacher at
-v41 settled 2454 of 2600 episodes (94.4%); v44 has not been scored settled yet. Three tasks cannot settle as scored: a book resting upright in the
+v41 settled 2454 of 2600 episodes (94.4%); v48 has not been scored settled yet. Three tasks cannot settle as scored: a book resting upright in the
 desk caddy's back compartment lies 3 mm below LIBERO's region box (libero_10 5, libero_90 77), and in
 libero_90 89 the humans' demonstrations end holding the book mid-insertion, so the tilt they leave is
 not a resting one.
@@ -84,7 +83,14 @@ of that workflow applied to one engineering problem.
 Features by date, newest first. Numbers are measured at the stated commit.
 
 - **2026-09-25** -- LIBERO's protocol for all 130 tasks (each task's 50 initial states in order):
-  5746 of 6500 at v26 -> 6413 at v41 -> 6433 at v44; settled 2150 -> 2454 of 2600 (v26 -> v41).
+  5746 of 6500 at v26 -> 6413 at v41 -> 6433 at v44 -> 6444 at v48; settled 2150 -> 2454 of 2600 (v26 -> v41).
+  - v48: the moka pot is held by the top of its handle -- the handle finder had taken the spout, 49 mm out
+    on the other side, for a handle (libero_10 8: 39 -> 43; libero_10 9 49 -> 48); a laid book crosses
+    the shelf's face pitched up to 0.5 rad, the humans' 23 deg median, so the hand stays high over the
+    book standing in front (libero_90 86: 42 -> 50). The reach screen keeps the step's IK and contact
+    answers, keyed on the whole simulator state: the teacher's planning had doubled since v41
+    (libero_10 9: 17-20 -> 36-41 ms per step), and the sweep's libero_90 went 2261 -> 1417 s,
+    episodes identical (60 of 60 compared step for step against v44).
   - v44: the face pinch is also offered leaned 0.1-0.2 rad toward the robot's base, as the humans
     take a bottle standing close in (libero_90 62: 46 -> 50); the microwave door's swing table keeps
     only rows backed by the mode's demonstrations (libero_90 33 46 -> 50, libero_10 9 44 -> 49); a
