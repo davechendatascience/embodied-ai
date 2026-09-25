@@ -1884,17 +1884,24 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      A sliding drawer whose bar has nothing of the scene over it where it sits closed -- the wooden
-      cabinet's top drawer, the bar the offsets were measured on, 15 x 16 mm across and 89 mm long, and
-      the white cabinet's top drawer, 16 x 16 mm across and 88 mm long -- is opened without grasping its
-      handle: the jaws wide open and pointing down, the jaw axis along the opening direction, the measured
-      tool lowered straight down to a point on the opening side of the bar and above it, and only when the
-      measured tool is within 4 mm of that height is it dragged along the opening direction at the drive
-      speed, the point re-derived from the bar's pose every control step. It stops when LIBERO's Open
-      holds past its threshold by the fill's margin. What follows leaves upward before anything else, the
-      next skill's first leg. A drawer whose bar has something of the scene over it where it sits closed
-      is opened by the pinch drive. Not claimed: that the drag cannot slip or stall -- a stalled drag
-      re-enters, and nothing bounds how often -- or that the offsets fit a bar of another section.
+      Something of the scene is over a drawer's bar when a geom other than the robot's and the drawer's
+      own body's -- colliding or not -- has its bottom above the bar's top and its plan bounding circle
+      within a declared corridor, in plan, of the bar's centre where the bar sits with the drawer closed.
+      A sliding drawer whose bar has nothing over it -- among LIBERO's, the wooden cabinet's top drawer,
+      the bar the offsets were measured on, 15 x 16 mm across and 89 mm long, and the white cabinet's top
+      drawer, 16 x 16 mm across and 88 mm long -- is opened without grasping its handle: the jaws wide
+      open and pointing down, the jaw axis along the opening direction, the measured tool lowered straight
+      down to a point on the opening side of the bar and above it, and only when the measured tool is
+      within 4 mm of that height is it dragged along the opening direction at the drive speed, the point
+      re-derived from the bar's pose every control step. It stops when LIBERO's Open holds past its
+      threshold by the fill's margin. The hook grasps nothing -- its jaws are never commanded closed -- so
+      DEF-skill-contract's release postcondition, which is of what a skill grasped, asks nothing of it;
+      its disengagement is that what follows leaves upward before anything else: once a bar has been
+      dragged in the episode, every skill but the drive dragging that bar first moves the tool straight
+      up, jaws open, until the finger meshes' reach below the tool point lies a declared height over that
+      bar's top, and only then acts. A drawer whose bar has something over it is opened by the pinch
+      drive. Not claimed: that the drag cannot slip or stall -- a stalled drag re-enters, and nothing
+      bounds how often -- or that the offsets fit a bar of a section other than these two.
     premises: [AXM-object-geometry-known, AXM-panda-gripper-geometry, AXM-handle-shares-body,
                DEF-skill-contract, AXM-libero-joint-bands, AXM-parameters-derived]
     derivation_rule: >-
@@ -1914,36 +1921,48 @@ branches:
       cabinet's top drawer (libero_90 23), its bar within 1 mm of the wooden one's section, is hooked with
       the same offsets -- 50 of 50 episodes of libero_90 23 open it by the hook, 33 of 50 in v39 and every
       failure one where the wrist could not reach the hook's frame (BRN-hook-frame-within-the-wrist).
+      Restated per the verifier: 'over' is defined as the teacher reads it; the hook grasps nothing, so
+      the release postcondition asks nothing of it and the upward leave is its disengagement; under
+      AXM-parameters-derived the 4 mm drag gate was set by hand, the one datum being that 17 mm off the
+      hook height the finger swept over the bar; the two bars measured are both in the scope the
+      disclaimer leaves.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-rim-pinch-as-deep-as-the-palm
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      Top-down pinches on a thin wall of an object -- grasp sites on its wall segments rather than
-      across its body -- are offered at three depths, listed deepest first: as deep below the wall's
-      top as the palm allows (the palm's offset behind the tool point less a declared margin), halfway
-      between that and the usual depth, and at the depth a grasp across a body would take (the usual
-      depth). None goes lower than the object's floor margin and the support's clearance allow. The
-      reach screen chooses among those it can witness by its conditioning bars first and list order
-      within a bar, so a deeper pinch is used where the arm can reach it at the best bar any pinch
-      reaches. Grasps across a body keep their depth. Not claimed: that the pinch cannot be lost, only
-      that of the positions offered the deepest witnessed one spreads the pads furthest up the wall.
+      Top-down pinches on a thin wall of an object -- grasp sites on its wall segments rather than across
+      its body -- are offered at three depths, listed deepest first: as deep below the wall's top as the
+      palm allows (the palm's offset behind the tool point less a declared margin), halfway between that
+      and the usual depth, and at the usual depth -- the depth a grasp across a body would take, or the
+      palm's depth where that is shallower, so the three are in that order. None goes lower than the
+      object's floor margin and the support's clearance allow. The reach screen chooses among those it can
+      witness: clean ones -- the arm, at every pose screened, touching nothing but the picked object --
+      where any is, else all it can witness, and among those by its conditioning bars first and list order
+      within a bar; so a deeper pinch is used where the arm reaches it at the best bar any pinch of the
+      same grade reaches. Grasps across a body keep their depth. Not claimed: that the pinch cannot be
+      lost; that a deeper pinch holds better -- that is measured, not derived from the gripper's geometry;
+      that the deepest pad tip stays on the wall where the floor clamp holds the pinch up.
     premises: [AXM-no-torsional-friction, AXM-panda-gripper-geometry, LMA-grip-fails-by-contact-not-load,
                AXM-object-geometry-known]
     derivation_rule: >-
-      AXM-no-torsional-friction leaves only the spread of the contact points to resist an object
-      pivoting about the jaw axis, and LMA-grip-fails-by-contact-not-load says such a pivot is how a
-      rim pinch fails; of the depths the palm permits (AXM-panda-gripper-geometry: the palm begins
-      31 mm behind the tool point), the deepest spreads the pads furthest up the wall. Measured:
-      LIBERO's humans pinch the bowl with the pads 36 mm apart up its wall (libero_spatial 7), the
-      teacher at 20 mm below the rim with them 20 mm apart; at the palm's depth the mid-carry drops
-      went 12 -> 1 (spatial 6), 14 -> 4 (spatial 7) and 12 -> 5 (goal 3) episodes of 20. Offered
-      alone, the deep pinch left a bowl inside the top drawer with no reachable grasp (spatial 4,
-      49 -> 8 of 50); offered first with the usual depth after it, 49 of 50. There the palm's depth
-      meets the cabinet in every layout, and the usual depth let the bowl pivot out of the pads as it
-      left the drawer floor; halfway, 48 -> 49 of 50 at the same seed with every other episode of the
-      1500 unchanged (runs/skill_v16). evidence: CTR-teacher-reliable, CTR-teacher-gentle.
+      AXM-no-torsional-friction leaves only the spread of the contact points to resist an object pivoting
+      about the jaw axis, and LMA-grip-fails-by-contact-not-load says such a pivot is how a rim pinch
+      fails; of the depths the palm permits (AXM-panda-gripper-geometry: the palm begins 31 mm behind the
+      tool point), the deepest spreads the pads furthest up the wall. Measured: LIBERO's humans pinch the
+      bowl with the pads 36 mm apart up its wall (libero_spatial 7), the teacher at 20 mm below the rim
+      with them 20 mm apart; at the palm's depth the mid-carry drops went 12 -> 1 (spatial 6), 14 -> 4
+      (spatial 7) and 12 -> 5 (goal 3) episodes of 20. Offered alone, the deep pinch left a bowl inside
+      the top drawer with no reachable grasp (spatial 4, 49 -> 8 of 50); offered first with the usual
+      depth after it, 49 of 50. There the palm's depth meets the cabinet in every layout, and the usual
+      depth let the bowl pivot out of the pads as it left the drawer floor; halfway, 48 -> 49 of 50 at the
+      same seed with every other episode of the 1500 unchanged (runs/skill_v16). evidence:
+      CTR-teacher-reliable, CTR-teacher-gentle. Restated per the verifier: the screen takes a clean pinch
+      where there is one before it weighs its bars, as it always has; 'listed deepest first' holds because
+      the usual depth is capped at the palm's; that a deeper pinch holds better is the measurement above,
+      not a consequence of the pads' geometry -- at the three depths the whole 16 mm pad lies on the wall
+      alike.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-lift-leaves-overhang
