@@ -112,6 +112,24 @@ axioms:
       and quaternion identical to the Panda's (difference exactly 0) for the four arms in all 130
       tasks, at four distinct Panda base poses across the scenes.
 
+  - id: AXM-robot-reset-draws-per-joint
+    domain: environment
+    statement: >-
+      In a reset that is not deterministic, the draws from numpy's global generator before LIBERO
+      samples its fixture and object placements are robosuite 1.4.0's robot reset's alone: one
+      standard normal per entry of the robot's init_qpos, which has one entry per arm joint (7 on the
+      Panda, IIWA, Kinova3 and Jaco; 6 on the UR5e). LIBERO's placement samplers then read that
+      generator and the scene's objects, fixtures and regions, not the robot. numpy's legacy generator
+      draws normals as one sequence: n normals drawn over several calls leave it where n drawn in one
+      call do.
+    rationale: >-
+      Traced 2026-09-26 on libero_10 0 by wrapping every numpy.random function during a reset: the
+      Panda and IIWA draw randn(7) from robosuite's single_arm.py, the UR5e randn(6), then the region
+      and placement samplers draw identically. With one normal drawn before the UR5e's reset the
+      generator's state at the sampler's entry hashes the same on all three arms, and every fixture
+      and object root body stands at the same pose at placement (11 of 11 bodies, difference exactly
+      0). Without it the UR5e's fixtures are drawn from a shifted stream.
+
   - id: AXM-libero-soft-reset-state
     domain: environment
     statement: >-
