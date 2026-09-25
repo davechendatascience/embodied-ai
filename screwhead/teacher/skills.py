@@ -117,6 +117,9 @@ class SkillConfig:
     entry_line: float = 0.02       # m off the entry line the object may be and still be entering along it
     lay_pitch: float = 0.15        # rad a laid object's approach tilts down: the humans' median at the release
     #                                into the shelf's top layer, 8.6 deg over 20 demos (libero_90 88)
+    cross_pitches: tuple = (0.5, 0.4, 0.3)  # rad, a laid object's approach as it crosses into the opening, steepest
+    #                                first: the humans cross the shelf's top layer's face pitched 23 and 31 deg down
+    #                                (medians, 5-52 deg, libero_90 86 and 88, 20 demos each)
     steep_pitches: tuple = (0.45, 0.55, 0.65, 0.75)  # rad, a laid object's steep entry, tried in order: the
     #                                humans into the shelf's bottom layer pitch 23-37 deg (libero_90 89)
     steep_depth: float = 0.05      # m the origin goes past the region's face by the steep entry (humans 0.8-4.5 cm)
@@ -237,6 +240,7 @@ class Skills:
         self._spots: dict[str, tuple] = {}         # synthetic regions: where a crowded object goes
         self._clearing: dict[tuple, str | None] = {}
         self._entry_choice: dict = {}              # BRN-place-steep-laid-entry's decision per (obj, region, side)
+        self._cross_choice: dict = {}              # the crossing pitch of a laid entry per (obj, region, side)
         self._tip: dict = {}                       # BRN-place-tips-a-standing-misfit: (obj, region) -> the tip
         self._let_go: dict[str, bool] = {}          # objects this episode's releases have let go
         self._released_at: dict[tuple, np.ndarray] = {}  # a roofed entry's release target, per (object, region)
@@ -281,7 +285,8 @@ class Skills:
             self._last_held = None
             for cache in (self._grasp_cache, self._handle_cache, self.grasp_log,
                           self._drop_cache, self._carry_cache, self._spots, self._clearing, self._let_go,
-                          self._released_at, self._entry_choice, self._tip, self._hooked, self._closed_above,
+                          self._released_at, self._entry_choice, self._cross_choice, self._tip, self._hooked,
+                          self._closed_above,
                           self._go_shallow):
                 cache.clear()
 
@@ -2004,12 +2009,12 @@ class _LevelEntry:
             frames.append(np.column_stack([np.cross(y, app), y, app]))
         return self.sk._by_wrist(self.R, frames)[0]
 
-    def laid_fit(self, xy, u: np.ndarray, roof: float):
+    def laid_fit(self, xy, u: np.ndarray, roof: float, pitches=None):
         """Pitched down as far as lay_pitch as the opening allows, as the humans' hands are: level, the wrist
         trailing behind the tool at its height sat on the next book on the table (libero_90 88). Jaws up and down:
         of the two, the one the last joint reaches within its range (by the jaws' nearer sign, libero_90 88's wrist
-        sat 0.01 rad from its limit 19 deg short of the frame)."""
-        for pitch in self.k.lay_pitch * np.linspace(1.0, 0.0, 5):
+        sat 0.01 rad from its limit 19 deg short of the frame). `pitches`: these instead, in order."""
+        for pitch in (self.k.lay_pitch * np.linspace(1.0, 0.0, 5) if pitches is None else pitches):
             R_try = self.pitched(u, pitch)
             Rb_e, off_e, ext_e, _h, _lv, low_e = self.measure(R_try)
             height_e = 2.0 * float(ext_e[2])  # pitched: its full vertical extent
@@ -2054,11 +2059,34 @@ class _LevelEntry:
             sk._entry_choice[key] = choice
         return sk._entry_choice.get(key)
 
+    def cross_fit(self, side: tuple, xy, roof: float):
+        """The laid frame at the steepest crossing pitch that fits under the roof at rest and whose level entry the
+        steep screen does not find blocked, decided once per episode and side when this is the place's own rule;
+        None where none is or none is recorded. At lay_pitch the hand, 21 cm across the jaws held up and down,
+        came down at the entry point on to the book standing in front of the shelf, was pushed off the entry
+        line and lifted, over and over (libero_90 86, 8 of 50); the humans cross the face pitched 5-45 deg,
+        the wrist high behind the book, and at 0.5 rad all 8 went in. At 0.5 rad libero_90 88's entry is blocked,
+        where a pitch taken without the screen sent its book on to the shelf's top board (1 of 20)."""
+        j, sgn, _axis, u = side
+        key = (self.obj, self.region, j, sgn)
+        sk = self.sk
+        if self.decide and key not in sk._cross_choice:
+            choice = None
+            for i_p, pitch in enumerate(self.k.cross_pitches):
+                fit = self.laid_fit(xy, u, roof, pitches=(pitch,))
+                if fit is not None and not sk._fixed_blocked(
+                        self.obj, fit[0], self.q_t, [self.entry_origin(side, fit[1], fit[2], fit[5], xy), np.r_[xy, fit[5]]]):
+                    choice = i_p
+                    break
+            sk._cross_choice[key] = choice
+        choice = sk._cross_choice.get(key)
+        return None if choice is None else self.laid_fit(xy, u, roof, pitches=(self.k.cross_pitches[choice],))
+
     def laid_side(self, side: tuple, xy, roof: float):
         """(entry frame, along, across, box centre at rest, bottom, top, rest height, drop point, steep) for a laid
         object entering along this side, or None where it is still too tall."""
         j, _sgn, _axis, u = side
-        fit = self.laid_fit(xy, u, roof)
+        fit = self.cross_fit(side, xy, roof) or self.laid_fit(xy, u, roof)
         xy_s = np.asarray(xy, float) + u[:2] * ((float(self.half[j]) - self.k.steep_depth)
                                                 - float((np.asarray(xy, float) - self.p_reg[:2]) @ u[:2]))
         xy_side, steep = xy, False

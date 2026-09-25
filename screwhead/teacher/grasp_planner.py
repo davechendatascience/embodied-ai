@@ -44,6 +44,15 @@ def _collides_geom(m, g: int) -> bool:
     return bool(m.geom_contype[g] or m.geom_conaffinity[g])
 
 
+def _over(upper: tuple, lower: tuple) -> bool:
+    """A geom's world box (centre, axes, half extents) lies over another's centre in plan, its bottom above the
+    other's top."""
+    (cu, Ru, hu), (cl, Rl, hl) = upper, lower
+    eu, el = np.abs(Ru) @ hu, np.abs(Rl) @ hl
+    inside = bool(np.all(np.abs((cl - cu)[:2]) <= eu[:2]))
+    return inside and float(cu[2] - eu[2]) > float(cl[2] + el[2])
+
+
 class GraspPlanner:
     def __init__(self, env, config):
         self.env, self.scene, self.k = env, env.scene, config
@@ -69,7 +78,8 @@ class GraspPlanner:
     # -- tiers --------------------------------------------------------------------------
     def handles(self, obj: str, floor: float) -> list:
         """Top-down grasps on an object's handle: the collision geoms lying out from its origin
-        (HANDLE_OUTER), jaws across each geom's thinnest horizontal axis, at points along a long one."""
+        (HANDLE_OUTER) on the farthest one's side, jaws across each geom's thinnest horizontal axis, at points
+        along a long one."""
         m, d = self.scene.m, self.scene.d
         bid = self.scene.body_id(obj)
         _R, q = self.scene.body_pose(obj)
@@ -78,7 +88,9 @@ class GraspPlanner:
             return []
         boxes = {g: geom_world_box(m, d, g, self.scene.base) for g in geoms}
         dist = {g: float(np.linalg.norm((boxes[g][0] - q)[:2])) for g in geoms}
-        far = max(dist.values())
+        far_g = max(geoms, key=lambda g: dist[g])
+        far = dist[far_g]
+        side = (boxes[far_g][0] - q)[:2] / max(far, EPS_NORM)
         out = []
         for g in sorted(geoms, key=lambda g: dist[g]):
             if dist[g] < HANDLE_OUTER * far:
@@ -86,6 +98,16 @@ class GraspPlanner:
             c, Rg, hl = boxes[g]
             hw = np.abs(Rg @ np.diag(hl)).sum(1)
             radial = (c - q)[:2] / max(dist[g], EPS_NORM)
+            if float(radial @ side) <= 0.0:
+                # the handle lies out on one side, the farthest geom's: the moka pot's spout, 49 mm out on the
+                # other, was its nearest "handle" and held both pots (libero_10 8: the second fell from it in the
+                # carry in 18 of 50); the humans hold the handle, 51-58 mm out on its side
+                continue
+            if any(_over(boxes[o], boxes[g]) for o in geoms if o != g):
+                # another part of the object lies over it: the moka pot's lower bar, under its upper one, was the
+                # nearest handle geom by 0.7 mm, and taken from above the palm came down on the upper bar (libero_10
+                # 8, 8 of 50 lost); the humans hold the handle's top, 43 mm above the pot's origin
+                continue
             horiz = [(2 * float(hl[i]), Rg[:, i]) for i in range(3) if abs(Rg[2, i]) < VERTICAL_COS]
             fits = [a for a in horiz if a[0] + self.k.grip_margin <= self.k.max_grip]
             if not fits:
