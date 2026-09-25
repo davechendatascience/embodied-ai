@@ -3512,6 +3512,44 @@ branches:
       state it. Restated per the verifier: touching is whatever passes and is not clean.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-handle-offered-after-upright
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Terms are BRN-handle-tier-for-handled-objects' (the handle tier, its candidates formed on the
+      object's handle geoms) and BRN-pinch-leans-when-upright-unreachable's (the tiers, the leaned forms,
+      the choice from the first tier with a candidate that passes). The grasp planner's tiers are offered
+      in this declared order: the handle tier where BRN-handle-tier-for-handled-objects offers it, then
+      the leaned forms of its candidates; the face tier (top-down grasps across the object's body); the
+      tier holding the wall pinches; the leaned wall pinches; the side grasps' tier; a tier with no
+      candidates is not offered. The affordance table may declare of a category, beside where it is held
+      (held_by), a second hold, also_held_by, read under the same evidence gate: measured or declared. For
+      an object whose category declares also_held_by: handle and whose held_by, read under the same gate,
+      is not handle (a held_by without that evidence counts as not handle), this branch offers the handle
+      tier, formed as BRN-handle-tier-for-handled-objects forms it, and the leaned forms of its
+      candidates, moved from the head of that order to between the tier holding the wall pinches and the
+      leaned wall pinches. Claimed: (1) for such an object, at a choice at which the face tier or the wall
+      pinches' tier has a candidate that passes, the grasp chosen is the one that would be chosen without
+      the handle tiers; (2) this branch offers handle candidates and their leaned forms only to an object
+      whose category declares also_held_by: handle and not held_by: handle, each read under that gate; (3)
+      the relative order of every other tier is unchanged. Not claimed: that a handle grasp holds the
+      object; that the upright tiers pass where the humans hold the handle; the place's release, which
+      reads held_by alone.
+    premises: [BRN-handle-tier-for-handled-objects, BRN-pinch-leans-when-upright-unreachable, AXM-category-affordances-declared]
+    derivation_rule: >-
+      libero_10 9's yellow-and-white mug goes into the microwave only by its handle: the humans take it so
+      in 8 of 8 demonstrations, leaned 36-59 deg, and with its leaned handle pinch the teacher went 0 ->
+      45 of 50 (v40). Declared held by its handle outright, the handle tier came first everywhere, and its
+      top-down pinch closed round the mug's body on the plates of libero_10 4 (50 -> 12 of 50) and
+      libero_90 34 (50 -> 10 of 36). Offered after the upright face and rim pinches, where those pass the
+      mug is taken as before (libero_10 4 8 of 8 and libero_90 34 4 of 4 of the inits v40 lost), and where
+      they do not -- into the microwave -- the leaned handle pinch is taken before the leaned rim pinch,
+      which went 1 of 5 there against 5 of 5. Restated per the verifier: the planner's tier order is
+      declared here, so the handle tiers' move leaves the others' order as it was; claim (2) is of what
+      this branch offers. Restated per the verifier: held_by is read through the same evidence gate, so an
+      unbacked held_by: handle does not stop the second hold.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:
