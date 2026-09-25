@@ -2108,12 +2108,13 @@ branches:
       perpendicular to the plan direction from the object's origin to the geom's centre, and when the
       box's most nearly radial horizontal axis is longer than three times the chosen axis's extent, the
       grasp points are spread along that radial axis. For any other category this branch offers no handle
-      tier; the other tiers are as the grasp planner's other branches state. Claimed: no handle candidate
-      is offered for an object whose category is not so declared, and every handle candidate's jaw axis
-      is, among the considered axes of its geom, the one most nearly perpendicular to that geom's radial
-      direction. Not claimed: that the handle tier yields a reachable grasp, that the grasp holds, or that
-      the outlying geoms are the handle in every asset; behaviour when a geom's centre coincides with the
-      object's origin in plan.
+      tier: a later branch may offer the handle candidates, formed as here, to a category declared
+      otherwise and states where; the other tiers are as the grasp planner's other branches state.
+      Claimed: this branch offers no handle candidate for an object whose category is not so declared, and
+      every handle candidate's jaw axis is, among the considered axes of its geom, the one most nearly
+      perpendicular to that geom's radial direction. Not claimed: that the handle tier yields a reachable
+      grasp, that the grasp holds, or that the outlying geoms are the handle in every asset; behaviour
+      when a geom's centre coincides with the object's origin in plan.
     premises: [AXM-category-affordances-declared, AXM-object-geometry-known, AXM-panda-gripper-geometry,
                AXM-parameters-derived]
     derivation_rule: >-
@@ -2135,7 +2136,9 @@ branches:
       Choosing the thinnest axis instead sent the moka pot's jaw line through its body (105 mm; task 2 0
       of 20). evidence: CTR-teacher-reliable. Restated so that later branches may add tiers
       (BRN-pinch-leans-when-upright-unreachable): the clause fixed every other category's tiers to those
-      before this branch, which a tier added for every category contradicts.
+      before this branch, which a tier added for every category contradicts. Restated again: a later
+      branch (BRN-handle-offered-after-upright) offers the handle candidates, formed as here, to a
+      category that declares its handle a second hold; this branch's claim is of what it offers.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-carry-turns-object-to-fit
