@@ -143,7 +143,21 @@ class SimArm:
         another: an object resting ON the fixture started embedded in it or floating.
         """
         np.random.seed((self._scene_seed * 1009 + k) % SEED_MOD)
+        self._draw_as_the_panda()
         self.env.reset()
+
+    def _draw_as_the_panda(self) -> None:
+        """Advance numpy's global generator so that LIBERO's fixture draws begin where they begin on the Panda
+        (AXM-robot-reset-draws-per-joint). The reset first draws one normal per arm joint; on the 6-joint UR5e the
+        living-room table was placed elsewhere and a ketchup bottle recorded on the Panda's table started 29 mm
+        inside it, and was thrown 338 mm (libero_10 0)."""
+        from .libero_env import PANDA_ARM_NQ
+        pad = PANDA_ARM_NQ - len(self.robot.init_qpos)
+        if pad < 0:
+            raise ValueError(f"{self.label}: {len(self.robot.init_qpos)} arm joints draw past the Panda's {PANDA_ARM_NQ}; "
+                             "the fixtures cannot be drawn as on the Panda")
+        if pad:
+            np.random.randn(pad)
 
     def _settled_init_state(self, k: int) -> np.ndarray:
         """LIBERO's initial state k, held until the objects in it are at rest -- not for a
@@ -152,6 +166,8 @@ class SimArm:
         from .libero_env import remap_init_state
         self._reset_scene(k)
         self.env.set_init_state(remap_init_state(self.init_states[k], self.env.sim, self.execution.robot == "Panda"))
+        if self.execution.robot != "Panda":
+            self._start_at_recorded_tool(k)
         self._anchor()
         self._settle(INITIAL_SETTLE)
         for _ in range(SETTLE_ROUNDS):
@@ -291,6 +307,47 @@ class SimArm:
         env.timestep += 1
         env.cur_time += env.control_timestep
         mujoco.mj_forward(m, d)
+
+    def _start_at_recorded_tool(self, k: int, draws: int = 63) -> None:
+        """Put this arm's tool where LIBERO's Panda held it in initial state k
+        (BRN-other-arm-starts-at-the-panda-tool-pose). robosuite's own start pose for a model ignores the scene:
+        with the objects copied from the initial state it moved an object more than 5 mm on 2 (UR5e), 15 (IIWA),
+        22 (Kinova3) and 3 (Jaco) of the 40 matrix tasks at init 0 -- a wine bottle 3 m off the table in libero_goal 3.
+
+        Seeds in order: the model's own start joints (init_qpos), then draws within the limits from a generator
+        seeded by k -- none from the reset, whose joints carry its noise draws. The
+        fingers are written, not left to the reset: the recorded Panda's on the gripper LIBERO recorded with, else
+        this gripper's own start opening. The first solution that is a reachable pose (DEF-reachable-pose) and with
+        which MuJoCo reports no penetrating robot-scene contact is taken; none raises.
+        """
+        from ..geometry.kin_np import NpChain, sigma_min, solve_ik
+        from ..teacher.reach import IK, MIN_MARGIN, MIN_SIGMA
+        from .libero_env import PANDA_ARM_NQ, panda_tool_pose
+        sim, idx = self.env.sim, self.joint_indexes
+        recorded = np.asarray(self.init_states[k], float).ravel()
+        sim.data.qpos[self.gripper_indexes] = (recorded[1 + PANDA_ARM_NQ: 1 + PANDA_ARM_NQ + len(self.gripper_indexes)]
+                                               if self.execution.gripper == "PandaGripper"
+                                               else np.asarray(self.robot.gripper.init_qpos, float))
+        c = NpChain.of(self.chain)
+        lo, hi = c.limits[:, 0], c.limits[:, 1]
+        q_reset = sim.data.qpos[idx].copy()
+        rng = np.random.default_rng(k)
+        seeds = np.vstack([np.asarray(self.robot.init_qpos, float),
+                           rng.uniform(np.maximum(lo, -np.pi), np.minimum(hi, np.pi), size=(draws, c.n))])
+        target = panda_tool_pose(recorded)
+        res = solve_ik(c, np.repeat(target[None], len(seeds), 0), seeds, **IK)
+        th = res["theta"]
+        margin = np.minimum(th - lo, hi - th).min(1)
+        ok = res["converged"] & (sigma_min(c, th) > MIN_SIGMA) & (margin > MIN_MARGIN)
+        for j in np.flatnonzero(ok):
+            sim.data.qpos[idx] = th[j]
+            sim.forward()
+            if not self._robot_contact():
+                return
+        sim.data.qpos[idx] = q_reset
+        sim.forward()
+        raise RuntimeError(f"{self.label}: no seed puts the {self.execution.robot} at the recorded tool pose of init {k} "
+                           f"touching nothing ({int(ok.sum())} reachable of {len(seeds)})")
 
     def _anchor(self) -> None:
         """Clear execution memory left from before a placement: robosuite's finger target to

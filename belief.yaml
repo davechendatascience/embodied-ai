@@ -232,6 +232,8 @@ components:
       - screwhead/sim/libero_env.py
       - screwhead/sim/sim_arm.py       # what both environments share
       - screwhead/sim/contacts.py      # every contact query, once
+      - tools/arm_scene_check.py            # another arm's scene against the Panda's
+      - tests/test_other_arm_start.py
       - tests/test_lean_step.py             # the lean period against env.step
       - scripts/setup_libero_venv.sh        # the pinned stack both environments run in
 
@@ -677,6 +679,23 @@ contracts:
     compatibility_key: [sw_revision]
     evaluable_by: [TST-teacher-deterministic]
     sufficiency: {n_min: 8, max_ci_width: 0.35}
+
+  # Another arm starts in the scene the Panda's episode begins in (consistency.yaml:
+  # BRN-other-arm-starts-at-the-panda-tool-pose). In robosuite's own start pose for its model, 42
+  # of 160 resets over the 40 matrix tasks moved some object more than 5 mm, so the first
+  # cross-embodiment matrix partly compared different scenes. Measured with the rule before this
+  # was declared: 40/40 on IIWA, Kinova3 and Jaco; 37/40 on the UR5e (libero_10 0, 1, 7, a ketchup
+  # bottle recorded 29 mm inside the table, ejected differently by a system with other joints).
+  - id: CTR-other-arm-scene-as-panda
+    subject: CMP-scene-randomizer
+    claim_type: capability
+    metrics:
+      - {id: max_object_offset_mm, unit: mm}
+      - {id: tool_offset_mm, unit: mm}
+    acceptance: {rule: "max_object_offset_mm <= 5.0 and tool_offset_mm <= 1.0", target_rate: 0.9}
+    compatibility_key: [teacher_revision, robot]
+    evaluable_by: [TST-other-arm-scene]
+    sufficiency: {n_min: 40, max_ci_width: 0.2}
 
   - id: CTR-servo-keeps-its-reference
     subject: CMP-twist-servo
@@ -1532,6 +1551,15 @@ tests:
     capture: [teacher_revision, task_suite, task]
     cost: 10.0
     timeout_s: 3600
+
+  - id: TST-other-arm-scene
+    layer: component
+    targets: [CMP-scene-randomizer]
+    run: env HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/arm_scene_check.py --trials $OUT
+    metrics: [max_object_offset_mm, tool_offset_mm, start_ok]
+    capture: [teacher_revision, robot, task_suite, task, init]
+    cost: 2.0
+    timeout_s: 1800
 
   - id: TST-teacher-deterministic
     layer: component

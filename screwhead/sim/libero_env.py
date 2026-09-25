@@ -43,6 +43,8 @@ if os.path.join(REPO, "third_party", "LIBERO") not in sys.path:
 
 _JNT_W = {0: (7, 6), 1: (4, 3), 2: (1, 1), 3: (1, 1)}   # free/ball/slide/hinge
 PANDA_ROBOT_NQ = PANDA_ROBOT_NV = 9
+PANDA_ARM_NQ = 7                  # the recorded Panda's arm joints, first in an initial state's qpos
+PANDA_GRIP_SITE_Z = 0.0970        # m, PandaGripper's grip site beyond the flange (gripper_geom on LIBERO's Panda)
 ROBOT_PREFIX = ("robot", "gripper", "mount")
 
 
@@ -180,7 +182,8 @@ def remap_init_state(state, sim, panda: bool = True):
     """Panda-recorded flattened state -> one this model can accept.
 
     Identity on a Panda, so Panda runs stay bit-for-bit what LIBERO recorded. On any other arm only the objects
-    are copied and the arm keeps its own start pose: a 7-joint arm with the Panda gripper has the Panda's robot
+    are copied and the arm keeps the reset's joints, which SimArm then replaces by a start at the recorded tool
+    pose (BRN-other-arm-starts-at-the-panda-tool-pose): a 7-joint arm with the Panda gripper has the Panda's robot
     width, and recognized by width alone it was started in the Panda's recorded joint angles -- the Kinova3 with
     its sixth joint pinned at its limit and the Panda hand folded into its upper arm (11 of 40)."""
     state = np.asarray(state, float).ravel()
@@ -201,6 +204,14 @@ def remap_init_state(state, sim, panda: bool = True):
         qpos[adr:adr + qw] = src[k:k + qw]
         k += qw
     return np.concatenate([[0.0], qpos, np.zeros(m.nv)])
+
+
+def panda_tool_pose(state) -> np.ndarray:
+    """The tool pose (4x4, base frame) at which LIBERO's Panda holds its grip site in a recorded initial state:
+    its arm joints (AXM-libero-init-states-record-a-panda) through the Panda's chain."""
+    from ..geometry.kin_np import NpChain, fk
+    q = np.asarray(state, float).ravel()[1:1 + PANDA_ARM_NQ]
+    return fk(NpChain.of(build_chain("panda", PANDA_GRIP_SITE_Z)), q[None])[0]
 
 
 def gripper_geom(env):

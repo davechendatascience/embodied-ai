@@ -171,6 +171,34 @@ choice of start pose (5); (c) the self-contact screen and dampers (2). The Robot
 and follows. The non-Panda trials are not ingested into `CTR-teacher-reliable`, whose slices are keyed by task and
 revision and would mix embodiments; a cross-embodiment contract is to be declared first.
 
+### The first matrix measured disturbed scenes (found 2026-09-26)
+
+Tracing the grasp losses further refuted two explanations before finding a confound under all of them:
+
+- **Not acceleration.** Peak tool accelerations while holding were 1.5-5.3 m/s^2 on the other arms and 3.6-4.0 on
+  the Panda. What differed was the grasp: the screen passed fewer candidates (forced choices: Panda 1, UR5e 1,
+  iiwa 5, Kinova3 5, Jaco 3 of 44-47; fallback tiers 2, 3, 0, 10, 13), rejected at the grasp, approach, pre-grasp
+  and column probes for IK not converging.
+- **Not the IK's starting point.** At each forced choice, the candidates converging at every probe numbered the
+  same from the arm's joints and from any of 18 seeds (iiwa goal 2: 14 of 240; Jaco and Kinova3 spatial 4: 40; Kinova3
+  goal 3: 0), so the missing grasps are outside the arm's reach, not in another IK branch.
+- **The scene.** Kinova3 goal 3 had its bowl 1.04 m from the base against the Panda's 0.58: robosuite's default start
+  pose for each model, taken with the objects copied from the initial state, knocks objects during the reset. Over
+  the 40 matrix tasks at init 0, some object ended more than 5 mm from where the Panda's reset leaves it on 2 (UR5e),
+  15 (iiwa, the wine bottle on every goal task), 22 (Kinova3, a bottle 3 m off the table in goal 3, the bowl 415
+  and 607 mm away in goal 2 and 9) and 3 (Jaco).
+
+Part of the understanding table above was therefore measured on disturbed scenes. The fix is
+`BRN-other-arm-starts-at-the-panda-tool-pose`: another arm starts with its tool at the pose LIBERO's Panda was
+recorded at (every registered arm's base stands at the Panda's, measured on all 130 tasks), in the first IK
+solution from an ordered seed list that is reachable and penetrates nothing; and numpy's global generator is
+advanced so that LIBERO's fixture draws begin where the Panda's do (the robot reset draws one normal per arm joint
+first; the 6-joint UR5e drew its fixtures from a shifted stream). With both, iiwa, Kinova3 and Jaco leave every
+object exactly where the Panda's reset does on 40 of 40 tasks; the UR5e on 18, and differs by more than 5 mm on 3
+(libero_10 0, 1, 7), where the recorded state puts a ketchup bottle 29 mm inside the table and how it is ejected
+depends on the simulated system's joint count -- identical fixtures and objects at placement, different after.
+The matrix is to be re-run on this start before the failures are re-traced.
+
 ## 5. What has to hold (for the ledger)
 
 Proposed as branches in `consistency.yaml`, each verified before it is built:

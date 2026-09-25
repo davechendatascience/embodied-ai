@@ -3870,6 +3870,60 @@ branches:
       the step at which a later direction's steep decision is made (refuted as first stated).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-other-arm-starts-at-the-panda-tool-pose
+    subject: CMP-scene-randomizer
+    claim_type: contract
+    statement: >-
+      Every placement from LIBERO's initial state k is preceded by a reset before which numpy's global
+      generator is seeded from (seed, k) as LMA-seed-fixtures-per-init-state has it. On an arm whose robot
+      reset draws n normals (AXM-robot-reset-draws-per-joint), the generator is then advanced by 7 - n
+      normals before that reset when n < 7, not at all when n = 7, and when n > 7 the placement raises
+      before that reset. Hence, for a given (seed, k), the fixture poses at placement are the ones the
+      Panda's reset draws. After the reset and the writing of the initial state, before the execution
+      layer is anchored, the state is as follows. On the Panda it is the initial state itself, unchanged.
+      On any other arm: the object joints hold the initial state's object block, joint by joint; the
+      finger joints are written explicitly -- the recorded Panda's finger joints when the arm carries the
+      gripper LIBERO recorded with, else that gripper model's own start opening; and the arm's joints hold
+      one configuration that is a function of the initial state, the models, the fixture poses and k --
+      nothing the reset leaves in the arm's joints enters it. Its target T* is the tool pose, in the
+      robot's base frame, that the initial state's seven Panda arm joints give through the Panda's
+      kinematic chain with the grip-site offset of the gripper LIBERO recorded with. Its candidates are
+      the results of the damped IK solve of DEF-reachable-pose for T* on this arm's chain, one per seed of
+      an ordered list: the arm model's own start joints first, then draws within the joint limits from a
+      generator seeded by k, separate from numpy's global one. The configuration placed is the first
+      candidate in that order that is a reachable pose in DEF-reachable-pose's sense and with which --
+      written into the state with those finger joints and forwarded -- MuJoCo's collision detection
+      reports no contact of negative distance between a geom of the robot's bodies and a geom of a body
+      that is not the robot's. If no seed yields such a candidate the placement raises; the arm is never
+      started elsewhere. Consequently, on a non-Panda arm: at placement MuJoCo reports no penetrating
+      contact between the robot and anything else; the tool is at the world pose at which the Panda's tool
+      was recorded, up to the IK tolerance; and the same seed, k and models give the same fixture poses
+      and the same start configuration. Not claimed: anything about the Panda's own placement beyond its
+      being the recorded state; penetration between geom pairs MuJoCo does not collide; that the objects
+      then settle exactly as they do on the Panda, since the arm's links occupy other space and the
+      simulated system has other joints; that T* is reachable on every arm at every k; or anything about
+      the robot's contacts after placement.
+    premises: [AXM-libero-init-states-record-a-panda, AXM-robot-reset-draws-per-joint, AXM-libero-resamples-fixtures, LMA-seed-fixtures-per-init-state, AXM-libero-soft-reset-state, AXM-mujoco-forward-is-a-function-of-state, DEF-reachable-pose, AXM-reproducible-measurement]
+    derivation_rule: >-
+      The fixture poses follow from the seeding (LMA-seed-fixtures-per-init-state), the draw count
+      (AXM-robot-reset-draws-per-joint: 7 - n advanced plus n drawn by the reset is the Panda's 7, as one
+      sequence) and the scene being the Panda model's on every registered arm
+      (AXM-libero-init-states-record-a-panda), whose samplers read the generator and the scene, not the
+      robot. The placement's screen forwards exactly the configuration placed -- arm, fingers, object
+      block -- so by AXM-mujoco-forward-is-a-function-of-state its contact verdict is the placement's. The
+      tool pose follows from the base pose being the Panda's and the IK converging (DEF-reachable-pose's
+      tolerance). The start configuration is a function of its inputs because the seeds are: the model's
+      own start joints, then a generator seeded by k; every candidate overwrites all arm joints. Refuted
+      twice before this statement (TRL-1090: fixture poses left to an unseeded generator; TRL-1093: k
+      named where the reset's draws make the first seed depend on (seed, k)); the gaps of TRL-1094 and
+      TRL-1097 (object-block mapping, the samplers' inputs) were closed by restating the init-state axiom
+      on measurements of 4 arms x 130 tasks, and the gap of TRL-1100 (the reset's arm joints as the first
+      seed) by seeding from the model's own start joints; proven 3/3 as TRL-1102..1104. The consequences
+      kept out of the claim are measured: over the 40 matrix tasks at init 0, the largest distance of any
+      object from the Panda's post-reset position and the tool's distance from the recorded pose.
+      evidence: CTR-other-arm-scene-as-panda.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:
