@@ -1061,7 +1061,9 @@ class Skills:
             roof = self._roof(c[:2], r, lo, rest - low + height, carry_z + height, mine)
             return roof is not None, roof, rest
 
-        def entry_at(xy):
+        loose: set[int] = set()                   # BRN-roofed-entry-past-loose-objects' second pass
+
+        def entry_at(xy, past_loose=False):
             """(u, E, R_entry, entering) for the drop point xy: the side the object is already entering
             along, else the clear side whose entry point is nearest the base; None when no side is."""
             roofed = roof_at(xy)
@@ -1186,7 +1188,7 @@ class Skills:
                         return u, E, R_entry, True, xy_side, steep
                     # steep, the swept band stops at the roof: what stands above it stays outside the face
                     if not self._level_clear(c_e[:2], e_c[:2], across + k.exit_margin, bot_e + k.place_clearance,
-                                             min(top_e, roof) if steep else top_e, mine):
+                                             min(top_e, roof) if steep else top_e, (mine | loose) if past_loose else mine):
                         continue
                     dist = float(np.linalg.norm(e_c[:2]))  # the robot's base is the frame's origin
                     if best is None or dist < best[0]:
@@ -1198,6 +1200,12 @@ class Skills:
         if roofed is None or not roofed[0]:
             return None                                   # placed as an unroofed target
         found = entry_at(xy0)
+        if found is None:
+            # BRN-roofed-entry-past-loose-objects: no side's sweep clear, one met only by loose objects is still a
+            # way in. Placed as unroofed instead, libero_90 42's pan, its front sweep met only by a bowl's rim 4 mm
+            # into its band, was lowered on to the shelf's top board (29 of 50; past the bowl, 49)
+            loose = {b for b in range(self.scene.m.nbody) if contacts.is_movable(self.scene.m, b)}
+            found = entry_at(xy0, past_loose=True)
         if found is None:
             return None
         return found[0], found[1], found[2], found[4], found[5]
