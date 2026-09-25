@@ -16,29 +16,36 @@ most current work is on the demonstrations it learns from.
    machine precision on five arms. Done.
 2. **Grounding** -- a policy trained under randomized layouts and start poses beats a copy with its
    cameras zeroed. A DINOv2 patch-token VLA reached 82% on libero_spatial against 4.5% blind.
-   The current work: a demonstration teacher for every task of libero_spatial, object and goal.
+   The current work: a demonstration teacher for every task of LIBERO's five suites.
 3. **Transfer** -- swap the arm. Not started.
 
 ## The skill teacher
 
 A geometry-driven demonstration policy (`screwhead/teacher/`) that reads a task's goal from its
 bddl and the scene's geometry from the simulator, and labels any state a student reaches (DAgger).
-Status at v24, 50 episodes per task at seed 555 unless stated (`runs/skill_v24`, `runs/skill_l10_v10`,
-`runs/skill_l90_v6`):
+Status at v41 (commit 32d78d7) on LIBERO's protocol -- each task's 50 initial states in order, 600
+steps (libero_10 800) -- in `runs/skill_v41`:
 
-| suite | at 600 steps | within LIBERO's step limit |
+| suite | at 600 steps (libero_10 800) | within LIBERO's step limit |
 |---|---|---|
-| libero_spatial (limit 220) | 498 / 500 | 478 / 500 |
-| libero_object (limit 280) | 500 / 500 | 496 / 500 |
-| libero_goal (limit 300) | 500 / 500 | 462 / 500 |
-| the three | 1498 / 1500 | 1436 / 1500 |
-| libero_10 (limit 520; at 800 steps) | 356 / 500 | 353 / 500 |
-| libero_90 (limit 400; 20 per task) | 1537 / 1800 | 1533 / 1800 |
+| libero_spatial (limit 220) | 495 / 500 | 479 / 500 |
+| libero_object (limit 280) | 500 / 500 | 500 / 500 |
+| libero_goal (limit 300) | 500 / 500 | 461 / 500 |
+| libero_10 (limit 520) | 472 / 500 | 466 / 500 |
+| libero_90 (limit 400) | 4446 / 4500 | 4406 / 4500 |
+| all 130 tasks | 6413 / 6500 (98.7%) | 6312 / 6500 (97.1%) |
+
+117 of the 130 tasks succeed in at least 48 of 50. Below that: libero_90 32 (35), libero_10 8 (39),
+libero_90 86 (42), libero_10 1 and 9 (43), libero_90 42 (43), libero_90 24 (44), libero_spatial 4 (45),
+libero_90 33 and 62 (46), libero_10 3, libero_90 5 and 8 (47).
 
 LIBERO scores the first step its goal holds. Scored instead after the teacher has finished -- the
 placed object released, at rest, and no more tipped than LIBERO's own human demonstrations leave it
-(`CTR-teacher-settled`, `tools/teacher_settled.py`) -- the teacher at v22 settled 2022 of 2600
-episodes against 2246 successes (RUN-0247).
+(`CTR-teacher-settled`, `tools/teacher_settled.py`, 20 episodes per task at seed 557) -- the teacher at
+v39 settled 2416 of 2600 episodes. Three tasks cannot settle as scored: a book resting upright in the
+desk caddy's back compartment lies 3 mm below LIBERO's region box (libero_10 5, libero_90 77), and in
+libero_90 89 the humans' demonstrations end holding the book mid-insertion, so the tilt they leave is
+not a resting one.
 
 The goal is at least 95% on every task within LIBERO's limits. What works and what is missing,
 task by task and against LIBERO's own human demonstrations, is in
@@ -69,6 +76,35 @@ task by task and against LIBERO's own human demonstrations, is in
 
 Features by date, newest first. Numbers are measured at the stated commit.
 
+- **2026-09-25** -- LIBERO's protocol for all 130 tasks (each task's 50 initial states in order):
+  5746 of 6500 at v26 -> 6413 at v41; settled 2150 -> 2416 of 2600 (v26 -> v39).
+  - Grasps leaned off the vertical where no upright one passes the reach screen, as LIBERO's humans
+    lean theirs (a rim pinch about the rim's tangent, a handle pinch about its jaw); after a drawer is
+    hooked the hand rises clear of its bar before anything else; the pick turns its wrist before it
+    comes down, not on the way (libero_90 8, open the drawer and put the bowl in it: 12 -> 47 of 50).
+  - A roofed target with no spot open from above is entered only 2 cm past its face, and the grasp is
+    screened where that entry lets go; the yellow-and-white mug is also held by its handle, offered
+    after its rim (libero_10 9, the mug into the microwave: 0 -> 43 of 50).
+  - The hook takes the jaw direction the wrist can reach (libero_90 23: 33 -> 50); a face pinch that
+    would touch a neighbour is turned up to 30 deg off square, as the humans turn theirs on the cream
+    cheese (libero_10 1: 37 -> 43).
+  - Regressions at v41, open: libero_90 32 43 -> 35 and 42 49 -> 43, libero_spatial 4 48 -> 45.
+  - A container's open test is read as mid-drag only while its drive is running
+    (BRN-open-precondition-reads-the-running-drive; libero_90 2 42 -> 49, 24 41 -> 44, libero_10 3
+    45 -> 47).
+  - Roofed targets entered past loose objects (libero_90 42 29 -> 49); a carried object turned to fit;
+    an object laid along a tilted region (libero_90 86 37 -> 42).
+  - A standing object too tall for its region is tipped over into it (libero_90 32 1 -> 43); into a
+    region the object is aligned before it is lowered (the caddy: libero_90 75, 80, 83 46/39/40 -> 50);
+    the leave from under a roof counts only what lies below the leg's start (libero_90 35 back to 50).
+  - A laid book goes in steep, front first, as the humans do (libero_90 89 0 -> 50); the hand leaves a
+    roof level before it rises (libero_90 23 13 -> 33).
+  - DEF-skill-contract's start gate: a skill does not start while the hand is still on what an earlier
+    one released (libero_10 2 26 -> 50).
+  - Drawer, caddy, moka-pot and shelf-exit laws (libero_10 8 0 -> 39, libero_90 5 11 -> 47, the caddy
+    tasks 75, 80, 81, 83 21-24 -> 39-50).
+  - Roofed targets entered level, as the humans do (libero_90 40, 88 0 -> 50, 42 0 -> 30, 86 0 -> 37);
+    the microwave's door swung without a grasp (libero_90 35 0 -> 50, 33 27 -> 46).
 - **2026-09-24**
   - Success is also scored after the teacher has finished (`CTR-teacher-settled`): on episode 0 of all
     130 tasks, 93 of the 104 placed objects were still held, falling or rocking when LIBERO scored
