@@ -112,6 +112,14 @@ class SkillTeacher:
         # for the pick's descent (2 of 50)
         past = (art["qpos"] - art["thresholds"]["open"]) * art["sign"]
         away = float(np.linalg.norm(self.env.snapshot()["p_tool"] - art["handle_world"])) > HANDLE_AWAY
+        # BRN-open-precondition-reads-the-running-drive: at the handle only while that container's drive is running --
+        # the drive selected at the previous step. By the tool's distance alone, libero_90 2's pick, its bowl beside the
+        # top drawer's handle, read the drawer as shut on its way down, the plan turned to the drawer, the drive's first
+        # move took the tool away, and the plan turned back, every 7 steps to the horizon (42 of 50; so read, 49)
+        same = self._previous is not None and self._previous[0] == getattr(self.env, "episode", None)
+        prev = self._previous[2] if same else None
+        driving = prev is not None and prev[0] == "articulate" and prev[2] == step.region
+        away = away or not driving
         # Away from the handle, admitting the object and within open_slack of LIBERO's threshold: held to the
         # threshold itself, libero_90 5's hand, reaching the pudding beside the open top drawer, eased it
         # 1.3 mm past it, and the plan turned to reopening it in the middle of every pick; with no threshold
