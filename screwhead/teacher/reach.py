@@ -61,15 +61,19 @@ class Reach:
         # screens re-judge the same grasps (grasp, column, approach probes) with only the release pose
         # changed, and re-solving them doubled the teacher's time per step (libero_10 9: 17-20 -> 36-41
         # ms, 3 -> 8 screen calls). Each row of the solve depends only on its own pose and the start
-        # joints, and a screen restores what it writes, so an answer holds until the state moves.
+        # joints, and a screen restores what it writes, so an answer holds until the state moves -- the
+        # whole state, not the arm's joints: goal 3's open-container check sets the drawer open within a
+        # step, and contacts read with it open answered the closed screen after (2 of 2 episodes changed).
         self._memo_state: tuple | None = None
         self._ik_memo: dict[bytes, tuple] = {}
         self._grade_memo: dict[tuple, int] = {}
 
     def _fresh(self) -> None:
         """Forget the step's answers once the state they were read from has moved on: another episode,
-        simulated time advanced, or the arm's joints changed."""
-        state = (getattr(self.env, "episode", None), float(self.env.env.sim.data.time),
+        simulated time advanced, any joint of the scene moved (a container set open to screen a grasp
+        with it open, as well as the arm), or the arm's joints as observed changed."""
+        sim = self.env.env.sim
+        state = (getattr(self.env, "episode", None), float(sim.data.time), sim.data.qpos.tobytes(),
                  np.asarray(self.env.raw["robot0_joint_pos"], float).tobytes())
         if state != self._memo_state:
             self._memo_state = state
