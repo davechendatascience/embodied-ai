@@ -39,6 +39,10 @@ videos/
 # verdict is a diff rather than a memory. NOT tracked: the ledger itself (.belief/*.jsonl, 49 MB
 # of evidence) -- the *.jsonl rule above excludes it -- nor the derived belief cache.
 .belief/cache/
+# Nor a run's raw read trace: every file the run opened, the venv included (32 MB for one teacher
+# ingest). The runner harvests it into reads.json, the repository paths read, which is tracked and
+# is all the stamps read back.
+.belief/artifacts/*/reads.log
 !.belief/stamps.jsonl
 
 # textbook-index MCP: the concept graph and index are derived from the PDFs in
