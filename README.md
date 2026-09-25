@@ -42,7 +42,7 @@ libero_90 33 and 62 (46), libero_10 3, libero_90 5 and 8 (47).
 LIBERO scores the first step its goal holds. Scored instead after the teacher has finished -- the
 placed object released, at rest, and no more tipped than LIBERO's own human demonstrations leave it
 (`CTR-teacher-settled`, `tools/teacher_settled.py`, 20 episodes per task at seed 557) -- the teacher at
-v39 settled 2416 of 2600 episodes. Three tasks cannot settle as scored: a book resting upright in the
+v41 settled 2454 of 2600 episodes (94.4%). Three tasks cannot settle as scored: a book resting upright in the
 desk caddy's back compartment lies 3 mm below LIBERO's region box (libero_10 5, libero_90 77), and in
 libero_90 89 the humans' demonstrations end holding the book mid-insertion, so the tilt they leave is
 not a resting one.
@@ -77,7 +77,7 @@ task by task and against LIBERO's own human demonstrations, is in
 Features by date, newest first. Numbers are measured at the stated commit.
 
 - **2026-09-25** -- LIBERO's protocol for all 130 tasks (each task's 50 initial states in order):
-  5746 of 6500 at v26 -> 6413 at v41; settled 2150 -> 2416 of 2600 (v26 -> v39).
+  5746 of 6500 at v26 -> 6413 at v41; settled 2150 -> 2454 of 2600 (v26 -> v41).
   - Grasps leaned off the vertical where no upright one passes the reach screen, as LIBERO's humans
     lean theirs (a rim pinch about the rim's tangent, a handle pinch about its jaw); after a drawer is
     hooked the hand rises clear of its bar before anything else; the pick turns its wrist before it
