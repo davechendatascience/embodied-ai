@@ -186,6 +186,12 @@ class SkillConfig:
     exit_step: float = 0.02         # m between the distances an exit is looked for at
     exit_max: float = 0.14          # m: the farthest exit examined
     exit_directions: int = 16
+    leave_radius: float = 0.05      # m, the hand's disc in plan for BRN-leave-a-roof-level-first
+    leave_above: float = 0.02       # m above the tool point a geom's bottom must be to lie over the hand
+    leave_band: tuple = (0.01, 0.10)  # m below and above the tool point the level way out is swept over
+    leave_step: float = 0.02        # m between the distances a way out is looked for at
+    leave_max: float = 0.30         # m: the farthest way out examined
+    leave_directions: int = 8
     side_step: float = 0.03         # m between the heights a pick's column is checked at
 
 
@@ -620,8 +626,38 @@ class Skills:
         c = self._grasp_cache.get(obj)
         return np.inf if c is None else float(self.scene.object_box(obj).world_centre[2] - c[3][2])
 
+    def _leave_point(self, p: np.ndarray) -> np.ndarray | None:
+        """BRN-leave-a-roof-level-first: where the tool goes level first when a colliding geom of the scene
+        lies over the hand -- within leave_radius of the tool point in plan, its bottom leave_above over the
+        tool point: the nearest point, leave_step apart out to leave_max in leave_directions directions from
+        the world's x axis counter-clockwise, over which nothing lies and to which a level sweep of the disc
+        over the hand's band meets nothing but what it already overlaps. None when nothing lies over the
+        hand, or no such point is found. After pressing libero_90 23's bottom drawer shut the tool sat under
+        the top drawer's bar, within column_leave of the hook point: the hook drove up through the bar."""
+        k = self.k
+        _pos, _rad, bottoms, tops, keep = self.reach._geoms_now()
+        solid = keep & self._solid(set())
+        z0 = float(p[2]) + k.leave_above
+        lo, hi = float(p[2]) - k.leave_band[0], float(p[2]) + k.leave_band[1]
+
+        def covered(xy):
+            dist = self.reach._footprint_distance(np.asarray(xy, float)[None])[:, 0]
+            return bool((solid & (dist < k.leave_radius) & (bottoms > z0)).any())
+        if not covered(p[:2]):
+            return None
+        d0 = self.reach._footprint_distance(np.asarray(p[:2], float)[None])[:, 0]
+        here = solid & (d0 < k.leave_radius) & (bottoms < hi) & (tops > lo)
+        already = set(int(b) for b in np.asarray(self.scene.m.geom_bodyid)[here])
+        angles = np.linspace(0.0, 2 * np.pi, k.leave_directions, endpoint=False)
+        for dist in np.arange(k.leave_step, k.leave_max + 1e-9, k.leave_step):
+            for th in angles:
+                xy = np.asarray(p[:2], float) + dist * np.array([np.cos(th), np.sin(th)])
+                if not covered(xy) and self._level_clear(p[:2], xy, k.leave_radius, lo, hi, already):
+                    return np.array([xy[0], xy[1], float(p[2])])
+        return None
+
     def path_to(self, R: np.ndarray, p: np.ndarray, R_goal: np.ndarray, start: np.ndarray,
-                safe_h: float) -> tuple[str, np.ndarray, np.ndarray] | None:
+                safe_h: float, leave: bool = False) -> tuple[str, np.ndarray, np.ndarray] | None:
         """Up, over, down on to `start`; None once the tool is in the column above it.
 
         Aiming straight at a target cuts a diagonal through whatever stands between and
@@ -633,6 +669,10 @@ class Skills:
         k = self.k
         lat = float(np.linalg.norm((p - start)[:2]))
         below = p[2] < safe_h - k.plane_band
+        if leave and below:
+            out = self._leave_point(p)
+            if out is not None:
+                return "leave", R, out
         if lat <= k.funnel_xy or (below and lat <= k.column_leave):
             return None
         if below:
@@ -1672,7 +1712,7 @@ class Skills:
         # down in front of the handle's bar and pushed the door shut (libero_90 35)
         if float(np.linalg.norm(p - p_t)) < k.swing_engage and rot_angle(R.T @ R_t) < k.at_rot:
             R_t, p_t = held_at(q + lead)
-        leg = self.path_to(R, p, R_t, p_t, top + k.lift_dz)
+        leg = self.path_to(R, p, R_t, p_t, top + k.lift_dz, leave=True)
         if leg is not None:
             self.phase, R_g, target = leg
             return self.action(self.twist_to(R, p, R_g, target), A_OPEN)
@@ -1735,7 +1775,7 @@ class Skills:
             self.phase = "drag"
             return self.action(self.twist_to(R, p, R_hook, hook + u * k.hook_ahead, v_max=k.drive_speed,
                                              v_min=k.drive_speed_min), A_OPEN)
-        leg = self.path_to(R, p, R_hook, hook, top + k.lift_dz)
+        leg = self.path_to(R, p, R_hook, hook, top + k.lift_dz, leave=True)
         if leg is not None:
             self.phase, R_t, target = leg
             return self.action(self.twist_to(R, p, R_t, target), A_OPEN)
@@ -1772,7 +1812,7 @@ class Skills:
         if abs(float(off[2])) < 2 * k.hook_band and lateral < k.hook_corridor and 0.0 < along < k.front_hook_stage + k.hook_corridor:
             self.phase = "in"                                # level, in front of the bar: move in
             return self.action(self.twist_to(R, p, R_f, hook), A_OPEN)
-        leg = self.path_to(R, p, R_f, stage, top + k.lift_dz)
+        leg = self.path_to(R, p, R_f, stage, top + k.lift_dz, leave=True)
         if leg is not None:
             self.phase, R_t, target = leg
             return self.action(self.twist_to(R, p, R_t, target), A_OPEN)
@@ -1806,7 +1846,7 @@ class Skills:
             self.phase = "press"
             return self.action(self.twist_to(R, p, R_push, push - u * k.push_close_ahead, v_max=k.drive_speed,
                                              v_min=k.drive_speed_min), 0.0)
-        leg = self.path_to(R, p, R_push, push, top + k.lift_dz)
+        leg = self.path_to(R, p, R_push, push, top + k.lift_dz, leave=True)
         if leg is not None:
             self.phase, R_t, target = leg
             return self.action(self.twist_to(R, p, R_t, target), 0.0)
