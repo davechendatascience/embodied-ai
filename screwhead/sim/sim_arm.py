@@ -151,7 +151,7 @@ class SimArm:
         10 steps (a bowl at 48.6 deg tilt moving 0.10 m/s, measured)."""
         from .libero_env import remap_init_state
         self._reset_scene(k)
-        self.env.set_init_state(remap_init_state(self.init_states[k], self.env.sim))
+        self.env.set_init_state(remap_init_state(self.init_states[k], self.env.sim, self.execution.robot == "Panda"))
         self._anchor()
         self._settle(INITIAL_SETTLE)
         for _ in range(SETTLE_ROUNDS):

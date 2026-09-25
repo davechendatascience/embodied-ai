@@ -176,15 +176,17 @@ def _joint_blocks(sim):
     return robot, sorted(objs)
 
 
-def remap_init_state(state, sim):
+def remap_init_state(state, sim, panda: bool = True):
     """Panda-recorded flattened state -> one this model can accept.
 
-    Identity on a Panda, so Panda runs stay bit-for-bit what LIBERO recorded.
-    """
+    Identity on a Panda, so Panda runs stay bit-for-bit what LIBERO recorded. On any other arm only the objects
+    are copied and the arm keeps its own start pose: a 7-joint arm with the Panda gripper has the Panda's robot
+    width, and recognized by width alone it was started in the Panda's recorded joint angles -- the Kinova3 with
+    its sixth joint pinned at its limit and the Panda hand folded into its upper arm (11 of 40)."""
     state = np.asarray(state, float).ravel()
     m = sim.model
     robot, objs = _joint_blocks(sim)
-    if len(state) == 1 + m.nq + m.nv and sum(e[1] for e in robot) == PANDA_ROBOT_NQ:
+    if panda and len(state) == 1 + m.nq + m.nv and sum(e[1] for e in robot) == PANDA_ROBOT_NQ:
         return state
     nq_o = sum(e[1] for e in objs)
     nv_o = sum(e[2] for e in objs)
