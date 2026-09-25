@@ -178,6 +178,22 @@ categories:
         it across the body at 81 mm, the gripper's limit, and lost it (libero_10 8, 0 of 50)
     open: the tilted approach the humans mostly use
 
+  white_yellow_mug:
+    kind: object
+    moved_by: pick
+    held_by: rim
+    also_held_by: handle
+    rests: upright
+    supports: none
+    evidence:
+      measured: >-
+        the teacher's rim pinch: libero_10 4, libero_90 34, 68 and 76 50 of 50 each in v39; held by its handle
+        first, libero_10 4 fell to 12 of 50 (v40: the top-down handle pinch closed round the body and slipped).
+        LIBERO's humans, libero_10 9 (8 demos): the handle in 8 of 8, jaws across its thickness, the approach
+        36-59 deg off vertical toward the mug's body, the hand kept outside the microwave's front as the mug
+        goes in; with the handle offered after the rim, libero_10 9 0 -> 45 of 50 (v40, handle first)
+    open: the humans' handle grasp where the rim pinch passes
+
   chefmate_8_frypan:
     kind: object
     moved_by: pick

@@ -156,6 +156,13 @@ class SkillTeacher:
             self._started = key
         self.step_index = i
         self.step = step                       # what is being executed (may be a precondition)
+        # BRN-hook-opens-sliding-drawer: what follows a hook drag leaves upward before anything else -- every skill but
+        # the drive dragging that bar
+        if step is not None and not (step.skill == "articulate" and self.skills.hooking(step.region)):
+            a = self.skills.leave_hook(s)
+            if a is not None:
+                self.phase = f"{step.skill}:{self.skills.phase}"
+                return a
         if step is None:
             held = [st.obj for st in self.plan
                     if st.skill in ("place_in", "place_on") and self.skills.held(st.obj)]

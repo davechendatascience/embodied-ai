@@ -59,3 +59,6 @@ def test_entry_is_well_formed(cat):
         assert "default" in rests and set(rests.values()) <= RESTS
         if e["moved_by"] == "push":
             assert e["held_by"] == "none", f"{cat}: a pushed object is not held"
+        # a second hold is read only as the handle, and only beside a different first hold
+        assert e.get("also_held_by", "handle") == "handle", f"{cat}: also_held_by is read only as handle"
+        assert not ("also_held_by" in e and e["held_by"] == "handle"), f"{cat}: held by its handle already"

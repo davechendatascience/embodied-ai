@@ -163,6 +163,10 @@ class SkillConfig:
     hook_corridor: float = 0.015    # m off the hook point, across the pull, before re-entering
     hook_band: float = 0.004        # m of the hook height the tool must be at before it drags: at
     #                                 17 mm off it the finger swept over the bar
+    roofed_depth: float = 0.02     # m past a fully roofed region's face an upright object's origin is left
+    face_yaws: tuple = (0.17, -0.17, 0.35, -0.35, 0.52, -0.52)  # rad a face pinch that touches a loose object is turned
+    lean_tilts: tuple = (0.2, 0.35, 0.5, 0.65, 0.8)  # rad a rim pinch is leaned off vertical when no upright one is reachable
+    hook_leave_above: float = 0.02  # m the fingertips rise over the hooked bar's top before the next skill moves
     # closing a drawer by pushing its bar (libero_10 3: LIBERO's humans close the bottom drawer with
     # no grasp in 50 of 50 demos; the side pinch the teacher reached for stalled against the cabinet)
     push_close_lead: float = 0.03   # m the tool stands in front of the bar's centre, on the opening side
@@ -227,6 +231,8 @@ class Skills:
         self._released_at: dict[tuple, np.ndarray] = {}  # a roofed entry's release target, per (object, region)
         self._last_held: str | None = None           # the object held() last found in the jaws
         self._withdraw: tuple | None = None          # after a roofed release: (entry direction, tool point out)
+        self._hooked: set[int] = set()               # bars a hook dragged this episode, not yet risen clear of
+        self._closed_above: dict[tuple, bool] = {}    # (obj, region): no spot of the region open from above
 
     # -- commands -------------------------------------------------------------------------
     def twist_to(self, R, p, R_goal, p_goal, v_max=None, v_min=None):
@@ -263,7 +269,7 @@ class Skills:
             self._last_held = None
             for cache in (self._grasp_cache, self._handle_cache, self.grasp_log,
                           self._drop_cache, self._carry_cache, self._spots, self._clearing, self._let_go,
-                          self._released_at, self._entry_choice, self._tip):
+                          self._released_at, self._entry_choice, self._tip, self._hooked, self._closed_above):
                 cache.clear()
 
     def grasp_for(self, obj: str, via: np.ndarray | None = None,
@@ -278,13 +284,23 @@ class Skills:
         if cached is not None and np.linalg.norm(cached[3] - centre) < self.k.regrasp_move:
             return cached[0], cached[1], cached[2]
         bid = self.scene.body_id(obj)
-        tiers = self.planner.tiers(obj, box, self._held_by(obj))
+        tiers = self.planner.tiers(obj, box, self._held_by(obj), self._also_held_by(obj))
         extra = self._release_probe(obj, *place) if place is not None else None
         chosen, used = None, ""
         for name, tier in tiers:
             chosen = self.reach.choose(tier, via, allow=bid, extra=extra)
             if chosen is not None:
                 used = name
+                if name == "faces" and not self.reach.last_choice.get("clean"):
+                    # the pinch square to the faces touches a loose object: turned about the vertical, a clean one is
+                    # taken instead -- only a clean one (BRN-face-pinch-turns-off-a-neighbour)
+                    kept = self.reach.last_choice
+                    turned = self.planner.faces_turned(obj, box)
+                    alt = self.reach.choose(turned, via, allow=bid, extra=extra) if turned else None
+                    if alt is not None and self.reach.last_choice.get("clean"):
+                        chosen, used = alt, "faces_turned"
+                    else:
+                        self.reach.last_choice = kept
                 break
         if chosen is None:
             # Every tier came up empty. Refusing is what DEF-witness-or-refusal asks, and it is off
@@ -494,7 +510,7 @@ class Skills:
         bid = self.scene.body_id(obj)
 
         def first_tier():
-            for name, t in self.planner.tiers(obj, self.scene.object_box(obj), self._held_by(obj)):
+            for name, t in self.planner.tiers(obj, self.scene.object_box(obj), self._held_by(obj), self._also_held_by(obj)):
                 if self.reach.choose(t, via, allow=bid) is not None:
                     return name
             return None
@@ -570,14 +586,23 @@ class Skills:
             if leg is not None:
                 self.phase, R_t, target = leg
                 return self.action(self.twist_to(R, p, R_t, target), open_to)
-            self.phase = "down"
-            return self.action(self.twist_to(R, p, R_g, side), open_to)
+            return self._down(R, p, R_g, side, open_to)
         leg = self.path_to(R, p, R_g, pre, safe)
         if leg is not None:
             self.phase, R_t, target = leg
             return self.action(self.twist_to(R, p, R_t, target), open_to)
-        self.phase = "down"                            # above the start: straight down to it
-        return self.action(self.twist_to(R, p, R_g, pre), open_to)
+        return self._down(R, p, R_g, pre, open_to)            # above the start: straight down to it
+
+    def _down(self, R: np.ndarray, p: np.ndarray, R_g: np.ndarray, start: np.ndarray, open_to: float) -> np.ndarray:
+        """BRN-pick-turns-before-descending: over the column, straight down on to its start at the grasp's frame --
+        once the wrist is within funnel_rot of that frame; until then turned toward it at the tool's height. Turned on
+        the way down, libero_90 8's hand came down 40 deg off the grasp's yaw and its corner met the open top drawer
+        (9 of 17 failures)."""
+        if rot_angle(R.T @ R_g) > self.k.funnel_rot and float(p[2]) > float(start[2]) + self.k.plane_band:
+            self.phase = "turn"
+            return self.action(self.twist_to(R, p, R_g, np.array([start[0], start[1], p[2]])), open_to)
+        self.phase = "down"
+        return self.action(self.twist_to(R, p, R_g, start), open_to)
 
     def _side_column(self, obj: str, R_g: np.ndarray, pre: np.ndarray, safe: float,
                      open_to: float) -> np.ndarray | None:
@@ -1033,7 +1058,7 @@ class Skills:
         return not bool(all(conv)) or any(self.reach.collides(t, bid, ap) == 2 for t in th)
 
     def _level_entry(self, obj: str, region: str, q: np.ndarray, target_q: np.ndarray, carry_z: float,
-                     R: np.ndarray, p: np.ndarray):
+                     R: np.ndarray, p: np.ndarray, decide: bool = True, closed_above: bool | None = None):
         """A roofed target's level entry (BRN-place-enters-roofed-target-level): None when nothing lies
         over the object's footprint at the target between its bottom resting there and its top carried;
         else (u, E, R_entry, xy): u the outward entry direction, E the origin's entry point at its rest
@@ -1051,6 +1076,7 @@ class Skills:
         R_reg, p_reg, half = self.region_pose(region)
         half = np.abs(np.asarray(half, float))
         mine = self._own_bodies(obj)
+        closed = self._closed_above.get((obj, region), False) if closed_above is None else closed_above
         Rb_t, c_t, q_t = R.T @ box.R, R.T @ (box.world_centre - p), R.T @ (q - p)   # the object in the tool
 
         def measure(Rv):
@@ -1156,7 +1182,7 @@ class Skills:
                         xy_s = np.asarray(xy, float) + u[:2] * ((float(half[j]) - k.steep_depth)
                                                                 - float((np.asarray(xy, float) - p_reg[:2]) @ u[:2]))
                         choice_key = (obj, region, j, sgn)
-                        if fit is not None and choice_key not in self._entry_choice:
+                        if decide and fit is not None and choice_key not in self._entry_choice:
                             # BRN-place-steep-laid-entry, decided once per episode: level, the hand went into the
                             # table under the shelf's bottom layer (libero_90 89, 0 of 50); steeper, and only its
                             # front part in, as the humans do
@@ -1193,6 +1219,17 @@ class Skills:
                         R_entry = axis_rot(Z, turn) @ R
                         along, across = long_half, min(h for h, _a in level)
                         rest_e, c_e, bot_e, top_e = rest, c, bottom_t, top_t
+                        # no deeper than roofed_depth past the face where no spot is open from above: at the centre,
+                        # the microwave's mug had the hand inside the opening and met its top (libero_10 9); the
+                        # humans leave it 36-53 mm in
+                        out = (float(half[j]) - k.roofed_depth) - float((np.asarray(xy, float) - p_reg[:2]) @ u[:2])
+                        if closed and out > 0.0:
+                            xy_side = np.asarray(xy, float) + u[:2] * out
+                            rest_e = rest_z(xy_side, off, low)
+                            if rest_e is None:
+                                continue
+                            c_e = np.r_[xy_side, rest_e] + off
+                            bot_e, top_e = rest_e - low, rest_e - low + height
                     face = float(half[j]) - float((c_e - p_reg) @ (sgn * axis))
                     d_out = max(face, 0.0) + along + k.entry_margin
                     e_c = c_e + u * d_out
@@ -1303,6 +1340,11 @@ class Skills:
         spec = getattr(self.env, "task_spec", None)
         return held_by((getattr(spec, "objects", {}) or {}).get(obj))
 
+    def _also_held_by(self, obj: str) -> str | None:
+        from .task_spec import also_held_by
+        spec = getattr(self.env, "task_spec", None)
+        return also_held_by((getattr(spec, "objects", {}) or {}).get(obj))
+
     def _release_probe(self, obj: str, region: str, inside: bool):
         """For a grasp candidate, the tool pose where it will let go: the drop point, computed now
         and not cached (the container may still be shut), plus the candidate's offset in the hand.
@@ -1322,6 +1364,17 @@ class Skills:
             target = self._region_top(R_reg, p_reg, half)
             target[:2] = xy
             target[2] += half_h - centre_off + self.k.place_clearance
+        if inside:
+            # a roofed target is let go where its level entry lets go (BRN-place-enters-roofed-target-level), turned as
+            # it enters: screened over the target, the microwave's top pinch put the hand on the microwave's roof and
+            # passed, and the hand met the opening's top as the mug went in (libero_10 9, 0 of 50)
+            s = self.env.snapshot()
+            entry = self._level_entry(obj, region, q, target, float(target[2]) + 2.0 * half_h, s["R_tool"], s["p_tool"],
+                                      decide=False, closed_above=not np.isfinite(_d))
+            turn = None if entry is None else entry[2] @ s["R_tool"].T
+            if turn is not None and float(turn[2, 2]) > 1.0 - 1e-6:   # upright: the grasp turned about the vertical
+                rest = np.r_[entry[3], entry[1][2]]                    # (a laid entry's frame is its own: screened as before)
+                return lambda cand: [pose(turn @ cand[0], rest + turn @ (cand[1] - q))]
         return lambda cand: [pose(cand[0], target + (cand[1] - q))]
 
     def place_target(self, obj: str, region: str, inside: bool,
@@ -1412,7 +1465,11 @@ class Skills:
         if key in self._drop_cache:
             return self._drop_cache[key]
         shared = self._shared_spot(obj, region, R_reg, p_reg, half)
-        best = shared if shared is not None else self._open_point(obj, R_reg, p_reg, half, box)[0]
+        if shared is not None:
+            best = shared
+        else:
+            best, d = self._open_point(obj, R_reg, p_reg, half, box)
+            self._closed_above[key] = not np.isfinite(d)
         self._drop_cache[key] = best
         return best
 
@@ -1694,6 +1751,32 @@ class Skills:
                                    min(k.max_grip, w + k.grip_margin))
         return None
 
+    def hooking(self, region: str) -> bool:
+        """A hook dragged this region's bar this episode and the tool has not yet risen clear of it."""
+        try:
+            return int(self.scene.articulation(region)["handle_geom"]) in self._hooked
+        except ValueError:
+            return False
+
+    def leave_hook(self, s: dict) -> np.ndarray | None:
+        """BRN-hook-opens-sliding-drawer: what follows a hook drag leaves upward before anything else.
+        Straight up, jaws open, until the fingertips -- the finger meshes' reach below the tool point --
+        are hook_leave_above over the dragged bar's top; None once they are, for every bar dragged this
+        episode. The next skill's own first leg was up only when its target lay off the bar: libero_90 8's
+        bowl stands under the top drawer's handle, the pick's pre-grasp was already in its funnel, and it
+        went straight down with the trailing finger behind the bar, on the drawer's face for 60 steps."""
+        self.new_episode_check()
+        R, p = s["R_tool"], s["p_tool"]
+        for g in sorted(self._hooked):
+            c, Rg, hl = geom_world_box(self.scene.m, self.scene.d, g, self.scene.base)
+            clear = float(c[2] + (np.abs(Rg) @ hl)[2]) + self.planner.gripper().reach + self.k.hook_leave_above
+            if float(p[2]) >= clear:
+                self._hooked.discard(g)
+                continue
+            self.phase = "unhook"
+            return self.action(self.twist_to(R, p, R, np.array([p[0], p[1], clear + self.k.handle_leave_past])), A_OPEN)
+        return None
+
     def handle_clearance(self, geom: int, app: np.ndarray) -> float:
         """How far the tool point must be back from the handle's centre, along the approach,
         before no part of the handle lies between the jaws: the handle's own half-depth along
@@ -1828,21 +1911,23 @@ class Skills:
         self.phase = "swing"
         return self.action(self.twist_to(R, p, R_t, p_t, v_max=k.drive_speed, v_min=k.drive_speed_min), A_OPEN)
 
-    def _by_wrist(self, R: np.ndarray, frames) -> list:
+    def _by_wrist(self, R: np.ndarray, frames, margin: float | None = None) -> list:
         """Two tool frames the held object makes equal -- the same approach, the jaw axis either way along
         a line -- ordered: those the last joint reaches by turning within its range first, the nearer turn
-        first among them. Used for the laid entry only (by the nearer turn, libero_90 88's wrist sat 0.01
-        rad from its limit 19 deg short of the frame). The four open-jaw laws (the push, the hook, the
-        front hook, the push-close) take the nearer turn alone: under this order libero_90 6's front hook
-        left a frame whose turn read 0.19 rad inside the limit for one 129 deg away, stalled 50 deg short
-        of it, and 43 of 50 opened the drawer where 50 had; libero_90 23, which it was for, stayed 13."""
+        first among them. Used for the laid entry (by the nearer turn, libero_90 88's wrist sat 0.01 rad from
+        its limit 19 deg short of the frame), and for the hook at margin zero (BRN-hook-frame-within-the-wrist:
+        after libero_90 23's press the nearer frame lay 0.6-1.0 rad past the last joint's limit and the hook
+        never engaged, 17 of 50). The push, the front hook and the push-close take the nearer turn alone: under
+        this order at its margin libero_90 6's front hook left a frame whose turn read 0.19 rad inside the limit
+        for one 129 deg away, stalled 50 deg short of it, and 43 of 50 opened the drawer where 50 had."""
         lo, hi = self.env.servo._np.limits[-1]
         q7 = float(self.scene.d.qpos[self.env.joint_indexes[-1]])
+        margin = self.k.wrist_margin if margin is None else margin
 
         def key(Rc):
             dR = R.T @ Rc
             turn = float(np.arctan2(dR[1, 0], dR[0, 0]))      # about the tool's own axis, the last joint's
-            within = lo + self.k.wrist_margin <= q7 + turn <= hi - self.k.wrist_margin
+            within = lo + margin <= q7 + turn <= hi - margin
             return (not within, rot_angle(dR))
         return sorted(frames, key=key)
 
@@ -1870,10 +1955,11 @@ class Skills:
         its rear edge, dragged along the opening direction at the drive speed, re-aimed from the
         bar's pose every step. Nothing is grasped, so there is nothing to back out of: the next
         skill's first move is up."""
+        self.new_episode_check()      # before _hooked is written: a first check later in the episode clears it
         k = self.k
         R, p = s["R_tool"], s["p_tool"]
         c, u, _bar, top = self._hook_frame(a)
-        R_hook = min((top_down(u), top_down(-u)), key=lambda Rc: rot_angle(R.T @ Rc))
+        R_hook = self._by_wrist(R, [top_down(u), top_down(-u)], margin=0.0)[0]
         hook = c + u * k.hook_lead + Z * k.hook_above
         off = p - hook
         along = float(off @ u)
@@ -1882,6 +1968,7 @@ class Skills:
         if down and lateral < k.hook_corridor and -k.hook_corridor < along < k.hook_ahead \
                 and rot_angle(R.T @ R_hook) < k.at_rot:
             self.phase = "drag"
+            self._hooked.add(int(a["handle_geom"]))
             return self.action(self.twist_to(R, p, R_hook, hook + u * k.hook_ahead, v_max=k.drive_speed,
                                              v_min=k.drive_speed_min), A_OPEN)
         leg = self.path_to(R, p, R_hook, hook, top + k.lift_dz, leave=True)

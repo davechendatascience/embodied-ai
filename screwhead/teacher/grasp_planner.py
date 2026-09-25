@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..geometry.frames import EPS_DIR, EPS_NORM, Z, tool_frame, top_down
+from ..geometry.frames import EPS_DIR, EPS_NORM, Z, axis_rot, tool_frame, top_down
 from ..sim import contacts
 from ..sim.scan import GripperScan, support_below
 from ..sim.scene import VERTICAL_COS, geom_world_box
@@ -103,7 +103,7 @@ class GraspPlanner:
                 out += self.at(pt, float(hw[2]), thin, w, body=bid, floor=floor)
         return out
 
-    def tiers(self, obj: str, box, held_by: str | None = None) -> list[tuple[str, list]]:
+    def tiers(self, obj: str, box, held_by: str | None = None, also_held_by: str | None = None) -> list[tuple[str, list]]:
         """Candidate grasps in order of preference, each tier tried on its own.
 
         A tier that offers nothing FEASIBLE must hand over rather than force: forcing left
@@ -128,14 +128,57 @@ class GraspPlanner:
         # the palm's depth meets the cabinet in every layout, and the usual depth let the bowl pivot
         # out of the pads as it left the drawer floor (2 of 50)
         parts = deep + middle + shallow
+        # the same pinches leaned off the vertical about the wall's tangent, the wrist away from the object's
+        # centre, least lean first: LIBERO's humans take libero_90 8's bowl, under the open top drawer, by
+        # the rim on the side away from the cabinet with the approach 11-24 deg off vertical
+        leaned = self.leaned(parts, box.world_centre)
         for g in self.part_geoms(obj, box):
             sides += self.handle_grasps(g)
         if not (faces or parts or sides):
             d0 = box.width_axes()[0][1] if box.width_axes() else np.array([1.0, 0.0, 0.0])
             faces = self.at(box.world_centre, half_h, d0, self.k.max_grip - self.k.grip_margin, floor=floor)
-        handles = self.handles(obj, box, floor) if held_by == "handle" else []
-        # a category held by its handle is offered the handle first (affordances.yaml held_by)
-        return [(n, t) for n, t in (("handle", handles), ("faces", faces), ("parts", parts), ("sides", sides)) if t]
+        handles = self.handles(obj, box, floor) if "handle" in (held_by, also_held_by) else []
+        handles_leaned = self.leaned(handles, self.scene.body_pose(obj)[1])
+        # a category held by its handle is offered the handle first (affordances.yaml held_by); one also held by it,
+        # after its upright tiers and before the leaned wall pinches (also_held_by): libero_10 9's mug, leaned by its
+        # rim 45 deg into the microwave, went 1 of 5 where by its leaned handle it went 5 of 5
+        upright = [("faces", faces), ("parts", parts)]
+        by_handle = [("handle", handles), ("handle_leaned", handles_leaned)]
+        order = by_handle + upright + [("leaned", leaned)] if held_by == "handle" else upright + by_handle + [("leaned", leaned)]
+        return [(n, t) for n, t in order + [("sides", sides)] if t]
+
+    def faces_turned(self, obj: str, box) -> list:
+        """The face pinches turned about the vertical by each of face_yaws, least first: the jaw across the
+        same faces at an angle, its opening measured along the turned jaw line. LIBERO's humans turn their
+        pinch on libero_10 1's cream cheese up to 21 deg off its faces' normal, where the hand square to
+        them lands on the milk carton beside it."""
+        bid = self.scene.body_id(obj)
+        half_h = float(np.abs(box.R @ np.diag(box.half)).sum(1)[2])
+        floor = support_below(self.scene, self._ray, obj) + self.gripper().reach + FLOOR_CLEARANCE
+        out = []
+        for yaw in self.k.face_yaws:
+            for w, d in box.width_axes():
+                wt = w / max(float(np.cos(yaw)), EPS_NORM)
+                if wt + self.k.grip_margin <= self.k.max_grip and self.clear_body(box.world_centre, -Z, bid):
+                    out += self.at(box.world_centre, half_h, axis_rot(Z, yaw) @ d, wt, body=bid, floor=floor)
+        return out
+
+    def leaned(self, cands: list, centre: np.ndarray) -> list:
+        """Top-down grasps leaned off the vertical by each of lean_tilts, least first: turned about the
+        level axis square to the line from the object's centre out to the grasp point, the wrist moving
+        out along that line -- about a rim pinch's tangent, about a handle pinch's jaw."""
+        out = []
+        for tilt in self.k.lean_tilts:
+            for R, p, w, _app in cands:
+                r = np.asarray(p - centre, float)[:2]
+                n = float(np.linalg.norm(r))
+                if n < EPS_DIR:
+                    continue
+                r = r / n
+                a = np.array([-r[1], r[0], 0.0])
+                R_l = min((axis_rot(a, tilt) @ R, axis_rot(a, -tilt) @ R), key=lambda Rc: float(Rc[:2, 2] @ r))
+                out.append((R_l, p, w, R_l[:, 2].copy()))
+        return out
 
     def at(self, centre: np.ndarray, half_h: float, d: np.ndarray, w: float, body: int = -1,
            floor: float = -np.inf, deep: float = 0.0) -> list:

@@ -79,6 +79,14 @@ def held_by(category: str | None) -> str | None:
     return entry.get("held_by") if ("measured" in evidence or "declared" in evidence) else None
 
 
+def also_held_by(category: str | None) -> str | None:
+    """A second place a category is held, offered after its own tiers (only 'handle' is read), under the
+    same evidence gate as held_by."""
+    entry = affordances().get(category or "", {}) or {}
+    evidence = entry.get("evidence") or {}
+    return entry.get("also_held_by") if ("measured" in evidence or "declared" in evidence) else None
+
+
 def parse(path: str | Path, suite: str | None = None) -> TaskSpec:
     from libero.libero.envs.bddl_utils import robosuite_parse_problem
     path = Path(path)
