@@ -121,6 +121,42 @@ Proposed as branches in `consistency.yaml`, each verified before it is built:
   count, limits, torque limits, tool offset, hand shape, pad names) comes from the loaded model or a
   measurement of it, never from a Panda constant.
 
+### Theory status (2026-09-25)
+
+Two of these are staged in the ledger and were proven 3 of 3 by the verifier as first stated, then
+restated to answer its design concerns (re-verification pending):
+
+- `BRN-servo-keeps-clearance` -- the damper servo over robot-scene and robot-self pairs. The restatement adds
+  the joint limits to the feasible set (a damped step could otherwise command past a limit), guards only geoms
+  the arm moves (a base or mount within the margin would leave no feasible step and silently disable the rule),
+  skips pairs within the gripper, requires the cutoff to exceed the margin, and passes the servo's references
+  through unaltered wherever no inequality binds, so that episodes stay bit-identical.
+- `BRN-reach-screen-grades-self-contact` -- the screen rejects folded-arm candidates. The restatement says the
+  robot includes its gripper, excludes pairs within the gripper (two fingers are not parent and child), and
+  leaves two things to measurement: a census of the Panda's probed configurations (claim 2's "nothing changes"
+  needs no self-contact at any depth there), and whether the UR5e's fold happens at a probed configuration at
+  all or only while the servo tracks between them.
+
+The other two statements of this section are not branches: that a non-redundant arm's IK branches are finite
+and a local step keeps its branch is a lemma that needs a kinematics premise, and that the embodiment is a
+declared input is a property of the code, for a component-belief contract.
+
+### The open design problem: what a student may touch
+
+The servo branch's exemptions come from the running policy. The skill teacher knows what it must touch (the
+object it grasps, the bar it hooks, the support under a deep pinch); a learned student declares nothing, so on
+this servo its fingers would be held off the very object it reaches for, where the teacher, in the same state
+with the same action, would touch it. Train and test execution would differ, against the rule that they are
+identical. Before a student runs on this servo, the exempt set has to be something both can use:
+
+- computed from the state -- for example the body between the open jaws within the pads' reach, the body a
+  closing gripper already touches, and the support under the tool's column; or
+- carried in the action -- a contact flag the policy emits and the decode honours, learned from the teacher's
+  labels like the gripper aperture.
+
+The first keeps the student's action space as it is; the second is more general and more to learn. This is
+the first decision of the servo-transfer work that changes the student, so it is taken before step 3 is built.
+
 ## 6. Risks and open questions
 
 - **Exemptions decide everything.** A clearance margin that is right for a free carry is wrong for a hook that
