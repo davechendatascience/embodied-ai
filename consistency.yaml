@@ -3143,12 +3143,12 @@ branches:
       robot's and the object's, at that step; (3) whether this branch keeps a direction at a step, and
       which is taken, are functions of that step's state, the placed object, the drop point, the region's
       box, the carry height, the recorded decisions and records of every branch that states it replaces
-      the place's entry frame, level frame, drop point or E for a direction (BRN-place-steep-laid-entry's
-      among them), the arm's joint ranges, the scene's body tree and joint types, and declared constants;
-      (4) where neither that branch nor this one keeps a direction, the target is placed as that branch
-      states. Not claimed: that the loose bodies the sweep meets stay where they are, upright, or out of
-      the region; that the object reaches the corridor or the drop point; that the hand or arm clears
-      anything.
+      the place's entry frame, level frame, drop point, E or band for a direction
+      (BRN-place-steep-laid-entry's among them), the arm's joint ranges, the scene's body tree and joint
+      types, and declared constants; (4) where neither that branch nor this one keeps a direction, the
+      target is placed as that branch states. Not claimed: that the loose bodies the sweep meets stay
+      where they are, upright, or out of the region; that the object reaches the corridor or the drop
+      point; that the hand or arm clears anything.
     premises: [BRN-place-enters-roofed-target-level, BRN-place-steep-laid-entry, AXM-mujoco-forward-is-a-function-of-state, AXM-object-geometry-known]
     derivation_rule: >-
       libero_90 42 (put the frying pan under the cabinet shelf) failed 21 of 50 in v37: the roof was
@@ -3169,7 +3169,9 @@ branches:
       frame, E and band as any branch replacing them leaves them, and the records those branches keep are
       among claim (3)'s inputs (a crossing pitch or a go-shallow record changes a direction's corridor and
       sweep). Restated again per the verifier: the replacing branches the sweep reads are those that state
-      their replacements as such functions, not of the direction taken, which claim (3) uses.
+      their replacements as such functions, not of the direction taken, which claim (3) uses. Restated a
+      third time per the verifier: the band is among what a replacing branch may change (the steep branch
+      lowers its top to the roof), so claim (3) lists band-replacing branches too.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-place-lays-along-tilted-region
