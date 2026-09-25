@@ -103,15 +103,24 @@ axioms:
       PandaGripper: the time, then qpos -- the Panda's seven arm joints and its two finger joints
       first, then every object joint in the model's joint order -- then qvel in the same order. With
       another arm registered as this project registers it (UR5e, IIWA, Kinova3 or Jaco), in every one
-      of the 130 tasks the model's object joints are the Panda model's -- the same joints, of the same
-      types and widths, in the same qpos order -- so the recorded object block maps onto them joint by
-      joint; and the robot's base body stands at exactly the world pose the Panda's base stands at, so
-      a pose given in the Panda's base frame is the same world pose in that arm's base frame.
+      of the 130 tasks: the model's object joints are the Panda model's -- the same joints, of the
+      same types and widths, in the same qpos order -- so the recorded object block maps onto them
+      joint by joint; the rest of the scene is the Panda model's too -- every body, geom and site that
+      is not the robot's, with its name, parent, mass, shape, size, mesh, contact filter, friction and
+      pose, except the poses of bodies attached to the world, which the reset re-samples -- so
+      registering an arm changes only the robot; the robot's base body stands at exactly the world
+      pose the Panda's base stands at, so a pose given in the Panda's base frame is the same world
+      pose in that arm's base frame; and the environment's resets are not deterministic in robosuite's
+      sense, on any arm.
     rationale: >-
       Measured 2026-09-26 on the four arms in all 130 tasks: the object joints (name, type, qpos
-      width, in qpos order) are identical to the Panda model's; robot0_base's world position and
-      quaternion are identical to the Panda's (difference exactly 0), at four distinct Panda base
-      poses across the scenes.
+      width, in qpos order) are identical to the Panda model's; a digest of every non-robot body
+      (name, parent, mass, pose unless attached to the world), geom (type, size, pose, contype,
+      conaffinity, friction, mesh name and vertex count) and site (name, type, size, pose) equals the
+      Panda's -- mesh indices alone differ, shifted by the robot's meshes before them; robot0_base's
+      world position and quaternion are identical to the Panda's (difference exactly 0), at four
+      distinct Panda base poses across the scenes; deterministic_reset is False in every task on every
+      arm.
 
   - id: AXM-robot-reset-draws-per-joint
     domain: environment
