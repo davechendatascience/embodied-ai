@@ -626,14 +626,17 @@ class Skills:
         c = self._grasp_cache.get(obj)
         return np.inf if c is None else float(self.scene.object_box(obj).world_centre[2] - c[3][2])
 
-    def _leave_point(self, p: np.ndarray) -> np.ndarray | None:
+    def _leave_point(self, p: np.ndarray, z_goal: float) -> np.ndarray | None:
         """BRN-leave-a-roof-level-first: where the tool goes level first when a colliding geom of the scene
         lies over the hand -- within leave_radius of the tool point in plan, its bottom leave_above over the
         tool point: the nearest point, leave_step apart out to leave_max in leave_directions directions from
         the world's x axis counter-clockwise, over which nothing lies and to which a level sweep of the disc
         over the hand's band meets nothing but what it already overlaps. None when nothing lies over the
         hand, or no such point is found. After pressing libero_90 23's bottom drawer shut the tool sat under
-        the top drawer's bar, within column_leave of the hook point: the hook drove up through the bar."""
+        the top drawer's bar, within column_leave of the hook point: the hook drove up through the bar. Only what
+        lies between the hand and the leg's start point counts -- its bottom below that point's height: the
+        microwave's top over its door's handle, where the swing must go, sent the hand away from it on every
+        step (libero_90 35, 50 -> 0 of 50)."""
         k = self.k
         _pos, _rad, bottoms, tops, keep = self.reach._geoms_now()
         solid = keep & self._solid(set())
@@ -642,7 +645,7 @@ class Skills:
 
         def covered(xy):
             dist = self.reach._footprint_distance(np.asarray(xy, float)[None])[:, 0]
-            return bool((solid & (dist < k.leave_radius) & (bottoms > z0)).any())
+            return bool((solid & (dist < k.leave_radius) & (bottoms > z0) & (bottoms < z_goal)).any())
         if not covered(p[:2]):
             return None
         d0 = self.reach._footprint_distance(np.asarray(p[:2], float)[None])[:, 0]
@@ -670,7 +673,7 @@ class Skills:
         lat = float(np.linalg.norm((p - start)[:2]))
         below = p[2] < safe_h - k.plane_band
         if leave and below:
-            out = self._leave_point(p)
+            out = self._leave_point(p, float(start[2]))
             if out is not None:
                 return "leave", R, out
         if lat <= k.funnel_xy or (below and lat <= k.column_leave):
