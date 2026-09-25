@@ -1,0 +1,96 @@
+[run] libero_object: 20 episodes x 10 tasks
+[run] libero_spatial: 20 episodes x 10 tasks
+[run] libero_goal: 20 episodes x 10 tasks
+
+task                              rate    94% interval  grade     mechanisms
+    goal[ 0]                20/20    [0.85, 1.00]  marginal  
+    goal[ 1]                20/20    [0.85, 1.00]  marginal  
+    goal[ 2]                20/20    [0.85, 1.00]  marginal  
+    goal[ 3]                20/20    [0.85, 1.00]  marginal  
+    goal[ 4]                20/20    [0.85, 1.00]  marginal  
+    goal[ 5]                20/20    [0.85, 1.00]  marginal  
+    goal[ 6]                20/20    [0.85, 1.00]  marginal  
+    goal[ 7]                20/20    [0.85, 1.00]  marginal  
+    goal[ 8]                20/20    [0.85, 1.00]  marginal  
+    goal[ 9]                20/20    [0.85, 1.00]  marginal  
+  object[ 0]                20/20    [0.85, 1.00]  marginal  
+  object[ 1]                20/20    [0.85, 1.00]  marginal  
+  object[ 2]                20/20    [0.85, 1.00]  marginal  
+  object[ 3]                20/20    [0.85, 1.00]  marginal  
+  object[ 4]                20/20    [0.85, 1.00]  marginal  
+  object[ 5]                20/20    [0.85, 1.00]  marginal  
+  object[ 6]                20/20    [0.85, 1.00]  marginal  
+  object[ 7]                20/20    [0.85, 1.00]  marginal  
+  object[ 8]                20/20    [0.85, 1.00]  marginal  
+  object[ 9]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 0]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 1]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 2]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 3]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 4]                19/20    [0.77, 0.99]  marginal  pick/never-reached-grasp (after losing it in place_on) x1
+ spatial[ 5]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 6]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 7]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 8]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 9]                20/20    [0.85, 1.00]  marginal  
+
+overall 599/600 = 0.998  [0.99, 1.00]   reliable 0  marginal 30  broken 0
+
+not reliable, worst first:
+  libero_spatial[4] 19/20 lo 0.77: pick/never-reached-grasp (after losing it in place_on) x1
+  libero_goal[0] 20/20 lo 0.85: -
+  libero_goal[1] 20/20 lo 0.85: -
+  libero_goal[2] 20/20 lo 0.85: -
+  libero_goal[3] 20/20 lo 0.85: -
+  libero_goal[4] 20/20 lo 0.85: -
+  libero_goal[5] 20/20 lo 0.85: -
+  libero_goal[6] 20/20 lo 0.85: -
+  libero_goal[7] 20/20 lo 0.85: -
+  libero_goal[8] 20/20 lo 0.85: -
+  libero_goal[9] 20/20 lo 0.85: -
+  libero_object[0] 20/20 lo 0.85: -
+  libero_object[1] 20/20 lo 0.85: -
+  libero_object[2] 20/20 lo 0.85: -
+  libero_object[3] 20/20 lo 0.85: -
+  libero_object[4] 20/20 lo 0.85: -
+  libero_object[5] 20/20 lo 0.85: -
+  libero_object[6] 20/20 lo 0.85: -
+  libero_object[7] 20/20 lo 0.85: -
+  libero_object[8] 20/20 lo 0.85: -
+  libero_object[9] 20/20 lo 0.85: -
+  libero_spatial[0] 20/20 lo 0.85: -
+  libero_spatial[1] 20/20 lo 0.85: -
+  libero_spatial[2] 20/20 lo 0.85: -
+  libero_spatial[3] 20/20 lo 0.85: -
+  libero_spatial[5] 20/20 lo 0.85: -
+  libero_spatial[6] 20/20 lo 0.85: -
+  libero_spatial[7] 20/20 lo 0.85: -
+  libero_spatial[8] 20/20 lo 0.85: -
+  libero_spatial[9] 20/20 lo 0.85: -
+
+failures by mechanism: pick/never-reached-grasp (after losing it in place_on) 1
+
+600 trials -> /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0245/result.json
+
+==== diagnosis, worst task first ====
+
+### libero_spatial[4] 19/20  pick up the black bowl in the top drawer of the wooden cabinet and place it on the plate
+  mechanisms: pick/never-reached-grasp (after losing it in place_on) x1
+  events in failed episodes: grasped akita_black_bowl_# in place_on x1, STALL in pick x1, LOST akita_black_bowl_# in pick x1
+  grasp tiers chosen: forced x1
+  -- ep0 (500 steps) [pick/never-reached-grasp (after losing it in place_on)]
+     timeline: pick:up 12 > pick:over 26 > pick:down 9 > pick:descend 7 > pick:squeeze 6 > place_on:lift 6 > pick:squeeze 1 > place_on:lift 5 > pick:squeeze 1 > place_on:lift 3 > pick:lift 1 > pick:up 2 > pick:down 9 > pick:descend 50 > pick:squeeze 6 > pick:up 16 > pick:over 10 > pick:down 9 > pick:descend 26 > pick:squeeze 3 > place_on:lift 12 > pick:up 15 > pick:over 13 > pick:down 10 > pick:descend 8 [clamp 5] > pick:squeeze 6 [clamp 6] > place_on:carry 1 > pick:squeeze 1 > place_on:carry 4 [clamp 4] > pick:up 26 [clamp 5] > pick:over 11 [clamp 8] > pick:down 2 > pick:over 9 [clamp 9] > pick:down 1 > pick:over 173 [reanchor 43, clamp 173]
+     t60 grasped akita_black_bowl_1 in place_on:lift, aperture 8 mm
+     t66 LOST akita_black_bowl_1 in pick:squeeze: object z 0.159, tool z 0.194, aperture 8 mm
+     t68 grasped akita_black_bowl_1 in place_on:lift, aperture 5 mm
+     t72 LOST akita_black_bowl_1 in pick:squeeze: object z 0.160, tool z 0.213, aperture 4 mm
+     t74 grasped akita_black_bowl_1 in place_on:lift, aperture 3 mm
+     t78 LOST akita_black_bowl_1 in pick:up: object z 0.174, tool z 0.230, aperture 6 mm
+     t208 grasped akita_black_bowl_1 in place_on:lift, aperture 27 mm
+     t220 LOST akita_black_bowl_1 in pick:up: object z 0.153, tool z 0.202, aperture 25 mm
+     t272 grasped akita_black_bowl_1 in place_on:carry, aperture 10 mm
+     t278 LOST akita_black_bowl_1 in pick:up: object z 0.154, tool z 0.179, aperture 11 mm
+     grasp akita_black_bowl_1: tier=forced, offered={'parts': 72, 'sides': 160}, via=True, feasible=0, score=None, forced=True, rejected={'approach0.08:no_ik': 226, 'approach0.06:no_ik': 223, 'approach0.02:no_ik': 222, 'grasp:no_ik': 221, 'approach0.04:no_ik': 219, 'pre:no_ik': 216}, approach=[-0.0, -0.0, -1.0], jaw=[-0.7, -0.71, 0.0], width_mm=17.7, open_mm=29.7, grasp_above_centre_mm=-0.0, transit=0.381, choices=8
+     final: on(akita_black_bowl_1, plate_1) = False | dxy 289 mm (< 30), dz +0.160 (>= 0), contact False
+
+full record of every failed episode -> /home/edge-host/Documents/GitHub/embodied_ai/runs/evidence/reliability/diagnosis.md

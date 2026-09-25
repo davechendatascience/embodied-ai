@@ -1,0 +1,75 @@
+[run] libero_object: 20 episodes x 10 tasks
+[run] libero_spatial: 20 episodes x 10 tasks
+[run] libero_goal: 20 episodes x 10 tasks
+
+task                              rate    94% interval  grade     mechanisms
+    goal[ 0]                20/20    [0.85, 1.00]  marginal  
+    goal[ 1]                20/20    [0.85, 1.00]  marginal  
+    goal[ 2]                20/20    [0.85, 1.00]  marginal  
+    goal[ 3]                20/20    [0.85, 1.00]  marginal  
+    goal[ 4]                20/20    [0.85, 1.00]  marginal  
+    goal[ 5]                20/20    [0.85, 1.00]  marginal  
+    goal[ 6]                20/20    [0.85, 1.00]  marginal  
+    goal[ 7]                20/20    [0.85, 1.00]  marginal  
+    goal[ 8]                20/20    [0.85, 1.00]  marginal  
+    goal[ 9]                20/20    [0.85, 1.00]  marginal  
+  object[ 0]                20/20    [0.85, 1.00]  marginal  
+  object[ 1]                20/20    [0.85, 1.00]  marginal  
+  object[ 2]                20/20    [0.85, 1.00]  marginal  
+  object[ 3]                20/20    [0.85, 1.00]  marginal  
+  object[ 4]                20/20    [0.85, 1.00]  marginal  
+  object[ 5]                20/20    [0.85, 1.00]  marginal  
+  object[ 6]                20/20    [0.85, 1.00]  marginal  
+  object[ 7]                20/20    [0.85, 1.00]  marginal  
+  object[ 8]                20/20    [0.85, 1.00]  marginal  
+  object[ 9]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 0]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 1]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 2]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 3]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 4]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 5]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 6]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 7]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 8]                20/20    [0.85, 1.00]  marginal  
+ spatial[ 9]                20/20    [0.85, 1.00]  marginal  
+
+overall 600/600 = 1.000  [0.99, 1.00]   reliable 0  marginal 30  broken 0
+
+not reliable, worst first:
+  libero_goal[0] 20/20 lo 0.85: -
+  libero_goal[1] 20/20 lo 0.85: -
+  libero_goal[2] 20/20 lo 0.85: -
+  libero_goal[3] 20/20 lo 0.85: -
+  libero_goal[4] 20/20 lo 0.85: -
+  libero_goal[5] 20/20 lo 0.85: -
+  libero_goal[6] 20/20 lo 0.85: -
+  libero_goal[7] 20/20 lo 0.85: -
+  libero_goal[8] 20/20 lo 0.85: -
+  libero_goal[9] 20/20 lo 0.85: -
+  libero_object[0] 20/20 lo 0.85: -
+  libero_object[1] 20/20 lo 0.85: -
+  libero_object[2] 20/20 lo 0.85: -
+  libero_object[3] 20/20 lo 0.85: -
+  libero_object[4] 20/20 lo 0.85: -
+  libero_object[5] 20/20 lo 0.85: -
+  libero_object[6] 20/20 lo 0.85: -
+  libero_object[7] 20/20 lo 0.85: -
+  libero_object[8] 20/20 lo 0.85: -
+  libero_object[9] 20/20 lo 0.85: -
+  libero_spatial[0] 20/20 lo 0.85: -
+  libero_spatial[1] 20/20 lo 0.85: -
+  libero_spatial[2] 20/20 lo 0.85: -
+  libero_spatial[3] 20/20 lo 0.85: -
+  libero_spatial[4] 20/20 lo 0.85: -
+  libero_spatial[5] 20/20 lo 0.85: -
+  libero_spatial[6] 20/20 lo 0.85: -
+  libero_spatial[7] 20/20 lo 0.85: -
+  libero_spatial[8] 20/20 lo 0.85: -
+  libero_spatial[9] 20/20 lo 0.85: -
+
+600 trials -> /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0246/result.json
+
+==== diagnosis, worst task first ====
+
+full record of every failed episode -> /home/edge-host/Documents/GitHub/embodied_ai/runs/evidence/reliability/diagnosis.md

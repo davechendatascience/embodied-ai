@@ -1,0 +1,4 @@
+python3 tools/teacher_report.py --suites libero_object libero_spatial libero_goal --episodes 20 --seed 556 --out /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0246/result.json
+exit=0
+test=TST-teacher-reliability@170abe48
+at=2026-09-24T00:51:33+00:00

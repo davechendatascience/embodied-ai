@@ -1,0 +1,17 @@
+libero_object task 0 ep 0: same
+libero_object task 0 ep 1: same
+libero_object task 0 ep 2: same
+libero_object task 0 ep 3: same
+libero_spatial task 6 ep 0: same
+libero_spatial task 6 ep 1: same
+libero_spatial task 6 ep 2: same
+libero_spatial task 6 ep 3: same
+libero_goal task 0 ep 0: same
+libero_goal task 0 ep 1: same
+libero_goal task 0 ep 2: same
+libero_goal task 0 ep 3: same
+libero_goal task 7 ep 0: same
+libero_goal task 7 ep 1: same
+libero_goal task 7 ep 2: same
+libero_goal task 7 ep 3: same
+16/16 reproducible -> /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0243/result.json

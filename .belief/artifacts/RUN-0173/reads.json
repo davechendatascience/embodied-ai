@@ -1,0 +1,19 @@
+[
+ "screwhead/assets/robots/panda/robot.xml",
+ "screwhead/sim/sim_arm.py",
+ "screwhead/third_party/LIBERO",
+ "tests/test_exec_state.py",
+ "third_party/LIBERO/libero.egg-info/entry_points.txt",
+ "third_party/LIBERO/libero/libero/assets/articulated_objects/flat_stove.xml",
+ "third_party/LIBERO/libero/libero/assets/articulated_objects/wooden_cabinet.xml",
+ "third_party/LIBERO/libero/libero/assets/scenes/libero_tabletop_base_style.xml",
+ "third_party/LIBERO/libero/libero/assets/stable_hope_objects/cream_cheese/cream_cheese.xml",
+ "third_party/LIBERO/libero/libero/assets/stable_scanned_objects/akita_black_bowl/akita_black_bowl.xml",
+ "third_party/LIBERO/libero/libero/assets/stable_scanned_objects/plate/plate.xml",
+ "third_party/LIBERO/libero/libero/assets/turbosquid_objects/wine_bottle/wine_bottle.xml",
+ "third_party/LIBERO/libero/libero/assets/turbosquid_objects/wine_rack/wine_rack.xml",
+ "third_party/LIBERO/libero/libero/bddl_files/libero_goal/put_the_bowl_on_the_plate.bddl",
+ "third_party/LIBERO/libero/libero/bddl_files/libero_goal/turn_on_the_stove.bddl",
+ "third_party/LIBERO/libero/libero/init_files/libero_goal/put_the_bowl_on_the_plate.pruned_init",
+ "third_party/LIBERO/libero/libero/init_files/libero_goal/turn_on_the_stove.pruned_init"
+]

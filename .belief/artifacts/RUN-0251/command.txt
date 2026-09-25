@@ -1,0 +1,4 @@
+HF_HUB_OFFLINE=1 PYTHONPATH=/home/edge-host/Documents/GitHub/embodied_ai/.belief/cache/readhook:third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/teacher_settled.py --episodes 20 --seed 557 --out /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0251/result.json
+exit=0
+test=TST-teacher-settled@a61d2d4b
+at=2026-09-24T04:28:38+00:00

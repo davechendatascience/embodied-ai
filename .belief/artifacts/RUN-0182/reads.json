@@ -1,0 +1,18 @@
+[
+ "screwhead/assets/robots/panda/robot.xml",
+ "screwhead/geometry/__pycache__",
+ "screwhead/sim/sim_arm.py",
+ "screwhead/third_party/LIBERO",
+ "tests/test_verdicts.py",
+ "third_party/LIBERO/libero.egg-info/entry_points.txt",
+ "third_party/LIBERO/libero/libero/assets/scenes/libero_floor_base_style.xml",
+ "third_party/LIBERO/libero/libero/assets/stable_hope_objects/alphabet_soup/alphabet_soup.xml",
+ "third_party/LIBERO/libero/libero/assets/stable_hope_objects/butter/butter.xml",
+ "third_party/LIBERO/libero/libero/assets/stable_hope_objects/cream_cheese/cream_cheese.xml",
+ "third_party/LIBERO/libero/libero/assets/stable_hope_objects/milk/milk.xml",
+ "third_party/LIBERO/libero/libero/assets/stable_hope_objects/orange_juice/orange_juice.xml",
+ "third_party/LIBERO/libero/libero/assets/stable_hope_objects/tomato_sauce/tomato_sauce.xml",
+ "third_party/LIBERO/libero/libero/assets/stable_scanned_objects/basket/basket.xml",
+ "third_party/LIBERO/libero/libero/bddl_files/libero_object/pick_up_the_cream_cheese_and_place_it_in_the_basket.bddl",
+ "third_party/LIBERO/libero/libero/init_files/libero_object/pick_up_the_cream_cheese_and_place_it_in_the_basket.pruned_init"
+]

@@ -1,0 +1,4 @@
+python3 tools/teacher_determinism.py --out /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0243/result.json
+exit=0
+test=TST-teacher-deterministic@a23f04d9
+at=2026-09-24T00:20:07+00:00

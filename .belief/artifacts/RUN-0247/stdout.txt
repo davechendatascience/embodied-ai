@@ -1,0 +1,176 @@
+libero_spatial[ 0] settled 20/20 (success 20)  
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+libero_spatial[ 1] settled 20/20 (success 20)  
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+libero_spatial[ 2] settled 20/20 (success 20)  
+libero_spatial[ 3] settled 20/20 (success 20)  
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+libero_spatial[ 4] settled 20/20 (success 20)  
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+libero_spatial[ 5] settled 20/20 (success 20)  
+libero_spatial[ 6] settled 20/20 (success 20)  
+libero_spatial[ 7] settled 20/20 (success 20)  
+libero_spatial[ 8] settled 20/20 (success 20)  
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+libero_spatial[ 9] settled 20/20 (success 20)  
+ libero_object[ 0] settled 20/20 (success 20)  
+ libero_object[ 1] settled 20/20 (success 20)  
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+ libero_object[ 2] settled  0/20 (success 20)  lost 20, unfinished 20, held 20, moving 20
+ libero_object[ 3] settled 20/20 (success 20)  
+ libero_object[ 4] settled  3/20 (success 20)  unfinished 17, held 16, moving 16, lost 1
+ libero_object[ 5] settled 20/20 (success 20)  
+ libero_object[ 6] settled 20/20 (success 20)  
+ libero_object[ 7] settled 20/20 (success 20)  
+ libero_object[ 8] settled 20/20 (success 20)  
+ libero_object[ 9] settled 20/20 (success 20)  
+   libero_goal[ 0] settled 20/20 (success 20)  
+   libero_goal[ 1] settled 20/20 (success 20)  
+   libero_goal[ 2] settled 20/20 (success 20)  
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+   libero_goal[ 3] settled 20/20 (success 20)  
+   libero_goal[ 4] settled 20/20 (success 20)  
+   libero_goal[ 5] settled 20/20 (success 20)  
+   libero_goal[ 6] settled 20/20 (success 20)  
+   libero_goal[ 7] settled 20/20 (success 20)  
+   libero_goal[ 8] settled 20/20 (success 20)  
+   libero_goal[ 9] settled  1/20 (success 20)  lost 19, unfinished 19, tipped 17, held 8, moving 5
+     libero_10[ 0] settled 19/20 (success 20)  lost 1, unfinished 1, held 1, moving 1
+     libero_10[ 1] settled 13/20 (success 13)  never succeeded 7, held 2
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+     libero_10[ 2] settled  3/20 (success  4)  tipped 17, never succeeded 16, held 16, moving 6
+     libero_10[ 3] settled 18/20 (success 18)  never succeeded 2, tipped 2
+     libero_10[ 4] settled 20/20 (success 20)  
+     libero_10[ 5] settled  0/20 (success 20)  tipped 15, lost 5, unfinished 5
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+     libero_10[ 6] settled  1/20 (success 20)  tipped 19, lost 18, unfinished 18, held 14, moving 11
+     libero_10[ 7] settled 20/20 (success 20)  
+     libero_10[ 8] settled  0/20 (success  0)  never succeeded 20, held 16, tipped 15, moving 13
+     libero_10[ 9] settled  0/20 (success  0)  never succeeded 20, tipped 7, held 3, moving 3
+[info] using task orders [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+     libero_90[ 0] settled 20/20 (success 20)  
+     libero_90[ 1] settled 20/20 (success 20)  
+     libero_90[ 2] settled 15/20 (success 15)  never succeeded 5
+     libero_90[ 3] settled 14/20 (success 20)  tipped 6
+     libero_90[ 4] settled 15/20 (success 20)  tipped 5
+     libero_90[ 5] settled  8/20 (success  8)  never succeeded 12
+     libero_90[ 6] settled 20/20 (success 20)  
+     libero_90[ 7] settled 20/20 (success 20)  
+     libero_90[ 8] settled  7/20 (success  7)  never succeeded 13, held 1, moving 1
+     libero_90[ 9] settled 20/20 (success 20)  
+     libero_90[10] settled 20/20 (success 20)  
+     libero_90[11] settled 20/20 (success 20)  
+     libero_90[12] settled 20/20 (success 20)  
+     libero_90[13] settled 20/20 (success 20)  
+     libero_90[14] settled 20/20 (success 20)  
+     libero_90[15] settled 20/20 (success 20)  
+     libero_90[16] settled 20/20 (success 20)  
+     libero_90[17] settled 20/20 (success 20)  
+     libero_90[18] settled 19/20 (success 19)  never succeeded 1, moving 1
+     libero_90[19] settled 20/20 (success 20)  
+     libero_90[20] settled 20/20 (success 20)  
+     libero_90[21] settled 20/20 (success 20)  
+     libero_90[22] settled 20/20 (success 20)  
+     libero_90[23] settled  5/20 (success  5)  never succeeded 15
+     libero_90[24] settled 18/20 (success 19)  never succeeded 1, tipped 1
+     libero_90[25] settled 20/20 (success 20)  
+     libero_90[26] settled 20/20 (success 20)  
+     libero_90[27] settled  0/20 (success 20)  lost 20, unfinished 20, tipped 20, held 5, moving 1
+     libero_90[28] settled 20/20 (success 20)  
+     libero_90[29] settled 20/20 (success 20)  
+     libero_90[30] settled 20/20 (success 20)  
+     libero_90[31] settled 20/20 (success 20)  
+     libero_90[32] settled  0/20 (success  0)  never succeeded 20
+     libero_90[33] settled  7/20 (success  7)  never succeeded 13, moving 1
+     libero_90[34] settled 16/20 (success 20)  tipped 4
+     libero_90[35] settled  0/20 (success  0)  never succeeded 20
+     libero_90[36] settled 20/20 (success 20)  
+     libero_90[37] settled 18/20 (success 20)  tipped 2
+     libero_90[38] settled 19/20 (success 20)  lost 1, unfinished 1, held 1, moving 1
+     libero_90[39] settled 20/20 (success 20)  
+     libero_90[40] settled  0/20 (success  0)  never succeeded 20, held 10, moving 5
+     libero_90[41] settled 20/20 (success 20)  
+     libero_90[42] settled  0/20 (success  0)  never succeeded 20, moving 13, held 11, tipped 11
+     libero_90[43] settled 20/20 (success 20)  
+     libero_90[44] settled 20/20 (success 20)  
+     libero_90[45] settled 20/20 (success 20)  
+     libero_90[46] settled 20/20 (success 20)  
+     libero_90[47] settled 20/20 (success 20)  
+     libero_90[48] settled 13/20 (success 20)  unfinished 7, held 7, moving 6
+     libero_90[49] settled 20/20 (success 20)  
+     libero_90[50] settled 20/20 (success 20)  
+     libero_90[51] settled 19/20 (success 19)  never succeeded 1, held 1
+     libero_90[52] settled 20/20 (success 20)  
+     libero_90[53] settled 20/20 (success 20)  
+     libero_90[54] settled 20/20 (success 20)  
+     libero_90[55] settled 19/20 (success 20)  lost 1, unfinished 1
+     libero_90[56] settled 20/20 (success 20)  
+     libero_90[57] settled 20/20 (success 20)  
+     libero_90[58] settled 20/20 (success 20)  
+     libero_90[59] settled 11/20 (success 12)  never succeeded 8, tipped 2, held 2, moving 2
+     libero_90[60] settled 19/20 (success 20)  tipped 1
+     libero_90[61] settled 20/20 (success 20)  
+     libero_90[62] settled 17/20 (success 17)  never succeeded 3
+     libero_90[63] settled 20/20 (success 20)  
+     libero_90[64] settled 19/20 (success 20)  tipped 1
+     libero_90[65] settled 20/20 (success 20)  
+     libero_90[66] settled 20/20 (success 20)  
+     libero_90[67] settled 20/20 (success 20)  
+     libero_90[68] settled 20/20 (success 20)  
+     libero_90[69] settled  0/20 (success 20)  unfinished 20, held 20, tipped 7, moving 7
+     libero_90[70] settled  0/20 (success 20)  unfinished 20, held 20, moving 4, tipped 2
+     libero_90[71] settled 20/20 (success 20)  
+     libero_90[72] settled 20/20 (success 20)  
+     libero_90[73] settled  1/20 (success  6)  tipped 17, never succeeded 14, held 1
+     libero_90[74] settled 20/20 (success 20)  
+     libero_90[75] settled  8/20 (success  9)  never succeeded 11, tipped 11, held 4, lost 1, unfinished 1, moving 1
+     libero_90[76] settled 20/20 (success 20)  
+     libero_90[77] settled  1/20 (success 20)  tipped 16, lost 3, unfinished 3, held 1, moving 1
+     libero_90[78] settled  0/20 (success  2)  tipped 20, never succeeded 18, moving 5, held 3
+     libero_90[79] settled 14/20 (success 20)  tipped 6
+     libero_90[80] settled  8/20 (success 10)  tipped 12, never succeeded 10, lost 1, unfinished 1, held 1
+     libero_90[81] settled  8/20 (success 10)  never succeeded 10, tipped 8, lost 2, held 1, moving 1
+     libero_90[82] settled 20/20 (success 20)  
+     libero_90[83] settled  6/20 (success  6)  never succeeded 14, tipped 14, held 1
+     libero_90[84] settled 20/20 (success 20)  
+     libero_90[85] settled 20/20 (success 20)  
+     libero_90[86] settled  0/20 (success  0)  never succeeded 20
+     libero_90[87] settled 20/20 (success 20)  
+     libero_90[88] settled  0/20 (success  0)  never succeeded 20, held 11
+     libero_90[89] settled  0/20 (success  0)  never succeeded 20, held 15, moving 11
+libero_spatial: settled 200/200, success 200/200
+libero_object: settled 163/200, success 200/200
+libero_goal: settled 181/200, success 200/200
+libero_10: settled 94/200, success 135/200
+libero_90: settled 1384/1800, success 1511/1800
+-> /home/edge-host/Documents/GitHub/embodied_ai/.belief/artifacts/RUN-0247/result.json

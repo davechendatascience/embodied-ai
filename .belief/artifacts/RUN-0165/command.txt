@@ -1,0 +1,4 @@
+env HF_HUB_OFFLINE=1 PYTHONPATH=/home/edge-host/Documents/GitHub/embodied_ai/.belief/cache/readhook:third_party/LIBERO:. MUJOCO_GL=egl taskset -c 5-9,15-19 .venv-libero/bin/python -m pytest tests/test_exec_state.py -q
+exit=0
+test=TST-exec-state-replay@dfdec905
+at=2026-09-23T06:06:21+00:00
