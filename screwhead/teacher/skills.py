@@ -106,6 +106,10 @@ class SkillConfig:
     entry_line: float = 0.02       # m off the entry line the object may be and still be entering along it
     lay_pitch: float = 0.15        # rad a laid object's approach tilts down: the humans' median at the release
     #                                into the shelf's top layer, 8.6 deg over 20 demos (libero_90 88)
+    steep_pitches: tuple = (0.45, 0.55, 0.65, 0.75)  # rad, a laid object's steep entry, tried in order: the
+    #                                humans into the shelf's bottom layer pitch 23-37 deg (libero_90 89)
+    steep_depth: float = 0.05      # m the origin goes past the region's face by the steep entry (humans 0.8-4.5 cm)
+    steep_margin: float = 0.02     # m outside the face the tool point stops when it pushes in after the release
     at_place_xy: float = 0.04      # a released object this close to its target is left there
     at_place_dz: float = 0.03
     at_place_above: float = 0.03   # ... and no higher than this above it: with no bound, a bowl 8 cm
@@ -204,6 +208,7 @@ class Skills:
         self._carry_cache: dict = {}
         self._spots: dict[str, tuple] = {}         # synthetic regions: where a crowded object goes
         self._clearing: dict[tuple, str | None] = {}
+        self._entry_choice: dict = {}              # BRN-place-steep-laid-entry's decision per (obj, region, side)
         self._let_go: dict[str, bool] = {}          # objects this episode's releases have let go
         self._released_at: dict[tuple, np.ndarray] = {}  # a roofed entry's release target, per (object, region)
         self._last_held: str | None = None           # the object held() last found in the jaws
@@ -244,7 +249,7 @@ class Skills:
             self._last_held = None
             for cache in (self._grasp_cache, self._handle_cache, self.grasp_log,
                           self._drop_cache, self._carry_cache, self._spots, self._clearing, self._let_go,
-                          self._released_at):
+                          self._released_at, self._entry_choice):
                 cache.clear()
 
     def grasp_for(self, obj: str, via: np.ndarray | None = None,
@@ -732,9 +737,9 @@ class Skills:
         self._withdraw = None
         carry_z = self._carry_height(obj, region, q, target_q, R, p)
         entry = self._level_entry(obj, region, q, target_q, carry_z, R, p)
-        R_entry = None
+        R_entry, steep = None, False
         if entry is not None:                          # BRN-place-enters-roofed-target-level
-            u, E, R_entry, xy = entry
+            u, E, R_entry, xy, steep = entry
             target_q = np.r_[xy, E[2]]                 # the drop point at the entry's (rest) height
             rel = q - target_q
             t = float(rel[:2] @ u[:2])                 # along the entry line, out from the drop point
@@ -801,6 +806,14 @@ class Skills:
             # 10), pushed in along the entry it seated it (8 of 10) -- laid, its approach within 45 deg of level
             w = -u if float(R_entry[2, 2]) > -np.cos(np.pi / 4) else u
             self._withdraw = (np.asarray(w, float), p + w * float((E - target_q)[:2] @ u[:2]))
+            if steep:
+                # BRN-place-steep-laid-entry: pushed in until the tool point is steep_margin outside the face. Drawn
+                # out, the released book was dragged back past the face (lost 10 of 10); pushed in all the way, the
+                # hand went under the board and stayed (unfinished 10 of 10)
+                R_reg, p_reg, half = self.region_pose(region)
+                extent = float(np.abs(R_reg.T @ u) @ np.abs(np.asarray(half, float)))
+                push = max(0.0, float((p - p_reg)[:2] @ u[:2]) - (extent + k.steep_margin))
+                self._withdraw = (np.asarray(-u, float), p - u * push)
         return self.action(np.zeros(6), A_OPEN)
 
     def _own_bodies(self, obj: str) -> set[int]:
@@ -865,6 +878,18 @@ class Skills:
             return None
         low = float(box.world_centre[2] - (np.abs(box.R) @ box.half)[2])
         return z_from - dist + float(q[2]) - low + self.k.place_clearance
+
+    def _fixed_blocked(self, obj: str, R_try: np.ndarray, q_t: np.ndarray, origins: list) -> bool:
+        """BRN-place-steep-laid-entry's screen: the tool at frame R_try placed so the held object's origin is at
+        each point is not reached by inverse kinematics from the joints now, or puts the arm, jaws as they are,
+        into something bolted down (the object itself aside). Touching only loose bodies is not blocked:
+        screened on any contact, libero_90 88's level entry, which brushes the next book, went steep and failed
+        10 of 10."""
+        Ts = [pose(R_try, np.asarray(o, float) - R_try @ q_t) for o in origins]
+        th, conv, _sig, _margin = self.reach.solve(Ts)
+        ap = float(self.env.snapshot()["aperture"])
+        bid = self.scene.body_id(obj)
+        return not bool(all(conv)) or any(self.reach.collides(t, bid, ap) == 2 for t in th)
 
     def _level_entry(self, obj: str, region: str, q: np.ndarray, target_q: np.ndarray, carry_z: float,
                      R: np.ndarray, p: np.ndarray):
@@ -943,6 +968,7 @@ class Skills:
                     if n < 1e-6:
                         continue
                     u /= n
+                    xy_side, steep = xy, False
                     if laid:
                         # pitched down as far as lay_pitch as the opening allows, as the humans' hands are:
                         # level, the wrist trailing behind the tool at its height sat on the next book on the
@@ -964,12 +990,53 @@ class Skills:
                             if rest_e is not None and rest_e - low_e + height_e + k.place_clearance <= roof:
                                 fit = (R_try, Rb_e, off_e, height_e, low_e, rest_e)
                                 break
+
+                        def entry_origin(Rb_c, off_c, rest_c, xy_c):
+                            """E for a frame and drop point: as below, from the object's box centre at rest."""
+                            c_c = np.r_[xy_c, rest_c] + off_c
+                            face_c = float(half[j]) - float((c_c - p_reg) @ (sgn * axis))
+                            return np.r_[xy_c, rest_c] + u * (max(face_c, 0.0) + float(abs(u @ Rb_c) @ box.half)
+                                                             + k.entry_margin)
+                        def steep_frame(pitch):
+                            """The steep frame at a pitch and the object carried at it at the steep drop point, or
+                            None where it has no rest height there."""
+                            app = np.cos(pitch) * -u - np.sin(pitch) * Z
+                            frames = []
+                            for y in (Z, -Z):
+                                y = y - (y @ app) * app
+                                y = y / np.linalg.norm(y)
+                                frames.append(np.column_stack([np.cross(y, app), y, app]))
+                            R_try = self._by_wrist(R, frames)[0]
+                            Rb_s, off_s, ext_s, _h, _lv, low_s = measure(R_try)
+                            rest_s = rest_z(xy_s, off_s, low_s)
+                            return None if rest_s is None else (R_try, Rb_s, off_s, 2.0 * float(ext_s[2]), low_s, rest_s)
+                        xy_s = np.asarray(xy, float) + u[:2] * ((float(half[j]) - k.steep_depth)
+                                                                - float((np.asarray(xy, float) - p_reg[:2]) @ u[:2]))
+                        choice_key = (obj, region, j, sgn)
+                        if fit is not None and choice_key not in self._entry_choice:
+                            # BRN-place-steep-laid-entry, decided once per episode: level, the hand went into the
+                            # table under the shelf's bottom layer (libero_90 89, 0 of 50); steeper, and only its
+                            # front part in, as the humans do
+                            choice = None
+                            if self._fixed_blocked(obj, fit[0], q_t, [entry_origin(fit[1], fit[2], fit[5], xy),
+                                                                      np.r_[xy, fit[5]]]):
+                                for i_p, pitch in enumerate(k.steep_pitches):
+                                    st = steep_frame(pitch)
+                                    if st is not None and not self._fixed_blocked(
+                                            obj, st[0], q_t, [entry_origin(st[1], st[2], st[5], xy_s),
+                                                              np.r_[xy_s, st[5]]]):
+                                        choice = i_p
+                                        break
+                            self._entry_choice[choice_key] = choice
+                        if fit is not None and self._entry_choice.get(choice_key) is not None:
+                            fit = steep_frame(k.steep_pitches[self._entry_choice[choice_key]])
+                            xy_side, steep = xy_s, True
                         if fit is None:
                             continue                      # laid, still too tall
                         R_entry, Rb_e, off_e, height_e, low_e, rest_e = fit
                         along = float(abs(u @ Rb_e) @ box.half)
                         across = float(abs(np.array([-u[1], u[0], 0.0]) @ Rb_e) @ box.half)
-                        c_e = np.r_[xy, rest_e] + off_e
+                        c_e = np.r_[xy_side, rest_e] + off_e
                         bot_e, top_e = rest_e - low_e, rest_e - low_e + height_e
                     else:
                         # turned about the vertical so its longest level axis lies along the entry: a pan goes
@@ -986,29 +1053,30 @@ class Skills:
                     face = float(half[j]) - float((c_e - p_reg) @ (sgn * axis))
                     d_out = max(face, 0.0) + along + k.entry_margin
                     e_c = c_e + u * d_out
-                    E = np.r_[xy, rest_e] + u * d_out
+                    E = np.r_[xy_side, rest_e] + u * d_out
                     # already in this side's corridor -- on its line, between the drop point and the entry
                     # point, at the entry's height -- it is this side: re-swept every step, a pan hanging from
                     # its handle flickered in and out of the band and was lifted back out of the shelf
-                    rel = q - np.r_[xy, rest_e]
+                    rel = q - np.r_[xy_side, rest_e]
                     t = float(rel[:2] @ u[:2])
                     # and the tool behind it along u, within 45 deg of u from the drop point: near the drop point
                     # the object lies in every direction's corridor, and libero_90 88's book, entered along -y, was
                     # taken as entering along +y and the hand withdrew into the shelf
-                    tr = np.asarray(p[:2], float) - np.asarray(xy, float)
+                    tr = np.asarray(p[:2], float) - np.asarray(xy_side, float)
                     t_tool = float(tr @ u[:2])
                     behind = t_tool >= float(np.linalg.norm(tr - u[:2] * t_tool))
                     inside = (behind and float(np.linalg.norm(rel[:2] - u[:2] * t)) <= k.entry_line
                               and -k.entry_line <= t <= d_out + k.entry_line and float(q[2]) <= float(E[2]) + k.plane_band)
                     if inside:
-                        return u, E, R_entry, True
+                        return u, E, R_entry, True, xy_side, steep
+                    # steep, the swept band stops at the roof: what stands above it stays outside the face
                     if not self._level_clear(c_e[:2], e_c[:2], across + k.exit_margin, bot_e + k.place_clearance,
-                                             top_e, mine):
+                                             min(top_e, roof) if steep else top_e, mine):
                         continue
                     dist = float(np.linalg.norm(e_c[:2]))  # the robot's base is the frame's origin
                     if best is None or dist < best[0]:
-                        best = (dist, u, E, R_entry)
-            return None if best is None else (best[1], best[2], best[3], False)
+                        best = (dist, u, E, R_entry, xy_side, steep)
+            return None if best is None else (best[1], best[2], best[3], False, best[4], best[5])
 
         xy0 = np.asarray(target_q[:2], float)
         roofed = roof_at(xy0)
@@ -1017,7 +1085,7 @@ class Skills:
         found = entry_at(xy0)
         if found is None:
             return None
-        return found[0], found[1], found[2], xy0
+        return found[0], found[1], found[2], found[4], found[5]
 
     def _fit_yaw(self, obj: str, region: str, R: np.ndarray) -> np.ndarray:
         """The tool turned about the vertical so the held object's footprint fits the region's: unturned
