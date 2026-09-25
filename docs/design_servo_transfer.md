@@ -134,6 +134,37 @@ What the matrix taught beyond the counts:
   inertia-weighted gains were sized on the Panda; the Kinova3's and the Jaco's actuators saturate on a third of
   their steps and the arm lags the reference by 0.06-0.1 rad.
 
+### Understanding the 18 failures (traced step by step, 2026-09-26)
+
+The diagnostics' first-cut labels were read against per-phase traces of every failure (saturated joints, tracking
+error, joint speed, the robot's contacts with the scene):
+
+| what happens | episodes | where |
+|---|---|---|
+| contact stall: the arm or hand pushes on the scene or the target, frozen at the servo's lead cap with a joint at its torque limit for hundreds of steps | 4 | UR5e on the wine rack (libero_10 3); Kinova3 on the cabinet top (goal 3); Kinova3 and Jaco hand on the moka pot during the grasp descent (libero_10 2) |
+| frozen at a joint limit: the reference cannot advance, about 590 steps at 1 mrad of error and no motion | 3 | iiwa goal 2, 7, 9 |
+| grasp lost during loaded motion: the object drops mid-lift or mid-carry while the arm saturates | 5 | Kinova3 goal 4, 9, libero_10 4; iiwa and Jaco libero_10 9 |
+| the squeeze never holds: the jaws close beside the object and the teacher waits to the horizon | 2 | Kinova3 libero_10 6, Jaco goal 2 |
+| out of the envelope: reaching into the top drawer, the arm cycles up and over while saturated, touching nothing | 2 | Kinova3 and Jaco spatial 4 |
+| self-fold | 1 | UR5e goal 0 |
+| regrasp loop | 1 | Kinova3 libero_10 9 |
+
+Three concepts the Panda teacher never needed are missing:
+
+- **Blocked progress** (9 episodes). The servo commands its reference whatever resists it, and the teacher waits for
+  a phase to finish. Blocked by a contact, a joint limit or an empty squeeze, the episode stalls to the horizon. The
+  episode log already detects stalls ("tool still for 30 steps"); nothing acts on them.
+- **Grip under the arm's dynamics** (6). The acceleration bounds that keep a grip (AXM-acceleration-loads-the-grip)
+  were measured on the Panda; on arms whose joints saturate on a third of their steps the motion is no longer the
+  commanded one, and objects slip.
+- **The arm's envelope and families** (6, overlapping). What is reachable, and without passing a limit, depends on the
+  arm's joint limits and the elbow family it starts in.
+
+Also measured: every arm's joint controller (kp 4000, inertia-weighted) saturates at a tracking error of 1-24 mrad,
+while the servo allows a lead of 100 mrad; the joint inertias are nearly equal across arms (the model's rotor inertia
+dominates), so the arms differ mainly in torque capacity (Panda 80/12 Nm, UR5e 150/28, iiwa 176/110/40, Kinova3
+32/13 with half of the shoulder's taken by gravity, Jaco 30.5/6.8).
+
 **Revised order**, by episodes each fix can reach: (a) a servo whose lead and acceleration are sized to each
 arm's torque capacity -- measured from its model (8 failures); (b) branch and family awareness, including the
 choice of start pose (5); (c) the self-contact screen and dampers (2). The Robotiq port (step 5) is independent
