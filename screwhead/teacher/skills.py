@@ -101,6 +101,7 @@ class SkillConfig:
     lower_speed: float = 0.15
     lower_speed_min: float = 0.03
     lower_done: float = 0.004      # lowered to within this of the target height
+    lower_align: float = 0.004     # m off the drop point in plan above which a place_in's lower holds its height
     place_clearance: float = 0.015 # object bottom above the target surface before release
     entry_margin: float = 0.03     # m past the region's box the level entry to a roofed target starts
     entry_line: float = 0.02       # m off the entry line the object may be and still be entering along it
@@ -838,7 +839,13 @@ class Skills:
             self.phase = "lower"
             # on to the drop point, not only down: lowered straight, the bowl drifted 13 mm toward
             # the cabinet on its way into libero_10 3's drawer
-            return self.action(self.twist_to(R, p, R_fit, p + delta, v_max=k.lower_speed,
+            # BRN-place-in-aligns-before-descending: into a region, the height held while the object is more than
+            # lower_align off the drop point in plan. Lowered and moved at once, the servo's lag left libero_90 80's
+            # book 7-10 mm short of its point as it went down between the caddy's walls, 6 mm of room each side,
+            # and it came to rest on a wall (80: 15, 83: 17 of 20). Onto a surface it is not: the moka pots pressed
+            # on to libero_10 8's burner went 2 lost, 1 won of 10
+            step = delta if not inside or float(np.linalg.norm(delta[:2])) <= k.lower_align else np.r_[delta[:2], 0.0]
+            return self.action(self.twist_to(R, p, R_fit, p + step, v_max=k.lower_speed,
                                              v_min=k.lower_speed_min), 0.0)
         self.phase = "release"
         self._let_go[obj] = True
