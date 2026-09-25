@@ -129,16 +129,20 @@ axioms:
       samples its fixture and object placements are robosuite 1.4.0's robot reset's alone: one
       standard normal per entry of the robot's init_qpos, which has one entry per arm joint (7 on the
       Panda, IIWA, Kinova3 and Jaco; 6 on the UR5e). LIBERO's placement samplers then read that
-      generator and the scene's objects, fixtures and regions, not the robot. numpy's legacy generator
-      draws normals as one sequence: n normals drawn over several calls leave it where n drawn in one
-      call do.
+      generator and the task's scene -- its objects, fixtures and regions as the model declares them
+      -- and neither the robot nor the fixture poses an earlier reset wrote: the poses they write are
+      a function of the generator's state at their entry and the task. numpy's legacy generator draws
+      normals as one sequence: n normals drawn over several calls leave it where n drawn in one call
+      do.
     rationale: >-
       Traced 2026-09-26 on libero_10 0 by wrapping every numpy.random function during a reset: the
       Panda and IIWA draw randn(7) from robosuite's single_arm.py, the UR5e randn(6), then the region
       and placement samplers draw identically. With one normal drawn before the UR5e's reset the
       generator's state at the sampler's entry hashes the same on all three arms, and every fixture
       and object root body stands at the same pose at placement (11 of 11 bodies, difference exactly
-      0). Without it the UR5e's fixtures are drawn from a shifted stream.
+      0). After resets under three other seeds moved the fixtures up to 18.6 mm, a reset seeded as
+      before wrote the same fixture poses exactly, on the Panda and the UR5e, in 16 tasks over the
+      four suites.
 
   - id: AXM-libero-soft-reset-state
     domain: environment
@@ -739,12 +743,21 @@ lemmas:
 
   - id: LMA-seed-fixtures-per-init-state
     statement: >-
-      Seeding numpy's global RNG before every reset, per initial-state index, makes the
-      fixture poses a function of (seed, init index), identical when a state is settled
-      and when it is replayed. (That whole episodes reproduce is measured, not derived:
-      CTR-teacher-deterministic.)
-    premises: [AXM-libero-resamples-fixtures, AXM-reproducible-measurement]
-    derivation_rule: The fixture pose becomes a function of (seed, init index), identical at settle and replay.
+      On one arm, seeding numpy's global generator before every reset from (seed, init index) makes
+      the fixture poses that reset writes a function of (seed, init index, the arm's per-joint draw
+      count), identical when a state is settled and when it is replayed on that arm, whatever resets
+      came before; and on an arm drawing n < 7 normals whose generator is advanced by 7 - n normals
+      after the seeding, they are the poses the 7-joint arms' resets write. (That whole episodes
+      reproduce is measured, not derived: CTR-teacher-deterministic.)
+    premises: [AXM-libero-resamples-fixtures, AXM-robot-reset-draws-per-joint, AXM-reproducible-measurement]
+    derivation_rule: >-
+      Seeding fixes the generator's state at the reset's start. On one arm the reset draws the same n
+      normals before the placement samplers (AXM-robot-reset-draws-per-joint), so their entry state is
+      a function of (seed, init index, n); the samplers write poses that are a function of that entry
+      state and the task, not of what earlier resets wrote, and AXM-libero-resamples-fixtures says
+      those poses are where the fixtures stand. With 7 - n normals drawn first, the entry state is the
+      one 7 draws leave, by the one-sequence clause. The earlier statement, unscoped across arms, was
+      refuted by TRL-1105.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: LMA-observers-read-only
