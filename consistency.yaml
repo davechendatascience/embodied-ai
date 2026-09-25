@@ -743,23 +743,26 @@ lemmas:
 
   - id: LMA-seed-fixtures-per-init-state
     statement: >-
-      On one arm, seeding numpy's global generator before every reset from (seed, init index) makes
-      the fixture poses that reset writes a function of (seed, init index, the arm's per-joint draw
+      On one arm registered as AXM-libero-init-states-record-a-panda has it, whose resets are
+      therefore not deterministic, seeding numpy's global generator from (seed, init index)
+      immediately before a reset, with nothing else drawing from it before that reset, makes the
+      fixture poses that reset writes a function of (task, seed, init index, the arm's per-joint draw
       count), identical when a state is settled and when it is replayed on that arm, whatever resets
       came before; and on an arm drawing n < 7 normals whose generator is advanced by 7 - n normals
-      after the seeding, they are the poses the 7-joint arms' resets write. (That whole episodes
-      reproduce is measured, not derived: CTR-teacher-deterministic.)
-    premises: [AXM-libero-resamples-fixtures, AXM-robot-reset-draws-per-joint, AXM-reproducible-measurement]
+      after the seeding, they are the poses the 7-joint arms' resets write in that task. (That whole
+      episodes reproduce is measured, not derived: CTR-teacher-deterministic.)
+    premises: [AXM-libero-resamples-fixtures, AXM-robot-reset-draws-per-joint, AXM-libero-init-states-record-a-panda,
+               AXM-reproducible-measurement]
     derivation_rule: >-
-      Seeding fixes the generator's state at the reset's start. On one arm the reset draws the same n
-      normals before the placement samplers (AXM-robot-reset-draws-per-joint), so their entry state is
+      Seeding fixes the generator's state at the reset's start, nothing drawing in between. The arm's
+      resets are not deterministic (AXM-libero-init-states-record-a-panda), so the reset draws its n
+      normals before the placement samplers (AXM-robot-reset-draws-per-joint) and their entry state is
       a function of (seed, init index, n); the samplers write poses that are a function of that entry
       state and the task, not of what earlier resets wrote, and AXM-libero-resamples-fixtures says
       those poses are where the fixtures stand. With 7 - n normals drawn first, the entry state is the
-      one 7 draws leave, by the one-sequence clause. The earlier statement, unscoped across arms, was
-      refuted by TRL-1105.
+      one 7 draws leave, by the one-sequence clause. Refuted unscoped across arms (TRL-1105) and
+      without the non-deterministic reset (TRL-1108).
     sufficiency: {n_min: 3, min_consensus: 0.8}
-
   - id: LMA-observers-read-only
     statement: >-
       A diagnostic must not cause a decision to be made: every read it performs returns a decision
