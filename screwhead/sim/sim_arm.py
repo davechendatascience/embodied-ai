@@ -36,9 +36,14 @@ SETTLE_CHUNK = 5              # then in chunks of this many, until at rest
 SETTLE_ROUNDS = 10            # at most this many chunks
 
 
+ROBOT_MODEL = {"Panda": "panda", "UR5e": "ur5e"}   # robosuite's arm name -> its model in screwhead/assets/robots
+
+
 @dataclass(frozen=True)
 class Execution:
     """How actions are executed -- the part that must be identical for teacher and student."""
+    robot: str = "Panda"              # the arm, by robosuite's name ("UR5e" is registered with LIBERO too)
+    gripper: str = "PandaGripper"     # the gripper, by robosuite's name
     kp: float = 4000.0
     servo_iters: int = 1
     settle_steps: int = 5
@@ -101,7 +106,7 @@ class SimArm:
               dict(use_camera_obs=False, has_offscreen_renderer=False))
         # a hard reset reloads the MuJoCo model (911 ms of a 1058 ms reset, measured), and
         # set_init_state overwrites the full state afterwards anyway
-        self.env = OffScreenRenderEnv(bddl_file_name=bddl, robots=["Panda"], gripper_types="PandaGripper",
+        self.env = OffScreenRenderEnv(bddl_file_name=bddl, robots=[ex.robot], gripper_types=ex.gripper,
                                       controller="JOINT_POSITION", hard_reset=ex.hard_reset, **kw)
         self.joint_step = ex.joint_step      # read by robosuite when a reset rebuilds the controller
         self.robot.controller_config.update(output_max=ex.joint_step, output_min=-ex.joint_step)
@@ -113,8 +118,9 @@ class SimArm:
             torch.load = _load
         self.env.reset()
         flange, _ = gripper_geom(self.env)
-        self.chain = build_chain("panda", flange)
-        check_loaded_model(self.robot.robot_model.file, "panda")
+        arm = ROBOT_MODEL[ex.robot]
+        self.chain = build_chain(arm, flange)
+        check_loaded_model(self.robot.robot_model.file, arm)
         self.servo = TwistServo(self.chain, self.spec, ex.joint_step, iters=ex.servo_iters, max_lag=ex.joint_step)
         self.servo.max_lin_acc, self.servo.max_ang_acc = ex.max_lin_acc, ex.max_ang_acc
         self.servo.max_lin_acc_holding = ex.max_lin_acc_holding
@@ -175,7 +181,7 @@ class SimArm:
         else:
             asked = float(a[6]) > 0.0
         self.servo.grip(asked, contacts.pinched(self.env.sim.model, self.env.sim.data))
-        cmd[:7] = self.servo.command(np.asarray(o["robot0_joint_pos"]), a[:6] * self.scale)
+        cmd[:self.robot.controller.control_dim] = self.servo.command(np.asarray(o["robot0_joint_pos"]), a[:6] * self.scale)
         if self.gripper_mode == "target":
             cmd[-1] = self.gripper_servo.command(float(channel_to_target(a[6])),
                                                  float(gq[0] - gq[1]), float(gv[0] - gv[1]))
@@ -310,7 +316,7 @@ class SimArm:
         for _ in range(n):
             meas = np.asarray(self.observe()["robot0_joint_pos"])
             cmd = np.zeros(self.env.env.action_dim)
-            cmd[:7] = np.clip((hold - meas) / self.joint_step, -1, 1)
+            cmd[:self.robot.controller.control_dim] = np.clip((hold - meas) / self.joint_step, -1, 1)
             cmd[-1] = gripper
             self._gains()
             if self.lean:
