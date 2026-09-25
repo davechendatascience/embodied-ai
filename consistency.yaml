@@ -3099,6 +3099,50 @@ branches:
       in libero_90 42, 89 or libero_10 9.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-place-lays-along-tilted-region
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Terms are BRN-carry-turns-object-to-fit's; poses and boxes are read from each step's state
+      (AXM-grip-fixes-object-in-hand, AXM-mujoco-forward-is-a-function-of-state). A region is tilted when
+      every axis of its box has a vertical component of magnitude below a declared bound, itself below
+      one. For a tilted region, its normal n is its box axis with the least half-extent (the first among
+      equals), signed so that its vertical component is not negative -- where that component is zero, as
+      the box axis points; the held object's long axis is its box axis with the largest half-extent (the
+      first among equals), signed so that its component along n is not negative -- where that component is
+      zero, as the box axis points. At every carry and lower step of a place into a tilted region at which
+      no roofed-entry direction is taken (BRN-place-enters-roofed-target-level), the commanded orientation
+      is instead the tool's frame at that step rotated by the least rotation carrying the object's long
+      axis, as held at that step, on to n -- the tool's frame itself where the two coincide. This replaces
+      the place's own commanded orientation at those steps, as BRN-carry-turns-object-to-fit allows a
+      later branch to; at places into regions that are not tilted, and at steps at which a roofed-entry
+      direction is taken, nothing changes. Claimed: (1) at every such step the commanded orientation --
+      before any branch after this one that states it replaces it -- is the tool's frame turned about the
+      axis normal to both the object's long axis and n, by the angle between them, which is at most a
+      quarter turn; (2) at places into regions that are not tilted, and at steps at which a roofed-entry
+      direction is taken, this branch does not change the commanded orientation, as a function of that
+      step's state; (3) whether a region is tilted, and the commanded orientation at such a step, are
+      functions of that step's state, the region's box, the held object's box and declared constants. Not
+      claimed: that the object keeps its pose in the grasp, reaches the orientation, rests in the region's
+      cradle or stays in the region after release; that the rotation is free of contact or reachable.
+    premises: [BRN-carry-turns-object-to-fit, BRN-place-enters-roofed-target-level, AXM-grip-fixes-object-in-hand, AXM-mujoco-forward-is-a-function-of-state, AXM-object-geometry-known]
+    derivation_rule: >-
+      Set down upright on the wine rack, whose cradle region has no vertical axis (its axes (-1, 0, 0),
+      (0, -0.46, -0.89) and (0, -0.89, 0.46)), libero_goal 9's and libero_90 27's wine bottle scored
+      LIBERO's On at the release and then rolled off the rack on to the table (TST-teacher-settled, seed
+      557: 0 of 20 each in v37, success 20 and 20). LIBERO's humans lay it in the cradle: over 4
+      demonstrations of libero_goal 9 its long axis lies along (-0.04 to 0.35, -0.8 to -0.9, 0.41 to 0.52)
+      at the release and the demo's end, the rack region's thinnest axis being (0, -0.89, 0.46). Laid
+      along that axis before release: settled 10 of 10 on each (seed 557); success unchanged --
+      libero_goal 9 50 of 50, libero_90 27 10 of 10 (inits 0-9) -- and libero_90 75, 77, 80 and 83 (the
+      caddy's compartments, whose regions have a vertical axis) 10 of 10 each, unchanged. Restated per the
+      verifier: claim (2) says this branch changes nothing at regions not tilted or where a roofed-entry
+      direction is taken (there the roofed entry may turn the carry); the long axis's sign at a zero
+      component along n is the box axis's own. Restated per the verifier: n's sign at a zero vertical
+      component is the box axis's own; claim (1) holds before a later branch that replaces the
+      orientation.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:
