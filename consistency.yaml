@@ -3125,31 +3125,32 @@ branches:
       state (AXM-mujoco-forward-is-a-function-of-state), and the scene's body tree and each body's joint
       types are constants of its model. A loose body is one with a free joint of its own. A replacing
       branch is one that states that it replaces a direction's entry frame, level frame, drop point, E or
-      band, and states each such replacement as a function of its own recorded decisions and records and
-      of that step's state, placed object, drop point, region's box and carry height, the arm's joint
-      ranges and declared constants, and not of the direction taken; BRN-place-steep-laid-entry is one.
-      Everything below -- which directions have an entry frame, each direction's corridor, the sweep and
-      the object at rest where it starts -- reads each direction's entry frame, drop point, E and band as
-      the place has them or as replacing branches leave them. At a step at which the place decides a
-      roofed target's entry and that branch keeps no direction -- no direction with an entry frame has the
-      object in its corridor, and every such direction's level sweep meets a colliding geom other than the
-      robot's and the object's -- a direction with an entry frame is kept, instead, when the same sweep --
-      over each direction's entry frame, E and band as that direction has them at that step -- meets no
-      colliding geom other than the robot's, the object's and those of loose bodies; the direction taken
-      is then chosen among the directions so kept by that branch's rule for choosing among kept
-      directions. This replaces, at such steps, the place's own decision of the direction taken, as
-      BRN-place-enters-roofed-target-level allows a later branch to, and with it the entry frame, drop
-      point, corridor, E and case that branch derives from the direction. At every other step nothing
-      changes. Claimed: (1) at every step at which that branch keeps some direction, this branch leaves
-      the direction taken unchanged; (2) where a direction is kept by this branch, its sweep met no
-      colliding geom of a body that is not loose, other than the robot's and the object's, at that step;
-      (3) whether this branch keeps a direction at a step, and which is taken, are functions of that
-      step's state, the placed object, the drop point, the region's box, the carry height, the recorded
-      decisions and records of every replacing branch (BRN-place-steep-laid-entry's among them), the arm's
-      joint ranges, the scene's body tree and joint types, and declared constants; (4) where neither that
-      branch nor this one keeps a direction, the target is placed as that branch states. Not claimed: that
-      the loose bodies the sweep meets stay where they are, upright, or out of the region; that the object
-      reaches the corridor or the drop point; that the hand or arm clears anything.
+      band, and states each such replacement as a function of the recorded decisions and records of
+      replacing branches -- its own and others' -- and of that step's state, placed object, drop point,
+      region's box and carry height, the arm's joint ranges and declared constants, and not of the
+      direction taken; BRN-place-steep-laid-entry is one. Everything below -- which directions have an
+      entry frame, each direction's corridor, the sweep and the object at rest where it starts -- reads
+      each direction's entry frame, drop point, E and band as the place has them or as replacing branches
+      leave them. At a step at which the place decides a roofed target's entry and that branch keeps no
+      direction -- no direction with an entry frame has the object in its corridor, and every such
+      direction's level sweep meets a colliding geom other than the robot's and the object's -- a
+      direction with an entry frame is kept, instead, when the same sweep -- over each direction's entry
+      frame, E and band as that direction has them at that step -- meets no colliding geom other than the
+      robot's, the object's and those of loose bodies; the direction taken is then chosen among the
+      directions so kept by that branch's rule for choosing among kept directions. This replaces, at such
+      steps, the place's own decision of the direction taken, as BRN-place-enters-roofed-target-level
+      allows a later branch to, and with it the entry frame, drop point, corridor, E and case that branch
+      derives from the direction. At every other step nothing changes. Claimed: (1) at every step at which
+      that branch keeps some direction, this branch leaves the direction taken unchanged; (2) where a
+      direction is kept by this branch, its sweep met no colliding geom of a body that is not loose, other
+      than the robot's and the object's, at that step; (3) whether this branch keeps a direction at a
+      step, and which is taken, are functions of that step's state, the placed object, the drop point, the
+      region's box, the carry height, the recorded decisions and records of every replacing branch
+      (BRN-place-steep-laid-entry's among them), the arm's joint ranges, the scene's body tree and joint
+      types, and declared constants; (4) where neither that branch nor this one keeps a direction, the
+      target is placed as that branch states. Not claimed: that the loose bodies the sweep meets stay
+      where they are, upright, or out of the region; that the object reaches the corridor or the drop
+      point; that the hand or arm clears anything.
     premises: [BRN-place-enters-roofed-target-level, BRN-place-steep-laid-entry, AXM-mujoco-forward-is-a-function-of-state, AXM-object-geometry-known]
     derivation_rule: >-
       libero_90 42 (put the frying pan under the cabinet shelf) failed 21 of 50 in v37: the roof was
@@ -3175,7 +3176,9 @@ branches:
       lowers its top to the roof), so claim (3) lists band-replacing branches too. Restated a fourth time
       per the verifier: the class of replacing branches is defined once and read everywhere -- the entry
       frames and corridors that decide whether this branch acts, the sweep, and where the object rests
-      when it starts.
+      when it starts. Restated a fifth time per the verifier: a replacing branch may read the records of
+      other replacing branches (the steep branch screens the frame a later level-frame replacer leaves),
+      so the class is closed under reading one another's replacements; claim (3) lists all their records.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-place-lays-along-tilted-region
