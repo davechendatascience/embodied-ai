@@ -1884,32 +1884,36 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      The wooden cabinet's top drawer -- the bar the offsets were measured on, 15 x 16 mm across and
-      89 mm long, with nothing of the scene over it -- is opened without grasping its handle: the jaws
-      wide open and pointing down, the jaw axis along the opening direction, the measured tool
-      lowered straight down to a point on the opening side of the bar and above it, and only when the
-      measured tool is within 4 mm of that height is it dragged along the opening direction at the
-      drive speed, the point re-derived from the bar's pose every control step. It stops when LIBERO's
-      Open holds past its threshold by the fill's margin. What follows leaves upward before anything
-      else, the next skill's first leg. Any other drawer, and this one when something lies over its
-      bar, is opened by the pinch drive. Not claimed: that the drag cannot slip or stall -- a stalled
-      drag re-enters, and nothing bounds how often -- or that the offsets fit another bar.
+      A sliding drawer whose bar has nothing of the scene over it where it sits closed -- the wooden
+      cabinet's top drawer, the bar the offsets were measured on, 15 x 16 mm across and 89 mm long, and
+      the white cabinet's top drawer, 16 x 16 mm across and 88 mm long -- is opened without grasping its
+      handle: the jaws wide open and pointing down, the jaw axis along the opening direction, the measured
+      tool lowered straight down to a point on the opening side of the bar and above it, and only when the
+      measured tool is within 4 mm of that height is it dragged along the opening direction at the drive
+      speed, the point re-derived from the bar's pose every control step. It stops when LIBERO's Open
+      holds past its threshold by the fill's margin. What follows leaves upward before anything else, the
+      next skill's first leg. A drawer whose bar has something of the scene over it where it sits closed
+      is opened by the pinch drive. Not claimed: that the drag cannot slip or stall -- a stalled drag
+      re-enters, and nothing bounds how often -- or that the offsets fit a bar of another section.
     premises: [AXM-object-geometry-known, AXM-panda-gripper-geometry, AXM-handle-shares-body,
                DEF-skill-contract, AXM-libero-joint-bands, AXM-parameters-derived]
     derivation_rule: >-
-      LIBERO's 50 human demonstrations of libero_goal 3, replayed from their recorded states, all
-      open the top drawer this way: jaws open 77-80 mm and never commanded closed, pointing straight
-      down, jaw axis along the opening direction, the tool 42 mm on the opening side of the bar and
-      17 mm above its centre, the drawer open by about step 62. The offsets are taken from them
-      (AXM-parameters-derived: a measured distribution); lower or closer settings measured on the
-      teacher, 9-12 mm above and 27-35 mm ahead, engaged the bar in 3 of 30 episodes, and the demos'
-      own setting in 6 of 6, open at a median step 55 against about 290 for the pinch drive after
-      relocating the bowl. Requiring the tool at the hook height before dragging is measured too: at
-      17 mm above it the finger swept over the bar. The middle drawer's bar has the top drawer's bar
-      over it, which is why the condition is stated: its humans approach from the side, and the pinch
-      drive already opens it in 74 steps. AXM-object-geometry-known gives the bar and whatever lies
-      over it; AXM-handle-shares-body puts the bar on the moving body; AXM-libero-joint-bands the
-      threshold. evidence: CTR-teacher-reliable (libero_goal 3 and 0).
+      LIBERO's 50 human demonstrations of libero_goal 3, replayed from their recorded states, all open the
+      top drawer this way: jaws open 77-80 mm and never commanded closed, pointing straight down, jaw axis
+      along the opening direction, the tool 42 mm on the opening side of the bar and 17 mm above its
+      centre, the drawer open by about step 62. The offsets are taken from them (AXM-parameters-derived: a
+      measured distribution); lower or closer settings measured on the teacher, 9-12 mm above and 27-35 mm
+      ahead, engaged the bar in 3 of 30 episodes, and the demos' own setting in 6 of 6, open at a median
+      step 55 against about 290 for the pinch drive after relocating the bowl. Requiring the tool at the
+      hook height before dragging is measured too: at 17 mm above it the finger swept over the bar. The
+      middle drawer's bar has the top drawer's bar over it, which is why the condition is stated: its
+      humans approach from the side, and the pinch drive already opens it in 74 steps.
+      AXM-object-geometry-known gives the bar and whatever lies over it; AXM-handle-shares-body puts the
+      bar on the moving body; AXM-libero-joint-bands the threshold. evidence: CTR-teacher-reliable
+      (libero_goal 3 and 0). Restated to the scope the teacher runs and is measured on: the white
+      cabinet's top drawer (libero_90 23), its bar within 1 mm of the wooden one's section, is hooked with
+      the same offsets -- 50 of 50 episodes of libero_90 23 open it by the hook, 33 of 50 in v39 and every
+      failure one where the wrist could not reach the hook's frame (BRN-hook-frame-within-the-wrist).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-rim-pinch-as-deep-as-the-palm
