@@ -116,6 +116,7 @@ class SkillConfig:
     tip_done: float = 0.10         # rad from the tipped frame at which the tip is done
     tip_stall: int = 20            # steps without tip_progress of rotation after which the tip is done
     tip_progress: float = 0.01     # rad
+    tilted_region: float = 0.99    # |vertical component| every axis of a tilted region's box stays below
     at_place_xy: float = 0.04      # a released object this close to its target is left there
     at_place_dz: float = 0.03
     at_place_above: float = 0.03   # ... and no higher than this above it: with no bound, a bowl 8 cm
@@ -834,6 +835,10 @@ class Skills:
             return self.action(self.twist_to(R, p, R, p + Z * (carry_z - q[2]),
                                              v_max=k.slow_lift_speed if slow else k.carry_speed), 0.0)
         R_fit = self._fit_yaw(obj, region, R) if R_entry is None else R_entry
+        if R_entry is None:
+            R_lay = self._lay_along_tilted(obj, region, R)
+            if R_lay is not None:                      # BRN-place-lays-along-tilted-region
+                R_fit = R_lay
         if over > k.over_xy:
             self.phase = "carry"
             goal = p + np.array([delta[0], delta[1], max(0.0, carry_z - q[2])])
@@ -890,6 +895,27 @@ class Skills:
                 push = max(0.0, float((p - p_reg)[:2] @ u[:2]) - (extent + k.steep_margin))
                 self._withdraw = (np.asarray(-u, float), p - u * push)
         return self.action(np.zeros(6), A_OPEN)
+
+    def _lay_along_tilted(self, obj: str, region: str, R: np.ndarray) -> np.ndarray | None:
+        """BRN-place-lays-along-tilted-region: for a region whose box has no axis near vertical (the wine rack's
+        cradle), the tool turned by the least rotation laying the held object's longest axis along the region's
+        thinnest axis, pointing up; None for any other region. Set upright on the rack, libero_goal 9's and
+        libero_90 27's bottle rolled off it after the release (settled 0 of 20 each, v37); LIBERO's humans lay it
+        in the cradle, its long axis along the rack's (0, -0.89, 0.46)."""
+        R_reg, _p_reg, half = self.region_pose(region)
+        if float(np.max(np.abs(np.asarray(R_reg[2], float)))) >= self.k.tilted_region:
+            return None
+        half = np.abs(np.asarray(half, float))
+        n = np.asarray(R_reg[:, int(np.argmin(half))], float)
+        n = n if n[2] >= 0 else -n
+        box = self.scene.object_box(obj)
+        la = np.asarray(box.R[:, int(np.argmax(box.half))], float)
+        la = la if float(la @ n) >= 0 else -la
+        ax = np.cross(la, n)
+        sn = float(np.linalg.norm(ax))
+        if sn <= 1e-9:
+            return R
+        return axis_rot(ax / sn, float(np.arctan2(sn, float(la @ n)))) @ R
 
     def _tip_plan(self, obj: str, R_reg, p_reg, half, R: np.ndarray, p: np.ndarray) -> dict | None:
         """The tip: the tool rotated by tip_angle about a horizontal axis through the object's lowest box corner,
