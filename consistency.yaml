@@ -3255,6 +3255,263 @@ branches:
       names it beside the drawers; the positions held fixed in claim (2) are the containers' joints.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-pinch-leans-when-upright-unreachable
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Terms are BRN-rim-pinch-as-deep-as-the-palm's (its wall pinches, offered at three depths) and
+      BRN-handle-tier-for-handled-objects' (its handle tier). The grasp planner offers its candidates in
+      tiers, in a declared order; the reach screen judges each candidate on its own -- whether it passes
+      depends on that candidate, the step's state and declared constants, not on which other candidates
+      are screened with it (DEF-reachable-pose) -- and, at a choice at which some tier has a candidate
+      that passes, the grasp chosen is the one the screen chooses from the first tier, in that order, with
+      such a candidate. The wall pinches are offered together, in one tier. The leaned form of a top-down
+      grasp -- its approach straight down -- at a tilt about a centre is its tool frame turned by the tilt
+      about the level axis square to the plan direction from the centre to its grasp point, by the one of
+      the two signs that gives the approach a horizontal part pointing from the grasp point toward the
+      centre; its grasp point and jaw opening are the grasp's own. A grasp whose point lies within a
+      declared positive distance of the centre in plan has no leaned form. The declared tilts lie strictly
+      between zero and a quarter turn and are taken in increasing order. Two tiers are added to those
+      offered before, without changing the order among those: right after the handle tier, wherever that
+      tier is placed, the leaned forms of the handle tier's candidates about the object's origin -- by
+      tilt, and within a tilt in the handle tier's order; and after the tier holding the wall pinches --
+      right after it, or after the handle tiers where a later branch places those between -- and before
+      every other tier offered before, the leaned forms of the wall pinches about the object's box centre,
+      in the same order. A tier with no candidates is not offered. Claimed: (1) every leaned candidate's
+      approach makes its tilt with the downward vertical, and its horizontal part, of length the sine of
+      the tilt, points from its grasp point toward its centre in plan; (2) a leaned candidate keeps the
+      grasp point and jaw opening of the grasp it is the leaned form of; (3) a leaned handle candidate is
+      offered only for an object to which handle candidates are offered; (4) at every choice at which some
+      tier has a candidate that passes, the grasp chosen is a leaned candidate or is the grasp that would
+      be chosen from the tiers without the two added ones. Not claimed: what the grasp choice does when no
+      tier has a candidate that passes; that a leaned grasp is reachable, holds the object or carries it
+      level; that the declared tilts span the humans' approaches; that the screen's conditioning bars rank
+      a leaned candidate as they rank an upright one.
+    premises: [BRN-rim-pinch-as-deep-as-the-palm, BRN-handle-tier-for-handled-objects, DEF-reachable-pose, AXM-object-geometry-known, AXM-panda-gripper-geometry]
+    derivation_rule: >-
+      Where no upright pinch passes the reach screen, LIBERO's humans lean theirs: libero_90 8's bowl,
+      under the opened top drawer's front, is taken by its rim on the side away from the cabinet with the
+      approach 11-24 deg off vertical (12 demonstrations), where every upright rim pinch the teacher
+      offered met the drawer at the screen (0 of 96 feasible at the first pick step, init 1) and the side
+      grasps it fell back to slipped (12 of 50 in v38); libero_10 9's mug is taken by its handle with the
+      approach 36-59 deg off vertical toward the mug's body (8 of 8 demonstrations). Leaned about the axis
+      square to the line out from the centre, the wrist moves out along that line -- about a wall pinch's
+      tangent, about a handle pinch's jaw -- and the pinch point stays where the upright pinch put it.
+      Added after the tiers they lean, the choice is unchanged wherever an upright candidate of an earlier
+      tier passes. Measured with the leaned wall pinches and the upward leave of
+      BRN-hook-opens-sliding-drawer: libero_90 8 12 -> 33 of 50 (won 23, lost 2); with the leave alone,
+      without the leaned tiers, 23 of 50. Restated per the verifier: the choice when no tier passes is not
+      this branch's to state -- the teacher's forced grasp there departs from DEF-witness-or-refusal,
+      which this branch no longer cites -- and claim (4) is of choices at which some tier passes; the wall
+      pinches form one tier; the no-lean distance is positive. Restated so that
+      BRN-handle-offered-after-upright may place the handle tiers between the wall pinches and their
+      leaned forms; the added tiers keep the order of the others, which is all claim (4) uses.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-roofed-entry-goes-in-shallow
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Terms are BRN-place-enters-roofed-target-level's and BRN-drop-point-footprint-as-carried's. A
+      place's region is closed above for its object when, at the step the place's drop point is chosen,
+      that point is the drop-point search's (not BRN-share-a-surface-side-by-side's) and the search -- its
+      earlier search and, where BRN-drop-point-footprint-as-carried runs it, its carried search -- found
+      no candidate open from above; this is recorded then, with the drop point, and cleared at an
+      episode's start. For a direction u, at a step at which the object is not laid, when the region is
+      closed above, the drop point for u -- which this branch states it replaces -- is the place's drop
+      point moved along u by the amount, where positive, by which its offset from the region's centre
+      along u falls short of the region's half-extent along the region's axis u is taken from less a
+      declared depth, zero or more and at most that half-extent; the rest height, bottom, top, entry point
+      E, corridor, sweep and commands for u are then those at that point, and where the object has no rest
+      height there, u has no entry frame. Claimed: (1) for such a direction the drop point for u lies on
+      the line through the place's drop point along u, and its offset from the region's centre along u,
+      read at that step, is the greater of the place's drop point's offset and that half-extent less the
+      depth; (2) where that offset already reaches that half-extent less the depth, or the region is not
+      closed above, or the object is laid, this branch leaves the drop point for u as it is without this
+      branch; (3) whether the region is closed above is fixed for the episode from the step the drop point
+      is chosen. Not claimed: that the object fits across the opening or rests where it is released; that
+      LIBERO's containment holds along the region's other axes; that a door or lid closes over the object;
+      the provenance of the depth.
+    premises: [BRN-place-enters-roofed-target-level, BRN-drop-point-footprint-as-carried, LMA-caches-reset-per-episode]
+    derivation_rule: >-
+      The microwave's heating region has no point open from above -- its roof covers all of it -- so the
+      drop point search returned its centre, 8.4 cm in from its front face. There a mug held by its handle
+      has the hand inside the opening, whose height (14.4 cm) and width (20.7 cm) the hand and the mug do
+      not fit together: at the centre every candidate of every tier met the microwave at the release (0 of
+      940, libero_10 9 init 2). LIBERO's humans release it with its origin 0-5 cm past the region's face
+      and close the door, which pushes it in (8 of 8 demonstrations end 3.6-5.3 cm past the face). With
+      the depth 2 cm, the handle tier's leaned pinches pass the screen at the release (10 of 252) and
+      libero_10 9 went 0 -> 5 of 5 (inits 0-4) with BRN-pinch-leans-when-upright-unreachable and
+      BRN-grasp-screened-at-roofed-release. Restated per the verifier: closed above is the search finding
+      no point open from above, whatever point it then returns; claim (1) states the offset exactly, read
+      at the step, since a region on a drawer can move after its drop point is chosen. Restated per the
+      verifier: claim (2) says this branch leaves the drop point alone there, since for a laid object
+      BRN-place-steep-laid-entry may replace it.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-grasp-screened-at-roofed-release
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Terms are BRN-place-enters-roofed-target-level's, BRN-place-steep-laid-entry's (its steep decision
+      and the steep choice it records per direction) and BRN-roofed-entry-goes-in-shallow's; the
+      drop-point search is BRN-drop-point-footprint-as-carried's, a function of the step's state, the
+      object, the region and declared constants; the region-derived target height of a place into a
+      region, the one BRN-place-onto-physical-support names, is the region's centre height plus the
+      greater of zero and its upward half-extent less the object's vertical half-extent, plus a declared
+      place clearance, each read from the region's box and the object's box at the step it is used; a
+      candidate grasp is a tool frame and a grasp point for the object as it lies. When a grasp is chosen
+      for an object that the plan's next step places into a region, the reach screen also judges each
+      candidate at a release pose. Before this branch that pose was the candidate's frame at the
+      region-derived drop point -- the drop-point search's point, computed at that step and not recorded,
+      at the region-derived target height -- plus the candidate's offset from the object's origin. The
+      place's decision rule is now evaluated at that step as an observer: on the object's present pose
+      relative to the present tool frame, with that point as the drop point, the region-derived height
+      plus twice the object's vertical half-extent as the carry height, the region counted closed above
+      exactly when that search found no point open from above, and no steep decision made -- a direction
+      with no recorded steep choice is taken at its level entry frame -- writing no record. Where it finds
+      the target roofed, the object not laid, and a direction taken -- whose entry frame is then the
+      present tool frame turned about the vertical -- the release pose, which this branch states it
+      replaces for the grasp screen, is the candidate's frame turned by that same turn, at the direction's
+      drop point at the entry's rest height plus the candidate's offset from the object's origin turned
+      the same way; elsewhere it is as before. Claimed: (1) the release pose judged for a candidate is a
+      function of that step's state, the object, the region, the candidate, the recorded steep choices and
+      declared constants; (2) where the observer finds a roofed target, the object not laid, with a
+      direction taken, the release pose's frame is the candidate's turned about the vertical by the
+      entry's turn, and its point lies at the entry's rest height over the direction's drop point offset
+      by the candidate's turned offset; (3) elsewhere -- no roof, no direction taken, or the object laid
+      -- the release pose is the one judged before; (4) judging it records nothing the place reads. Not
+      claimed: that the place takes the same direction or entry frame when it runs; that the object lies
+      in the hand as it lay relative to the candidate; that a grasp passing reaches the release pose, or
+      that the path in is clear; that the screen's rejections are not conservative.
+    premises: [BRN-place-enters-roofed-target-level, BRN-place-steep-laid-entry, BRN-roofed-entry-goes-in-shallow, BRN-drop-point-footprint-as-carried, BRN-place-onto-physical-support, DEF-reachable-pose, AXM-mujoco-forward-is-a-function-of-state, AXM-grip-fixes-object-in-hand, AXM-object-geometry-known]
+    derivation_rule: >-
+      Screened at the region-derived height -- over the microwave's heating region, 5 cm below the top of
+      its box -- the top pinch on libero_10 9's mug put the hand on the microwave's roof and passed;
+      entered level at the floor's rest height, as the place then did, the hand met the top of the opening
+      2 cm in, the insert stalled, and the mug was let fall outside (0 of 50 in v38). Screened where the
+      level entry lets go, no upright candidate passes (the hand meets the opening's top or its side
+      walls) and the handle tier's leaned pinches do (10 of 252, with BRN-roofed-entry-goes-in-shallow's 2
+      cm): libero_10 9 went 0 -> 5 of 5 (inits 0-4) with BRN-pinch-leans-when-upright-unreachable. The
+      observer writes nothing, so the place decides its entry when it runs as before; a laid object's
+      frame is its own, not a turn of the grasp, and keeps the old pose. Restated per the verifier: the
+      steep decision and its record are BRN-place-steep-laid-entry's, cited; the drop-point search and the
+      region-derived height are cited as functions of what claim (1) lists. Restated per the verifier: the
+      region-derived height is stated from the region's and the object's boxes, read at the step; the
+      replacement is for an object not laid.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-pick-turns-before-descending
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Terms are BRN-pick-descends-beside-overhang's. The pick's own law, as that branch states it, has a
+      down phase: it comes straight down on to the pre-grasp -- or, for a grasp with a side point, on to
+      the side point -- once the tool is within the funnel of it in plan, the tool frame turning toward
+      R_g as it comes down; its slide, squeeze and advance are not the down phase. Now, at a step at which
+      the law's command is its down phase, while the angle of the rotation from the tool frame to R_g
+      exceeds a declared angle and the tool point is more than a declared band above that point's height,
+      the command is instead the tool toward the point over that point at the tool point's present height,
+      at frame R_g; otherwise the command is the law's. Claimed: (1) at every step at which the pick's
+      command is the law's down phase, the tool frame is within the declared angle of R_g or the tool
+      point is within the band above that point's height; (2) at a step at which it turns instead, the
+      commanded translation has no vertical component; (3) at a step at which the tool frame is within the
+      declared angle of R_g, the pick acts as it did without this rule; (4) at a step at which the law's
+      command is its down phase, whether the pick turns or descends is a function of that step's state,
+      R_g, the pre-grasp or side point, and declared constants. Not claimed: that the turn ends within any
+      number of steps; that the hand clears the scene while it turns; that the declared angle is small
+      enough for any scene; that the arm's configuration after the turn is the one the reach screen
+      evaluated; anything of the slide.
+    premises: [BRN-pick-descends-beside-overhang, AXM-mujoco-forward-is-a-function-of-state]
+    derivation_rule: >-
+      Once in the funnel over the pre-grasp the pick came straight down while its wrist was still turning
+      toward the grasp's frame. In libero_90 8 the hand left the opened top drawer's bar, crossed to over
+      the bowl in 6 steps, and came down 40 deg off the grasp's yaw: its corner met the drawer at 21 cm
+      while the tool was at 18 cm, and the pick stalled there to the horizon (init 14; 9 of the 17
+      failures with the leaned tiers and the upward leave, each with a screened upright rim pinch). Turned
+      at its height first, those 9 inits (3, 8, 14, 17, 20, 30, 38, 42, 48) went 0 -> 9 of 9.
+      BRN-place-in-aligns-before-descending is the same rule on the place's side. Restated per the
+      verifier: claims (1) and (4) are of the law's down phase; the slide is not it.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-hook-frame-within-the-wrist
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Terms are BRN-hook-opens-sliding-drawer's, and the wrist order is
+      BRN-place-enters-roofed-target-level's, here with its margin zero: of two tool frames, first those
+      the last joint reaches within its range -- its present position plus the frame's turn -- then the
+      smaller angle of the rotation from the present frame, ties to the first. The hook's two candidate
+      frames point down with the jaw axis along the opening direction, one each way along it, in a
+      declared order: the jaw axis along the opening direction first, then against it. The nearer frame is
+      the one of the two at the smaller rotation angle from the present tool frame, ties to the first in
+      that order. The hook's frame at a step was the nearer frame, and is now the first of the two, in
+      that order, under the wrist order at margin zero, read at that step. Claimed: (1) the hook's frame
+      at every step is one of its two candidate frames, so the jaws point down with their axis along the
+      opening direction, as BRN-hook-opens-sliding-drawer states; (2) at a step at which the nearer
+      frame's turn keeps the last joint within its range, or neither frame's does, the hook's frame is the
+      nearer frame, as before; (3) otherwise it is the frame whose turn keeps the last joint within its
+      range. Not claimed: that the last joint's present position plus a frame's turn is the position the
+      servo reaches at that frame; that the other joints reach the frame; that the drag succeeds.
+    premises: [BRN-hook-opens-sliding-drawer, BRN-place-enters-roofed-target-level, AXM-mujoco-forward-is-a-function-of-state]
+    derivation_rule: >-
+      After libero_90 23's press closed the white cabinet's bottom drawer, the hook came down to its hook
+      point over the top drawer's bar at the nearer of the two frames, 0.58-0.99 rad of turn short: the
+      last joint sat at its limit (2.90 of 2.90 rad), the servo clamped, the drag never started and the
+      hook re-entered to the horizon (17 of the 17 failures, 33 of 50 in v39). Choosing the frame the last
+      joint reaches within its range, 17 of those 17 inits opened the drawer (dev tree with the v40
+      candidate). Unchanged where the nearer frame is within range: libero_90 7 and 11 and libero_goal 3,
+      10 inits each, episode for episode the same as without it. At the wrist order's own margin (0.2 rad)
+      the choice also changed where the nearer frame was inside the range; zero keeps the nearer frame
+      there. An earlier try of the wrist order on all four open-jaw laws took libero_90 6's front hook
+      from 50 to 43; the front hook, the push and the push-close keep the nearer frame. Restated per the
+      verifier: the two frames are in a declared order and the nearer frame's ties go to the first, as the
+      wrist order's do.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-face-pinch-turns-off-a-neighbour
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Terms are BRN-pinch-leans-when-upright-unreachable's (the tiers, the reach screen judging each
+      candidate on its own, the choice from the first tier with a candidate that passes) and
+      BRN-rim-pinch-as-deep-as-the-palm's (a grasp across a body, and the screen's choice within a set it
+      judges: clean candidates where any is, else all it can witness, then its conditioning bars and list
+      order). The face tier offers top-down grasps across the object's body, the jaw axis along one of the
+      object's box's level axes. A candidate the screen passes that is not clean is touching. A face pinch
+      turned by a yaw is the face pinch's tool frame turned about the vertical by that yaw, its grasp
+      point unchanged, its opening the object's extent along the turned jaw axis through that point where
+      that is measured, else the box's width across those faces over the cosine of the yaw; it is offered
+      only where the face tier offers the square pinch and that width over the cosine of the yaw, plus the
+      grip margin, is at most the maximum jaw opening. The declared yaws lie strictly between minus and
+      plus a quarter turn and are taken in a declared order. At a choice at which the face tier is the
+      first tier, in the declared order, with a candidate that passes -- so that without this rule the
+      grasp chosen is the one the screen takes from it -- and that one is touching, the face pinches
+      turned by each declared yaw, in that order, are screened as one set; if one of them passes and the
+      one the screen takes from that set is clean, the choice takes it in place of the touching one;
+      otherwise the choice is as before. Claimed: (1) a turned candidate's approach is straight down, its
+      grasp point is that of the face pinch it turns, and its jaw axis is level and at the yaw from that
+      pinch's jaw axis; (2) the grasp chosen differs from the one chosen without this rule only where that
+      one is a touching face pinch, and then it is a clean turned face pinch; (3) at a choice at which the
+      face tier's pick is clean, or no face pinch passes, the choice is as before. Not claimed: that a
+      turned pinch holds the object as the square one would; that the loose body a square pinch touches
+      would have stopped it; that the turned set's pick is the one the humans take.
+    premises: [BRN-pinch-leans-when-upright-unreachable, BRN-rim-pinch-as-deep-as-the-palm, DEF-reachable-pose, AXM-object-geometry-known, AXM-panda-gripper-geometry]
+    derivation_rule: >-
+      libero_10 1's cream cheese box (82 x 42 x 18 mm) fits the jaws only across its short axis, and
+      square to it the hand -- 20 cm along the jaw line -- came down on the milk carton beside it: of the
+      face tier's pinches every one that passed the screen touched the carton (clean 0 in inits 0, 1, 5
+      and 17), the screen took one, and the descent stalled 6-8 cm above the grasp to the horizon (5 of
+      the 13 failures in v39, 37 of 50). LIBERO's humans pinch it across the same faces turned up to 21
+      deg from square (8 demonstrations, jaw x components 0 to -0.36). Turned by 10, 20 and 30 deg either
+      way, a clean pinch passed in inits 0, 1 and 5 (at -20 or -30 deg), none in 17; with the turn, 6 of
+      the 13 failing inits succeeded (0, 1, 18, 25, 26, 49). Only a clean turned pinch replaces a touching
+      square one, so a choice that was clean is unchanged. Restated per the verifier: the rule applies
+      only where the face tier is the first tier that passes, so the grasp it replaces is the one chosen
+      without it; the screen's clean-first choice is BRN-rim-pinch-as-deep-as-the-palm's, restated to
+      state it. Restated per the verifier: touching is whatever passes and is not clean.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:
