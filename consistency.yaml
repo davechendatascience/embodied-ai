@@ -1885,25 +1885,29 @@ branches:
     claim_type: contract
     statement: >-
       Something of the scene is over a drawer's bar when a geom other than the robot's and the drawer's
-      own body's -- colliding or not -- has its bottom above the bar's top and its plan bounding circle
-      within a declared corridor, in plan, of the bar's centre where the bar sits with the drawer closed.
-      A sliding drawer whose bar has nothing over it -- among LIBERO's, the wooden cabinet's top drawer,
-      the bar the offsets were measured on, 15 x 16 mm across and 89 mm long, and the white cabinet's top
-      drawer, 16 x 16 mm across and 88 mm long -- is opened without grasping its handle: the jaws wide
-      open and pointing down, the jaw axis along the opening direction, the measured tool lowered straight
-      down to a point on the opening side of the bar and above it, and only when the measured tool is
-      within 4 mm of that height is it dragged along the opening direction at the drive speed, the point
-      re-derived from the bar's pose every control step. It stops when LIBERO's Open holds past its
-      threshold by the fill's margin. The hook grasps nothing -- its jaws are never commanded closed -- so
-      DEF-skill-contract's release postcondition, which is of what a skill grasped, asks nothing of it;
-      its disengagement is that what follows leaves upward before anything else: once a bar has been
-      dragged in the episode, every skill but the drive dragging that bar first moves the tool straight
-      up, jaws open, until the finger meshes' reach below the tool point lies a declared height over that
-      bar's top, and only then acts. A drawer whose bar has something over it is opened by the pinch
-      drive. Not claimed: that the drag cannot slip or stall -- a stalled drag re-enters, and nothing
-      bounds how often -- or that the offsets fit a bar of a section other than these two.
-    premises: [AXM-object-geometry-known, AXM-panda-gripper-geometry, AXM-handle-shares-body,
-               DEF-skill-contract, AXM-libero-joint-bands, AXM-parameters-derived]
+      own body's -- colliding or not -- has its bottom above the bar's top and some point of its plan
+      bounding circle within a declared corridor distance, in plan, of the bar's centre where the bar sits
+      with the drawer closed. A sliding drawer whose bar has nothing over it -- among LIBERO's, the wooden
+      cabinet's top drawer, the bar the offsets were measured on, 15 x 16 mm across and 89 mm long, and
+      the white cabinet's top drawer, 16 x 16 mm across and 88 mm long -- is opened without grasping its
+      handle: the jaws wide open and pointing down, the jaw axis along the opening direction, the measured
+      tool lowered straight down to a point on the opening side of the bar and above it, and only when the
+      measured tool is within a declared gate of that height is it dragged along the opening direction at
+      the drive speed toward a point at that height, the point re-derived from the bar's pose every
+      control step. It stops when LIBERO's Open holds past its threshold by the fill's margin
+      (BRN-open-precondition-reads-the-running-drive's margin clause). The hook grasps nothing -- its jaws
+      are never commanded closed -- so DEF-skill-contract's release postcondition, which is of what a
+      skill grasped, asks nothing of it; its disengagement is that what follows leaves upward before
+      anything else: after each drag of a bar, until the finger meshes' reach below the tool point first
+      lies a declared height over that bar's top, every skill but the drive dragging that bar moves the
+      tool straight up, jaws open; once that height is reached the leave is done for that drag, and skills
+      act as they would; the drag holds nothing and every skill after it rises first, so nothing is held
+      while the leave runs. A drawer whose bar has something over it is opened by the pinch drive
+      (BRN-drive-tracks-the-handle). Not claimed: that the finger engages the bar when the drag starts at
+      the gate's edge -- the gate decides when the drag starts, and no claim here depends on its width;
+      that the drag cannot slip or stall -- a stalled drag re-enters, and nothing bounds how often -- or
+      that the offsets fit a bar of a section other than these two.
+    premises: [AXM-object-geometry-known, AXM-panda-gripper-geometry, AXM-handle-shares-body, DEF-skill-contract, AXM-libero-joint-bands, AXM-parameters-derived, BRN-drive-tracks-the-handle, BRN-open-precondition-reads-the-running-drive]
     derivation_rule: >-
       LIBERO's 50 human demonstrations of libero_goal 3, replayed from their recorded states, all open the
       top drawer this way: jaws open 77-80 mm and never commanded closed, pointing straight down, jaw axis
@@ -1923,9 +1927,11 @@ branches:
       failure one where the wrist could not reach the hook's frame (BRN-hook-frame-within-the-wrist).
       Restated per the verifier: 'over' is defined as the teacher reads it; the hook grasps nothing, so
       the release postcondition asks nothing of it and the upward leave is its disengagement; under
-      AXM-parameters-derived the 4 mm drag gate was set by hand, the one datum being that 17 mm off the
-      hook height the finger swept over the bar; the two bars measured are both in the scope the
-      disclaimer leaves.
+      AXM-parameters-derived the drag gate (4 mm) was set by hand, the one datum being that 17 mm off the
+      hook height the finger swept over the bar, and it carries no claim -- whether the finger engages at
+      its edge is disclaimed; the two bars measured are both in the scope the disclaimer leaves. Restated
+      again per the verifier: 'within the corridor' is some point of the circle within it; the leave runs
+      while nothing is held; the pinch drive and the fill's margin are cited.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-rim-pinch-as-deep-as-the-palm
@@ -1933,17 +1939,18 @@ branches:
     claim_type: contract
     statement: >-
       Top-down pinches on a thin wall of an object -- grasp sites on its wall segments rather than across
-      its body -- are offered at three depths, listed deepest first: as deep below the wall's top as the
-      palm allows (the palm's offset behind the tool point less a declared margin), halfway between that
-      and the usual depth, and at the usual depth -- the depth a grasp across a body would take, or the
-      palm's depth where that is shallower, so the three are in that order. None goes lower than the
-      object's floor margin and the support's clearance allow. The reach screen chooses among those it can
-      witness: clean ones -- the arm, at every pose screened, touching nothing but the picked object --
-      where any is, else all it can witness, and among those by its conditioning bars first and list order
-      within a bar; so a deeper pinch is used where the arm reaches it at the best bar any pinch of the
-      same grade reaches. Grasps across a body keep their depth. Not claimed: that the pinch cannot be
-      lost; that a deeper pinch holds better -- that is measured, not derived from the gripper's geometry;
-      that the deepest pad tip stays on the wall where the floor clamp holds the pinch up.
+      its body -- are offered at three depths, listed depth-first across all wall sites -- every site's
+      pinch at the deepest depth, then every site's halfway, then every site's at the usual depth: as deep
+      below the wall's top as the palm allows (the palm's offset behind the tool point less a declared
+      margin), halfway between that and the usual depth, and at the usual depth -- the depth a grasp
+      across a body would take, or the palm's depth where that is shallower, so the three are in that
+      order. None goes lower than the object's floor margin and the support's clearance allow. The reach
+      screen chooses among those it can witness: clean ones -- the arm, at every pose screened, touching
+      nothing but the picked object -- where any is, else all it can witness, and among those by its
+      conditioning bars first and list order within a bar. Grasps across a body keep their depth. Not
+      claimed: that the pinch cannot be lost; that a deeper pinch holds better -- that is measured, not
+      derived from the gripper's geometry; that the deepest pad tip stays on the wall where the floor
+      clamp holds the pinch up.
     premises: [AXM-no-torsional-friction, AXM-panda-gripper-geometry, LMA-grip-fails-by-contact-not-load,
                AXM-object-geometry-known]
     derivation_rule: >-
@@ -1961,8 +1968,9 @@ branches:
       CTR-teacher-reliable, CTR-teacher-gentle. Restated per the verifier: the screen takes a clean pinch
       where there is one before it weighs its bars, as it always has; 'listed deepest first' holds because
       the usual depth is capped at the palm's; that a deeper pinch holds better is the measurement above,
-      not a consequence of the pads' geometry -- at the three depths the whole 16 mm pad lies on the wall
-      alike.
+      not a consequence of the pads' geometry Restated again per the verifier: the list is depth-first
+      across sites, as the planner builds it; the sentence drawing a consequence for the deepest pinch is
+      withdrawn, since a clean shallower pinch is taken over a touching deeper one.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-lift-leaves-overhang
