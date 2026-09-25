@@ -2823,15 +2823,16 @@ branches:
       corridor holds the object -- the direction that branch then takes -- or after the last; a direction
       u is an entry of that branch's list of directions -- a region axis and a sign -- and u's level frame
       at a step is u's entry frame for a laid object as that branch defines it (pitched by at most its lay
-      pitch). A declared inverse-kinematics solver's result is a function of its start joints, its target
-      pose and the arm's joint ranges alone; the scene's body tree and each body's joint types are
-      constants of its model. A set of tool poses is fixed-blocked at a step when, for some pose of it,
-      the solver, started from the arm's joints as read at that step, does not converge to it, or the arm
-      put at the solution in the simulator, with the jaws at their present opening, has a contact at
-      negative distance between a robot geom and a geom of a body that is not the robot's, has no free
-      joint of its own, and is neither the placed object nor a body whose parent is it; each such screen
-      writes the arm's joints and the jaws, runs the forward computation, reads the contacts and restores
-      everything it wrote before anything else reads the simulator
+      pitch) or, at a step at which a later branch states that it replaces that frame for u, the frame
+      that branch puts in its place. A declared inverse-kinematics solver's result is a function of its
+      start joints, its target pose and the arm's joint ranges alone; the scene's body tree and each
+      body's joint types are constants of its model. A set of tool poses is fixed-blocked at a step when,
+      for some pose of it, the solver, started from the arm's joints as read at that step, does not
+      converge to it, or the arm put at the solution in the simulator, with the jaws at their present
+      opening, has a contact at negative distance between a robot geom and a geom of a body that is not
+      the robot's, has no free joint of its own, and is neither the placed object nor a body whose parent
+      is it; each such screen writes the arm's joints and the jaws, runs the forward computation, reads
+      the contacts and restores everything it wrote before anything else reads the simulator
       (AXM-mujoco-forward-is-a-function-of-state). The steep drop point for u at a step is the point in
       plan whose offset from the region's centre along u equals the region's box half-extent along the
       region axis u was built from less a declared depth, and whose component across u is the drop
@@ -2861,29 +2862,30 @@ branches:
       margin, or by zero where it does not; the retreat reads it as that branch states. Claimed: (1) at
       every step at which the object is held and is not laid, or is laid and no evaluated direction has a
       recorded pitch decision, whether the target is roofed, whether the object is laid, the direction and
-      entry frame taken, the case and the command are as BRN-place-enters-roofed-target-level states; (2)
-      where a steep frame is taken at a step, the level frame's poses at the drop point were
-      fixed-blocked, and the decision's steep poses were not, at the step the decision was made, each as
-      computed at that step; (3) the steep drop point's plan offset from the region's centre along u is
-      that half-extent less the depth, and its component across u is the drop point's; (4) the steep
-      decision is a function of the state at the step it is made, the placed object, the region's box, the
-      drop point and the carry height at that step, the arm's joint ranges and declared constants; and at
-      each step, which frame each evaluated direction has is a function of the recorded decisions and of
-      that step's state, placed object, region's box, drop point and carry height, the joint ranges and
-      declared constants; (5) the recorded steep withdrawal point's plan offset from the region's centre
-      along u is the smaller of the tool point's at the release and the box's extent along u plus the
-      margin; (6) where a steep frame is taken, BRN-place-enters-roofed-target-level's claims (1) and (4)
-      hold with the steep drop point in place of the drop point, and its claim (2) with the recorded
-      decisions among its arguments; its claims (3) and (5) are not claimed there -- the drop point in
-      plan the place's lower and release read is the steep drop point, whose component across u is the
-      place's own (claim (3)). Not claimed: that the object carried at a steep frame fits under the roof,
-      or passes under it untouched; that the sweep checks anything where the band from the object's bottom
-      plus the clearance to the roof is empty; that the steep drop point lies inside the region's face
-      where the region axis u was built from is not horizontal; that the part of the object outside the
-      face stays clear of anything; that the servo reaches a screened configuration, that anything between
-      the screened poses is clear, or that poses screened at the decision step stay clear at later steps;
-      that a level frame's poses touching only loose bodies are safe (they keep the level frame); that the
-      object rests level or stays in the region after release.
+      entry frame taken, the case and the command are as BRN-place-enters-roofed-target-level states, with
+      u's level frame as defined here; (2) where a steep frame is taken at a step, the level frame's poses
+      at the drop point were fixed-blocked, and the decision's steep poses were not, at the step the
+      decision was made, each as computed at that step; (3) the steep drop point's plan offset from the
+      region's centre along u is that half-extent less the depth, and its component across u is the drop
+      point's; (4) the steep decision is a function of the state at the step it is made, the placed
+      object, the region's box, the drop point and the carry height at that step, the arm's joint ranges
+      and declared constants; and at each step, which frame each evaluated direction has is a function of
+      the recorded decisions and of that step's state, placed object, region's box, drop point and carry
+      height, the joint ranges and declared constants; (5) the recorded steep withdrawal point's plan
+      offset from the region's centre along u is the smaller of the tool point's at the release and the
+      box's extent along u plus the margin; (6) where a steep frame is taken,
+      BRN-place-enters-roofed-target-level's claims (1) and (4) hold with the steep drop point in place of
+      the drop point, and its claim (2) with the recorded decisions among its arguments; its claims (3)
+      and (5) are not claimed there -- the drop point in plan the place's lower and release read is the
+      steep drop point, whose component across u is the place's own (claim (3)). Not claimed: that the
+      object carried at a steep frame fits under the roof, or passes under it untouched; that the sweep
+      checks anything where the band from the object's bottom plus the clearance to the roof is empty;
+      that the steep drop point lies inside the region's face where the region axis u was built from is
+      not horizontal; that the part of the object outside the face stays clear of anything; that the servo
+      reaches a screened configuration, that anything between the screened poses is clear, or that poses
+      screened at the decision step stay clear at later steps; that a level frame's poses touching only
+      loose bodies are safe (they keep the level frame); that the object rests level or stays in the
+      region after release.
     premises: [BRN-place-enters-roofed-target-level, AXM-mujoco-forward-is-a-function-of-state, AXM-object-geometry-known]
     derivation_rule: >-
       BRN-place-enters-roofed-target-level disclaims that the hand or arm clears the table: libero_90 89
@@ -2916,7 +2918,9 @@ branches:
       Restated per the verifier: claim (1) is of steps at which the object is held, and names what it
       covers; directions are entries of the parent's list; the steep pitches are below a quarter turn; the
       screen's blocking bodies exclude the robot's. Restated after BRN-place-enters-roofed-target-level's
-      carve-out: this branch states what it replaces.
+      carve-out: this branch states what it replaces. Restated so that a later branch
+      (BRN-laid-entry-crosses-pitched) may put a frame of its own in the place of u's level frame: the
+      decision screens the frame in force.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-leave-a-roof-level-first
@@ -3557,6 +3561,123 @@ branches:
       declared here, so the handle tiers' move leaves the others' order as it was; claim (2) is of what
       this branch offers. Restated per the verifier: held_by is read through the same evidence gate, so an
       unbacked held_by: handle does not stop the second hold.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-door-table-keeps-well-sampled-rows
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Terms are BRN-swing-door-as-the-humans' (its declared tables of entries, each a door angle and a
+      tool pose in the door body's frame). Each entry also declares the number of frames of the humans'
+      demonstrations its bin of door angle was formed from, and each mode's tables declare the number of
+      demonstrations behind them. An entry is kept in its table only when its frames number at least the
+      demonstrations behind its mode -- one frame per demonstration on average; where no entry of a table
+      meets that, the table keeps every entry. The tables BRN-swing-door-as-the-humans reads are the
+      entries kept. Claimed: (1) every entry the drive reads meets that count, or belongs to a table none
+      of whose entries does; (2) which entries are kept is fixed by the table file, not by the episode or
+      its state; (3) BRN-swing-door-as-the-humans' rule and claims are unchanged, over the entries kept.
+      Not claimed: that an entry kept is a pose the humans held while pushing; that the drive closes or
+      opens the door; that a table so thinned covers every angle the door can start at.
+    premises: [BRN-swing-door-as-the-humans, AXM-parameters-derived]
+    derivation_rule: >-
+      The closing table's widest entry (-2.03 rad) was formed from 31 frames of its 100 demonstrations
+      (libero_90 33 and libero_10 9), the next from 64, the rest from 100-201: the humans' hands still
+      arriving rather than pushing, 3 cm nearer the door than every other entry. Carried to a door opened
+      2.07-2.11 rad -- past every entry -- it put a fingertip over the door's handle bar, and the swing
+      pressed on the bar to the horizon: libero_90 33 4 of 50 and libero_10 9 5 of 50 (the mug already in
+      the microwave) in v41, every door opened past 2.07 rad. Kept only where an entry's frames reach its
+      mode's demonstrations: libero_90 33 8 of 8 (its 4 failures and 4 of its successes), libero_10 9 7 of
+      7 (its 5 door failures and 2 successes); the opening table (50 demonstrations, libero_90 35) loses
+      its two thinnest entries (42 and 39 frames) and libero_90 35 stays 10 of 10, each episode 15-17
+      steps longer. Under AXM-parameters-derived the count is the table's own: its demonstrations, read
+      from the file that holds the entries.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-face-pinch-leans-toward-the-base
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Terms are BRN-pinch-leans-when-upright-unreachable's (the leaned form of a top-down grasp at a tilt
+      about a centre), BRN-face-pinch-turns-off-a-neighbour's (the face tier; its square pinches, top-down
+      across the object's body) and BRN-rim-pinch-as-deep-as-the-palm's (the reach screen's choice within
+      a set it judges: clean candidates where any is, else all it can witness, and among those by its
+      conditioning bars first -- the highest bar some candidate reaches -- and list order within a bar;
+      where none reaches a bar, the best score). The base's position is the position of the robot's base
+      body, read from each step's state (AXM-mujoco-forward-is-a-function-of-state). The face tier now
+      offers, after all its square pinches, their leaned forms about the base's position in plan at
+      declared tilts, which lie strictly between zero and a quarter turn -- by tilt, least first, and
+      within a tilt in the square pinches' order: the approach's horizontal part points from the grasp
+      point toward the base, and the wrist leans away from it. Claimed: (1) every added candidate's
+      approach makes its tilt with the downward vertical, its horizontal part pointing toward the base in
+      plan, and it keeps the grasp point and jaw opening of the square pinch it leans; (2) the grasp the
+      screen takes from the face tier is a square pinch wherever some square pinch of the grade the screen
+      draws from reaches the highest conditioning bar that any candidate of that grade reaches; (3) no
+      tier but the face tier is changed, and whether the face tier has a candidate that passes is
+      unchanged wherever a square pinch passes. Where the face tier's pick is not clean, square or leaned,
+      BRN-face-pinch-turns-off-a-neighbour's rule applies as that branch states it: its turned set is
+      formed from the object's box -- straight-down pinches, jaw level, turned about the vertical -- and
+      not from the pick, so a leaned pick is never itself turned; (2) is of the pick the screen takes from
+      the face tier, before that rule. Not claimed: that a leaned pinch holds the object or carries it
+      level; that the declared tilts span the humans'; the choice where no candidate of the grade reaches
+      a bar.
+    premises: [AXM-mujoco-forward-is-a-function-of-state, BRN-face-pinch-turns-off-a-neighbour, BRN-pinch-leans-when-upright-unreachable, BRN-rim-pinch-as-deep-as-the-palm, DEF-reachable-pose]
+    derivation_rule: >-
+      libero_90 62's salad dressing stands 24 cm in front of the robot's base. Its square face pinch
+      passed the reach screen, but the arm came down to it with the elbow at its stop (joint 4 at -3.07 of
+      -3.07 rad) and stalled 6 cm above the grasp to the horizon (4 of 50 in v41). LIBERO's humans take it
+      across the same faces with the approach tilted 3-11 deg toward the base, the wrist away from it (8
+      of 8 demonstrations). Offered beside the square pinches, leaned 0.1 and 0.2 rad that way, the screen
+      took a leaned one in those 4 inits and all 4 succeeded; where a square pinch reaches the best bar it
+      is taken as before -- libero_goal's 10 tasks, 3 inits each, 30 of 30 episodes identical. Restated
+      per the verifier: the centre is the robot's base body's position, the origin of the frame the
+      planner's poses are in. Restated again per the verifier: the tilts are bounded as the leaned-form
+      term's own are (0.1 and 0.2 rad lie in the bound), and the turn rule's place is said: it acts on the
+      face tier's pick after the screen takes it, leaned or square. Restated a third time per the
+      verifier: the turn rule's turned set is its own straight-down pinches formed from the box, whichever
+      pinch the screen took; the leaned forms' order is by tilt, then the square pinches' order; the
+      sentence on the planner's frame, which no premise backs and no claim uses, is dropped. Restated a
+      fourth time: BRN-face-pinch-turns-off-a-neighbour now states its trigger for any face-tier pick and
+      its turned set from the square pinches; the leaned forms' order is stated once.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-place-carries-on-through-a-flicker
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      Terms are BRN-place-done-when-released's (its let-go test: not held in DEF-holding's sense, and, for
+      the object last held, touched by no robot geometry and with the tool point more than a declared
+      margin outside the object's box; and the place's target, the point its delivered test reads) and
+      DEF-holding's. The object is at the place at a step when its origin, read at that step, lies within
+      a declared distance of the place's target in plan and within a declared band about the target's
+      height. The place's not-held law, at a step of a place at which its object is not held, is: where
+      the object is at the place, settle there; else where the place's own release of the object is
+      recorded and it is falling, wait; else take the object back -- a pick of it, as the place's first
+      move. The place's own release is recorded when the place commands the jaws open to let the object go
+      -- at the place, or at the end of a tip -- and cleared at every step at which the object is held and
+      at an episode's start. That law now applies at a step at which the object is not held only when the
+      object is at the place, or its release is recorded, or it passes the let-go test; at any other step
+      at which it is not held the place acts as at a step at which it is held. Claimed: (1) at a step at
+      which the object is not held, is not at the place and its release is not recorded, the place takes
+      it back only if it passes the let-go test; (2) at a step at which the object is at the place, or its
+      release is recorded, or it passes the let-go test, the place acts as it did without this rule; (3)
+      whether the not-held law applies at a step is a function of that step's state, the place's target,
+      the record of the place's release, the object last held and declared constants. Not claimed: that
+      the object is still in the jaws when the place carries on; that a flicker of holding ends; that
+      carrying on does not move an object that has slipped but is still touched.
+    premises: [BRN-place-done-when-released, DEF-holding, AXM-mujoco-forward-is-a-function-of-state]
+    derivation_rule: >-
+      A tall object lowered into a drawer nudges the jaws against the drawer, and holding reads false for
+      a step (the flicker of the held-flicker notes). The place took that as lost and took the object back
+      mid-lower: libero_90 32's ketchup, lowered into the white cabinet's top drawer, was re-grasped from
+      where it stood, the hand lifted off and came down on the standing bottle, which tipped 37-90 deg (7
+      of 50 lost in v39, 5 of them so). Carried on through the flicker -- the object not yet let go by
+      BRN-place-done-when-released's test -- 4 of those 7 inits succeeded. Gated on the let-go test alone,
+      the place never settled after its own release while the hand still touched the moka pot's handle
+      (libero_10 8, 9 -> 0 of 10); the place's own release and the object at the place keep the law as it
+      was, and libero_10 8's inits 0-4 then matched the teacher without it (4 of 5), libero_90 75 10 of 10
+      (the task a held latch had taken from 3 to 0). Restated per the verifier: claim (1) is of steps at
+      which the release is not recorded -- after its own release, an object that slides off may be taken
+      back as before; 'at the place' is defined.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 policies:
