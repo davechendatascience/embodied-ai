@@ -105,6 +105,41 @@ Each step is a design branch first (proposed, verified, declared), then code, th
    and the step-1 diagnostics per cell. This is the research dataset; it says which of steps 2-5 matter most
    and for which arm.
 
+### The first matrix (2026-09-26)
+
+The teacher unchanged, the Panda gripper on every arm, the 40 benchmark tasks at initial state 0, servo
+diagnostics on (`runs/matrix_<arm>`; commit cb033ff):
+
+| arm | spatial | object | goal | 10 | total | steps at a torque limit | steps in self-contact |
+|---|---|---|---|---|---|---|---|
+| Panda | 10/10 | 10/10 | 10/10 | 10/10 | 40/40 | 0.9% | 0% |
+| UR5e | 10/10 | 10/10 | 9/10 | 9/10 | 38/40 | 13.4% | 6.3% |
+| iiwa | 10/10 | 10/10 | 7/10 | 9/10 | 36/40 | 5.2% | 0% |
+| Jaco | 9/10 | 10/10 | 9/10 | 8/10 | 36/40 | 35.5% | 5.3% |
+| Kinova3 | 9/10 | 10/10 | 7/10 | 6/10 | 32/40 | 30.2% | 0% |
+
+142 of 160 on the four new arms. The 18 failures by the diagnostics' first-cut mechanism: **tracking under
+torque saturation 8**, **pinned at a joint limit 5**, **self-collision 2**, teacher-level 3 (the servo tracked;
+the plan or grasp does not suit the arm).
+
+What the matrix taught beyond the counts:
+
+- **The start pose is a design choice.** The first run copied LIBERO's recorded Panda joint angles onto every
+  7-joint arm (the init-state remap recognized the Panda by joint count): the Kinova3 started with a joint at its
+  limit and the Panda hand folded into its upper arm, 11 of 40. With its own ready pose, 32 of 40. The iiwa went
+  the other way, 38 of 40 in the Panda's angles and 36 in its own: a redundant arm keeps the elbow family it starts
+  in for the whole episode, since the local IK never leaves it, and the Panda's family happened to suit these tasks
+  better. Branch and family awareness matters on 7-joint arms too.
+- **Weak actuators are the commonest break.** The servo's lead (0.1 rad per period) and the controller's
+  inertia-weighted gains were sized on the Panda; the Kinova3's and the Jaco's actuators saturate on a third of
+  their steps and the arm lags the reference by 0.06-0.1 rad.
+
+**Revised order**, by episodes each fix can reach: (a) a servo whose lead and acceleration are sized to each
+arm's torque capacity -- measured from its model (8 failures); (b) branch and family awareness, including the
+choice of start pose (5); (c) the self-contact screen and dampers (2). The Robotiq port (step 5) is independent
+and follows. The non-Panda trials are not ingested into `CTR-teacher-reliable`, whose slices are keyed by task and
+revision and would mix embodiments; a cross-embodiment contract is to be declared first.
+
 ## 5. What has to hold (for the ledger)
 
 Proposed as branches in `consistency.yaml`, each verified before it is built:
