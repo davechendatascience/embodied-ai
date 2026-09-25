@@ -2566,26 +2566,28 @@ branches:
       the tool, its rotation goal unchanged, toward the point level with it along the withdrawal's
       direction at the withdrawal point's distance along it, until that distance is within the over
       distance; then it clears the withdrawal and retreats as before. A target not roofed at a step, or
-      roofed with no direction kept, is placed at that step as before. The commands stated here are the
-      place's own; at a step at which a later branch states that it replaces the place's command, that
-      branch governs that step instead. Claimed: (1) at every step at which the object is held, the target
-      is roofed, a direction is taken, and the object is in that direction's corridor and not over the
-      drop point, the place's own command -- this branch's, before any later branch that states it
-      replaces the place's command at that step -- is the tool along the offset from the object's origin
-      to the drop point at the entry's rest height; (2) at every step at which the object is held, whether
-      the target is roofed, whether the object is laid, which direction and entry frame are taken, and
-      which of the four cases (a) to (d) applies are functions of that step's state, the placed object,
-      the drop point, the region's box, the carry height, the arm's joint ranges and declared constants;
-      (3) for a laid object with a direction taken, the object carried at the entry frame at its rest
-      height at the drop point has its top, plus the clearance, at or below the roof of that step; (4)
-      while a withdrawal is recorded, no placed object is held and the withdrawal point's distance along
-      its direction exceeds the over distance, the retreat's commanded translation has no vertical
-      component; (5) the drop point in plan is the place's own. Not claimed: that the object reaches the
-      corridor; that the roof, the laid decision or the direction stay the same while the object is in the
-      corridor; that the tool reaches the entry frame or tracks the commanded height; that the hand or arm
-      clears the roof, the table or other objects; that the object fits the opening across its width,
-      rests level, or stays in the region after release; that the withdrawal leaves the object
-      undisturbed; anything of the place's own lift, carry, lower and release beyond what
+      roofed with no direction kept, is placed at that step as before. The decisions, entry frames, drop
+      points, records and commands stated here are the place's own; at a step at which a later branch
+      states that it replaces any of them -- the place's command, or its entry frame, drop point or
+      records for a direction -- that branch governs what it replaces at that step instead. Claimed: (1)
+      at every step at which the object is held, the target is roofed, a direction is taken, and the
+      object is in that direction's corridor and not over the drop point, the place's own command -- this
+      branch's, before any later branch that states it replaces the place's command at that step -- is the
+      tool along the offset from the object's origin to the drop point at the entry's rest height; (2) at
+      every step at which the object is held, the place's own decisions -- whether the target is roofed,
+      whether the object is laid, which direction and entry frame are taken, and which of the four cases
+      (a) to (d) applies -- are functions of that step's state, the placed object, the drop point, the
+      region's box, the carry height, the arm's joint ranges and declared constants; (3) for a laid object
+      with a direction taken, the object carried at the place's own entry frame at its rest height at the
+      place's own drop point has its top, plus the clearance, at or below the roof of that step; (4) while
+      a withdrawal is recorded, no placed object is held and the withdrawal point's distance along its
+      direction exceeds the over distance, the retreat's commanded translation has no vertical component;
+      (5) the place's own drop point in plan is the place's drop point. Not claimed: that the object
+      reaches the corridor; that the roof, the laid decision or the direction stay the same while the
+      object is in the corridor; that the tool reaches the entry frame or tracks the commanded height;
+      that the hand or arm clears the roof, the table or other objects; that the object fits the opening
+      across its width, rests level, or stays in the region after release; that the withdrawal leaves the
+      object undisturbed; anything of the place's own lift, carry, lower and release beyond what
       BRN-place-onto-physical-support states.
     premises: [BRN-place-onto-physical-support, AXM-object-geometry-known, AXM-grip-fixes-object-in-hand, AXM-mujoco-forward-is-a-function-of-state]
     derivation_rule: >-
@@ -2631,7 +2633,10 @@ branches:
       10), pushed in it seated (88 8, 86 3 of 10 settled, seed 557), while the pan drawn out settled 10 of
       10 (40, where the first direction's withdrawal gave 7). Restated 2026-09-25: claim (1) and the
       commands are the place's own, so that a branch replacing the place's command at a step
-      (BRN-place-tips-a-standing-misfit, while a tip is recorded) does not contradict it.
+      (BRN-place-tips-a-standing-misfit, while a tip is recorded) does not contradict it. Restated again
+      the same day: the carve-out covers the entry frames, drop points and records as well as the
+      commands, and claims (2), (3) and (5) are of the place's own, so that BRN-place-steep-laid-entry's
+      replacements do not contradict them.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-pick-descends-beside-overhang
@@ -2788,38 +2793,40 @@ branches:
       object carried at it has a rest height at the steep drop point, and u has no entry frame at that
       step if not; no roof fit is required of a steep frame; the steep drop point replaces the drop point
       for u wherever that branch reads it (the corridor, E, the four cases and the recorded release
-      point), and the swept height band's top is the lower of the object's top and the roof. When the
-      place commands the release with a steep frame taken, the withdrawal it records -- here a push in,
-      toward the region -- is, in place of that branch's, the direction -u and the tool point moved along
-      -u by the amount by which the tool point's plan offset from the region's centre along u exceeds the
-      region box's extent along u (the sum of its half-extents times the magnitudes of its axes'
-      components along u) plus a declared margin, or by zero where it does not; the retreat reads it as
-      that branch states. Claimed: (1) at every step at which the object is held and is not laid, or is
-      laid and no evaluated direction has a recorded pitch decision, whether the target is roofed, whether
-      the object is laid, the direction and entry frame taken, the case and the command are as
-      BRN-place-enters-roofed-target-level states; (2) where a steep frame is taken at a step, the level
-      frame's poses at the drop point were fixed-blocked, and the decision's steep poses were not, at the
-      step the decision was made, each as computed at that step; (3) the steep drop point's plan offset
-      from the region's centre along u is that half-extent less the depth, and its component across u is
-      the drop point's; (4) the steep decision is a function of the state at the step it is made, the
-      placed object, the region's box, the drop point and the carry height at that step, the arm's joint
-      ranges and declared constants; and at each step, which frame each evaluated direction has is a
-      function of the recorded decisions and of that step's state, placed object, region's box, drop point
-      and carry height, the joint ranges and declared constants; (5) the recorded steep withdrawal point's
-      plan offset from the region's centre along u is the smaller of the tool point's at the release and
-      the box's extent along u plus the margin; (6) where a steep frame is taken,
-      BRN-place-enters-roofed-target-level's claims (1) and (4) hold with the steep drop point in place of
-      the drop point, and its claim (2) with the recorded decisions among its arguments; its claims (3)
-      and (5) are not claimed there -- the drop point in plan the place's lower and release read is the
-      steep drop point, whose component across u is the place's own (claim (3)). Not claimed: that the
-      object carried at a steep frame fits under the roof, or passes under it untouched; that the sweep
-      checks anything where the band from the object's bottom plus the clearance to the roof is empty;
-      that the steep drop point lies inside the region's face where the region axis u was built from is
-      not horizontal; that the part of the object outside the face stays clear of anything; that the servo
-      reaches a screened configuration, that anything between the screened poses is clear, or that poses
-      screened at the decision step stay clear at later steps; that a level frame's poses touching only
-      loose bodies are safe (they keep the level frame); that the object rests level or stays in the
-      region after release.
+      point), and the swept height band's top is the lower of the object's top and the roof. At every step
+      at which u is evaluated with a recorded pitch decision and has the steep frame, this branch replaces
+      the place's own entry frame and drop point for u, and so its command, as
+      BRN-place-enters-roofed-target-level allows a later branch to. When the place commands the release
+      with a steep frame taken, the withdrawal it records -- here a push in, toward the region -- is, in
+      place of that branch's, the direction -u and the tool point moved along -u by the amount by which
+      the tool point's plan offset from the region's centre along u exceeds the region box's extent along
+      u (the sum of its half-extents times the magnitudes of its axes' components along u) plus a declared
+      margin, or by zero where it does not; the retreat reads it as that branch states. Claimed: (1) at
+      every step at which the object is held and is not laid, or is laid and no evaluated direction has a
+      recorded pitch decision, whether the target is roofed, whether the object is laid, the direction and
+      entry frame taken, the case and the command are as BRN-place-enters-roofed-target-level states; (2)
+      where a steep frame is taken at a step, the level frame's poses at the drop point were
+      fixed-blocked, and the decision's steep poses were not, at the step the decision was made, each as
+      computed at that step; (3) the steep drop point's plan offset from the region's centre along u is
+      that half-extent less the depth, and its component across u is the drop point's; (4) the steep
+      decision is a function of the state at the step it is made, the placed object, the region's box, the
+      drop point and the carry height at that step, the arm's joint ranges and declared constants; and at
+      each step, which frame each evaluated direction has is a function of the recorded decisions and of
+      that step's state, placed object, region's box, drop point and carry height, the joint ranges and
+      declared constants; (5) the recorded steep withdrawal point's plan offset from the region's centre
+      along u is the smaller of the tool point's at the release and the box's extent along u plus the
+      margin; (6) where a steep frame is taken, BRN-place-enters-roofed-target-level's claims (1) and (4)
+      hold with the steep drop point in place of the drop point, and its claim (2) with the recorded
+      decisions among its arguments; its claims (3) and (5) are not claimed there -- the drop point in
+      plan the place's lower and release read is the steep drop point, whose component across u is the
+      place's own (claim (3)). Not claimed: that the object carried at a steep frame fits under the roof,
+      or passes under it untouched; that the sweep checks anything where the band from the object's bottom
+      plus the clearance to the roof is empty; that the steep drop point lies inside the region's face
+      where the region axis u was built from is not horizontal; that the part of the object outside the
+      face stays clear of anything; that the servo reaches a screened configuration, that anything between
+      the screened poses is clear, or that poses screened at the decision step stay clear at later steps;
+      that a level frame's poses touching only loose bodies are safe (they keep the level frame); that the
+      object rests level or stays in the region after release.
     premises: [BRN-place-enters-roofed-target-level, AXM-mujoco-forward-is-a-function-of-state, AXM-object-geometry-known]
     derivation_rule: >-
       BRN-place-enters-roofed-target-level disclaims that the hand or arm clears the table: libero_90 89
@@ -2851,7 +2858,8 @@ branches:
       claims (3) and (5) are not claimed where a steep frame is taken; 'no free joint' is the body's own.
       Restated per the verifier: claim (1) is of steps at which the object is held, and names what it
       covers; directions are entries of the parent's list; the steep pitches are below a quarter turn; the
-      screen's blocking bodies exclude the robot's.
+      screen's blocking bodies exclude the robot's. Restated after BRN-place-enters-roofed-target-level's
+      carve-out: this branch states what it replaces.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-leave-a-roof-level-first
