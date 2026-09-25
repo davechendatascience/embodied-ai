@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 SUITES = ["libero_spatial", "libero_object", "libero_goal", "libero_10"]
 ARMS = ["UR5e", "IIWA", "Kinova3", "Jaco"]
+SCENE_TOL_MM = 5.0        # CTR-other-arm-scene-as-panda's bound on any object's offset
 
 
 def _objects(env):
@@ -107,8 +108,8 @@ def main() -> int:
     Path(args.trials).write_text(json.dumps({"trials": trials}))
     for arm in args.arms:
         rs = [t for t in trials if t["conditions"]["robot"] == arm]
-        ok = [t for t in rs if t["metrics"].get("max_object_offset_mm", 1e9) <= 5.0]
-        print(f"{arm}: {len(ok)}/{len(rs)} within 5 mm of the Panda's scene")
+        ok = [t for t in rs if t["metrics"].get("max_object_offset_mm", 1e9) <= SCENE_TOL_MM]
+        print(f"{arm}: {len(ok)}/{len(rs)} within {SCENE_TOL_MM:g} mm of the Panda's scene")
     return 0
 
 
