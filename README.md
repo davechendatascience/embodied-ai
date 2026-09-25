@@ -59,6 +59,13 @@ task by task and against LIBERO's own human demonstrations, is in
 - `belief.yaml` -- components, contracts and tests; measured evidence is ingested per revision
   (the component-belief MCP server). A trial is stamped with the teacher revision that ran it.
 - Both load from git HEAD: a declaration does nothing until it is committed.
+- The stamp-monitor MCP server reads both ledgers and reports what a change touches, whether the
+  recorded evidence is still current, and where the history routes around the loop.
+
+The three servers come from
+[Theoretically Driven LLM Planning](https://github.com/davechendatascience/Theoretically_Driven_LLM_Planning),
+which documents them and packages them for use on other projects. This repository is a worked example
+of that workflow applied to one engineering problem.
 
 ## Layout
 
