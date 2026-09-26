@@ -22,7 +22,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from .sim_arm import Execution, SimArm
+from .sim_arm import INITIAL_SETTLE, REST_SPEED, SEED_MOD, SETTLE_CHUNK, SETTLE_ROUNDS, Execution, SimArm
 
 __all__ = ["Execution", "StartNoise", "TaskEnv"]
 
@@ -74,6 +74,32 @@ class TaskEnv(SimArm):
             self._settled[k] = self._settled_init_state(k)
         self._reset_scene(k)
         self.env.set_init_state(self._settled[k])
+        self._anchor()
+        if any(v > 0 for v in self.start.values()):
+            self._randomize_start()
+        self.servo.reset(np.asarray(self.observe()["robot0_joint_pos"]))
+        if self.execution.posture_start:
+            self.servo.posture, self.servo.posture_gain = self.servo.ref.copy(), POSTURE_GAIN
+        self.t = 0
+        self.raw = self.observe()
+        return self.raw
+
+    def reset_fresh(self, seed: int, episode: int):
+        """Start episode `episode` from a layout LIBERO's own placement samplers draw anew for the task -- inside its
+        task file's regions, as its stored initial states were drawn -- rather than from one of those states; numpy's
+        global generator, which those samplers and the fixture draws read, seeded by (seed, episode) alone. Held until
+        at rest, then the tool's start randomized as reset() does. The Panda only."""
+        self.episode = episode
+        self.init_index = -1
+        np.random.seed((seed * 1_000_003 + episode) % SEED_MOD)
+        self._draw_as_the_panda()
+        self.env.reset()                      # samples the objects and fixtures; no stored state is loaded after it
+        self._anchor()
+        self._settle(INITIAL_SETTLE)
+        for _ in range(SETTLE_ROUNDS):
+            if self._max_object_speed() < REST_SPEED:
+                break
+            self._settle(SETTLE_CHUNK)
         self._anchor()
         if any(v > 0 for v in self.start.values()):
             self._randomize_start()

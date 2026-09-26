@@ -35,6 +35,13 @@ def integration_digest(m, d) -> str:
     return hashlib.sha1(s.tobytes()).hexdigest()[:16]
 
 
+# The randomized test set's bounds (BRN-random-starts-test-set): objects moved in rigid groups within 8 cm and
+# turned; the tool's start moved 10 cm across, 5 cm up or down, 30 deg in yaw, 10 deg in tilt, the redundant joint
+# 0.3 rad. Wider draws multiply every bound.
+RANDOMIZER = dict(layout_radius=0.08, start_xy_m=0.10, start_z_m=0.05, start_yaw_deg=30.0, start_tilt_deg=10.0,
+                  start_null_rad=0.3)
+
+
 STEP_CHECK = (100, 500)           # physics steps after which a stepping reference is digested
 
 

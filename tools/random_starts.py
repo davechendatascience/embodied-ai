@@ -34,12 +34,11 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from screwhead.sim.task_env_place import RANDOMIZER  # noqa: E402  this project's declared randomized evaluation
 
 SUITE = "libero_spatial"
 STEP_LIMIT = 220                  # LIBERO's published step limit for libero_spatial (tools/eval_vla.py)
 NOVELTY_M = 0.02
-RANDOMIZER = dict(layout_radius=0.08, start_xy_m=0.10, start_z_m=0.05, start_yaw_deg=30.0, start_tilt_deg=10.0,
-                  start_null_rad=0.3)   # this project's declared randomized evaluation
 CPUS = "5,6,7,8,9,15,16,17"
 
 
