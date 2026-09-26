@@ -18,14 +18,16 @@ committed before evaluation.
   --val-demos 2 --steps 20000 --batch 16 --lr 2e-4 --warmup 500 --chunk 8 --execute 4 --workers 6 --seed 0
   [--blind]`, launched with a controlled environment (`env -i`, the declared variables only). Both models are trained
   before either is evaluated.
-- **Evaluation:** code revision 705c71f, `tools/eval_vla.py` with evaluation seed 555, `VLA_EXECUTION` (the twist
+- **Evaluation:** code revision 526b380, `tools/eval_vla.py` with evaluation seed 555, `VLA_EXECUTION` (the twist
   decode, cameras without multisampling), every episode twice in fresh processes; on LIBERO's starts
   (`--episodes 50`) and on the randomized set (`--starts ...`). Changed from 8582a63 before any model was
   evaluated: at 8582a63 a task not admitted or an episode whose model differed crashed the run after both rounds
   (fac96f7 reports them as not scored), and the randomized set's file was not among the data files a run records
-  (29fb366), and placements recorded no digest of the integration state (705c71f). Episode execution is unchanged.
+  (29fb366), placements recorded no digest of the integration state (705c71f), and records did not name the host
+  or GPU model (526b380; P0's training records, made at 8582a63, do not either). Episode execution is unchanged.
   On the randomized set, models are compared only on results recording the same set-file digest, and on a start only
-  where both placements record the same integration-state digest; other starts are reported as differing.
+  where both placements record the same integration-state digest; other starts are reported as differing, and the
+  number of starts compared is reported beside every comparison.
   VLA-JEPA's runner records both digests too, but its project is not under version control, so its runs are outside
   DEF-single-operator-lab: beside, never evidence.
 
