@@ -122,8 +122,9 @@ class SimArm:
     label = "env"
 
     # -- opening a task -------------------------------------------------------------------
-    def _open(self, suite: str, task_index: int, render: bool, ex: Execution) -> str:
-        """Load a LIBERO task and set up the execution path; returns its bddl path."""
+    def _open(self, suite: str, task_index: int, render: bool | int, ex: Execution) -> str:
+        """Load a LIBERO task and set up the execution path; returns its bddl path. `render`: the observation
+        cameras, at CAMERA_PX when True or at that many pixels when a number; none when False."""
         from libero.libero import benchmark, get_libero_path
         from libero.libero.envs import OffScreenRenderEnv
 
@@ -143,7 +144,8 @@ class SimArm:
         task = bm.get_task(task_index)
         self.language = task.language
         bddl = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
-        kw = (dict(camera_heights=CAMERA_PX, camera_widths=CAMERA_PX) if render else
+        px = CAMERA_PX if render is True else int(render)
+        kw = (dict(camera_heights=px, camera_widths=px) if render else
               dict(use_camera_obs=False, has_offscreen_renderer=False))
         # a hard reset reloads the MuJoCo model (911 ms of a 1058 ms reset, measured), and
         # set_init_state overwrites the full state afterwards anyway

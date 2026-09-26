@@ -2,7 +2,7 @@
 """LIBERO's human demonstrations replayed through the evaluation's execution path: the Panda VLA's
 training pairs (BRN-vla-trains-on-demos-replayed-through-the-servo).
 
-  demo_replay.py --suite libero_spatial [--tasks 0 1] [--demos 50] --trials $OUT
+  demo_replay.py --suite libero_spatial [--tasks 0 1] [--demos 50] --trials $OUT [--render 256 --out cache/vla_replay]
 
 Each demonstration is placed from its first recorded state, with the fixture poses its own recorded
 model ran with: the reset re-samples them and writing the state restores neither
@@ -17,7 +17,9 @@ steps. A replay is kept only if LIBERO's predicate accepts some state it reaches
 at the first such state, where LIBERO's evaluation ends an episode.
 
 This is the first gate (CTR-demo-replay-succeeds): the replay success rate per task, with how far the
-tool strayed from the demonstration's path.
+tool strayed from the demonstration's path. With --render, the kept replays are also written, one file per
+task (<out>/<suite>/task<NN>.hdf5, a group per demonstration): both cameras as the evaluation renders them
+(uint8, as robosuite returns them, stored losslessly), the evaluation's proprioception and the actions.
 """
 from __future__ import annotations
 
@@ -118,29 +120,58 @@ def replay_demo(env, states: np.ndarray, actions: np.ndarray, xml: str, pairs: l
                 max_track_mm=round(1000 * max(track), 1), mean_track_mm=round(1000 * float(np.mean(track)), 1))
 
 
+def _write(g, pairs: list, m: dict, env) -> None:
+    """One kept replay: what the policy observed at each step and the action it was labelled with."""
+    obs = [o for o, _a in pairs]
+    tool = [env.tool_state(o) for o in obs]
+    pose = np.zeros((len(obs), 4, 4), np.float32)
+    pose[:, :3, :3] = [t["R_tool"] for t in tool]
+    pose[:, :3, 3] = [t["p_tool"] for t in tool]
+    pose[:, 3, 3] = 1.0
+    for cam, key in (("agentview", "agentview_image"), ("wrist", "robot0_eye_in_hand_image")):
+        img = np.stack([o[key] for o in obs]).astype(np.uint8)
+        g.create_dataset(cam, data=img, chunks=(1, *img.shape[1:]), compression="lzf")
+    g.create_dataset("joint_pos", data=np.stack([o["robot0_joint_pos"] for o in obs]).astype(np.float32))
+    g.create_dataset("gripper_qpos", data=np.stack([o["robot0_gripper_qpos"] for o in obs]).astype(np.float32))
+    g.create_dataset("tool_pose", data=pose)
+    g.create_dataset("actions", data=np.stack([a for _o, a in pairs]).astype(np.float32))
+    for k in ("first_success_step", "demo_steps"):
+        g.attrs[k] = m[k]
+
+
 def _pin(cpus) -> None:
     os.environ["OMP_NUM_THREADS"] = "1"
     os.sched_setaffinity(0, {cpus.get()})
 
 
 def _task(job: tuple) -> list[dict]:
-    suite, task, demos, rev = job
+    suite, task, demos, rev, px, out = job
     import h5py
     import torch
     torch.set_num_threads(1)
     from screwhead.sim.sim_arm import Execution
     from screwhead.sim.task_env import TaskEnv
-    env = TaskEnv(suite, task, horizon=10**6, seed=SCENE_SEED, render=False, execution=Execution(**VLA_EXECUTION))
+    env = TaskEnv(suite, task, horizon=10**6, seed=SCENE_SEED, render=px or False, execution=Execution(**VLA_EXECUTION))
     path = DATASETS / suite / f"{env.task_spec.name}_demo.hdf5"
     rows = []
+    data = None
+    if px:
+        dst = Path(out) / suite / f"task{task:02d}.hdf5"
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        data = h5py.File(dst, "w")
+        data.attrs.update(task_suite=suite, task=task, language=env.language, replay_revision=rev,
+                          execution=json.dumps(VLA_EXECUTION), camera_px=px, source=str(path.relative_to(ROOT)))
     with h5py.File(path) as f:
         keys = sorted(f["data"].keys(), key=lambda k: int(k.split("_")[1]))[:demos]
         for key in keys:
             e = f["data"][key]
             xml = e.attrs["model_file"]
             xml = xml.decode() if isinstance(xml, bytes) else xml
+            pairs: list | None = [] if data is not None else None
             try:
-                m = replay_demo(env, e["states"][()], e["actions"][()], xml)
+                m = replay_demo(env, e["states"][()], e["actions"][()], xml, pairs)
+                if pairs:
+                    _write(data.create_group(key), pairs, m, env)
             except Exception as err:  # noqa: BLE001  a worker boundary: a crash is a failed, recorded replay
                 m = dict(success=False, first_success_step=-1, demo_steps=int(len(e["states"])),
                          max_track_mm=-1.0, mean_track_mm=-1.0, error=f"{type(err).__name__}: {err}")
@@ -150,6 +181,8 @@ def _task(job: tuple) -> list[dict]:
                                         **({"error": m["error"]} if "error" in m else {})},
                          "repro": {"task_suite": suite, "task": task, "demo": demo, "replay_revision": rev,
                                    "execution": json.dumps(VLA_EXECUTION)}})
+    if data is not None:
+        data.close()
     env.close()
     return rows
 
@@ -161,6 +194,8 @@ def main() -> int:
     ap.add_argument("--demos", type=int, default=50)
     ap.add_argument("--cpus", default=CPUS)
     ap.add_argument("--trials", required=True)
+    ap.add_argument("--render", type=int, default=0, help="camera pixels; 0 runs the gate without images")
+    ap.add_argument("--out", default=str(ROOT / "cache/vla_replay"))
     args = ap.parse_args()
     tasks = args.tasks if args.tasks is not None else list(range(90 if args.suite == "libero_90" else 10))
     rev = replay_revision()
@@ -168,7 +203,7 @@ def main() -> int:
     free = multiprocessing.Manager().Queue()
     for c in cpus:
         free.put(c)
-    jobs = [(args.suite, t, args.demos, rev) for t in tasks]
+    jobs = [(args.suite, t, args.demos, rev, args.render, args.out) for t in tasks]
     with ProcessPoolExecutor(len(cpus), initializer=_pin, initargs=(free,),
                              mp_context=multiprocessing.get_context("spawn")) as pool:
         trials = [r for rows in pool.map(_task, jobs) for r in rows]
