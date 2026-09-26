@@ -61,9 +61,37 @@ fixtures to the floor (AXM-libero-soft-reset-misplaces-hosted-objects). The teac
 benchmark generated from LIBERO's assets whose scenes and tasks are valid and doable by construction
 ([`docs/design_libero_variations.md`](docs/design_libero_variations.md)).
 
+LIBERO-Variations v0 (`screwhead/variations/`, the benchmark is `benchmarks/v0.yaml`): the kitchen table without
+fixtures; put A on a plate, cookie box or ramekin, or in the basket; A, its target and 1-3 other objects from 16
+LIBERO categories, placed inside the Panda's reach map; one episode per generated task, a fresh split seed per
+round (`tools/lv_eval.py --seed S --tasks 40`).
+
+| round (split seed) | success | put on | put in | settled |
+|---|---|---|---|---|
+| 1 (3101) | 40/40 | 23/23 | 17/17 | 37/40 |
+| 2 (3102) | 40/40 | 20/20 | 20/20 | 40/40 |
+| 3 (3103) | 40/40 | 27/27 | 13/13 | 38/40 |
+
+Settled: after LIBERO's first success the teacher lets go and retreats; the goal still holds, the object is at rest
+and upright within 10 deg. The five unsettled are all tall bottles (bbq sauce, milk, salad dressing) put on a ramekin
+or the cookie box and ending on their side -- four still scored as successes by LIBERO's On. One bottle slipped
+from a pinch high on its neck during the lift and was re-picked lying; one stood on the 62 mm cookie box and
+toppled after release.
+
 ## Changelog
 
 Features by date, newest first. Numbers are measured at the stated commit.
+
+- **2026-09-27** -- LIBERO-Variations v0 built and scored (39492ec, e0b6861). A top-down reach map for the Panda
+  over the kitchen table (1279 of 3111 grid points; jaw lines served by either direction, as the grasp planner
+  offers both -- fixed tool yaws confined it to one side, 690 points), a shape catalog measured from collision
+  geometry, a generator that keeps a task only if its scene, preconditions and instruction check out at rest, and an
+  evaluation that regenerates each task from the metadata and a seed (reproduced by digest, 6 of 6, three
+  generations). The teacher: 120/120 over three fresh rounds, 115/120 settled (put on 65/70, put in 50/50) -- the
+  unsettled are tall bottles on small supports. Building it found that the model fingerprint left out the model's
+  names and options, so two objects of a category could have swapped bodies unseen (fixed). Theory: four branches
+  (action space, scene validity, doable tasks, unambiguous instructions), three proven so far, and an axiom that a
+  MuJoCo contact depends on its pair alone (AXM-mujoco-contacts-pairwise, d8eaa16).
 
 - **2026-09-27** -- Theory and code cleanup. Pruned the dormant optimization teacher (search on the task
   loss, verdicts, state restore; 7 branches, a lemma, a component with 5 contracts, 20 files), SimArm's lean

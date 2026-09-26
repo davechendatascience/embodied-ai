@@ -152,7 +152,7 @@ def _write_trials(rows: list[dict], args, bench_meta: dict, rev: str, gen_rev: s
          "detail": dict(r.get("detail", {}), steps=r["steps"], language=r["language"],
                         objects=r.get("objects", []), moved=r.get("moved", ""), target=r.get("target", "")),
          "repro": {"bench": os.path.relpath(args.bench, ROOT), "bench_version": bench_meta["version"],
-                   "task_suite": suite, "generator_revision": gen_rev,
+                   "task_suite": suite, "template": r.get("template", ""), "generator_revision": gen_rev,
                    "split_seed": args.seed, "task": r["task"], "task_seed": r.get("task_seed"),
                    "attempt": r.get("attempt"), "task_digest": r.get("task_digest"),
                    "placed_digest": r.get("placed_digest"), "fingerprint": r.get("fingerprint"),
