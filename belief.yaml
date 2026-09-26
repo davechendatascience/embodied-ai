@@ -46,6 +46,14 @@
 # through the checkpoints/vla_student*.pt symlinks; they gain --gripper-target when
 # the aligned target model replaces them.
 #
+# Where things stand (2026-09-26). The skill teacher (CMP-skill-library) solves 6444 of LIBERO's
+# 6500 test episodes on the Panda. On four other arms with the Panda's gripper it was tuned until
+# 149 of 160 tasks succeeded at init 0, and that tuning is paused (README changelog,
+# docs/design_servo_transfer.md; CTR-teacher-on-other-arms holds the evidence). The student is now
+# the Panda VLA on Qwen3-VL-2B (CMP-vla-student, docs/design_VLA_qwen.md), trained on LIBERO's human
+# demonstrations replayed through the servo and evaluated by LIBERO's protocol beside a blind twin.
+# CMP-action-expert and CMP-vision-encoder are the DINOv2 token student its evidence came from.
+#
 # Every code file under screwhead/ and tools/ belongs to a component; each component
 # lists its files in its `code:` field, which consistency-belief reads: a component with
 # code and no declared branch is code nobody justified, and a component with a branch and
@@ -197,6 +205,30 @@ components:
       - tools/record_rollout.py
       - scripts/token_vla.sh                # the student pipeline end to end
       - scripts/heldout_task.sh
+
+  # The Panda VLA the teacher push handed over to (docs/design_VLA_qwen.md). Planned: its designs are
+  # staged in consistency-belief (BRN-vla-trains-on-demos-replayed-through-the-servo,
+  # BRN-vla-reported-beside-a-blind-twin); code, contracts and tests land with the first of them built.
+  - id: CMP-vla-student
+    purpose: >-
+      The Panda VLA -- Qwen3-VL-2B-Instruct reads both cameras and the instruction; an action expert
+      reads its hidden states and the tool state and predicts a chunk of tool twists and gripper
+      aperture targets, executed by TwistServo and GripperServo exactly as in training
+    testable_capability: >-
+      On LIBERO's protocol (each task's 50 initial states once, the suite's horizon) succeeds at a
+      rate its blind twin, trained identically with zeroed images, does not reach, within the edge
+      target's latency and memory
+    failure_modes:
+      - {id: FM-trajectory-prior, observable: the blind twin matches the sighted model; one memorised path per task succeeds}
+      - {id: FM-replay-drops-tasks, observable: demonstrations fail when replayed through the servo and a task keeps too few to learn from}
+      - {id: FM-weak-grip-label, observable: the recorded finger opening while an object is held labels an aperture at its width, and the replay or the policy holds without squeezing}
+      - {id: FM-inference-irreproducible, observable: the same episode, weights, inputs and seed give different actions (reduction order, batch-dependent kernels)}
+      - {id: FM-mode-averaging, observable: regression on the chunk averages two ways around an obstacle into one through it}
+      - {id: FM-over-edge-budget, observable: per-step latency or memory exceeds what Orin/Thor can serve at the control rate}
+    remediation: >-
+      Labels close the loop on the servo's reference; a replay enters the data only when LIBERO's
+      predicate accepts it; a blind twin beside every number and several training seeds; flow
+      matching only if mode averaging is measured to hurt; latency and VRAM reported with accuracy
   - id: CMP-twist-servo
     purpose: Execute a body twist on the simulator's joint-position controller
     inputs: [IFC-expert__ik]
@@ -300,6 +332,8 @@ components:
       - tools/teacher_report.py
       - tools/teacher_determinism.py
       - tools/teacher_motion.py
+      - tools/teacher_settled.py          # TST-teacher-settled: scored after the teacher has finished
+      - tools/teacher_videos.py           # one recorded episode per task
       - tools/demo_survey.py              # LIBERO's human demos replayed, per task: the teacher's ground truth
       - screwhead/teacher/clearing.py
       - scripts/skill_sweep.sh
@@ -1092,6 +1126,24 @@ contracts:
     evaluable_by: [TST-teacher-reliability]
     sufficiency: {n_min: 100, max_ci_width: 0.25}
 
+  # The teacher on another arm with the Panda's gripper, started at the recorded Panda's tool pose in
+  # the Panda's scene (CTR-other-arm-scene-as-panda). Tuning paused 2026-09-26 at 149 of 160 tasks
+  # succeeding at init 0; this holds what it reached, per arm, not a bar it met.
+  - id: CTR-teacher-on-other-arms
+    subject: CMP-skill-library
+    claim_type: capability
+    metrics:
+      - {id: success, unit: bool}
+    acceptance: {rule: "success == true", target_rate: 0.9}
+    conditions:
+      - {id: ur5e, when: "robot == 'UR5e'"}
+      - {id: iiwa, when: "robot == 'IIWA'"}
+      - {id: kinova3, when: "robot == 'Kinova3'"}
+      - {id: jaco, when: "robot == 'Jaco'"}
+    compatibility_key: [robot, gripper, teacher_revision]
+    evaluable_by: [TST-teacher-other-arms]
+    sufficiency: {n_min: 200, max_ci_width: 0.1}
+
   # Coverage, kept apart from reliability so that neither hides the other. A teacher that refuses
   # everything reads perfectly reliable here and fails this; one that attempts everything badly
   # reads the other way round. Both numbers are wanted.
@@ -1581,6 +1633,16 @@ tests:
     metrics: [success, refused, release_gap_mm, drop_count]
     capture: [task, task_suite, teacher_revision, mechanism]
     cost: 80.0
+    timeout_s: 10800
+
+  # Four suites x ten tasks x initial states 0-4, per arm, one trials file per (arm, suite) under $OUT
+  - id: TST-teacher-other-arms
+    layer: e2e
+    targets: [CMP-skill-library, CMP-scene-randomizer]
+    run: mkdir -p $OUT && for R in UR5e IIWA Kinova3 Jaco; do for S in libero_spatial libero_object libero_goal libero_10; do H=600; [ $S = libero_10 ] && H=800; HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/skill_eval.py --suite $S --tasks 0 1 2 3 4 5 6 7 8 9 --episodes 5 --horizon $H --init-order --cpus 5,6,7,8,9,15,16,17 --robot $R --diagnostics --trials $OUT/$R.$S.trials.json; done; done
+    metrics: [success, refused]
+    capture: [task_suite, task, init_index, robot, gripper, teacher_revision]
+    cost: 60.0
     timeout_s: 10800
 
   # All 130 tasks, 20 episodes each, on a seed of its own (557): each episode continued past

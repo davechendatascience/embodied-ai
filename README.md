@@ -90,7 +90,13 @@ Features by date, newest first. Numbers are measured at the stated commit.
   of 40 (146 of 160). The reach screen no longer probes fixed heights over the pre-grasp (562db34): those
   poses sat at the edge of the Kinova3's and the Jaco's reach and rejected every handle grasp of the moka
   pot -> 149 of 160; the Panda's protocol sweep scores 6444 of 6500, as v48 did (10 episodes differ). A
-  screen graded by intended contact was measured (146 -> 144) and withdrawn.
+  screen graded by intended contact was measured (146 -> 144) and withdrawn. The UR5e starts in its home
+  family, the shoulder panned to the far side of the base (4d3c216; calibrated on held-out libero_90 tasks,
+  85 -> 90 of 90) -> 152 of 160. Over initial states 0-4 of the same 40 tasks (200 episodes per arm,
+  4d3c216): UR5e 195 (184 before the home family), IIWA 186, Kinova3 180, Jaco 179; never solved: IIWA
+  libero_goal 7, Kinova3 and Jaco libero_spatial 4 and libero_10 9. **Cross-embodiment tuning of the
+  teacher is paused here.** Next: the Panda VLA on Qwen3-VL-2B, trained on LIBERO's human demonstrations
+  replayed through the servo (docs/design_VLA_qwen.md).
 - **2026-09-25** -- LIBERO's protocol for all 130 tasks (each task's 50 initial states in order):
   5746 of 6500 at v26 -> 6413 at v41 -> 6433 at v44 -> 6444 at v48; settled 2150 -> 2454 -> 2479 of 2600 (v26 -> v41 -> v48).
   - v48: the moka pot is held by the top of its handle -- the handle finder had taken the spout, 49 mm out
