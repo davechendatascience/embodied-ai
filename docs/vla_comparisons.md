@@ -1,0 +1,29 @@
+# Panda VLA comparisons, fixed before evaluation
+
+BRN-vla-reported-beside-a-blind-twin requires every comparison's measure, training procedure and configuration,
+seeds, evaluation seed and execution configuration to be fixed before any of its models is evaluated, one sighted
+and one blind model per seed, and every comparison reported whether or not it credits vision. They are fixed here,
+committed before evaluation.
+
+## P0 -- pilot (declared 2026-09-26; unreplicated by design, no vision claim)
+
+- **Why:** the user's choice to see first numbers after one seed pair (about 17 h) rather than after six models
+  (about 49 h). With one seed per model its margin is reported as unreplicated, never as evidence.
+- **Measure (named in advance):** overall success rate on libero_spatial from the randomized starts
+  (`runs/evidence/random_starts/libero_spatial.npz`, BRN-random-starts-test-set). Beside it, not as evidence: the
+  success rate on LIBERO's own libero_spatial test starts, per-task rates, offline action errors, and VLA-JEPA's rates
+  on both sets (lerobot/VLA-JEPA-LIBERO, evaluated in its own environment: `vla_jepa/eval_starts.py`).
+- **Seeds:** training seed 0; exactly one sighted and one blind model.
+- **Training:** code revision 8582a63 (frozen worktree), `tools/train_vla.py --suites libero_spatial --demos 50
+  --val-demos 2 --steps 20000 --batch 16 --lr 2e-4 --warmup 500 --chunk 8 --execute 4 --workers 6 --seed 0
+  [--blind]`, launched with a controlled environment (`env -i`, the declared variables only). Both models are trained
+  before either is evaluated.
+- **Evaluation:** code revision 8582a63, `tools/eval_vla.py` with evaluation seed 555, `VLA_EXECUTION` (the twist
+  decode, cameras without multisampling), every episode twice in fresh processes; on LIBERO's starts
+  (`--episodes 50`) and on the randomized set (`--starts ...`).
+
+## E1 -- evidence (to be fixed here before its first evaluation)
+
+Seeds 1, 2 and 3, one sighted and one blind model each; procedure, configuration and measure written here before
+any of its models is evaluated. A change made after P0's results is allowed (E1 is a new comparison) and is
+written here with its reason.
