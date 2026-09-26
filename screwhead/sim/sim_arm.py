@@ -437,14 +437,20 @@ class SimArm:
         return np.ascontiguousarray(self.env.sim.render(width=px, height=px, camera_name=camera)[::-1])
 
     def model_fingerprint(self) -> str:
-        """A digest of every numeric field of the compiled task model, the poses of the fixtures the reset draws
-        (world-attached <object>_main bodies) and the records of the files it was read from excepted
-        (BRN-random-starts-test-set: two environments place the same scenes only if these agree)."""
+        """A digest of every numeric field, every name and every option of the compiled task model, the poses of the
+        fixtures the reset draws (world-attached <object>_main bodies) and the records of the files it was read from
+        excepted (BRN-random-starts-test-set, BRN-lv-scenes-valid: two environments place the same scenes only if
+        these agree). The names are in it so that two objects of one category cannot swap bodies unseen; the options
+        (timestep, contact margins and flags) are not arrays of the model and were left out before."""
         import hashlib
         from .task_env_place import drawn_fixtures
         m = self.env.sim.model._model
         drawn = drawn_fixtures(m)
         h = hashlib.sha1()
+        h.update(bytes(m.names))
+        for name in sorted(n for n in dir(m.opt) if not n.startswith("_")):
+            h.update(name.encode())
+            h.update(np.ascontiguousarray(getattr(m.opt, name), float).tobytes())
         for name in sorted(dir(m)):
             if name.startswith("_") or name.endswith("_pathadr") or name == "paths":
                 continue

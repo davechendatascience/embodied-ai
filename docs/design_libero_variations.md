@@ -1,6 +1,6 @@
 # LIBERO-Variations: a generated benchmark
 
-Status: design, 2026-09-26. Nothing built yet.
+Status: v0 built, 2026-09-27 (screwhead/variations/, metadata screwhead/variations/benchmarks/v0.yaml).
 
 ## Why
 
@@ -74,6 +74,28 @@ two-step templates.
 - **LIBERO's standard suites** stay as a secondary reference, run now and then so the VLA's numbers remain
   comparable with published ones; LIBERO-Variations is the target.
 
+## v0 as built (2026-09-27)
+
+- **Reach map** (tools/lv_reach_map.py): 2 cm grid over the kitchen table's 1.0 x 1.2 m top; four jaw lines (0, 45,
+  90, 135 deg), each served by either of its two directions as the grasp planner offers both, at 2, 5, 10, 15, 20
+  and 25 cm above the top, fingers open (80 mm); 5 cm border. 1279 of 3111 points, world x -0.50 to +0.08 (0.16 to
+  0.74 m ahead of the base) across the whole width, less a notch in front of the base. Fixed tool yaws spanning a
+  half turn instead confined it to y < 0.2 m (690 points): the wrist ran out of travel on the left. Computed in 18 s.
+- **Catalog**: each pool category's shape at rest, for layout planning only. Six groceries (the sauces, milk, juice,
+  soup) are modelled lying and stood up by their initial rotation, so each category's up axis is measured.
+- **Templates**: put A on B (plate, cookie box, ramekin) and put A in the basket. Stack on a bowl is off: by the fit
+  rule (A's plan box grown 5 mm on every side, centred clear of the walls' boxes) nothing in the pool fits the bowl's
+  opening -- LIBERO's own "cream cheese in the bowl" does not pass it. The mug fits no target.
+- **Scenes**: A, its target and 1-3 others from the pool (at most 3 per category); centres drawn on the map's points,
+  regions 5 mm either side, footprints kept 4 cm apart. Checks at rest per BRN-lv-scenes-valid, preconditions per
+  BRN-lv-tasks-doable, the instruction rewritten from the rest scene and compared with the task file's.
+- **Measured**: generation keeps a task in 2-3.5 s, within three attempts for the first six of split 1. Generated
+  three times (the cores permuted), the six tasks reproduced their placed-state digests every time and their task
+  digests once the fingerprint covered names and options. The teacher solved 6 of 6 (development only).
+- **Found building it**: the model fingerprint left out the model's names and options, so two objects of a category
+  could have swapped bodies unseen (fixed); PyYAML reads a bare `On` as true (goals are quoted, and a test checks).
+
 ## Open
 
-- The yaws and heights of the reach map; the clearance margins; how many objects per scene in v0.
+- How many objects per scene; the order-word gap (4 cm) against what an instruction reader resolves; fixtures and
+  front approaches in the reach map; a fit rule that admits nesting (stacking bowls).

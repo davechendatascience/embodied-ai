@@ -22,6 +22,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
+from .scene import Scene
 from .sim_arm import Execution, SimArm
 
 __all__ = ["Execution", "StartNoise", "TaskEnv"]
@@ -47,7 +48,6 @@ class StartNoise:
 class TaskEnv(SimArm):
     def __init__(self, suite: str, task_index: int | str, horizon: int = 600, seed: int = 0,
                  render: bool | int = True, execution: Execution | None = None, start: StartNoise | None = None):
-        from .scene import Scene
         from ..teacher.task_spec import parse
         self.suite, self.ti, self.horizon = suite, task_index, horizon
         self.seed = int(seed)          # an episode's draws are seeded from it and the
@@ -107,6 +107,30 @@ class TaskEnv(SimArm):
         same_fixtures = all(np.array_equal(m.body_pos[m.body(n).id], p) and np.array_equal(m.body_quat[m.body(n).id], q)
                             for n, (p, q) in fixtures.items())
         return same_fixtures and (fingerprint is None or self.model_fingerprint() == fingerprint)
+
+    def draw_scene(self, k: int) -> dict[str, np.ndarray]:
+        """A generated task's scene (LIBERO-Variations, BRN-lv-scenes-valid): LIBERO's samplers draw every object in
+        its task-file region -- numpy's global generator seeded by this env's seed and k, the scene rebuilt from the
+        task file when the env was opened with Execution(hard_reset=True) -- and the scene is held until every free
+        object is at rest. Returns where the sampler put each free object's origin (world), before it moved."""
+        from .sim_arm import INITIAL_SETTLE, REST_SPEED, SETTLE_CHUNK, SETTLE_ROUNDS
+        self._reset_scene(k)
+        self.scene = Scene(self.env.env)            # a rebuilt scene is a new model: nothing read before holds
+        m, d = self.env.sim.model, self.env.sim.data
+        sampled = {n: d.body_xpos[m.body_name2id(f"{n}_main")].copy() for n in self.task_spec.objects}
+        self._anchor()
+        self._settle(INITIAL_SETTLE)
+        for _ in range(SETTLE_ROUNDS):
+            if self._max_object_speed() < REST_SPEED:
+                break
+            self._settle(SETTLE_CHUNK)
+        return sampled
+
+    def keep_model(self) -> None:
+        """Stop rebuilding the model at each reset: a kept scene's episodes are placed in the model it was drawn in
+        (TaskEnv.place_stored checks its fingerprint), and a rebuild would leave every reader of the old one stale."""
+        self.env.env.hard_reset = False
+        self.scene = Scene(self.env.env)
 
     def skip_episode(self) -> None:
         """Advance the episode stream past one episode without simulating it: an episode's draws

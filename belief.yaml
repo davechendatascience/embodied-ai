@@ -259,6 +259,15 @@ components:
       the metadata's version
     code:
       - docs/design_libero_variations.md
+      - screwhead/variations/task_file.py      # the task file, by LIBERO's own writer
+      - screwhead/variations/reach_map.py      # the action space (BRN-lv-action-space)
+      - screwhead/variations/shapes.py         # plan shapes and fit, from collision geometry
+      - screwhead/variations/generator.py      # draft, build, check, keep (BRN-lv-scenes-valid, -tasks-doable, -instructions-unambiguous)
+      - screwhead/variations/benchmarks/v0.yaml
+      - screwhead/variations/benchmarks/reach_panda_kitchen_table.json
+      - screwhead/variations/benchmarks/catalog_v0.json
+      - tools/lv_reach_map.py
+      - tools/lv_eval.py
   - id: CMP-twist-servo
     purpose: Execute a body twist on the simulator's joint-position controller
     inputs: [IFC-expert__ik]
@@ -1334,6 +1343,28 @@ contracts:
     evaluable_by: [TST-grasp-infeasible]
     sufficiency: {n_min: 200, max_ci_width: 0.05}
 
+
+  # LIBERO-Variations regenerates from its metadata: a split's task, generated again, has the same task file, model
+  # (names and options included) and placed state -- by digest (FM-irreproducible-generation)
+  - id: CTR-lv-regenerates
+    subject: CMP-libero-variations
+    claim_type: capability
+    metrics: [{id: reproduced, unit: bool}]
+    acceptance: {rule: "reproduced == true", target_rate: 0.995}
+    compatibility_key: [task_suite, generator_revision]
+    evaluable_by: [TST-lv-regenerate]
+    sufficiency: {n_min: 40, max_ci_width: 0.1}
+
+  # The teacher-push bar on the generated benchmark: every template above 95% on fresh split seeds
+  - id: CTR-lv-teacher-template
+    subject: CMP-skill-library
+    claim_type: capability
+    metrics: [{id: success, unit: bool}]
+    acceptance: {rule: "success == true", target_rate: 0.95}
+    compatibility_key: [task_suite, template, teacher_revision, generator_revision]
+    evaluable_by: [TST-lv-teacher]
+    sufficiency: {n_min: 60, max_ci_width: 0.25}
+
 tests:
   - id: TST-poe-fk
     layer: component
@@ -1621,6 +1652,26 @@ tests:
     metrics: [success]
     capture: [robot, gripper, dof, task_suite, policy_revision, task, arm_swapped, gripper_swapped]
     cost: 40.0
+
+  # One round: a fresh --seed per scored round (the teacher push's protocol), 40 generated tasks, one episode each
+  - id: TST-lv-teacher
+    layer: e2e
+    targets: [CMP-skill-library, CMP-libero-variations]
+    run: PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/lv_eval.py --seed ${SEED:?a fresh split seed per scored round} --tasks 40 --trials $OUT
+    metrics: [success, generated]
+    capture: [task_suite, task, template, teacher_revision, generator_revision]
+    cost: 5.0
+    timeout_s: 3600
+
+  # A split generated twice, the second checked against the first
+  - id: TST-lv-regenerate
+    layer: component
+    targets: [CMP-libero-variations]
+    run: PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/lv_eval.py --seed 1 --tasks 40 --trials $OUT.first && PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/lv_eval.py --seed 1 --tasks 40 --check-against $OUT.first --trials $OUT
+    metrics: [reproduced, success]
+    capture: [task_suite, task, generator_revision]
+    cost: 5.0
+    timeout_s: 3600
 
 priors: []
 

@@ -48,6 +48,7 @@ class Job:
     robot: str = "Panda"       # the embodiment (Execution.robot, Execution.gripper)
     gripper: str = "PandaGripper"
     diagnostics: bool = False  # record the servo's tracking per episode (SimArm.diagnostics) in its trial
+    bench: str = ""            # a LIBERO-Variations benchmark's metadata: `task` is then a generated task's index
 
 
 def _observe(errors: list, fn, *args):
@@ -62,9 +63,6 @@ def _observe(errors: list, fn, *args):
 
 def _run_episode(env, teacher, job: Job, ep: int, record: bool):
     """One episode: the row for the report, and frames if recording."""
-    from screwhead.teacher.episode_log import EpisodeLog
-    from screwhead.teacher.grip_watch import GripWatch
-    from screwhead.teacher.refusal import Refusal
     # Drawn from the seeded stream (with replacement), 50 episodes covered 26-34 of a task's 50 initial
     # states and repeated the rest exactly; --init-order runs each once, in order, as LIBERO does
     episode = job.ep_offset + ep * job.stride
@@ -72,6 +70,15 @@ def _run_episode(env, teacher, job: Job, ep: int, record: bool):
         env.reset(init_index=episode % len(env.init_states))
     else:
         env.reset()
+    return play(env, teacher, job, episode, record)
+
+
+def play(env, teacher, job: Job, episode: int, record: bool):
+    """The teacher runs an episode from wherever env was just placed: the row for the report, and frames if
+    recording."""
+    from screwhead.teacher.episode_log import EpisodeLog
+    from screwhead.teacher.grip_watch import GripWatch
+    from screwhead.teacher.refusal import Refusal
     errors: list[str] = []
     log = _observe(errors, EpisodeLog, env, teacher)
     # CTR-teacher-gentle's metrics, kept on their own error list: a failing watch must not
@@ -121,7 +128,7 @@ def _run_episode(env, teacher, job: Job, ep: int, record: bool):
     track = log.track if log is not None else {}
     forced = {o: g.get("rejected", {}) for o, g in
               (detail.get("grasp") or {}).items() if g.get("forced")}
-    row = dict(task=job.task, episode=job.ep_offset + ep * job.stride, seed=job.seed, env_episode=env.episode,
+    row = dict(task=job.task, episode=episode, seed=job.seed, env_episode=env.episode,
                success=ok, steps=env.t,
                refused=refusal is not None, **(refusal.as_row() if refusal else {}),
                forced_grasp=bool(forced), rejected_by=forced, **gentle,
@@ -292,7 +299,7 @@ def _jobs(args) -> list[Job]:
     return jobs
 
 
-def _run(jobs: list[Job], suite: str, at_once: int = 0) -> list[dict]:
+def _run(jobs: list[Job], suite: str, at_once: int = 0, worker=None, printer=None) -> list[dict]:
     """Run the jobs, at most `at_once` processes alive at a time, printing rows as they arrive.
 
     Every job is a whole LIBERO environment: a process of its own, above a gigabyte of it, and
@@ -313,7 +320,7 @@ def _run(jobs: list[Job], suite: str, at_once: int = 0) -> list[dict]:
         while pending and free:
             job = replace(pending.pop(0), cpu=free.pop(0))
             a, b = ctx.Pipe()
-            proc = ctx.Process(target=_worker, args=(b, asdict(job)), daemon=True)
+            proc = ctx.Process(target=worker or _worker, args=(b, asdict(job)), daemon=True)
             proc.start()
             b.close()
             live[a] = (proc, job.cpu)
@@ -328,7 +335,10 @@ def _run(jobs: list[Job], suite: str, at_once: int = 0) -> list[dict]:
                 free.append(cpu)
                 continue
             rows.append(r)
-            _print_row(suite, r)
+            if printer:
+                printer(r)
+            else:
+                _print_row(suite, r)
     return rows
 
 

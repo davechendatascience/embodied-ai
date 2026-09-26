@@ -1,0 +1,66 @@
+# LIBERO-Variations v0: this file is the benchmark (docs/design_libero_variations.md). Every task
+# regenerates from it and a seed (screwhead/variations/generator.py); nothing generated is stored.
+# Results are tied to this version; a change to anything here bumps it.
+name: libero-variations
+version: 0
+
+family:
+  workspace: kitchen_table      # LIBERO's kitchen table, no fixtures
+  fixtures: []
+robot: {name: Panda, gripper: PandaGripper}
+
+action_space:                   # BRN-lv-action-space: tools/lv_reach_map.py
+  map: reach_panda_kitchen_table.json
+  digest: 8ad682838ced25dd
+catalog:                        # each category's shape at rest, for layout planning only: tools/lv_reach_map.py --catalog
+  file: catalog_v0.json
+  digest: eeebe68a446656b0
+
+pool:
+  pick: [akita_black_bowl, white_yellow_mug, butter, cream_cheese, chocolate_pudding, alphabet_soup,
+         tomato_sauce, ketchup, bbq_sauce, salad_dressing, milk, orange_juice]
+  targets: [plate, cookies, glazed_rim_porcelain_ramekin, basket, akita_black_bowl]
+  containers: [basket, akita_black_bowl]   # measured with their walls
+
+nouns:                          # one noun phrase per category (BRN-lv-instructions-unambiguous)
+  akita_black_bowl: black bowl
+  white_yellow_mug: white yellow mug
+  butter: butter
+  cream_cheese: cream cheese
+  chocolate_pudding: chocolate pudding
+  alphabet_soup: alphabet soup
+  tomato_sauce: tomato sauce
+  ketchup: ketchup
+  bbq_sauce: bbq sauce
+  salad_dressing: salad dressing
+  milk: milk
+  orange_juice: orange juice
+  plate: plate
+  cookies: cookie box
+  glazed_rim_porcelain_ramekin: ramekin
+  basket: basket
+
+templates:                      # BRN-lv-tasks-doable
+  put_on: {weight: 1, goal: "On", supports: surface, targets: [plate, cookies, glazed_rim_porcelain_ramekin],
+           wording: "put the {a} on the {b}"}
+  put_in: {weight: 1, goal: "In", supports: container, targets: [basket], region: contain_region,
+           wording: "put the {a} in the {b}"}
+  stack:  {weight: 0, goal: "On", supports: container, targets: [akita_black_bowl],
+           wording: "put the {a} in the {b}"}   # off: nothing in the pool fits the bowl's opening by the fit rule
+
+scene:                          # BRN-lv-scenes-valid
+  others: [1, 3]                # objects besides the one moved and its target, drawn from the pool
+  same_category_max: 3
+  region_half: 0.005            # m, each object's task-file region: a square this far either side of its centre
+  rest_shift: 0.010             # m, largest move across the table between sampled and at rest
+  clearance: 0.02               # m, footprints grown by this stay in the action space; planned centres keep 2x apart
+  fit_clearance: 0.005          # m, the moved object's footprint grown by this fits its target's top or opening
+  upright_deg: 10.0             # largest angle between a category's up axis and the vertical at rest
+  order_gap: 0.04               # m, order words need every two of a category this far apart along the axis
+  layout_tries: 200
+  attempts: 20
+
+horizon: 600
+episodes_per_task: 1
+splits:
+  dev: 1                        # for development; scored rounds use fresh seeds, recorded with their results
