@@ -97,8 +97,9 @@ def _reference_bodies(m) -> list[int]:
 
 
 def match_digest(m) -> str:
-    """A digest of what BRN-lv-action-space's match compares: the robot's, its gripper's and its mount's bodies,
-    the table and the fixtures a reset draws, with every body below them -- each with its parent's name, its pose
+    """A digest of what BRN-lv-action-space's match compares: the world body's own geoms (a floor, or a table or
+    fixture modelled on the world), the robot's, its gripper's and its mount's bodies, the table and the fixtures a
+    reset draws, with every body below them -- each with its parent's name, its pose
     in its parent (so, the chain rooted at the world, its world pose at given joint positions), its inertia -- their
     geoms, each with its pose in its body, its shape (a mesh's vertices and faces too), contact filters, margins
     and gaps, and their joints; and the model's contact settings: its options, and its contact exclusions and
@@ -106,7 +107,7 @@ def match_digest(m) -> str:
     positions are not in it."""
     h = hashlib.sha1()
     _digest_contact_settings(h, m)
-    for b in sorted(_reference_bodies(m), key=lambda b: m.body(b).name):
+    for b in [0] + sorted(_reference_bodies(m), key=lambda b: m.body(b).name):   # the world's own geoms too
         _digest_body(h, m, b)
     return h.hexdigest()[:16]
 
