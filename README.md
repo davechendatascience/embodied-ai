@@ -74,9 +74,12 @@ round (`tools/lv_eval.py --seed S --tasks 40`).
 
 Settled: after LIBERO's first success the teacher lets go and retreats; the goal still holds, the object is at rest
 and upright within 10 deg. The five unsettled are all tall bottles (bbq sauce, milk, salad dressing) put on a ramekin
-or the cookie box and ending on their side -- four still scored as successes by LIBERO's On. One bottle slipped
-from a pinch high on its neck during the lift and was re-picked lying; one stood on the 62 mm cookie box and
-toppled after release.
+or the cookie box and ending on their side -- four still scored as successes by LIBERO's On. The teacher centres
+them within 1 mm but lets go 15 mm above the target's top (its place clearance): on the ramekin's thin rim a 53 mm
+carton, too wide for the 66 mm opening, lands leaning 20-23 deg or topples. Releasing on contact instead (ae00b13)
+fixed the cartons but let a butter's fingertips, below its bottom, into the ramekin, and cost libero_10 6 four of 20
+settled; on three fresh rounds (seeds 3104-3106) it settled 113/120 against 115/120, and its theory was refuted on
+liveness. It was reverted (903f63a); the release height is open.
 
 ## Changelog
 
@@ -91,7 +94,12 @@ Features by date, newest first. Numbers are measured at the stated commit.
   unsettled are tall bottles on small supports. Building it found that the model fingerprint left out the model's
   names and options, so two objects of a category could have swapped bodies unseen (fixed). Theory: four branches
   (action space, scene validity, doable tasks, unambiguous instructions), three proven so far, and an axiom that a
-  MuJoCo contact depends on its pair alone (AXM-mujoco-contacts-pairwise, d8eaa16).
+  MuJoCo contact depends on its pair alone (AXM-mujoco-contacts-pairwise, d8eaa16). The action-space branch was
+  refuted or doubted nine times, each on something the reference match left free -- contact settings,
+  geom poses in their bodies, other joints, joint reference positions and limit enforcement, buffer overflow, flex
+  elements, the simulator release -- and each is now compared (bf532b0), its tenth statement under verification; a kinematics axiom was declared on the way
+  (AXM-mujoco-kinematics-by-chain, fa535c2). A teacher change for the unsettled tall bottles was measured and
+  reverted (ae00b13, 903f63a; see LIBERO-Variations above).
 
 - **2026-09-27** -- Theory and code cleanup. Pruned the dormant optimization teacher (search on the task
   loss, verdicts, state restore; 7 branches, a lemma, a component with 5 contracts, 20 files), SimArm's lean
