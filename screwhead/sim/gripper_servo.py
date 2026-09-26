@@ -52,6 +52,13 @@ class GripperServo:
         return 1.0 if pred > target + self.band else (-1.0 if pred < target - self.band else 0.0)
 
 
+def squeeze_command(g) -> float:
+    """The +1/-1 command a LIBERO-style gripper (VLA_EXECUTION's command mode) is given for a target channel: close
+    only for a squeeze (a target within SATURATE of shut), open for anything else -- fully open and a pre-shape alike,
+    which a two-valued gripper cannot hold."""
+    return 1.0 if float(channel_to_target(g)) <= SATURATE else -1.0
+
+
 def snap_channel(g, levels):
     """Nearest of the target apertures (m) the programs actually use, as a channel value.
 
