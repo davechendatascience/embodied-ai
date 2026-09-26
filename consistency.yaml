@@ -4218,12 +4218,13 @@ branches:
       frame, AXM-libero-demos-record-a-panda), divided componentwise by the action range's bounds, fixed
       constants: set before any pair is read and by no statistic of any training set. The gripper part is
       the gripper command the demonstration recorded at step j+1 (AXM-libero-demos-record-their-actions).
-      A stored observation with no recorded state two steps after it has no pair. Consequently each label
-      is the displacement the demonstrator's arm made over the control period that began with the arm
-      where its observation shows it, exact at the period's end -- the pose it names is the forward
-      kinematics of the next recorded state -- while it fixes neither the path the tool took within the
-      period nor, on the seven-joint arm, the joints it ended at; and nothing in such a pair depends on
-      our simulator or execution path. Not claimed: that the evaluation's execution reproduces a label's
+      A stored observation with no recorded state two steps after it has no pair. Consequently each
+      label's arm part is the displacement the demonstrator's arm made over the control period that began
+      with the arm where its observation shows it, exact at the period's end -- the pose it names is the
+      forward kinematics of the next recorded state -- while it fixes neither the path the tool took
+      within the period nor, on the seven-joint arm, the joints it ended at; its gripper part is the
+      command the demonstrator issued for that same period; and nothing in such a pair depends on our
+      simulator or execution path. Not claimed: that the evaluation's execution reproduces a label's
       displacement (the decode is its own design); that the labels lie within the action range; that a
       policy trained on these pairs succeeds or uses its images.
     premises: [AXM-libero-demos-record-a-panda, AXM-libero-demos-record-their-actions, AXM-libero-demo-observations-follow-their-actions]
@@ -4246,7 +4247,8 @@ branches:
       premises here), so pairs from other sources cannot move a LIBERO label; the arm part (from states)
       and the gripper part (from the recorded action) are stated apart. TRL-1295: the stored observation
       is claimed to equal recorded state j+1 in the arm joints only, what the axiom gives and all the arm
-      label needs.
+      label needs. TRL-1307: the consequence speaks of the arm part as a displacement and the gripper part
+      as a command.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-vla-decodes-twists-exactly
@@ -4351,6 +4353,72 @@ branches:
       2026-09-26 to training on pairs taken from LIBERO's demonstrations (TRL-1283: its training-side
       clauses rest on LIBERO-only premises once BRN-vla-learns-the-recorded-motion was scoped); another
       source is covered by a claim that its pairs meet the same conditions.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-vla-teacher-pairs-as-demo-pairs
+    subject: CMP-vla-student
+    claim_type: contract
+    statement: >-
+      Training pairs for the Panda VLA may also come from the skill teacher's episodes, recorded so that
+      each meets the interface conditions BRN-vla-learns-the-recorded-motion and
+      BRN-vla-sees-and-acts-as-trained state of a pair taken from LIBERO's demonstrations: where its
+      observation is read, how its inputs are made, how its labels are computed and from what, and the
+      values its gripper label takes. A teacher episode of a LIBERO task runs on the Panda of that task's
+      LIBERO scene, the arm LIBERO's demonstrations record (AXM-libero-demos-record-a-panda), whose
+      recorded states hold its arm joints where LIBERO's flattened states hold them and whose tool frame
+      is the one the labels use; it runs through the VLA's execution -- the same servos and decode as the
+      VLA's evaluation (AXM-one-execution-path) -- one step of the environment, one control period, per
+      recorded step, with the observation after every step a forced read of the state as it stands
+      (AXM-robosuite-step-observes-the-period-end), the read the evaluation acts on. By design the VLA's
+      execution acts on the simulator only within a step's call -- its servos and decode compute and write
+      their commands there -- and the teacher and the recorder only read it; the recorder captures the
+      simulator's state immediately before each step's call and reads the observation immediately after
+      the call returns, so nothing writes the simulator between the read after step j and the capture
+      before step j+1. The teacher's gripper channel is executed as the two-valued command the VLA's
+      gripper takes: +1 only when the teacher asks for a squeeze, -1 otherwise; in the VLA's execution
+      that value is given unchanged as the gripper entry of the action robosuite's controller executes,
+      the entry through which LIBERO's demonstrations' recorded commands were executed
+      (AXM-libero-demos-record-their-actions), and the value given is the value recorded. The recorder
+      writes, per episode and under its task, the file layout LIBERO's demonstrations have: at each step
+      j, the captured state as recorded state j, the action executed in the step (its last entry that
+      gripper command) as recorded action j, and the observation read after the step as stored observation
+      j -- both camera images as the simulator renders them for the evaluation, at the resolution and in
+      the row order LIBERO's stored images have, and the arm joints and the finger positions, the only
+      proprioceptive fields the VLA's input is computed from (BRN-vla-sees-and-acts-as-trained). Stored
+      observation j therefore shows recorded state j+1 -- in full, where LIBERO's shows it in the arm
+      joints (AXM-libero-demo-observations-follow-their-actions). Only episodes that meet LIBERO's
+      predicate within the suite's step limit are kept. Pairs are read from such a file by the same
+      function as from LIBERO's, with the instruction LIBERO's benchmark defines for the file's task:
+      stored observation j, preprocessed by the same function, with the arm label computed from recorded
+      states j+1 and j+2 by the same function, through the Panda's chain and the same fixed constants, the
+      gripper label the command recorded at step j+1, and the chunk's later positions from the same
+      episode's later steps. Consequently a teacher pair meets each of those interface conditions -- its
+      inputs the same function of an observation read where the evaluation reads, its arm label the
+      displacement the Panda's arm made over the control period that began with the arm where its
+      observation shows it, its gripper label +1 or -1 given to the same gripper entry the VLA's own
+      commands are given to -- so the interface conclusion of BRN-vla-sees-and-acts-as-trained holds for a
+      model trained on pairs of both sources: no difference between training and evaluation lies in the
+      input or output interface at the steps it names. Not claimed: that a teacher pair is, as a LIBERO
+      pair is, independent of this project's simulator and execution path -- its images are this
+      simulator's renders and its arm label is the motion this execution produced; that the teacher moves
+      like LIBERO's human demonstrators, or that the union helps; that the images of the two sources look
+      alike; that a teacher's squeeze and a human's close happen at the same moments; that the fingers
+      answer a command as they did in the robosuite release the demonstrations were collected with; that
+      the labels lie within the action range; anything about episodes on other arms.
+    premises: [BRN-vla-learns-the-recorded-motion, BRN-vla-sees-and-acts-as-trained, AXM-libero-demo-observations-follow-their-actions, AXM-libero-demos-record-their-actions, AXM-libero-demos-record-a-panda, AXM-robosuite-step-observes-the-period-end, AXM-one-execution-path]
+    derivation_rule: >-
+      E2 (docs/vla_comparisons.md): VLA-JEPA, trained on LIBERO's demonstrations alone, fell from 99.0% on
+      LIBERO's starts to 70.0% on the randomized set's (tasks 0-3), 72% of its failures precision misses;
+      the skill teacher at 1.5x the test set's range under the VLA's execution solved 450/475 draws on
+      nine tasks and 50/164 on task 4 (the drawer: the two-valued gripper cannot hold the teacher's
+      pre-shape, under study). The user chose to train on teacher episodes from widened starts. Proposed
+      and verified 2026-09-26: TRL-1279..1281 (DOUBTED: proprioceptive fields, one step per period, the
+      gripper's entry, and BRN-vla-learns-the-recorded-motion's 'every pair is LIBERO's', since scoped);
+      TRL-1297..1299 (REFUTED on scope: 'every condition' took in a LIBERO pair's independence from our
+      simulator; now the interface conditions only, and the execution acting on the simulator only within
+      a step's call); TRL-1303..1305 (DOUBTED: which arm); TRL-1309..1311 (PROVEN, staged).
+      squeeze_command is 5aa47b2. Evidence to be measured: the demonstration-replay gate on teacher files
+      (CTR-demo-replay-succeeds, a teacher condition).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-random-starts-test-set
