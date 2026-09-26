@@ -83,6 +83,14 @@ of that workflow applied to one engineering problem.
 
 Features by date, newest first. Numbers are measured at the stated commit.
 
+- **2026-09-26** -- Servo transfer, the teacher on other arms (docs/design_servo_transfer.md). Another arm
+  now starts in the Panda's scene: its tool at the pose LIBERO's Panda was recorded at, the fixtures drawn
+  from the Panda's random stream (2c371d4; before, robosuite's own start poses knocked objects on 42 of 160
+  resets). On the 40 benchmark tasks at init 0, with the Panda gripper: UR5e 37, IIWA 38, Kinova3 35, Jaco 36
+  of 40 (146 of 160). The reach screen no longer probes fixed heights over the pre-grasp (562db34): those
+  poses sat at the edge of the Kinova3's and the Jaco's reach and rejected every handle grasp of the moka
+  pot -> 149 of 160; the Panda's protocol sweep scores 6444 of 6500, as v48 did (10 episodes differ). A
+  screen graded by intended contact was measured (146 -> 144) and withdrawn.
 - **2026-09-25** -- LIBERO's protocol for all 130 tasks (each task's 50 initial states in order):
   5746 of 6500 at v26 -> 6413 at v41 -> 6433 at v44 -> 6444 at v48; settled 2150 -> 2454 -> 2479 of 2600 (v26 -> v41 -> v48).
   - v48: the moka pot is held by the top of its handle -- the handle finder had taken the spout, 49 mm out
