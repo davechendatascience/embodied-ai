@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT))
 from skill_eval import Job, _crashed_row, _failed_row, _run, play  # noqa: E402
 
 LV_CPUS = "5,6,7,8,9,15,16,17"
+SETTLED = ("success_final", "finished", "released", "at_rest", "tilt_deg", "upright", "settled", "settle_steps")
 
 
 def _worker(remote, job_fields: dict) -> None:
@@ -51,6 +52,7 @@ def _worker(remote, job_fields: dict) -> None:
     teacher.skills.reach.refuse_when_empty = job.refuse
     try:
         row, _frames = play(env, teacher, job, job.task, record=False)
+        row.update(_settled(env, teacher, bench, kept.draft, job.horizon, bool(row["success"])))
     except Exception as e:  # noqa: BLE001  a worker boundary: a crash is one failed, recorded episode
         row = _crashed_row(job, 0, env, e)
     d = kept.draft
@@ -61,6 +63,29 @@ def _worker(remote, job_fields: dict) -> None:
     remote.send(row)
     remote.send(None)
     env.close()
+
+
+def _settled(env, teacher, bench, draft, horizon: int, first: bool) -> dict:
+    """Does the success settle (teacher_settled's measure)? After LIBERO's first success the teacher carries on --
+    lets go, retreats -- until its plan is done with nothing touched or moving, or the horizon. Upright is the
+    moved object's category up axis within the benchmark's declared angle of the vertical: there are no human
+    demonstrations of a generated task to take a tilt from."""
+    from teacher_settled import _settle, _Watch
+
+    from screwhead.variations import shapes
+    watch = _Watch(env, [draft.a])
+    t_first = env.t
+    finished = first and _settle(env, teacher, horizon, watch, None)
+    held, still = watch.touched(), watch.moving()
+    tilt = shapes.upright_angle(env.scene, draft.a, bench.catalog[draft.categories[draft.a]])
+    final = env.success()
+    upright = tilt <= bench.scene["upright_deg"]
+    why = [w for w, bad in (("never succeeded", not first), ("lost", first and not final),
+                            ("unfinished", first and not finished), ("held", bool(held)),
+                            ("moving", bool(still)), ("tipped", not upright)) if bad]
+    return dict(success_final=final, finished=finished, released=not held, at_rest=not still,
+                tilt_deg=round(tilt, 1), upright=upright, settled=not why,
+                settle_steps=env.t - t_first if first else -1, why=why)
 
 
 def _parse() -> argparse.Namespace:
@@ -92,10 +117,14 @@ def _summarise(rows: list[dict], seconds: float) -> None:
     print()
     for t in sorted(by):
         ok = sum(r["success"] for r in by[t])
+        settled = sum(bool(r.get("settled")) for r in by[t])
         fails = collections.Counter(r.get("mechanism") or r["last_phase"] for r in by[t] if not r["success"])
-        print(f"  {t}: {ok}/{len(by[t])}" + (f"  failures: {dict(fails)}" if fails else ""))
+        unsettled = collections.Counter(w for r in by[t] if r["success"] for w in r.get("why", []))
+        print(f"  {t}: {ok}/{len(by[t])} succeeded, {settled} settled" + (f"  failures: {dict(fails)}" if fails else "")
+              + (f"  unsettled: {dict(unsettled)}" if unsettled else ""))
     ok = sum(r["success"] for r in scored)
-    print(f"LIBERO-Variations: {ok}/{len(scored)} = {ok / max(1, len(scored)):.3f}"
+    settled = sum(bool(r.get("settled")) for r in scored)
+    print(f"LIBERO-Variations: {ok}/{len(scored)} = {ok / max(1, len(scored)):.3f}, settled {settled}/{len(scored)}"
           + (f", {not_generated} not generated" if not_generated else "") + f"   ({seconds:.0f}s)")
 
 
@@ -115,8 +144,10 @@ def _write_trials(rows: list[dict], args, bench_meta: dict, rev: str, gen_rev: s
     Path(args.trials).parent.mkdir(parents=True, exist_ok=True)
     Path(args.trials).write_text(json.dumps({"trials": [
         {"metrics": dict({"success": r["success"], "generated": r.get("generated")},
+                         **{k: r[k] for k in SETTLED if k in r},
                          **({"reproduced": r["reproduced"]} if "reproduced" in r else {})),
          "conditions": {"task": r["task"], "suite": suite, "template": r.get("template", ""),
+                        "why": ",".join(r.get("why", [])),
                         "last_phase": r["last_phase"], "mechanism": r.get("mechanism", "")},
          "detail": dict(r.get("detail", {}), steps=r["steps"], language=r["language"],
                         objects=r.get("objects", []), moved=r.get("moved", ""), target=r.get("target", "")),
