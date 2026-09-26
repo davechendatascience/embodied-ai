@@ -126,9 +126,11 @@ class SimArm:
     label = "env"
 
     # -- opening a task -------------------------------------------------------------------
-    def _open(self, suite: str, task_index: int, render: bool | int, ex: Execution) -> str:
-        """Load a LIBERO task and set up the execution path; returns its bddl path. `render`: the observation
-        cameras, at CAMERA_PX when True or at that many pixels when a number; none when False."""
+    def _open(self, suite: str, task_index: int | str, render: bool | int, ex: Execution) -> str:
+        """Load a LIBERO task and set up the execution path; returns its bddl path. `task_index` is a benchmark
+        task's index, or the path of a task file of LIBERO's format (a generated task, LIBERO-Variations), which
+        has no stored initial states: its episodes start from stored starts (TaskEnv.place_stored). `render`: the
+        observation cameras, at CAMERA_PX when True or at that many pixels when a number; none when False."""
         from libero.libero import benchmark, get_libero_path
         from libero.libero.envs import OffScreenRenderEnv
 
@@ -144,10 +146,15 @@ class SimArm:
         self.gripper_servo = GripperServo()
         self.spec = ActionSpec()
         self.scale = np.array([self.spec.max_angular_speed] * 3 + [self.spec.max_linear_speed] * 3)
-        bm = benchmark.get_benchmark_dict()[suite]()
-        task = bm.get_task(task_index)
-        self.language = task.language
-        bddl = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
+        if isinstance(task_index, (str, os.PathLike)):
+            from libero.libero.envs.bddl_utils import robosuite_parse_problem
+            bm, bddl = None, str(task_index)
+            self.language = " ".join(robosuite_parse_problem(bddl)["language_instruction"])
+        else:
+            bm = benchmark.get_benchmark_dict()[suite]()
+            task = bm.get_task(task_index)
+            self.language = task.language
+            bddl = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
         px = CAMERA_PX if render is True else int(render)
         kw = (dict(camera_heights=px, camera_widths=px) if render else
               dict(use_camera_obs=False, has_offscreen_renderer=False))
@@ -160,7 +167,7 @@ class SimArm:
         _load = torch.load        # LIBERO pickles its init states; torch>=2.6 refuses unless told
         torch.load = lambda *a, **k: _load(*a, **{**k, "weights_only": False})
         try:
-            self.init_states = bm.get_task_init_states(task_index)
+            self.init_states = bm.get_task_init_states(task_index) if bm is not None else []
         finally:
             torch.load = _load
         self.env.reset()

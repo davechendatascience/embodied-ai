@@ -45,7 +45,7 @@ class StartNoise:
 
 
 class TaskEnv(SimArm):
-    def __init__(self, suite: str, task_index: int, horizon: int = 600, seed: int = 0,
+    def __init__(self, suite: str, task_index: int | str, horizon: int = 600, seed: int = 0,
                  render: bool | int = True, execution: Execution | None = None, start: StartNoise | None = None):
         from .scene import Scene
         from ..teacher.task_spec import parse
