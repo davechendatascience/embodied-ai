@@ -118,8 +118,10 @@ def _task(job: tuple) -> dict:
             continue
         if not _teacher_solves(solve, state, fixtures, vla_execution):
             counts["teacher did not solve"] += 1
+            print(f"task {task}: draw {draws}, kept {len(kept)}, teacher failed {counts['teacher did not solve']}", flush=True)
             continue
         kept.append((state, fixtures, float(gaps.min())))
+        print(f"task {task}: draw {draws}, kept {len(kept)}, teacher failed {counts['teacher did not solve']}", flush=True)
     layout_reasons = dict(draw.layout.reasons) if draw.layout is not None else {}
     out = dict(task=task, draws=draws, kept=len(kept), discarded=dict(counts), randomizer_rejections=layout_reasons,
                states=[k[0] for k in kept], fixtures=[{n: (p.tolist(), q.tolist()) for n, (p, q) in k[1].items()} for k in kept],
