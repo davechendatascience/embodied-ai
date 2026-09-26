@@ -3999,22 +3999,23 @@ branches:
       two tool poses at the present tool orientation 0.03 and 0.15 m above it (minus infinity if either
       does not converge), and the best is taken if it scores at least 0.2. With a spot, the step selected
       is relocate(o, spot) -- the place skill, into no container, taking o first when it is not held --
-      until o is unheld at the spot, and then articulate(j, open), which, a skill newly selected, does not
-      start while o, just released, is touched by the robot or has the tool point within the start gate's
-      margin of its box: the hand retreats instead (DEF-skill-contract's start gate). Crowded with no
-      spot, or not crowded, no relocation is selected and the step is articulate(j, open) with o where it
-      rests. As the precondition of pick(o), articulate(j, open) is selected only while o is not held. Not
-      claimed: that a crowded o could not be picked once j is open; that o is graspable at the spot once j
-      is open, or that the spot or the path to it is screened with j open (the spot is screened with j as
-      it stands, at two poses, which is not DEF-reachable-pose); that the pick and place after opening
-      succeed; that this is DEF-skill-contract's clear_of(o, j) -- it is a stand-in narrower in three
-      ways: an o outside the band of (a) is judged clear without a grasp screen, graspable is read as
-      keeping the same first tier, and a crowded o with no spot does not stop j being opened, so clear_of
-      is not enforced as a precondition in DEF-witness-or-refusal's sense; that any object other than the
-      one the place puts into j is tested; that nothing overhangs the spot higher than 0.15 m above o's
-      bottom, which the rays pass under; that the decision, kept for the episode, still holds after the
-      scene changes; that the screen leaves every simulator data field as it found it (it restores joint
-      positions and velocities and forwards).
+      until o is unheld at the spot, and then articulate(j, open). Crowded with no spot, or not crowded,
+      no relocation is selected and the step is articulate(j, open) with o where it rests. As the
+      precondition of pick(o), articulate(j, open) is selected only while o is not held. Not claimed: that
+      DEF-skill-contract's release postcondition holds when articulate(j, open) is first selected -- after
+      a relocation the open fingers may still flank o; the teacher's start gate then commands a retreat
+      while that step stays selected, and the gate reads touch and a margin around o's box, not whether o
+      lies between the fingers; that a crowded o could not be picked once j is open; that o is graspable
+      at the spot once j is open, or that the spot or the path to it is screened with j open (the spot is
+      screened with j as it stands, at two poses, which is not DEF-reachable-pose); that the pick and
+      place after opening succeed; that this is DEF-skill-contract's clear_of(o, j) -- it is a stand-in
+      narrower in three ways: an o outside the band of (a) is judged clear without a grasp screen,
+      graspable is read as keeping the same first tier, and a crowded o with no spot does not stop j being
+      opened, so clear_of is not enforced as a precondition in DEF-witness-or-refusal's sense; that any
+      object other than the one the place puts into j is tested; that nothing overhangs the spot higher
+      than 0.15 m above o's bottom, which the rays pass under; that the decision, kept for the episode,
+      still holds after the scene changes; that the screen leaves every simulator data field as it found
+      it (it restores joint positions and velocities and forwards).
     premises: [AXM-one-gripper, AXM-object-geometry-known, AXM-mujoco-forward-is-a-function-of-state, AXM-support-scannable, DEF-skill-contract, BRN-open-precondition-reads-the-running-drive]
     derivation_rule: >-
       The claim describes the decision rule; what is derived is why its parts are admissible and what its
@@ -4035,7 +4036,10 @@ branches:
       slice libero_goal task 3, the task the rule was built for. Restated 2026-09-27 after the cleanup's
       verification round: TRL-1396 (REFUTED: opening could start with the released o between the fingers)
       answered by stating the start gate the teacher applies to every newly selected skill; TRL-1397's
-      gaps (the threshold's direction, overhangs above the rays, the kept decision) stated.
+      gaps (the threshold's direction, overhangs above the rays, the kept decision) stated. Narrowed
+      2026-09-27 after TRL-1441 (REFUTED: the start gate's retreat does not make opening start after the
+      release postcondition holds, in DEF-skill-contract's sense of starting): the claim is of what is
+      selected, and the postcondition's shortfall is named.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-trial-provenance
@@ -4054,18 +4058,21 @@ branches:
       refuse, whether refusal was enabled; robot and gripper when they are not the Panda and its gripper;
       task and task_suite; and teacher_revision, a digest of every .py file the tool reaches by imports
       from skill_eval, the skill teacher, TaskEnv and the episode log, computed once before any worker
-      starts. skill_eval constructs every TaskEnv with Execution.anchor on and never changes it. For a
-      teacher episode in TaskEnv, then, the seed, episode index and initial state of which
-      BRN-reset-anchors-all-execution makes the trajectory a function are in the trial as the worker used
-      them, beside the settings they do not fix: the start-noise magnitudes, the refusal mode, the arm,
-      the gripper and the horizon. Not claimed: that an equal teacher_revision names an equal execution --
-      the digest covers no file outside that .py closure (not the affordance table or other data files,
-      the robot models, LIBERO, the installed packages, the BLAS kernel or the CPU); that trials differing
-      in seed, start, refuse, robot or gripper are kept apart by the ledger, whose teacher contracts key
-      on task_suite, task and teacher_revision; that --video, --video-px, --diagnostics or --cpus leave
-      the trajectory unchanged, since none is recorded; the classes BRN-reset-anchors-all-execution places
-      outside its claim; anything about trials written by other tools, or by skill_eval before this
-      change, whose --split trials carry seed*100+task and no env_episode.
+      starts. skill_eval constructs every TaskEnv with Execution.anchor on and never changes it. TaskEnv
+      advances its episode counter first, at every reset, stored start and skipped episode, before
+      anything in them can fail. For a teacher episode in TaskEnv that returned, then, the seed, episode
+      index and initial state of which BRN-reset-anchors-all-execution makes the trajectory a function are
+      in the trial as the worker used them, beside the settings they do not fix: the start-noise
+      magnitudes, the refusal mode, the arm, the gripper and the horizon. Not claimed: the initial state
+      of an episode that was lost (its init_index is null); that an equal teacher_revision names an equal
+      execution -- the digest covers no file outside that .py closure (not the affordance table or other
+      data files, the robot models, LIBERO, the installed packages, the BLAS kernel or the CPU); that
+      trials differing in seed, start, refuse, robot or gripper are kept apart by the ledger, whose
+      teacher contracts key on task_suite, task and teacher_revision; that --video, --video-px,
+      --diagnostics or --cpus leave the trajectory unchanged, since none is recorded; the classes
+      BRN-reset-anchors-all-execution places outside its claim; anything about trials written by other
+      tools, or by skill_eval before this change, whose --split trials carry seed*100+task and no
+      env_episode.
     premises: [AXM-reproducible-measurement, AXM-instruments-do-not-decide, BRN-reset-anchors-all-execution]
     derivation_rule: >-
       BRN-reset-anchors-all-execution makes a teacher episode's trajectory in TaskEnv a function of the
@@ -4083,7 +4090,9 @@ branches:
       repro fields alone with the same steps, initial state and timeline. Evidence:
       CTR-teacher-deterministic. Restated 2026-09-27 after the cleanup's verification round: TRL-1376's
       gap (the anchor-on scope, unrecorded) stated; the episode index is BRN-reset-anchors-all-execution's
-      counter after the reset, now stated there.
+      counter after the reset, now stated there. Narrowed 2026-09-27 after TRL-1432 (REFUTED: a lost
+      episode records no init_index, yet the conclusion claimed every episode's initial state): the
+      conclusion is of episodes that returned; TRL-1433's counter gap stated.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 policies:
