@@ -541,14 +541,15 @@ definitions:
       within the fingers' width across it, and from the palm's face to the finger tips along the
       approach, each widened by 1 mm, more than a contact point lies off the surfaces in contact --
       with the contact's normal nearer the jaw line than the approach; (pushed) a finger touches B and
-      B's category is moved by pushing in the affordance table; (joint) a finger touches B and B moves
-      on a slide or hinge joint of its own; (support) a finger touches B while both finger groups
-      touch another body that touches B; (inside) the tool point lies inside a region site of B's
-      object. Every other contact between the robot and anything else is unintended, and so is every
-      contact between two of the robot's bodies more than one joint apart in the kinematic tree,
-      unless both are the gripper's. The rules read no policy's intent, so a teacher and a student in
-      the same state are judged alike. This names what the per-intent rules allow; it does not say an
-      intended contact is harmless or an unintended one harmful.
+      B's category is moved by pushing in the affordance table; (joint) any part of the gripper
+      touches B, and B is, of the bodies that move on a slide or hinge joint of their own, the one
+      whose collision geometry lies nearest the tool point; (support) a finger touches B while both
+      finger groups touch another body that touches B; (inside) the tool point lies inside a region
+      site of B's object. Every other contact between the robot and anything else is unintended, and
+      so is every contact between two of the robot's bodies more than one joint apart in the kinematic
+      tree, unless both are the gripper's. The rules read no policy's intent, so a teacher and a
+      student in the same state are judged alike. This names what the per-intent rules allow; it does
+      not say an intended contact is harmless or an unintended one harmful.
     rationale: >-
       The user's decision of 2026-09-26: exemptions are per-intent state rules, not one finger zone,
       so a fingertip striking a wall stays guarded. Calibrated on the Panda teacher's 40 matrix

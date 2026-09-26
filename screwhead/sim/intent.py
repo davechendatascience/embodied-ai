@@ -13,8 +13,9 @@ way. A contact between a robot geom and a body B is intended when
            it pinned the Jaco's descent on the moka pot for 733 steps, libero_10 2);
   pushed   a finger touches B and B's category is moved by pushing (the affordance table), passed in as
            `pushed`;
-  joint    a finger touches B and B moves on a joint of its own (a drawer, a door, a knob): the fingers drive
-           fixtures, the palm does not;
+  joint    the gripper touches B, and B is the body at the tool point among those that move on a joint of their
+           own (a drawer, a door, a knob): the one whose collision geometry is nearest the tool point. The hand
+           pushes a drawer shut (BRN-push-closes-sliding-drawer); a hand on the drawer above it is not driving it;
   support  a finger touches B while the jaws pinch another body that B touches (the support under a deep pinch);
   inside   the tool point lies inside a region site of B (a container the tool reaches into).
 
@@ -63,6 +64,7 @@ class Intent:
         self.palm_geoms = [g for g in collide if self.gripper_body(int(mm.geom_bodyid[g])) and not self.finger[int(mm.geom_bodyid[g])]]
         self.jointed = {b for b in range(mm.nbody) if not self.robot[b] and int(mm.body_jntnum[b]) > 0
                         and int(mm.jnt_type[int(mm.body_jntadr[b])]) in (mujoco.mjtJoint.mjJNT_SLIDE, mujoco.mjtJoint.mjJNT_HINGE)}
+        self.jointed_geoms = [(g, int(mm.geom_bodyid[g])) for g in collide if int(mm.geom_bodyid[g]) in self.jointed]
         self.regions = [s for s in range(mm.nsite) if "region" in (mujoco.mj_id2name(mm, mujoco.mjtObj.mjOBJ_SITE, s) or "")
                         and int(mm.site_type[s]) == mujoco.mjtGeom.mjGEOM_BOX and not self.robot[int(mm.site_bodyid[s])]]
         self._joints_between = {}
@@ -120,6 +122,19 @@ class Intent:
         x0, x1, z0, z1 = self._xz
         return (np.array([x0, a[:, 1].max(), z0]) - CONTACT_TOL, np.array([x1, b[:, 1].min(), z1]) + CONTACT_TOL)
 
+    def _at_tool(self, p_world: np.ndarray) -> int | None:
+        """The body, of those moving on a joint of their own, whose collision geometry is nearest the point: distance
+        to each geom's own bounding box, oriented with the geom."""
+        m, d = self.m, self.d
+        best, arg = np.inf, None
+        for g, b in self.jointed_geoms:
+            R = d.geom_xmat[g].reshape(3, 3)
+            q = R.T @ (p_world - d.geom_xpos[g]) - m.geom_aabb[g, :3]
+            dist = float(np.linalg.norm(np.maximum(np.abs(q) - m.geom_aabb[g, 3:], 0.0)))
+            if dist < best:
+                best, arg = dist, b
+        return arg
+
     def _inside(self, p_world: np.ndarray) -> set[int]:
         """Roots of the bodies one of whose region sites contains the point."""
         out = set()
@@ -158,13 +173,13 @@ class Intent:
     def _rule(self, rb: int, ob: int, q: np.ndarray, normal: np.ndarray, at: dict) -> str:
         if ob in at["held"] or self._root(ob) in at["held_roots"]:
             return "held"
+        if self.gripper_body(rb) and ob == at["at_tool"]:
+            return "joint"
         if self.finger[rb]:
             if self._gripping(q, normal, at["vol"], at["R"]):
                 return "jaws"
             if self._root(ob) in self.pushed:
                 return "pushed"
-            if ob in self.jointed:
-                return "joint"
             if any(ob in at["touching"].get(h, ()) for h in at["held"]):
                 return "support"
         return "inside" if self._root(ob) in at["inside"] else "UNINTENDED"
@@ -173,7 +188,8 @@ class Intent:
         """Every robot contact of negative or zero distance, with the rule that makes it intended, or none."""
         found, touching, held = self._contacts()
         at = dict(held=held, held_roots={self._root(b) for b in held}, touching=touching, R=R_tool,
-                  vol=self._jaws_volume(R_tool, p_tool_world), inside=self._inside(p_tool_world))
+                  vol=self._jaws_volume(R_tool, p_tool_world), inside=self._inside(p_tool_world),
+                  at_tool=self._at_tool(p_tool_world))
         out, seen = [], set()
         for b1, b2, pt, normal in found:
             r1, r2 = self.robot[b1], self.robot[b2]
