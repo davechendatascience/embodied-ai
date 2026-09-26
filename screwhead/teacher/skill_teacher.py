@@ -133,6 +133,9 @@ class SkillTeacher:
 
     # -- the feedback law -----------------------------------------------------------
     def act(self, s: dict | None = None) -> np.ndarray:
+        # every per-episode decision is forgotten before this step reads any: otherwise the start gate and let_go
+        # could read the previous episode's released set and last-held object at an episode's first step
+        self.skills.new_episode_check()
         s = s or self.env.snapshot()
         if s["success"]:
             self.phase = "done"
