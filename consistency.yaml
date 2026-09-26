@@ -4141,6 +4141,54 @@ branches:
       tasks), so only the UR5e declares a home family. evidence: CTR-other-arm-scene-as-panda.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-vla-trains-on-demos-replayed-through-the-servo
+    subject: CMP-vla-student
+    claim_type: contract
+    statement: >-
+      Every training pair of the Panda VLA comes from a replay of one of LIBERO's human demonstrations
+      through the execution path the evaluation uses (AXM-one-execution-path), whose gripper channel is an
+      aperture target in which +1 is the closed end, executed by closing the fingers until they stop, and
+      -1 the fully open end. A demonstration is placed from its first recorded state, with the fixture
+      poses written from its own recorded model (AXM-libero-demos-record-a-panda), since the reset
+      re-samples them and writing the state restores neither (AXM-libero-resamples-fixtures). At each
+      control step t of the replay, the action is the body twist that carries the servo's pose reference,
+      as it stands at t, to the tool pose the demonstration recorded at t+1 (the forward kinematics of its
+      recorded arm joints through the Panda's chain) in one control period, normalized to the action's
+      range and clipped to it, with the gripper channel set to the gripper command the demonstration
+      recorded at t (AXM-libero-demos-record-their-actions: +1 closes, -1 opens); after the
+      demonstration's last recorded pose the replay holds that pose and its last gripper command. The pair
+      is the replay's own observation at t -- rendered by the evaluation's renderer, with the evaluation's
+      proprioception -- and that action. A replay contributes its pairs only if LIBERO's predicate accepts
+      some state it reaches within the demonstration's length plus a declared settling allowance
+      (AXM-libero-scores-final-state); otherwise it contributes none and is counted. Consequently every
+      action in the training set was executed by the evaluation's execution path from a state that path
+      reached; each label is computed from the servo's reference at its own step, so a twist the servo
+      limited at one step does not become a fixed offset in the labels after it; and the gripper label
+      closes where the demonstration closed and opens where it opened, not holding at the opening an
+      object stopped the fingers at. Not claimed: how many demonstrations replay successfully; that the
+      replay's states equal the demonstration's recorded ones; that the replays' fixture poses are
+      distributed as the evaluation's seeded resets draw them; that a policy trained on these pairs
+      succeeds, or that it uses its images.
+    premises: [AXM-libero-demos-record-a-panda, AXM-libero-demos-record-their-actions, AXM-libero-resamples-fixtures, AXM-libero-scores-final-state, AXM-mujoco-forward-is-a-function-of-state, AXM-one-execution-path, AXM-reproducible-measurement, AXM-servo-lead-bounds-travel, BRN-servo-lead-scaled-uniformly]
+    derivation_rule: >-
+      A relabel-then-test pipeline, labels computed in one action interface and a policy tested through
+      another, invalidated a round of student results in this project (AXM-one-execution-path's
+      rationale). LIBERO's demonstrations were recorded through robosuite's operational-space controller;
+      our policies act through the twist servo. Replaying each demonstration through the servo and keeping
+      the replay's own observations and executed actions makes training and evaluation one execution path.
+      The label closes the loop on the servo's reference (AXM-servo-lead-bounds-travel) because the servo
+      bounds how fast the commanded twist may change: open-loop twists from consecutive recorded poses
+      would leave the reference behind whenever the bound binds. Measured 2026-09-26: no demonstration's
+      first state is one of the test initial states (1000 demonstrations of libero_spatial and
+      libero_goal; the nearest differs by at least 0.07 in some object coordinate). Restated after
+      TRL-1160 (the demonstrations' layout and models a premise), after TRL-1165..1167's note (the
+      recorded opening while an object is held is its width, a target the servo would hold rather than
+      squeeze), and after TRL-1174..1176 (the demonstrations' gripper command and its sign are now a
+      premise, AXM-libero-demos-record-their-actions; the execution path's channel convention is stated in
+      the claim, which the implementation must meet). Evidence: CTR-demo-replay-succeeds (to be declared
+      with the replay tool).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:

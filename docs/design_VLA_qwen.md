@@ -30,9 +30,18 @@ vision.
    from its own first recorded state, its fixture poses written from its model file (demo_survey.py: without them 37
    of 50 libero_goal 9 demos fail LIBERO's predicate on replay). It is then re-executed through the servo: at each
    control step the action is the twist that takes the servo's pose reference to the demonstration's next recorded
-   tool pose, with the recorded finger opening as the aperture target. A replay that ends meeting LIBERO's
-   predicate enters the training set as the replay's own observations and executed actions; one that does not is
-   counted and left out. First gate: the replay success rate per task.
+   tool pose, with the demonstration's own gripper command (+1 close, -1 open; AXM-libero-demos-record-their-actions)
+   in the aperture channel. Not the recorded finger opening: while an object is held that opening is the object's
+   width, a target GripperServo would hold rather than squeeze. A replay that meets LIBERO's predicate enters the
+   training set as the replay's own observations and executed actions; one that does not is counted and left out
+   (BRN-vla-trains-on-demos-replayed-through-the-servo). First gate: the replay success rate per task.
+
+   Left to the implementation by the branch, each able to lower the replay rate unnoticed (verifier notes,
+   TRL-1180..1182): the recorded state at t is the one action t ran from; the replay's control period is one
+   demonstration step; the servo's reference is synced to the placed first state; the servo's pose reference and
+   the chain's forward kinematics use the same tool frame; the gripper keeps squeezing after the fingers stop
+   (GripperServo commands close for any target at the closed end); and whether pairs after a first brief success
+   are kept.
 2. **Model.** Qwen3-VL-2B reads the agent-view and wrist images and the instruction; a small action expert reads its
    final hidden states and the tool state and predicts a chunk of the next H actions (twist and aperture). First
    version: L1 regression on the chunk, vision tower frozen, LoRA on the language model; flow matching only if
