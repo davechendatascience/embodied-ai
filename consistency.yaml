@@ -1178,48 +1178,40 @@ branches:
     subject: CMP-scene-randomizer
     claim_type: contract
     statement: >-
-      SimArm anchors the execution layer at every placement of the arm -- after each set_init_state,
-      after each state restore between layout tries, and after the random start's IK write before its
-      hold: robosuite's finger target is set to fully open (the setpoint every settle pass ends on), the
-      joint controller's cache is refreshed (update(force=True)), and the joint ramp is re-installed at
-      the placed pose. Before every reset numpy's global generator is seeded by (seed, init index), as
-      LMA-seed-fixtures-per-init-state has it. At the end of every reset the twist servo's joint
-      reference, pose reference and previous twist are set to the arm's measured joints, their pose and
-      zero; the gripper servo keeps no state between calls. The teacher's own state is of three kinds:
-      caches of model constants (geom boxes, the gripper scan), which no reset changes; per-episode
-      decisions, cleared whenever the environment's episode counter changes, which it does at every
-      reset before the teacher first acts; and its current step and phase, recomputed from the state at
-      every control step. In TaskEnv, episode e's init index is the e-th draw of a generator seeded by
-      the seed alone (every episode draws exactly one, and a process that skips an episode draws its
-      index and discards it), and the random start's draws come from a generator seeded by (seed,
-      episode index, attempt). An episode's trajectory under a teacher in TaskEnv is then a function of
-      (seed, episode index, init state), the same whichever episodes ran before it in the process. In
-      PrivilegedEnv, whose init-index draws, layout redraws and displacements come from the process's
-      one generator seeded by the seed, a variable number per episode, it is a function of the seed and
-      the draws of the episodes run before it, and no execution state reaches it from them. In both, a
-      hold after a placement starts from the placed state. Outside the claim: GripperScan, measured once
-      per process (differences <= 1e-15 m); EGL rendering, which can differ by one intensity level
-      between renders of one state; distill's student-driven, mixed and DART episodes, whose features
-      depend on which workers share a GPU batch. What a trial records, so that it can be reproduced and
-      never pooled across executions, is BRN-trial-provenance.
-    premises: [AXM-reproducible-measurement, AXM-one-execution-path, AXM-robosuite-controller-cache,
-               AXM-robosuite-gripper-target-persists, AXM-libero-resamples-fixtures,
-               LMA-seed-fixtures-per-init-state, AXM-libero-soft-reset-state]
+      In TaskEnv, with Execution.anchor on (the default), SimArm anchors the execution layer at every
+      placement of the arm: after set_init_state when an init state is first settled (after the
+      recorded-tool write, on an arm other than the Panda), after set_init_state at every reset and every
+      stored start, and after the random start's inverse-kinematics write. Anchoring sets robosuite's
+      finger target fully open (the setpoint every settle pass ends on), refreshes the joint controller's
+      cache and restarts the joint ramp at the placed joints; each hold -- the settling of an init state,
+      the random start's settle -- follows an anchor with no state written between. Before each reset
+      numpy's global generator is seeded by (seed, init index), as LMA-seed-fixtures-per-init-state has
+      it; a stored start seeds index 0 and then writes its recorded fixture poses. At the end of every
+      reset and stored start the twist servo's joint reference, pose reference, previous twist and grip
+      latch are set to the arm's measured joints, their pose, zero and not holding; the gripper servo
+      keeps no state between calls. When reset is given no init index, episode e's index is the e-th draw
+      of a generator seeded by the seed alone (each such reset, and each skipped episode, draws exactly
+      one); given one, it draws nothing. The random start's draws come from a generator seeded by (seed,
+      episode index, attempt). The skill teacher's state is of three kinds: caches of model constants
+      (geom boxes, the gripper scan) and answers keyed by the episode and the whole simulator state;
+      per-episode decisions, cleared at the start of the first control step after the environment's
+      episode counter changes, before that step reads any, and the start gate's record of its run, keyed
+      by that counter; and its current step and phase, recomputed from the state at every control step. An
+      episode's trajectory under the skill teacher in TaskEnv is then a function of (seed, episode index,
+      init state), the same whichever episodes ran before it in the process. Outside the claim:
+      PrivilegedEnv, whose placements and layout-sampler restores call set_init_state without anchoring,
+      so its holds after those writes start from execution state earlier placements left, and every
+      episode run in it; the gripper scan, measured once per process (differences at most 1e-15 m); EGL
+      rendering, which can differ by one intensity level between renders of one state.
+    premises: [AXM-reproducible-measurement, AXM-one-execution-path, AXM-robosuite-controller-cache, AXM-robosuite-gripper-target-persists, AXM-libero-resamples-fixtures, LMA-seed-fixtures-per-init-state, AXM-libero-soft-reset-state]
     derivation_rule: >-
-      AXM-libero-soft-reset-state names the three channels a reset leaves: the anchor closes the finger
-      target and the controller cache at every placement, and LMA-seed-fixtures-per-init-state makes the
-      fixture poses a function of (seed, init index). What remains is this project's state, stated in
-      the claim: the servos' (reset with the episode, or none), the teacher's (model constants,
-      per-episode decisions cleared at the reset, a step recomputed from the state) and the generators'.
-      Measured, the mechanism that held in every one of six earlier reviews: bit-identical teacher
-      episodes across up to 10 process histories in TaskEnv and across histories in PrivilegedEnv
-      layout mode (a redraw and 20-21 rejections included); split, non-split, teacher_motion and distill
-      trials reproduced bit-for-bit in fresh processes; every hold site starting from the placed state
-      (drift <= 6.1e-9 rad with the anchor vs up to 2.2e-1 without). Withdrawn from the earlier
-      statement: that a redrawn init state is settled in place rather than by recursing into reset (in
-      PrivilegedEnv a redraw that lands on an init state not yet settled starts the reset over), and
-      that every episode's draws come from a generator seeded by its index (PrivilegedEnv's come from
-      the process's one generator). evidence: CTR-execution-reproducible.
+      Restated 2026-09-26 (theory cleanup) to the implementation: anchoring and holds hold in TaskEnv,
+      where the skill teacher and every evaluation run, but PrivilegedEnv's placements and layout-sampler
+      restores write state and hold without anchoring, so PrivilegedEnv moves outside the claim. The index
+      clause now says an explicit index draws nothing, and the teacher's per-episode decisions are cleared
+      before the first step of an episode reads any (bce70d4: before it, the start gate and let_go could
+      read the previous episode's released and last-held objects; 30 episodes identical with and without
+      the change). Earlier derivation and trials: git history and the ledger.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   # ---- CMP-twist-servo: the twist servo and the joint ramp every policy's action goes through
@@ -1269,259 +1261,220 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      A carry is planned only at a height that passes a declared screen: at every station of the carry
-      -- over the pick point, over the drop point, the stations between them, and the columns the object
-      rises and is lowered through -- the tool is a reachable pose with the arm not penetrating a
-      fixture, for the in-hand offset the object has when the screen runs. Stations are spaced so that
-      the arm's IK solution changes by no more than DEF-reachable-pose's joint margin between
-      consecutive stations, which makes their number follow from the carry rather than from a choice,
-      and forces an interior station on any carry long enough to need one. The screen answers for those
-      stations and not for the poses between them. It is asked again whenever the in-hand offset has
-      changed since it last ran, over the stations still ahead; a height is never carried past a change
-      in the offset it was screened for. When no height examined passes every remaining station, the
-      query refuses per DEF-witness-or-refusal: no carry is witnessed among the candidates examined, and
-      nothing is said of heights not examined. A refusal before the lift means the skill does not run; a
-      refusal during the carry ends the episode with the refusal recorded beside the scorer's verdict.
-      Not claimed: that the carried object clears the fixtures, which this screen tests only of the arm;
-      that the stations witness the poses between them.
-    premises: [LMA-whole-path-reachable, DEF-reachable-pose, DEF-witness-or-refusal,
-               DEF-refusal-is-an-outcome, AXM-grip-fixes-object-in-hand, AXM-no-torsional-friction,
-               AXM-rim-pinch-drops-under-smooth-motion, AXM-parameters-derived,
-               AXM-libero-scores-final-state, AXM-instruments-do-not-decide]
+      The place skill carries a held object at a height for the object's origin chosen once per (object,
+      region, grasp point) in an episode, at the first place step after that grasp was chosen, and reused
+      until the episode ends or another grasp point is chosen. The heights examined run in 0.03 m steps
+      from a top derived from the geoms near the line from the object to the drop point and the object's
+      hang below its origin -- at most 0.30 m above the drop point -- down to a floor 0.05 m above the
+      drop point, the floor always among them. A height passes when, at each of three stations -- the
+      object's origin where it is when the screen runs, the drop point, and halfway between them in plan
+      -- the tool pose that keeps the tool's orientation and its offset from the object's origin as they
+      are when the screen runs is a reachable pose (DEF-reachable-pose): inverse kinematics solved from
+      the current joints converges, the smallest singular value exceeds 0.05, every joint is more than
+      0.15 rad from its limit, and with the arm written there no robot geom penetrates a body that has no
+      free joint, the carried object's body and its children aside. The highest passing height is taken
+      and recorded as verified in the teacher's grasp log. When no height passes, the floor is taken and
+      recorded as unverified, with the worst station's conditioning; the query never refuses, whether or
+      not refusal is enabled. A verified height answers for those three stations and for nothing between
+      them. Not claimed: that the carried object clears the fixtures -- it is not moved to the stations,
+      and only the arm is tested; that the columns the object rises and is lowered through are screened;
+      that the number of stations follows from DEF-reachable-pose's joint margin -- it is fixed at three
+      -- or that the stations, the 0.03 m step, the floor, the cap or the clearance margins are derived
+      parameters; that the height remains screened after the in-hand offset or the tool's orientation
+      changes -- neither brings a new screen, and the orientation the carry commands (a turn about the
+      vertical to fit the region, a laid or entry frame) is not the one screened; that a height recorded
+      as unverified is reachable; that this query answers per DEF-witness-or-refusal.
+    premises: [LMA-whole-path-reachable, DEF-reachable-pose, AXM-grip-fixes-object-in-hand]
     derivation_rule: >-
-      LMA-whole-path-reachable rules out judging a segment by its endpoints, which is why the claim runs
-      over stations and names the columns, and equally why it is a screen over those stations, since the
-      lemma denies any finite set settles the motion. DEF-reachable-pose gives what each station
-      demands, in its own words -- not penetrating a fixture -- and its 0.15 rad joint margin also gives
-      the spacing: it is a definition in this file, which AXM-parameters-derived admits as a source, so
-      the station count is derived rather than chosen. The spacing is claimed to make that count
-      non-arbitrary and to force interior stations, not to make the stations sufficient.
-      AXM-grip-fixes-object-in-hand ties a station's tool pose to the object's only while the object is
-      held without slipping, and AXM-no-torsional-friction and AXM-rim-pinch-drops-under-smooth-motion
-      say the offset changes without a regrasp. An earlier statement voided the height on any such
-      change, which for a pinch grasp voids it at every station after the first and satisfies the claim
-      vacuously by planning nothing; asking the screen again at the current offset needs no tolerance
-      and plans nothing on an offset the object no longer has. DEF-witness-or-refusal permits a query to
-      give up early, so the refusal is stated over the candidates examined -- the qualifier this
-      branch's sibling already carried and this one lacked. DEF-refusal-is-an-outcome gives a refusal
-      during the carry its bookkeeping. AXM-libero-scores-final-state and AXM-instruments-do-not-decide
-      are cited because DEF-refusal-is-an-outcome is a stipulation about bookkeeping and says a branch
-      relying on it cites them itself: they are what make the scorer's verdict the outcome and keep a
-      refusal an annotation beside it. evidence: CTR-teacher-reliable (spatial 6, 14 -> 19/20 paired;
-      the per-grasp revision 186 -> 186 paired); CTR-teacher-attempts, where a refusal is counted.
+      Restated 2026-09-26 (theory cleanup) to the implementation: three fixed stations screened at
+      DEF-reachable-pose's thresholds, fixture clause included; the answer cached per (object, region,
+      grasp point) rather than re-screened on an in-hand offset change; an empty screen falls back to the
+      floor, logged unverified, with no refusal under any setting. The columns, the joint-margin spacing,
+      the re-screen and the refusal move to Not claimed, and the premises that served only them
+      (DEF-witness-or-refusal, DEF-refusal-is-an-outcome, AXM-libero-scores-final-state,
+      AXM-instruments-do-not-decide, AXM-no-torsional-friction, AXM-rim-pinch-drops-under-smooth-motion,
+      AXM-parameters-derived) are no longer cited. Earlier derivation and trials: git history of
+      consistency.yaml and the ledger.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-handle-grasp-reachable-along-drive
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      A handle grasp is used only if accessible(j) holds of it in DEF-skill-contract's sense: at every
-      station of the joint's motion -- its start, its end, and the stations between them -- the grasp
-      frame carried by that motion is a reachable pose with the arm not penetrating a fixture.
-      Evaluating a station means writing the joint to the position the station denotes and the arm to
-      its IK solution for the carried frame there, forwarding, screening, and restoring the state that
-      was there before. Stations are spaced so that the arm's IK solution changes by no more than
-      DEF-reachable-pose's joint margin between consecutive stations, which makes their number follow
-      from the motion rather than from the plan, and forces an interior station on any drive long enough
-      to need one. The screen answers for those stations and for nothing between them. When no candidate
-      examined passes every station, the query refuses per DEF-witness-or-refusal: accessible(j) has no
-      witness among the candidates examined, the skill does not run, and the refusal is recorded beside
-      the scorer's verdict. A candidate that fails the stations is not used with its failure recorded as
-      a caveat.
-    premises: [LMA-whole-path-reachable, DEF-reachable-pose, DEF-witness-or-refusal,
-               DEF-refusal-is-an-outcome, DEF-skill-contract, AXM-handle-shares-body,
-               AXM-object-geometry-known, AXM-mujoco-integration-state,
-               AXM-mujoco-forward-is-a-function-of-state, AXM-parameters-derived,
-               BRN-drive-tracks-the-handle, AXM-libero-scores-final-state,
-               AXM-instruments-do-not-decide]
+      The first time in an episode that the skill needs a joint's handle grasp, it screens the candidates
+      the grasp planner offers on the handle geom, once, and keeps the result for the rest of the episode.
+      A candidate passes when, at every pose it is screened at, the arm's inverse-kinematics solution,
+      solved from the arm's joints at that step, converges, and, with that solution written to the arm's
+      joints and the fingers set to the candidate's approach opening, no robot geometry penetrates a body
+      without a free joint other than the joint's moving body and that body's children. Its poses are the
+      grasp, its pre-grasp 0.10 m back along the approach and the points every 0.02 m between them, all
+      with the joint where it is; the grasp carried by the joint's motion through half of dq and through
+      dq, dq the joint's remaining travel from its position at that step to just past its goal threshold
+      (translated along a slide, turned about a hinge's anchor); and the grasp carried through dq and
+      backed off along the carried approach by the handle's clearance -- its box's half-extent along that
+      approach, the box as it stands at that step, plus the finger meshes' reach past the tool point. Only
+      the arm's and fingers' joints are written: the fixture's joint stays where it is at every pose; each
+      pose is written, forwarded and read, and the joint positions and velocities are restored and
+      forwarded. Contact with a free-jointed body and conditioning rank the passing candidates and reject
+      none. When some candidate passes, the first-ranked is kept, marked drive-checked. When none passes:
+      with refusal enabled, the query refuses accessible(j), the skill does not run, and the refusal is
+      recorded beside the scorer's verdict; with refusal disabled, the default, the query is asked again
+      without the three drive poses and its first-ranked candidate is kept, or the first candidate offered
+      if none passes even there (recorded forced), either way marked not drive-checked. Claimed: (1) a
+      grasp kept as drive-checked passed every pose listed; (2) with refusal enabled, no grasp that failed
+      a pose is used; (3) with refusal disabled, every kept grasp that failed a drive pose is marked not
+      drive-checked. Not claimed: that the poses are reachable in DEF-reachable-pose's sense -- its
+      singular-value and joint-margin thresholds rank and do not reject; that the stations are spaced by
+      joint change, or that the inverse-kinematics solutions are continuous between them -- each pose is
+      solved on its own from the current joints; anything between the poses; contacts the joint's own
+      motion would make, since the fixture is not moved; that the screened retreat is the back-out
+      BRN-leave-handle-along-approach commands, which aims 10 mm further, from where the drive stopped, at
+      the tool's current orientation; that the default answers per DEF-witness-or-refusal; that the
+      fractions 1/2 and 1, the probe spacing or the ranking bars have a source AXM-parameters-derived
+      admits.
+    premises: [LMA-whole-path-reachable, DEF-witness-or-refusal, DEF-refusal-is-an-outcome, AXM-handle-shares-body, AXM-object-geometry-known, AXM-mujoco-forward-is-a-function-of-state, AXM-mujoco-integration-state, AXM-libero-scores-final-state, AXM-instruments-do-not-decide]
     derivation_rule: >-
-      DEF-skill-contract is what accessible(j) means here, and was cited nowhere before; the claim now
-      states that sense rather than assuming it. LMA-whole-path-reachable gives the stations.
-      DEF-reachable-pose gives what a station demands and, through its 0.15 rad joint margin, the
-      spacing -- a definition in this file, which AXM-parameters-derived admits, where 'declared with
-      the plan' was none of that axiom's sources and let a two-station plan reduce the screen to the
-      endpoint check the lemma forbids. The spacing is claimed to make the station count follow from the
-      motion and to force interior stations, not to make the stations sufficient.
-      BRN-drive-tracks-the-handle gives the carried frame: the handle travels with the joint, rotated by
-      a hinge and carried without rotation along a slide, so the pose screened at a station is the grasp
-      as that station would hold it. AXM-mujoco-forward-is-a-function-of-state licenses writing both the
-      joint and the arm to a configuration the world is not in and reading its geometry, since
-      DEF-reachable-pose's conditions are properties of the arm's configuration;
-      AXM-mujoco-integration-state licenses the restore. AXM-handle-shares-body and
-      AXM-object-geometry-known put the handle on the moving body and the fixtures' collision geometry
-      in the state. DEF-witness-or-refusal permits a query to give up early, so the refusal is read over
-      the candidates examined. AXM-libero-scores-final-state and AXM-instruments-do-not-decide are cited
-      because DEF-refusal-is-an-outcome is a stipulation about bookkeeping and says a branch relying on
-      it cites them itself: they are what make the scorer's verdict the outcome and keep a refusal an
-      annotation beside it. evidence: CTR-teacher-reliable (goal 0/3/7: drive_checked in 60 of 60
-      episodes).
+      Restated 2026-09-26 (theory cleanup) to the implementation -- inverse-kinematics convergence and no
+      penetration of a fixed body at the grasp, pre-grasp, approach probes, the dq/2 and dq stations and
+      the end-of-drive retreat, the fixture's joint unwritten and conditioning ranking only -- dropping
+      DEF-reachable-pose (its thresholds rank, not reject), DEF-skill-contract, AXM-parameters-derived and
+      the then-refuted BRN-drive-tracks-the-handle, whose content the claim no longer uses. Earlier
+      derivation and trials: git history and the ledger.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-handle-holding-by-aperture
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      For a grip whose command drives the fingers to their closing limit, the jaws hold a handle when,
-      with the finger target at rest against that limit, three things hold together. Each finger group's
-      contacts with the handle's own geometry carry more than half of that finger's closing force,
-      summed over the group -- not merely touching the handle, and not some other geometry of the body
-      the handle belongs to. The aperture lies within the span of the handle's own geometry across the
-      jaw axis, to within the penetration the model's contact parameters allow, so jaws stopped by a
-      thicker or thinner feature of the same body sit outside it. And over a window longer than a
-      transient spike, the aperture has not closed by more than a handle held at rest closes over the
-      same window, so a slip that lets the jaws close slowly and steadily fails however slow it is. No
-      one of the three suffices: contact does not attribute the stop, the aperture does not exclude a
-      feature of the same width, and stillness does not say what is still. A grip commanded to a width
-      rather than to the limit is outside this claim.
-    premises: [LMA-holding-is-geometric, DEF-holding, AXM-handle-shares-body, AXM-panda-gripper-geometry,
-               AXM-object-geometry-known, AXM-robosuite-gripper-target-persists, AXM-squeeze-is-a-spring,
-               AXM-slip-spikes-are-transient, AXM-mujoco-forward-is-a-function-of-state, AXM-parameters-derived]
+      The skill's test that the jaws hold a handle is true at a control step exactly when the simulator's
+      contact list has a contact between the handle geom and a body of the left finger and one between the
+      handle geom and a body of the right finger, and the jaw aperture -- the separation of the finger
+      joints -- lies within [0.5 w, w + 4 mm], w the width kept with the episode's handle grasp: the
+      extent of the handle geom's bounding box along the grasp's jaw axis when the grasp was chosen. It
+      reads nothing else: no contact force, no finger target or command, no earlier step. It is
+      DEF-holding with the band's ends given, and it decides whether the handle is driven: the drive is
+      commanded only at steps where it is true. Claimed: (1) the test is a function of the step's contact
+      list, the finger joint positions and the kept width; (2) contact between a finger and any other geom
+      of the handle's body -- a drawer's face beside its bar, the rest of a knob's button -- does not
+      satisfy its contact clause. Not claimed: that either finger's press is borne by the handle -- the
+      test reads touch, not force, so LMA-holding-is-geometric's press requirement is not met; that a
+      graze, or another feature of the same body, whose aperture falls in the band is told from a grip;
+      that the band fits a handle gripped with the jaw axis not square to it; any test of slip over time;
+      that the contact list is recomputed at the step's final configuration (it is MuJoCo's from its last
+      collision pass); that 0.5 and 4 mm have a source AXM-parameters-derived admits (both set by hand;
+      held grips read 0.9-1.4 mm over the width on 278 drive steps).
+    premises: [DEF-holding, AXM-handle-shares-body, AXM-object-geometry-known]
     derivation_rule: >-
-      LMA-holding-is-geometric requires the form -- the handle's own geometry and an aperture the handle
-      stopped -- and leaves the thresholds to the claim that scores it, so each number here needs its
-      own declared source. AXM-handle-shares-body makes the geometry qualifier necessary.
-      AXM-squeeze-is-a-spring gives each finger's closing force, 1000 N/m times its distance from closed
-      and capped at 20 N, and AXM-mujoco-forward-is-a-function-of-state makes per-contact normal forces
-      readable, so the share is computable. It is more than half and summed over the finger group: an
-      earlier statement said at least half and justified it as the least share two contacts cannot both
-      hold, which is false at exactly half, and summing over the group is what the lemma's 'press'
-      means. AXM-object-geometry-known gives the handle's span and AXM-panda-gripper-geometry the pads'
-      16 mm depth across which another feature could stop the jaws; requiring the aperture to fall
-      within the handle's own span is what makes such a stop visible, and it replaces DEF-holding's
-      band, which has no endpoints. The tolerance on the span is the contact penetration the MuJoCo
-      model's contact parameters allow, one of AXM-parameters-derived's sources.
-      AXM-robosuite-gripper-target-persists is why the target is read at rest against its limit rather
-      than as a commanded sign; it carries no aperture speed, and the free-closing speed an earlier
-      statement took from it was a difference between two runs read as distance travelled, so no speed
-      appears here. AXM-slip-spikes-are-transient gives the window, longer than a spike of a step or
-      two. Its speed figure bounds a held object's motion relative to the jaws, which a steady slip can
-      stay under indefinitely, so the claim bounds displacement over the window rather than rate; the
-      bound is the measured aperture closure of a handle held at rest over the same window, a measured
-      distribution AXM-parameters-derived admits once named with its measurement, which is
-      component-belief's to take. evidence: CTR-teacher-reliable (goal 0, 14 -> 20/20 paired; the geom
-      revision 20/0/20 unchanged).
+      Restated 2026-09-26 (theory cleanup) to the implementation -- both finger groups in contact with the
+      handle geom and the aperture in [0.5 w, w + 4 mm], read from one step -- which is DEF-holding with
+      its ends given; the force-share, span and window tests were never implemented, so their premises
+      (AXM-squeeze-is-a-spring, AXM-robosuite-gripper-target-persists, AXM-slip-spikes-are-transient,
+      AXM-panda-gripper-geometry, AXM-parameters-derived, LMA-holding-is-geometric) are dropped and the
+      lemma's press clause is named as unmet. Earlier derivation and trials: git history and the ledger.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-reliability-evidence-valid
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      The per-task success rates offered as evidence for CTR-teacher-reliable exclude one named way a
-      rate is made of nothing and require three others, and claim no more than that. An episode's
-      trajectory is a function of its seed, its episode index and its initial state, not of the episodes
-      that ran before it in the same process, for the teacher episodes these rates are formed over,
-      which lie outside the classes BRN-reset-anchors-all-execution excludes: GripperScan's
-      once-per-process measurement, EGL rendering, and distill's student-driven, mixed and DART
-      episodes. That whole episodes reproduce is measured by CTR-teacher-deterministic, not derived
-      here. The instruments that form the rates are required to leave each episode's outcome to the
-      scorer, to report a shortfall against the episodes declared rather than rate whatever arrived, and
-      to offer only the trials the run itself wrote. Those three are requirements this branch states;
-      whether a given run meets them is implementation fidelity, measured in component-belief, and is
-      not claimed here. Not claimed: that the rates are valid evidence in any sense beyond these
-      exclusions.
+      The per-task success rates offered as evidence for CTR-teacher-reliable exclude one named way a rate
+      is made of nothing and require three others, and claim no more than that. An episode's trajectory is
+      a function of its seed, its episode index and its initial state, not of the episodes that ran before
+      it in the same process, for the teacher episodes these rates are formed over, the skill teacher's in
+      TaskEnv, which lie outside the classes BRN-reset-anchors-all-execution excludes: every episode run
+      in PrivilegedEnv, the gripper scan's once-per-process measurement, and EGL rendering. That whole
+      episodes reproduce is measured by CTR-teacher-deterministic, not derived here. The instruments that
+      form the rates are required to leave each episode's outcome to the scorer, to report a shortfall
+      against the episodes declared rather than rate whatever arrived, and to offer only the trials the
+      run itself wrote. Those three are requirements this branch states; whether a given run meets them is
+      implementation fidelity, measured in component-belief, and is not claimed here. Not claimed: that
+      the rates are valid evidence in any sense beyond these exclusions.
     premises: [AXM-instruments-do-not-decide, AXM-libero-scores-final-state, BRN-reset-anchors-all-execution]
     derivation_rule: >-
-      BRN-reset-anchors-all-execution gives the trajectory clause, and the claim now says trajectory
-      where an earlier statement said episode: that branch places EGL rendering outside its claim, so an
-      episode that renders is not a function of its seed, index and initial state even though its
-      trajectory is. Its exclusions are restated here rather than inherited silently, which is the
-      omission on which BRN-trial-provenance was refuted. AXM-libero-scores-final-state fixes what an
-      outcome is, and AXM-instruments-do-not-decide supplies the three requirements on the instruments.
-      They are stated as requirements rather than claimed met, because an axiom that forbids an
-      instrument deciding an outcome cannot establish that none did; an earlier statement dropped
-      LMA-observers-read-only as subsumed by that axiom and so removed the only node carrying the claim
-      that the requirement was met, while still asserting it. AXM-reproducible-measurement and
-      LMA-seed-fixtures-per-init-state are no longer cited: the first did no work in the derivation, and
-      the second is DOUBTED and supplied only what BRN-reset-anchors-all-execution, which is proven,
-      already gives. evidence: CTR-teacher-deterministic (same seed, same timeline, run twice).
+      BRN-reset-anchors-all-execution gives the trajectory clause, and the claim now says trajectory where
+      an earlier statement said episode: that branch places EGL rendering outside its claim, so an episode
+      that renders is not a function of its seed, index and initial state even though its trajectory is.
+      Its exclusions are restated here rather than inherited silently, which is the omission on which
+      BRN-trial-provenance was refuted. AXM-libero-scores-final-state fixes what an outcome is, and
+      AXM-instruments-do-not-decide supplies the three requirements on the instruments. They are stated as
+      requirements rather than claimed met, because an axiom that forbids an instrument deciding an
+      outcome cannot establish that none did; an earlier statement dropped LMA-observers-read-only as
+      subsumed by that axiom and so removed the only node carrying the claim that the requirement was met,
+      while still asserting it. AXM-reproducible-measurement and LMA-seed-fixtures-per-init-state are no
+      longer cited: the first did no work in the derivation, and the second is DOUBTED and supplied only
+      what BRN-reset-anchors-all-execution, which is proven, already gives. evidence:
+      CTR-teacher-deterministic (same seed, same timeline, run twice). Restated 2026-09-26
+      (TRL-1339..1341, REFUTED: the trajectory clause dropped BRN-reset-anchors-all-execution's scope, one
+      environment) to the skill teacher's episodes in TaskEnv, with the premise's restated exclusions.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-drive-tracks-the-handle
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      The first control step in an episode at which the skill drives a joint by its handle, it chooses
-      one handle grasp -- an orientation, a jaw width and an approach direction, screened for reach
-      along the joint's motion from the state at that step -- and records it with the joint's position
-      q0 at that step; the choice is kept for the rest of the episode, and re-running the screen from a
-      later state may choose differently. At every step the grasp orientation R_h and the approach are
-      the recorded ones carried by the joint's motion from q0 to its current position q (turned by
-      q - q0 about the hinge axis for a hinge, unchanged for a slide), and the grasp position p_h is the
-      handle geom's current centre. While the handle is held, the drive target is the pose (R_h, p_h)
-      carried by the joint's motion through dq, the joint's remaining travel to just past its goal
-      threshold, clipped to 0.06 rad (hinge) or 0.03 m (slide). Claimed: given the recorded choice, the
-      skill's command at every step of the drive is a function of the current state; and the drive
-      target leads the handle's current grasp pose by at most 0.06 rad (hinge) or 0.03 m (slide), the
-      rotation less than the squeeze alignment tolerance of 0.10 rad. Not claimed: that the recorded
-      choice is re-derivable from a later state.
-    premises: [AXM-dagger-needs-markov-labels, AXM-handle-shares-body, AXM-object-geometry-known,
-               AXM-panda-gripper-geometry, LMA-holding-is-geometric]
+      The first control step in an episode at which the skill reaches its handle rule for a joint -- a
+      hinge other than the microwave's door, or a sliding drawer being opened with something over its bar
+      -- it chooses one handle grasp, an orientation R_h0, a jaw width w and an approach app0, and keeps
+      it with the joint's position q0 at that step until the episode ends (a drawer whose grasp was forced
+      is then opened without it, by the front hook). At every step the grasp orientation R_h and the
+      approach are the kept ones carried by the joint's motion from q0 to its current position q -- turned
+      by q - q0 about a hinge's axis, unchanged for a slide -- and the grasp position p_h is the handle
+      geom's current position. At a step at which the jaws hold the handle
+      (BRN-handle-holding-by-aperture), the command is a twist toward (R_h, p_h) carried by the joint's
+      motion through dq, the joint's remaining travel to just past its goal threshold clipped to 0.06 rad
+      for a hinge or 0.03 m for a slide, with the jaws commanded shut. Claimed: (1) given the kept grasp,
+      every drive command is a function of the step's state; (2) the drive target is turned from R_h by at
+      most 0.06 rad about a hinge's axis, less than the 0.10 rad squeeze alignment tolerance, and not at
+      all for a slide, whose target lies at most 0.03 m from p_h along the axis. Not claimed: that the
+      kept grasp is re-derivable from a later state -- it depends on the state at the choosing step (q0,
+      the arm's joints its inverse kinematics is solved from, the scene), so a relabel of a mid-drive
+      state may choose another, and the drive's labels do not meet AXM-dagger-needs-markov-labels; a bound
+      on a hinge target's lead in position; that the handle follows the target.
+    premises: [AXM-handle-shares-body, AXM-object-geometry-known, BRN-handle-holding-by-aperture]
     derivation_rule: >-
-      AXM-handle-shares-body makes the handle move with the joint, so the recorded orientation carried
-      by the joint's motion since q0 is the recorded grasp held fixed in the handle's frame;
-      AXM-object-geometry-known supplies q, the joint's axis and the handle geom's centre at every step,
-      and dq is read from q and LIBERO's threshold, so the target is a function of the current state and
-      the recorded choice, and the clip bounds its lead. Whether the recorded choice meets
-      AXM-dagger-needs-markov-labels is the open question: it is made once because re-solving it every
-      step flipped the winner between candidates and the jaws cycled 15-35 mm without closing. A frame
-      fixed in the world instead made the label depend on the joint angle at selection (0.15 rad of
-      misalignment read at a knob angle of 0.02). evidence: CTR-teacher-reliable (goal 7, 12 -> 20/20
-      paired; goal 0 20 -> 20).
+      Refuted by TRL-0439..0441 on the once-per-episode record against AXM-dagger-needs-markov-labels,
+      which the code still keeps: restated 2026-09-26 (theory cleanup, the user's cleanup plan; option
+      chosen: describe the code and name the shortfall) to what the implementation does, moving Markov
+      compliance to Not claimed and dropping that axiom, and answering TRL-0440's second gap by citing
+      BRN-handle-holding-by-aperture, whose test reads one step. No DAgger relabelling runs yet; the
+      shortfall is named, not hidden. Earlier derivation and trials: git history and the ledger.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-leave-handle-along-approach
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      A skill may not start while a handle any skill has acted on this episode is held or enclosed by
-      the jaws. For each such handle this is a predicate on the current state, read whenever a skill
-      would start: the jaws do not hold it in DEF-holding's sense, no part of its geometry lies within
-      the jaw envelope -- between the fingers, out to the finger meshes' reach past the tool point --
-      and no robot geometry touches its geometry. It constrains where each handle is relative to the
-      jaws, not where the arm may go: holding another object, or reaching over an opened drawer into it,
-      satisfies it. The skill that acted on a handle ends by making the predicate hold for it: the jaws
-      release, then the tool moves along the handle's approach axis as the drive left it, away from the
-      handle, with no component across that axis and no other motion, until the handle -- its own
-      extent along that axis included -- lies wholly beyond the finger meshes' reach past the tool
-      point, and stops there. That pose, carried by the drive's motion, is screened with the drive's
-      stations: a handle grasp whose retreat ends outside DEF-reachable-pose is not used. If it later
-      fails for a handle --
-      the arm drifting back until a handle is enclosed again -- that skill's retreat is re-entered
-      before any other skill starts. The jaws release first because the predicate cannot hold while they
-      hold the handle.
-    premises: [AXM-panda-gripper-geometry, AXM-handle-shares-body, DEF-skill-contract, DEF-holding,
-               BRN-drive-tracks-the-handle, DEF-reachable-pose, LMA-whole-path-reachable,
-               AXM-object-geometry-known]
+      At every control step whose plan step is a pick, before the pick acts, the skill reads, for each
+      joint whose handle grasp was kept this episode -- a forced one included -- the carried approach app
+      and the handle geom's current position p_h as BRN-drive-tracks-the-handle states them, and the tool
+      point p. The tool is inside that handle when p lies within 30 mm of the line through p_h along app
+      and |(p - p_h) . app| is less than the handle's clearance: its box's half-extent along app plus the
+      finger meshes' reach past the tool point. For the first handle it is inside, the step's command is
+      the leave: the tool toward p_h - (clearance + 10 mm) app, its orientation held, the jaws commanded
+      to the grasp's approach opening (its width plus 12 mm, at most 75 mm), and the pick does not act
+      that step. When it is inside none, the pick acts. Claimed: (1) no step whose plan step is a pick
+      acts the pick while the tool point is inside a handle kept this episode; (2) at a leave step the
+      commanded position lies on that handle's approach line, clearance + 10 mm back from p_h on the
+      approach side, and the commanded rotation is zero; (3) the test reads only the step's state and the
+      episode's kept handle grasps. Not claimed: that the jaws release before the arm moves -- they are
+      commanded open on the step the back-out starts; that the motion has no component across the approach
+      line -- a tool off the line is also moved toward it; that when the test reads outside, the jaws do
+      not hold the handle, none of it lies between the fingers, or no robot geometry touches it -- it
+      reads the tool point alone, with one 30 mm radius whatever the handle's length; that any step but a
+      pick's is held back -- a place's regrasp, relocate, push, place, articulate and the end-of-plan
+      retreat do not call it, and the start gate for DEF-skill-contract's postcondition ranges over placed
+      objects, not handles; that the back-out's poses are screened --
+      BRN-handle-grasp-reachable-along-drive screens one retreat pose, at the drive's end station and the
+      grasp's orientation, without the 10 mm.
+    premises: [BRN-drive-tracks-the-handle, AXM-panda-gripper-geometry, AXM-object-geometry-known]
     derivation_rule: >-
-      DEF-skill-contract makes disengagement the planner's obligation and gives its form: a skill that
-      releases what it grasped ends with the jaws not holding it, none of it between the fingers and no
-      robot geometry touching it, and no skill may start while that fails for anything an earlier skill
-      in the episode released. For a drive what it grasped is the handle, which is why the touch clause
-      is about the handle rather than the joint's whole body, and the quantifier over every handle acted
-      on this episode is that definition's, not an addition here. An earlier statement put 'the hand
-      holds nothing' and a standing distance from every handle into the predicate, which under this
-      quantifier forbids carrying an object after opening a drawer and forbids reaching into the drawer
-      just opened -- the task this branch exists to serve. What entangles the arm is a handle between
-      the fingers, so the predicate is written about that and nothing else. AXM-panda-gripper-geometry
-      supplies the jaw envelope: the finger meshes reach 9.3 mm past the tool point, so a handle whose
-      nearest point along the approach lies beyond that reach is between no part of the fingers, and
-      AXM-object-geometry-known gives the handle's extent. The stop is that predicate read on the
-      current pose, not a distance travelled: an earlier statement required at least the pads'
-      back-edge offset plus the reach, which bounds the retreat from below only, and the retreat it
-      admitted ran 100-150 mm out -- measured at 107fa9c, the smallest singular value of the arm's
-      Jacobian fell 0.108 -> 0.063 along it and the next skill's first motion crossed 0.003, the servo
-      re-anchored and the arm swept an object set down beside the cabinet. LMA-whole-path-reachable is
-      why the retreat's end is screened rather than assumed from the drive's end, and
-      DEF-reachable-pose is what the screen demands.
-      BRN-drive-tracks-the-handle supplies that axis as the drive left it, the grasp frame carried by
-      the joint's motion, which for a hinge differs from the axis at the start. The touch clause is on
-      the handle's own geometry rather than its body, because AXM-handle-shares-body says only that
-      contact with the body does not locate a finger on the handle, not that every contact with the body
-      pushes the joint. DEF-holding makes release a precondition of the predicate, which is all the
-      ordering needs; an earlier statement argued it from how a held handle moves under a retreat, which
-      no premise here supports. evidence: CTR-teacher-reliable (goal 3's drawer task is the one this
-      governs; a 35 mm retreat on the same seeds took it 0/10 -> 2/10 with the smallest singular value
-      after the drive at least 0.037), CTR-teacher-gentle.
+      Restated 2026-09-26 (theory cleanup) to the implementation and its one call site (the skill
+      teacher's pick steps): a tool-point predicate with a 30 mm radius and the handle's clearance, and a
+      back-out to a point on the approach line with the jaws opened on the same step; each part of the
+      earlier design it does not do is named under Not claimed instead of citing the node it fails
+      (DEF-skill-contract, DEF-holding, DEF-reachable-pose, LMA-whole-path-reachable and
+      AXM-handle-shares-body are no longer cited). Earlier derivation and trials: git history and the
+      ledger.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-scan-then-place
@@ -1632,49 +1585,45 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      For a goal On(o, R) where o's category is declared moved_by push and R lies on the surface o
-      rests on, the teacher moves o without grasping it. The jaws are held open and aligned with the
-      direction from o's centre to R's centre, the tool points down, and the finger meshes' tips are
-      lowered on to o's floor -- the top of o's collision geometry about its axis -- at a point ahead
-      of o's centre by a fixed fraction of o's plan radius, so that the leading finger lies inside
-      o's rim. The tool then advances toward R at a bounded speed, its aim a fixed distance ahead of
-      that point, the point and the direction re-derived from o's pose at every control step, so the
-      advance is limited by speed and not by where o is. If the tool leaves a corridor about the line
-      through that point -- across it, or more than a bound ahead of it -- it rises clear of the rim
-      and re-enters. It stops when LIBERO's predicate holds. An entry is used only if the tool poses at
-      three stops -- the entry, halfway to R, and the entry point carried to R -- are reachable poses;
-      with no jaw direction passing, the push refuses per DEF-witness-or-refusal, the refusal recorded
-      beside the scorer's verdict. The screen answers for those three stops and for nothing between
-      them. Scope: the dish it was measured on, LIBERO's plate, whose floor is level out past the
-      leading finger and whose inner rim lies beyond the lead plus half the jaws' opening; another
-      dish is covered only once the same holds of it, which is not claimed. When LIBERO's predicate
-      holds, what follows the push leaves upward before anything else, the teacher's retreat or the
-      next skill's first leg. Not claimed: that o reaches R if something blocks it, that o's
+      For a goal On(o, R) where o's category is declared moved_by push, the plan's step is a push, and the
+      push commands the jaws to 62 mm at every step. Each control step it reads o's pose: u is the plan
+      direction from the centre of o's box to R's centre; o's floor is the highest top of o's colliding
+      geoms whose centres lie within 0.2 of o's plan radius of its centre; the entry point lies ahead of
+      o's centre along u by 0.44 of o's plan radius (its box's larger horizontal half-extent), at the
+      height that puts the finger meshes' reach below the tool point on that floor. The jaw frame is one
+      of the two that point the tool down with the jaw axis along u, the one nearer the wrist. While the
+      fingertips are below o's top, the tool is within 15 mm of the entry point across u and less than 40
+      mm ahead of it along u, and the wrist is within 0.10 rad of that frame, the push commands the tool
+      toward a point 80 mm ahead of the entry point along u at a linear speed of exactly 0.10 m/s: the aim
+      lies more than 40 mm from the tool, where the proportional command saturates. Otherwise the tool
+      returns to the entry point by the teacher's up-over-down approach, whose plane lies a declared lift
+      above o's top: straight to the entry point when within 20 mm of it in plan, or within 50 mm while
+      below the plane; else up to the plane, across and down. At each step of that approach the tool poses
+      at three stops -- the entry point, the entry point carried to R, and halfway between -- are screened
+      for each jaw frame, nearer first: inverse kinematics solved from the current joints converges with
+      the smallest singular value above 0.05 and every joint more than 0.15 rad from its limit
+      (DEF-reachable-pose's kinematic clauses; its fixture clause is not tested). The approach uses the
+      first frame that passes. When neither passes and refusal is enabled, the push refuses per
+      DEF-witness-or-refusal, ending the episode with the refusal recorded beside the scorer's verdict;
+      with refusal off (the default) it approaches with the frame nearer the wrist, unscreened and
+      unrecorded. The screen answers for those three stops' kinematics and for nothing between them. The
+      push is selected only while LIBERO's predicate for its goal does not hold. Scope: the dish it was
+      measured on, LIBERO's plate, whose floor is level out past the leading finger and whose inner rim
+      lies beyond the lead plus half the jaws' opening, so that the leading finger lies inside its rim;
+      another dish is covered only once the same holds of it, which is not claimed. Not claimed: that R
+      lies on the surface o rests on -- the plan does not check it; that the arm is clear of fixtures at
+      the stops; that the push rises over the rim to re-enter when the tool is within 50 mm of the entry
+      point; that what follows the push leaves upward -- nothing does that for a push, and where the push
+      completes the task the episode ends at success; that o reaches R if something blocks it, that o's
       orientation is controlled, or that objects other than o stay where they were.
-    premises: [AXM-category-affordances-declared, AXM-object-geometry-known, AXM-support-scannable,
-               AXM-panda-gripper-geometry, DEF-reachable-pose, LMA-whole-path-reachable,
-               DEF-witness-or-refusal, DEF-refusal-is-an-outcome, AXM-libero-scores-final-state,
-               AXM-instruments-do-not-decide, DEF-skill-contract]
+    premises: [AXM-category-affordances-declared, AXM-object-geometry-known, AXM-panda-gripper-geometry, DEF-reachable-pose, LMA-whole-path-reachable, DEF-witness-or-refusal, DEF-refusal-is-an-outcome, AXM-libero-scores-final-state, AXM-instruments-do-not-decide]
     derivation_rule: >-
-      A verifier refuted the earlier statement's "so that the leading finger lies inside o's rim":
-      a fixed fraction of the radius and a fixed opening do not scale, and a 110 mm dish would put
-      the finger on its edge. The scope now states the size condition. The affordance table declares
-      the plate moved_by push: it is 137 mm across against the gripper's 75 mm opening, and picked
-      instead it scored 3 of 50 on forced grasps. LIBERO's 50
-      human demonstrations of libero_goal 5, replayed from their recorded states, never close the
-      jaws: open about 62 mm, aligned with the motion, the tool point about 7.5 mm above the plate's
-      centre -- fingertips on the dish floor -- leading its centre by 0.44 of its radius, moving it
-      about 250 mm in about 80 steps; the fraction, the opening and the speed are taken from them.
-      Three fingertip settings were measured on the teacher: 3 mm above the floor touched the plate
-      on 1-4 of 400 steps and never moved it; 6 mm into it tilted the plate 8-12 degrees and pinned
-      it; on the floor, 24 of 24 moved it 198-218 mm into the region. An aim 10-30 mm ahead of a
-      point that moves with the plate stopped the reference where the stuck plate held it and left
-      the push no force; the human hand advances at a steady rate. AXM-object-geometry-known gives
-      the floor and the rim; AXM-panda-gripper-geometry the fingers' reach below the tool point.
-      LMA-whole-path-reachable is why more than the endpoints is screened, and the three stops are
-      the ones the carry is screened at; the claim is limited to them because the lemma denies any
-      finite set settles a path. The regression planner's scope listed pushing as not covered; this
-      covers the dish case only. evidence: CTR-teacher-reliable (libero_goal 5: 20 of 20).
+      Restated 2026-09-26 (theory cleanup) to the implementation: the push's stop screen tests
+      convergence, conditioning and joint margin but not DEF-reachable-pose's fixture clause, and refuses
+      only when refusal is enabled, otherwise approaching with the nearer frame unscreened. The corridor
+      re-entry rises over the rim only beyond 50 mm, and no push-specific upward leave exists, so those
+      clauses move to Not claimed, and AXM-support-scannable and DEF-skill-contract are no longer cited.
+      Earlier derivation and trials: git history and the ledger.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-hook-opens-sliding-drawer
@@ -1689,21 +1638,23 @@ branches:
       measured tool lowered straight down to a point on the opening side of the bar and above it, and only
       when the measured tool is within a declared gate of that height is it dragged along the opening
       direction at the drive speed toward a point at that height, the point re-derived from the bar's pose
-      every control step. It stops when LIBERO's Open holds past its threshold by the fill's margin
-      (BRN-open-precondition-reads-the-running-drive's margin clause). The hook grasps nothing -- its jaws
-      are never commanded closed -- so DEF-skill-contract's release postcondition, which is of what a
-      skill grasped, asks nothing of it; its disengagement is that what follows leaves upward before
-      anything else: after each drag of a bar, until the finger meshes' reach below the tool point first
-      lies a declared height over that bar's top, every skill but the drive dragging that bar is
-      pre-empted -- the step's command is the leave's, the tool straight up, jaws open, and it is not a
-      step of the skill pre-empted; once that height is reached the leave is done for that drag, and
-      skills act as they would; the drag holds nothing and every skill after it rises first, so nothing is
-      held while the leave runs. A drawer whose bar has something over it is not hooked. Not claimed: that
-      the finger engages the bar when the drag starts at the gate's edge -- the gate decides when the drag
-      starts, and no claim here depends on its width; that the drag cannot slip or stall -- a stalled drag
-      re-enters, and nothing bounds how often -- or that the offsets fit a bar of a section other than the
-      wooden cabinet's top bar, on which they were measured (15 x 16 mm across, 89 mm long), and the white
-      cabinet's (16 x 16 mm, 88 mm).
+      every control step. It stops when BRN-open-precondition-reads-the-running-drive's margin clause
+      holds: the travel past LIBERO's open threshold is at least the smaller of the fill's margin and the
+      joint's room past it less a declared small amount. The hook grasps nothing -- its jaws are never
+      commanded closed -- so DEF-skill-contract's release postcondition, which is of what a skill grasped,
+      asks nothing of it; its disengagement is that what follows leaves upward before anything else: after
+      each drag of a bar, until the finger meshes' reach below the tool point first lies a declared height
+      over that bar's top, every skill but the drive dragging that bar is pre-empted -- the step's command
+      is the leave's, the tool straight up, jaws open, and it is not a step of the skill pre-empted; once
+      that height is reached the leave is done for that drag, and skills act as they would; the drag holds
+      nothing and every skill after it rises first, so nothing is held while the leave runs. A drawer
+      whose bar has something over it is not hooked. Not claimed: that the drawer ends open by the full
+      margin, or open at all by LIBERO's Open, when its joint's range reaches past the threshold by less
+      than twice the margin plus the small amount; that the finger engages the bar when the drag starts at
+      the gate's edge -- the gate decides when the drag starts, and no claim here depends on its width;
+      that the drag cannot slip or stall -- a stalled drag re-enters, and nothing bounds how often -- or
+      that the offsets fit a bar of a section other than the wooden cabinet's top bar, on which they were
+      measured (15 x 16 mm across, 89 mm long), and the white cabinet's (16 x 16 mm, 88 mm).
     premises: [AXM-object-geometry-known, AXM-panda-gripper-geometry, AXM-handle-shares-body, DEF-skill-contract, AXM-libero-joint-bands, AXM-parameters-derived, BRN-open-precondition-reads-the-running-drive]
     derivation_rule: >-
       LIBERO's 50 human demonstrations of libero_goal 3, replayed from their recorded states, all open the
@@ -1738,7 +1689,9 @@ branches:
       other branch's claim about its own command is read at those steps; a covered bar is only said not to
       be hooked, citing nothing about how it is opened. Restated again per the verifier: which bars have
       nothing over them is read per step, not asserted of the named cabinets, and the corridor's width is
-      measured.
+      measured. Restated 2026-09-26 after re-verification: the stop was stated as LIBERO's Open past its
+      threshold by the margin, which the cited margin clause does not give when the joint's range past the
+      threshold is short; restated as the clause itself, the short-range case not claimed.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-rim-pinch-as-deep-as-the-palm
@@ -1786,25 +1739,25 @@ branches:
     statement: >-
       The rule governs the control steps of a place skill at which the held object is below its carry
       height and its origin is farther than the skill's declared over-tolerance (over_xy) from the drop
-      point in plan. At each governed step the skill tests the column over the object's plan footprint
-      as it is at that step (its box in plan, widened by a declared margin) against the object and
-      fixture geoms whose bottom is above the object's top at that step, the held object's own geoms
-      aside, with no upper bound on height; and it examines the whole declared finite set of offsets
-      (directions and distances) at that step. An offset qualifies when its column is clear by the same
-      test and the straight level path to it at the object's current height band meets no object or
-      fixture geom overlapping that band (the held object aside). At a governed step the skill commands
-      a rise only if the column is clear or no offset qualifies; if the column is not clear and some
-      offset qualifies, it commands a level move at the object's current height toward the nearest
-      qualifying offset. Claimed: at no governed step does the skill command a rise while the column
-      over the object's footprint at that step, as tested, is blocked and some offset qualifies. Not
-      claimed: steps that are not governed (including those within over_xy of the drop point below
-      carry height, and anything before the place skill's first step, such as the pick's own initial
-      lift); that the object does not slip; that geometry already touching or below the object's top is
-      caught by the column test; that the level move is free of contact beyond the swept band test; that
-      level moves end within any number of steps; that a rise commanded at a step with a clear column
-      stays clear during that period; or that the arm is screened for the rise at the offset or the
-      carry from it, which BRN-carry-reachable-along-carry re-screens only when the in-hand offset
-      changes.
+      point in plan. At each governed step the skill tests the column over the object's plan footprint as
+      it is at that step (its box in plan, widened by a declared margin) against the object and fixture
+      geoms whose bottom is above the object's top at that step, the held object's own geoms aside, with
+      no upper bound on height; and it examines the whole declared finite set of offsets (directions and
+      distances) at that step. An offset qualifies when its column is clear by the same test and the
+      straight level path to it at the object's current height band meets no object or fixture geom
+      overlapping that band (the held object aside). At a governed step the skill commands a rise only if
+      the column is clear or no offset qualifies; if the column is not clear and some offset qualifies, it
+      commands a level move at the object's current height toward the nearest qualifying offset. Claimed:
+      at no governed step does the skill command a rise while the column over the object's footprint at
+      that step, as tested, is blocked and some offset qualifies. Not claimed: steps that are not governed
+      (including those within over_xy of the drop point below carry height, and anything before the place
+      skill's first step, such as the pick's own initial lift); that the object does not slip; that
+      geometry already touching or below the object's top is caught by the column test; that the level
+      move is free of contact beyond the swept band test; that level moves end within any number of steps;
+      that a rise commanded at a step with a clear column stays clear during that period; or that the arm
+      is screened for the rise at the offset or the carry from it: BRN-carry-reachable-along-carry screens
+      once per grasp point and region, from where the object is at the place's first step with that grasp,
+      and not again after the level move.
     premises: [DEF-skill-contract, AXM-object-geometry-known, AXM-one-gripper,
                BRN-carry-reachable-along-carry]
     derivation_rule: >-
@@ -1861,44 +1814,44 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      The first time in an episode that a sliding drawer is to be opened, the skill screens the grasps of
-      its handle bar for reachability along the drive, once, and keeps the outcome for the rest of the
-      episode. If no grasp passed that screen, the control step on which it ran and every later control
-      step of opening that drawer in the episode follow this rule, whatever a later screen would find: at
-      every such step it reads the
-      bar's pose and the joint's opening direction in plan (u), and defines the hook point at a declared
-      height above the bar's centre, the stage point a declared distance in front of the hook point along
-      u, and the drag line through the hook point along u. It commands the jaws open at every step, with
-      the fingers pitched a declared angle below level toward -u (into the cabinet) and the jaw axis
-      along the bar. When the tool is within declared bands of the hook point's height and of the drag
-      line, and no more than a declared distance in front of the hook point along u, it commands motion
-      toward the point on the drag line a declared distance beyond the hook point along u (the drag);
-      when it is within those bands but further in front, up to the stage point, it commands motion
-      toward the hook point (in); otherwise it commands the approach to the stage point. The rule ends
-      when LIBERO's open threshold for the joint holds. Claimed: while opening such a drawer the skill
-      never commands the jaws closed, and at every drag step the commanded target lies on the drag line
-      beyond the hook point along u. Not claimed: that the fingers catch the bar, that the drawer reaches
-      its threshold, that the approach is free of contact, or that the hand is clear of the drawer when
-      the rule ends (a drive that grasped nothing has no retreat here; DEF-skill-contract's release
-      postcondition is not met by this rule).
-    premises: [AXM-handle-shares-body, AXM-libero-joint-bands, AXM-object-geometry-known, DEF-skill-contract,
-               AXM-dagger-needs-markov-labels, AXM-parameters-derived]
+      At a control step at which the skill is opening a sliding drawer, something lies over the drawer's
+      bar where it sits closed -- a geom other than the robot's and the drawer body's own, its bottom
+      above the bar's top, its plan bounding circle within 15 mm of the bar's closed centre, read at that
+      step -- and the handle grasp kept for that drawer this episode was forced -- when it was chosen, no
+      candidate passed even the screen without the drive's poses -- the skill follows this rule instead of
+      the handle drive. It reads the bar's box and u, the joint's axis signed toward just past LIBERO's
+      open threshold from the joint's present position, with its components along the bar and the vertical
+      removed. The hook point is 18 mm above the bar's centre, the stage point 0.10 m in front of it along
+      u, and the drag line the line through the hook point along u; the tool frame has the fingers pitched
+      0.54 rad below level toward -u and the jaw axis along the bar, whichever sign is nearer the tool's
+      frame. With off the tool point less the hook point: when |off_z| < 4 mm, the tool is within 0.10 rad
+      of that frame, within 15 mm of the drag line and -15 mm < off . u < 3 mm, it commands motion toward
+      the point 50 mm beyond the hook point along u (the drag); otherwise, when |off_z| < 8 mm, the tool
+      is within 15 mm of the drag line and 0 < off . u < 0.115 m, toward the hook point (in); otherwise
+      toward the stage point, by the up-over-down path when not already in its column. It commands the
+      jaws fully open at every step, and has no end of its own: it acts while the plan selects opening
+      that drawer. Claimed: (1) at every step of the rule the jaws are commanded fully open; (2) at every
+      drag step the commanded position lies on the drag line, 50 mm beyond the hook point along u. Not
+      claimed: that the fingers catch the bar, that the drawer reaches its threshold, or that the approach
+      is free of contact; that the rule runs whenever no grasp is reachable along the drive -- a grasp
+      failing the drive's poses but passing at its start is driven instead, and with refusal enabled the
+      choice refuses before any grasp is forced; that the choice between hook and grasp is re-derivable
+      from a later state -- it reads the grasp kept at the choosing step, so the labels do not meet
+      AXM-dagger-needs-markov-labels; that its numbers have sources AXM-parameters-derived admits -- the
+      18 mm height was chosen on 4 episodes, the pitch is the humans' measured 31 deg, and the stage,
+      bands, corridor, engagement and drag lead were set by hand; that the hand is clear of the drawer
+      when the rule stops -- it has no retreat, and the only back-out that can follow is
+      BRN-leave-handle-along-approach's before a pick, against the forced grasp's approach line, so
+      DEF-skill-contract's release postcondition is not met.
+    premises: [AXM-object-geometry-known, AXM-libero-joint-bands]
     derivation_rule: >-
-      AXM-object-geometry-known supplies the bar's pose and the joint's axis at every step;
-      AXM-handle-shares-body makes pulling the bar pull the drawer; AXM-libero-joint-bands gives the
-      threshold that ends the rule. The drag target is the hook point moved along u, so it lies on the
-      drag line by construction, and the jaw command is open throughout the rule, which holds for the
-      whole opening because the no-grasp choice is made once per episode. Measured: libero_90 6's bottom
-      drawer lies under the middle drawer's bar, so the top-down hook's column is blocked, and no side
-      pinch was reachable (0 of 20). LIBERO's humans open it with no grasp in 50 of 50 demos; over 20,
-      at the start of the pull the tool is at the bar along u (-3 mm), 26 mm above its centre, pitched 31
-      deg below level into the cabinet, jaws 80 mm open along the bar. The height was chosen on 4
-      separate episodes (18 mm opened 4 of 4; 0, 6, 12 and 26 mm none); with it, 20 of 20. Under
-      AXM-parameters-derived: the pitch (31 deg) is the humans' measured one; the height (18 mm) was
-      chosen on those 4 episodes; the stage distance (0.10 m), the engagement distance (3 mm), the
-      height band (4 mm), the corridor (15 mm) and the drag's lead (50 mm) are set by hand. Under
-      AXM-dagger-needs-markov-labels: whether the drawer is hooked or grasped is decided once per
-      episode, from the state at the first opening step. evidence: CTR-teacher-reliable.
+      Refuted by TRL-0445..0447 on AXM-dagger-needs-markov-labels, AXM-parameters-derived and
+      DEF-skill-contract's release postcondition; the code answers none and triggers on a forced grasp
+      rather than a failed drive screen. Restated 2026-09-26 (theory cleanup; option chosen: describe the
+      code and name the shortfalls) to state that trigger and name all three shortfalls under Not claimed;
+      AXM-handle-shares-body, DEF-skill-contract, AXM-dagger-needs-markov-labels and
+      AXM-parameters-derived are no longer cited. Earlier derivation and trials: git history and the
+      ledger.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-handle-tier-for-handled-objects
@@ -3994,6 +3947,107 @@ branches:
       a step's call); TRL-1303..1305 (DOUBTED: which arm); TRL-1309..1311 (PROVEN, staged).
       squeeze_command is 5aa47b2. Evidence to be measured: the demonstration-replay gate on teacher files
       (CTR-demo-replay-succeeds, a teacher condition).
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-clear-before-opening
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      At a control step where the plan's current step is pick(o), the step after it is place_in(o, r), r
+      belongs to an articulated container j, that place's goal does not already hold with o let go, and
+      the open test (BRN-open-precondition-reads-the-running-drive) reads j as not open, the teacher
+      decides whether o must be moved clear before j is opened. The decision is computed at the first such
+      step of the episode, from the state at that step, and kept for the rest of the episode. o is judged
+      crowded when two tests both hold: (a) with j's joint carried to its drive target (LIBERO's open
+      threshold plus 0.03), the plan box around the collision geoms of j's moving body lies within 0.03 m
+      of o's plan box, reaches below o's top plus 0.15 m and above o's bottom; and (b) the first grasp
+      tier, in the grasp planner's order, with a candidate passing the reach screen -- inverse kinematics
+      converged at every probed pose (grasp, pre-grasp, approach, and the delivery point over r as it
+      stands) and no pose with the arm inside a fixed body -- is absent or different once j's joint is
+      written to LIBERO's open threshold plus 0.012 and the state forwarded; the joint positions and
+      velocities are written back and the state forwarded again, whatever the answer. For a crowded o, a
+      spot is searched on 12 radii (0.08-0.30 m) by 32 angles around o's plan centre: a footprint of o's
+      plan half-extents plus 0.03 m, at least 0.08 m in plan from j's open footprint, on which all 25 rays
+      of a 5 x 5 downward grid, cast from 0.15 m above o's bottom with o ignored, land within 5 mm of o's
+      bottom height; each such spot is scored by the smaller of the inverse-kinematics joint margin and 8
+      times the smallest singular value, the worse of two tool poses at the present tool orientation 0.03
+      and 0.15 m above it (minus infinity if either does not converge), and the best is taken if it scores
+      at least 0.2. With a spot, the step selected is relocate(o, spot) -- the place skill, into no
+      container, taking o first when it is not held -- until o is unheld at the spot, and then
+      articulate(j, open). Crowded with no spot, or not crowded, no relocation is selected and the step is
+      articulate(j, open) with o where it rests. As the precondition of pick(o), articulate(j, open) is
+      selected only while o is not held. Not claimed: that a crowded o could not be picked once j is open;
+      that o is graspable at the spot once j is open, or that the spot or the path to it is screened with
+      j open (the spot is screened with j as it stands, at two poses, which is not DEF-reachable-pose);
+      that the pick and place after opening succeed; that this is DEF-skill-contract's clear_of(o, j) --
+      it is a stand-in narrower in three ways: an o outside the band of (a) is judged clear without a
+      grasp screen, graspable is read as keeping the same first tier, and a crowded o with no spot does
+      not stop j being opened, so clear_of is not enforced as a precondition in DEF-witness-or-refusal's
+      sense; that any object other than the one the place puts into j is tested; that the screen leaves
+      every simulator data field as it found it (it restores joint positions and velocities and forwards).
+    premises: [AXM-one-gripper, AXM-object-geometry-known, AXM-mujoco-forward-is-a-function-of-state, AXM-support-scannable, DEF-skill-contract, BRN-open-precondition-reads-the-running-drive]
+    derivation_rule: >-
+      The claim describes the decision rule; what is derived is why its parts are admissible and what its
+      order guarantees. AXM-one-gripper: while o is held, j's joint cannot be driven, and the hand frees
+      only by setting o down, so a relocation must end with o set down before j opens -- the rule selects
+      articulate(j, open) only with o unheld, and after a relocation only with o at the spot.
+      AXM-object-geometry-known puts the collision geometry of j's moving body and of o in the state,
+      which the boxes of (a) and the grasp screen read. AXM-mujoco-forward-is-a-function-of-state licenses
+      screening j at a configuration it has not reached by writing its joint, forwarding and reading, and
+      makes the geometry after the write-back that of the restored configuration. AXM-support-scannable
+      makes a grid of downward rays that all land at o's resting height the reading of a surface open from
+      above at that height. BRN-open-precondition-reads-the-running-drive is the open test that triggers
+      the decision. DEF-skill-contract names what the rule stands in for; the three ways it is narrower
+      are stated in the claim, not derived. Declared 2026-09-26 in the theory cleanup: live code
+      (SkillTeacher's relocate step, Clearing.crowds and Clearing.spot, Skills.clearing_spot) had only a
+      staged statement, gapped on 2026-09-21 (TRL-1040) for citing none of the first four premises and for
+      promising the pick after opening, which this one does not claim. Evidence: CTR-teacher-reliable,
+      slice libero_goal task 3, the task the rule was built for.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
+  - id: BRN-trial-provenance
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      tools/skill_eval.py writes one trial for every episode its run declared -- one per task and episode
+      index 0..episodes-1, whether the episode was attempted, refused, crashed, or never returned because
+      its worker died -- and each trial's repro block carries: seed, the seed the worker's TaskEnv was
+      constructed with (seed*100+task, or (seed*100+task)*1000+j for worker j under --split S > 1);
+      env_episode, TaskEnv's episode counter after that episode's reset (under --interleave it counts the
+      episodes the worker skipped, under --split only the worker's own), read from the environment for an
+      episode that ran and computed from the job by the same count for one that was lost; episode, the
+      episode's index among the task's declared episodes; init_index, the initial state the reset used
+      (null for a lost episode); horizon; start, the five start-noise magnitudes every worker was given;
+      refuse, whether refusal was enabled; robot and gripper when they are not the Panda and its gripper;
+      task and task_suite; and teacher_revision, a digest of every .py file the tool reaches by imports
+      from skill_eval, the skill teacher, TaskEnv and the episode log, computed once before any worker
+      starts. For a teacher episode in TaskEnv, then, the seed, episode index and initial state of which
+      BRN-reset-anchors-all-execution makes the trajectory a function are in the trial as the worker used
+      them, beside the settings they do not fix: the start-noise magnitudes, the refusal mode, the arm,
+      the gripper and the horizon. Not claimed: that an equal teacher_revision names an equal execution --
+      the digest covers no file outside that .py closure (not the affordance table or other data files,
+      the robot models, LIBERO, the installed packages, the BLAS kernel or the CPU); that trials differing
+      in seed, start, refuse, robot or gripper are kept apart by the ledger, whose teacher contracts key
+      on task_suite, task and teacher_revision; that --video, --video-px, --diagnostics or --cpus leave
+      the trajectory unchanged, since none is recorded; the classes BRN-reset-anchors-all-execution places
+      outside its claim; anything about trials written by other tools, or by skill_eval before this
+      change, whose --split trials carry seed*100+task and no env_episode.
+    premises: [AXM-reproducible-measurement, AXM-instruments-do-not-decide, BRN-reset-anchors-all-execution]
+    derivation_rule: >-
+      BRN-reset-anchors-all-execution makes a teacher episode's trajectory in TaskEnv a function of the
+      seed, the episode index and the initial state, within exclusions the claim restates rather than
+      inherits -- the omission on which the staged statement was refuted (TRL-0200). The record takes each
+      of the three from the worker's own TaskEnv, not from the command line: recomputed from --seed and
+      the task's episode index, the earlier record under --split had the wrong seed for every worker and
+      the wrong index for every worker after the first, which counted its episodes from 1 (fixed in
+      34d1df5). AXM-reproducible-measurement makes naming the seed a condition of a measurement being
+      evidence; AXM-instruments-do-not-decide binds evidence to the run that produced it, which a revision
+      digested before any worker starts does for the teacher's own .py code and for nothing outside it, as
+      the claim says. Withdrawn from the staged statement: the execution digest over installed packages,
+      arm model and LIBERO commit, the pooling guarantee, and every writer but skill_eval. Measured
+      2026-09-26: libero_object 2, --split 2, seed 777, start-xy 0.05 -- 4 of 4 episodes re-run from their
+      repro fields alone with the same steps, initial state and timeline. Evidence:
+      CTR-teacher-deterministic.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 policies:
