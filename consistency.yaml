@@ -580,7 +580,8 @@ axioms:
       their contact filters (contype and conaffinity, the filtering of a body against its parent and of
       bodies welded to one body, and the model's exclusions and explicit pairs naming them), their
       margins and gaps -- and by the model's contact options. The model's other geoms do not change
-      it, as long as the contact buffer does not overflow, which MuJoCo reports as a warning.
+      it, as long as the contact buffer does not overflow, which MuJoCo reports as a warning. In a model
+      without flex (deformable) elements every contact MuJoCo reports is between two geoms.
     rationale: >-
       BRN-lv-action-space screens the arm's contacts with the table and fixtures once, in a reference
       scene, and relies on the answer in every scene that matches it; those scenes differ in their free
