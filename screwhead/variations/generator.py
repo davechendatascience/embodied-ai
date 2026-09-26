@@ -62,13 +62,14 @@ class Benchmark:
 
 
 def generator_revision(bench_path: str) -> str:
-    """The generator that runs: its code (this package) and the benchmark's metadata with the files it names."""
+    """The generator that runs: its code (this package), the benchmark's metadata with the files it names, and the
+    affordance table its preconditions read -- so a task's trials name the declarations it was generated under."""
     with open(bench_path) as f:
         meta = yaml.safe_load(f)
     root = os.path.dirname(os.path.abspath(bench_path))
     files = sorted(os.path.join(HERE, n) for n in os.listdir(HERE) if n.endswith(".py"))
     files += [os.path.abspath(bench_path), os.path.join(root, meta["action_space"]["map"]),
-              os.path.join(root, meta["catalog"]["file"])]
+              os.path.join(root, meta["catalog"]["file"]), os.path.join(HERE, "..", "teacher", "affordances.yaml")]
     h = hashlib.sha1()
     for p in files:
         with open(p, "rb") as f:
