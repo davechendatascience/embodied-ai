@@ -79,9 +79,11 @@ def test_order_words():
 
 
 def test_v0_nouns_single_out_categories():
-    """BRN-lv-instructions-unambiguous: distinct noun phrases, none inside another as whole words."""
+    """BRN-lv-instructions-unambiguous: distinct noun phrases, none inside another as whole words -- over the
+    scene's objects and its fixtures, the table among them."""
     meta = yaml.safe_load(V0.read_text())
-    pool = set(meta["pool"]["pick"]) | set(meta["pool"]["targets"])
+    pool = set(meta["pool"]["pick"]) | set(meta["pool"]["targets"]) | {meta["family"]["workspace"]}
+    pool |= set(meta["family"]["fixtures"])
     nouns = meta["nouns"]
     assert pool <= set(nouns)
     phrases = [nouns[c] for c in pool]

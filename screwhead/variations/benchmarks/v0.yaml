@@ -11,7 +11,7 @@ robot: {name: Panda, gripper: PandaGripper}
 
 action_space:                   # BRN-lv-action-space: tools/lv_reach_map.py
   map: reach_panda_kitchen_table.json
-  digest: 392cdc62d4011025
+  digest: c0bd0d3ea1507b35
 catalog:                        # each category's shape at rest, for layout planning only: tools/lv_reach_map.py --catalog
   file: catalog_v0.json
   digest: eeebe68a446656b0
@@ -22,7 +22,8 @@ pool:
   targets: [plate, cookies, glazed_rim_porcelain_ramekin, basket, akita_black_bowl]
   containers: [basket, akita_black_bowl]   # measured with their walls
 
-nouns:                          # one noun phrase per category (BRN-lv-instructions-unambiguous)
+nouns:                          # one noun phrase per category, the table's too (BRN-lv-instructions-unambiguous)
+  kitchen_table: table
   akita_black_bowl: black bowl
   white_yellow_mug: white yellow mug
   butter: butter

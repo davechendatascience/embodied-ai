@@ -147,7 +147,8 @@ def _digest_body(h, m, b: int) -> None:
         a = int(m.jnt_qposadr[j])
         width = 7 if int(m.jnt_type[j]) == 0 else 4 if int(m.jnt_type[j]) == 1 else 1
         # the reference position (qpos0) too: a hinge or slide poses its child by its value less the reference
-        _put(h, m.jnt_type[j:j + 1], m.jnt_axis[j], m.jnt_pos[j], m.jnt_range[j], m.qpos0[a:a + width])
+        _put(h, m.jnt_type[j:j + 1], m.jnt_axis[j], m.jnt_pos[j], m.jnt_range[j], m.jnt_limited[j:j + 1],
+             m.qpos0[a:a + width])
     if m.body(b).name.startswith(REFERENCE_PARTS):
         for k in np.nonzero(m.site_bodyid == b)[0]:
             h.update(m.site(int(k)).name.encode())
@@ -193,6 +194,14 @@ def matches(m, d, reference: dict) -> bool:
 
 
 # -- computing it ---------------------------------------------------------------------------
+def _overflows(d) -> tuple[int, int]:
+    """MuJoCo's counts of full contact and constraint buffers (mjWARN_CONTACTFULL, mjWARN_CNSTRFULL): it drops what
+    does not fit and warns, so a screen during which either rose may have missed a contact."""
+    import mujoco
+    return (int(d.warning[mujoco.mjtWarning.mjWARN_CONTACTFULL].number),
+            int(d.warning[mujoco.mjtWarning.mjWARN_CNSTRFULL].number))
+
+
 def erode(passed: np.ndarray, r: int) -> np.ndarray:
     """Points whose every grid neighbour within r cells (Euclidean) passed; a neighbour off the grid is no grid
     point and does not count against it."""
@@ -234,6 +243,7 @@ def compute(env, spec: MapSpec | None = None, log=print) -> ReachMap:
     gx, gy = np.meshgrid(origin[0] + s * np.arange(nx), origin[1] + s * np.arange(ny), indexing="ij")
     xy = np.stack([gx.ravel(), gy.ravel()], 1)
     ok = np.ones(len(xy), bool)
+    overflowed = 0
     for line in spec.lines_deg:
         served = np.zeros(len(xy), bool)
         for yaw in (line, line + 180.0):
@@ -248,7 +258,11 @@ def compute(env, spec: MapSpec | None = None, log=print) -> ReachMap:
                 th, conv, sig, margin = reach.solve(Ts)
                 good = conv & (sig > MIN_SIGMA) & (margin > MIN_MARGIN)
                 for k in np.nonzero(good)[0]:
+                    full = _overflows(d)
                     good[k] = reach.collides(th[k], aperture=spec.aperture) < 2
+                    if _overflows(d) != full:          # a contact may have been dropped: the screen is not a pass
+                        good[k] = False
+                        overflowed += 1
                 here[live[~good]] = False
             served |= here
         ok &= served
@@ -264,7 +278,8 @@ def compute(env, spec: MapSpec | None = None, log=print) -> ReachMap:
     }
     moving = [m.joint(int(j)).name for j in range(m.njnt)
               if int(m.jnt_qposadr[j]) in set(env.joint_indexes) | set(env.gripper_indexes)]
-    reference.update(moving_joints=sorted(moving), held_joints=held_joints(m, d, set(moving)))
+    reference.update(moving_joints=sorted(moving), held_joints=held_joints(m, d, set(moving)),
+                     screens_overflowed=overflowed)
     roots = {m.body(int(m.body_parentid[b])).name for b in _reference_bodies(m)} - {m.body(b).name for b in _reference_bodies(m)}
     if roots != {"world"}:
         raise ValueError(f"the matched bodies hang from {sorted(roots)}, not the world alone")
