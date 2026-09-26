@@ -4211,6 +4211,50 @@ branches:
       state j+1. Evidence: CTR-vla-libero-success.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-vla-decodes-twists-exactly
+    subject: CMP-vla-student
+    claim_type: contract
+    statement: >-
+      The Panda VLA's actions are executed, identically wherever it is evaluated or its labels are
+      replayed (AXM-one-execution-path), by a twist servo on the joint-position controller: each step's
+      twist, after the servo's acceleration bound (the free-motion bound kept while the jaws hold
+      something), is integrated as a constant body twist over the control period onto the servo's pose
+      reference, and the servo's damped inverse kinematics is iterated until the pose of its joint
+      reference is within 1e-6 mm and 1e-6 rad of that pose reference or a cap of 30 iterations is
+      reached; the null-space motion the twist leaves free is pulled toward the joint posture the episode
+      started in; the gripper channel is the simulator's own open/close command, executed as it is; and
+      the observation returned for each step is a forced read taken after the step's physics. The servo
+      resets its pose reference to its joint reference's pose (BRN-servo-lead-scaled-uniformly's
+      re-anchor) only when their difference exceeds 0.02 in the norm of its logarithm, above the
+      iteration's tolerance. Every step at which the acceleration bound changed the twist, the lead limit
+      scaled the joint reference (BRN-servo-lead-scaled-uniformly), the iteration cap was reached, or the
+      pose reference was re-anchored is counted. Consequently, at every step with none of those four
+      events the pose reference moves by exactly the policy's twist over the period and the joint
+      reference the controller is sent reaches that pose to within 1e-6 mm and 1e-6 rad, so the decode
+      adds no kinematic error and whatever separates the tool from where the twists put it is the
+      controller's tracking (bounded by AXM-servo-lead-bounds-travel); and the observation the policy acts
+      on shows the state the previous step's action led to (AXM-robosuite-step-observes-the-period-end: a
+      forced read reports the state as it stands), the point of a step at which its stored training
+      observations were read (AXM-libero-demo-observations-follow-their-actions). Not claimed: that the
+      tool reaches the reference within a period; that the path within a period is the twist's screw
+      motion; that the joints or the elbow match the demonstrators'; that the policy succeeds.
+    premises: [AXM-one-execution-path, AXM-robosuite-step-observes-the-period-end, AXM-libero-demo-observations-follow-their-actions, AXM-servo-lead-bounds-travel, BRN-servo-lead-scaled-uniformly]
+    derivation_rule: >-
+      Restated after TRL-1189..1191: the re-anchor threshold is stated (0.02, far above the 1e-6
+      tolerance) and a re-anchor is counted as a fourth event. Measured 2026-09-26, the demonstrations'
+      recorded motion replayed open loop as twists through this decode: with one damped iteration per
+      step, as the skill teacher runs, the joint reference missed the pose reference by 0.06-0.18 mm
+      (median, up to 0.54 mm); with 30 iterations and the start-posture pull by 6e-9 mm (median, at most
+      9.3e-7 mm). Over 800 demonstrations of the four suites' 40 tasks (20 each) the dense recorded motion
+      replayed 733 times (91.6%), the tool up to 8.5 mm off the recorded path (median over demonstrations)
+      -- the joint controller ends each period about 0.6 of a step behind its target. The start-posture
+      pull, like the null-space term of the operational-space controller the demonstrations were recorded
+      through, kept the joints within 0.18-0.29 rad of the recorded ones against 0.28-0.44 rad with the
+      skill teacher's pull to mid-range. A read forced at the start of every step left the next step's
+      observation up to 0.145 rad behind the end-of-period state, and feedback on it overshot
+      (libero_spatial 0 replays 20 -> 7 of 20). Evidence: CTR-demo-replay-succeeds.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:
