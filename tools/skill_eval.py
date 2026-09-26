@@ -4,16 +4,10 @@
   skill_eval.py --suite libero_object --episodes 5
   skill_eval.py --suite libero_spatial --tasks 4 --episodes 10 --split 5 -v
   skill_eval.py --suite libero_object --tasks 0 1 --episodes 3 --video videos/skill
-  skill_eval.py --suite libero_goal --episodes 50 --wide 1.5 --seed 2701   # widened randomized starts
 
 Per task: success, and for each failure the mechanism, a one-line summary and (with -v)
 the full account from screwhead/teacher/episode_log.py -- timeline, events, the grasp chosen, and
 the false predicate term. Trials go to --trials for tools/teacher_report.py and the ledger.
-
-With --wide S every episode starts from a fresh layout LIBERO's own samplers draw inside the task file's regions
-(TaskEnv.reset_fresh), not one of its 50 stored initial states, with the tool's start randomized at S times the
-randomized test set's start bounds (screwhead/sim/task_env_place.RANDOMIZER); each episode seeded by (seed, task,
-episode) alone. A fresh --seed per sweep keeps fixes from being tuned to the episodes of an earlier one.
 """
 from __future__ import annotations
 
@@ -54,7 +48,6 @@ class Job:
     robot: str = "Panda"       # the embodiment (Execution.robot, Execution.gripper)
     gripper: str = "PandaGripper"
     diagnostics: bool = False  # record the servo's tracking per episode (SimArm.diagnostics) in its trial
-    wide: float = 0.0          # > 0: fresh LIBERO layouts, the start randomized at this multiple of RANDOMIZER
 
 
 def _observe(errors: list, fn, *args):
@@ -75,9 +68,7 @@ def _run_episode(env, teacher, job: Job, ep: int, record: bool):
     # Drawn from the seeded stream (with replacement), 50 episodes covered 26-34 of a task's 50 initial
     # states and repeated the rest exactly; --init-order runs each once, in order, as LIBERO does
     episode = job.ep_offset + ep * job.stride
-    if job.wide > 0:
-        env.reset_fresh(job.seed, episode)
-    elif job.init_order:
+    if job.init_order:
         env.reset(init_index=episode % len(env.init_states))
     else:
         env.reset()
@@ -188,18 +179,13 @@ def _worker(remote, job_fields: dict) -> None:
     from screwhead.sim.task_env import StartNoise, TaskEnv
     # cameras only for video: the teacher reads no image, trajectories are identical either way, and
     # ten workers rendering every step held the GPU at 33-39% and the box at 93-95 C
-    start = StartNoise(**job.start)
-    if job.wide > 0:
-        from screwhead.sim.task_env_place import RANDOMIZER
-        start = StartNoise(**{k.removeprefix("start_"): v * job.wide
-                              for k, v in RANDOMIZER.items() if k.startswith("start_")})
     env = TaskEnv(job.suite, job.task, horizon=job.horizon, seed=job.seed, render=bool(job.video),
-                  start=start, execution=Execution(robot=job.robot, gripper=job.gripper))
+                  start=StartNoise(**job.start), execution=Execution(robot=job.robot, gripper=job.gripper))
     teacher = SkillTeacher(env)
     teacher.skills.reach.refuse_when_empty = job.refuse
     videos = 0
     for ep in range(job.episodes):
-        if job.stride > 1 and not job.wide:   # the stream's episodes before this one belong to other workers
+        if job.stride > 1:             # the stream's episodes before this one belong to other workers
             for _ in range(job.ep_offset if ep == 0 else job.stride - 1):
                 env.skip_episode()
         record = bool(job.video) and videos < job.max_videos
@@ -261,8 +247,6 @@ def _parse() -> argparse.Namespace:
     ap.add_argument("--robot", default="Panda", help="the arm, by robosuite's name (Panda, UR5e, IIWA, Jaco, Kinova3)")
     ap.add_argument("--gripper", default="PandaGripper", help="the gripper, by robosuite's name")
     ap.add_argument("--diagnostics", action="store_true", help="record the servo's tracking per episode in its trial")
-    ap.add_argument("--wide", type=float, default=0.0,
-                    help="fresh LIBERO layouts, the start randomized at this multiple of the randomized test set's bounds")
     ap.add_argument("--trials", default="")
     ap.add_argument("-v", "--verbose", action="store_true",
                     help="timeline, events, grasp, and the false predicate term for every failure")
@@ -286,16 +270,15 @@ def _jobs(args) -> list[Job]:
                                 args.horizon, args.refuse, start, args.video,
                                 args.max_videos, args.video_px, stride=args.interleave,
                                 init_order=args.init_order, robot=args.robot, gripper=args.gripper,
-                                diagnostics=args.diagnostics, wide=args.wide))
+                                diagnostics=args.diagnostics))
         for j in range(args.split if args.interleave <= 1 else 0):
             n = min(per, args.episodes - j * per)
             if n > 0:
-                # --wide draws every episode from (seed, episode) alone, so the task's seed must not change with the split
-                seed = args.seed * 100 + t if args.split == 1 or args.wide else (args.seed * 100 + t) * 1000 + j
+                seed = args.seed * 100 + t if args.split == 1 else (args.seed * 100 + t) * 1000 + j
                 jobs.append(Job(args.suite, t, n, seed, cpus[len(jobs) % len(cpus)], j * per,
                                 args.horizon, args.refuse, start, args.video,
                                 args.max_videos, args.video_px, init_order=args.init_order, robot=args.robot,
-                                gripper=args.gripper, diagnostics=args.diagnostics, wide=args.wide))
+                                gripper=args.gripper, diagnostics=args.diagnostics))
     return jobs
 
 
@@ -428,8 +411,7 @@ def _write_trials(rows: list[dict], args, rev: str) -> None:
          "detail": dict(r.get("detail", {}), episode=r["episode"], steps=r["steps"], language=r["language"]),
          "repro": {"seed": args.seed * 100 + r["task"], "task": r["task"], "task_suite": args.suite,
                    "episode": r["episode"], "horizon": args.horizon, "init_index": r.get("init_index"),
-                   "teacher_revision": rev, **embodiment, **({"wide": args.wide} if args.wide else {})}}
-        for r in rows]}, indent=1))
+                   "teacher_revision": rev, **embodiment}} for r in rows]}, indent=1))
     written = json.loads(Path(args.trials).read_text())["trials"]
     leaked = [t for t in written if t["metrics"].get("refused") and "success" in t["metrics"]]
     assert not leaked, (f"{len(leaked)} refused trials carry a success metric; they would be "

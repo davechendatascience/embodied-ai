@@ -51,50 +51,15 @@ The goal is at least 95% on every task within LIBERO's limits. What works and wh
 task by task and against LIBERO's own human demonstrations, is in
 [`docs/skill_teacher_task_notes.md`](docs/skill_teacher_task_notes.md).
 
-### Widened randomized starts: the push to 95% on every task
+### Beyond LIBERO's own scenes
 
-Since 2026-09-26 the teacher is also scored away from LIBERO's 50 stored initial states
-(`tools/skill_eval.py --wide 1.5`, `CTR-teacher-wide`): every episode starts from a fresh layout LIBERO's own
-samplers draw inside the task file's regions, with the tool's start moved up to 15 cm across, 7.5 cm up or down,
-45 deg in yaw, 15 deg in tilt and the redundant joint 0.45 rad (1.5x the randomized test set's bounds); 600 steps
-(libero_10 800). Five episodes per task per round, each round on a seed never used before, so a fix tuned to one
-round's scenes earns nothing on the next. Done when three rounds in a row score every task 5/5.
-
-| round | seed | commit | spatial | object | goal | libero_10 | libero_90 | all | tasks 5/5 |
-|---|---|---|---|---|---|---|---|---|---|
-| 1 | 2702 | a0d3a73 | 43/50 | 50/50 | 49/50 | 46/50 | 446/450 | 634/650 (97.5%) | 121/130 |
-
-Below 5/5 in round 1: libero_spatial 7 (0/5, blocked reaching the bowl on the stove), libero_spatial 4 (3/5,
-blocked reaching into the drawer), libero_10 1 and 9 (3/5), libero_goal 5, libero_90 3, 32, 36 and 55 (4/5).
-Half the failures (8 of 16) are one mechanism: the approach is blocked and the teacher does not recover.
-
-## How the work is kept honest
-
-- `consistency.yaml` -- the design as axioms, definitions, lemmas and branches, verified by
-  falsification trials (the consistency-belief MCP server). A design change is proposed and
-  verified before it is built.
-- `belief.yaml` -- components, contracts and tests; measured evidence is ingested per revision
-  (the component-belief MCP server). A trial is stamped with the teacher revision that ran it.
-- Both load from git HEAD: a declaration does nothing until it is committed.
-- The stamp-monitor MCP server reads both ledgers and reports what a change touches, whether the
-  recorded evidence is still current, and where the history routes around the loop.
-
-The three servers come from
-[Theoretically Driven LLM Planning](https://github.com/davechendatascience/Theoretically_Driven_LLM_Planning),
-which documents them and packages them for use on other projects. This repository is a worked example
-of that workflow applied to one engineering problem.
-
-## Layout
-
-| path | what |
-|---|---|
-| `screwhead/sim` | LIBERO environment wrappers, the twist servo, the gripper servo, contacts, scene geometry |
-| `screwhead/geometry` | kinematics and frames shared by the teacher and the student |
-| `screwhead/teacher` | the skill teacher: task spec, skills, grasp planner, reach screen, affordances |
-| `screwhead/student`, `screwhead/scripted` | the VLA and the earlier per-task scripted teachers |
-| `tools/` | evaluation (`skill_eval.py`), reports and ledger ingest (`teacher_report.py`), the human-demo survey (`demo_survey.py`) |
-| `tests/` | unit tests (`.venv-libero/bin/python -m pytest tests -q`) |
-| `docs/` | design notes, the project brief (zh-TW), the per-task notes |
+LIBERO's 50 initial states per task are near-copies (each object within about 3 cm per axis, the robot's start
+fixed), so they show the teacher solves each task's canonical scene, not that it handles variation. Perturbing
+LIBERO's scenes after the fact could not be made valid or doable from the task files, and the first attempt
+(2026-09-26, fresh soft-reset layouts with widened starts, 634/650) is void: a soft reset dropped objects hosted on
+fixtures to the floor (AXM-libero-soft-reset-misplaces-hosted-objects). The teacher push moves to LIBERO-Variations, a
+benchmark generated from LIBERO's assets whose scenes and tasks are valid and doable by construction
+([`docs/design_libero_variations.md`](docs/design_libero_variations.md)).
 
 ## Changelog
 
@@ -108,8 +73,10 @@ Features by date, newest first. Numbers are measured at the stated commit.
   contracts (reproduction, placement, the checkpoint training ended with); pairs recorded from the teacher are
   declared equivalent to LIBERO's for training (BRN-vla-teacher-pairs-as-demo-pairs, proven). The teacher at 1.5x
   the randomized set's range: 450/475 on libero_spatial's other nine tasks, task 4 (the drawer) 50/164, as poor
-  with its own gripper as with the VLA's two-valued one (11 vs 10 of 30 paired starts). `skill_eval.py --wide`
-  (a0d3a73) runs every task from fresh LIBERO layouts with widened starts: round 1, 634/650, 121 tasks at 5/5.
+  with its own gripper as with the VLA's two-valued one (11 vs 10 of 30 paired starts). A first round from fresh
+  LIBERO layouts with widened starts (634/650) was void -- a soft reset drops fixture-hosted objects to the floor
+  (AXM-libero-soft-reset-misplaces-hosted-objects) -- and the approach was dropped for LIBERO-Variations, a generated
+  benchmark (docs/design_libero_variations.md).
 - **2026-09-26** -- Servo transfer, the teacher on other arms (docs/design_servo_transfer.md). Another arm
   now starts in the Panda's scene: its tool at the pose LIBERO's Panda was recorded at, the fixtures drawn
   from the Panda's random stream (2c371d4; before, robosuite's own start poses knocked objects on 42 of 160
