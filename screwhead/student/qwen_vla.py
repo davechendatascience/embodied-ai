@@ -73,12 +73,13 @@ def backbone_files() -> dict:
 
 def environment_record(read: list | None = None, models: dict | None = None) -> dict:
     """What a run executed and read (BRN-vla-reported-beside-a-blind-twin; one comparison uses runs whose records
-    agree): the code revision, every installed package, the GPU driver, a digest of every source file imported and
+    agree): the host, its GPU and driver, the code revision, every installed package, a digest of every source file imported and
     every shared library mapped into the process, the data files it read (`read`), the fingerprints of the task
     models it built (`models`), the backbone's files and the process environment. Call it at the end of a run."""
     import hashlib
     import importlib.metadata as md
     import os
+    import socket
     import subprocess
     import sys
     root = Path(__file__).resolve().parents[2]
@@ -88,8 +89,8 @@ def environment_record(read: list | None = None, models: dict | None = None) -> 
     installed = sorted(f"{d.metadata['Name']}=={d.version}" for d in md.distributions())
     versions = {pkg: next((i.split("==")[1] for i in installed if i.split("==")[0].lower() == pkg), None)
                 for pkg in ("mujoco", "robosuite", "torch", "torchvision", "transformers", "peft", "numpy")}
-    driver = subprocess.run(["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
-                            capture_output=True, text=True).stdout.strip()
+    gpu, _, driver = subprocess.run(["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"],
+                                    capture_output=True, text=True).stdout.strip().rpartition(", ")
     sources = [f for mod in list(sys.modules.values()) if (f := getattr(mod, "__file__", None)) and os.path.isfile(f)]
     with open("/proc/self/maps") as fh:
         libraries = {line.split()[-1] for line in fh if ".so" in line.split()[-1] and os.path.isfile(line.split()[-1])}
@@ -97,7 +98,8 @@ def environment_record(read: list | None = None, models: dict | None = None) -> 
     n_lib, lib = _combined(libraries)
     n_read, data = _combined(read or [])
     env = sorted(os.environ.items())
-    return {"code_revision": rev + ("+dirty" if dirty else ""), "cuda": torch.version.cuda, "gpu_driver": driver, **versions,
+    return {"host": socket.gethostname(), "gpu": gpu, "gpu_driver": driver,
+            "code_revision": rev + ("+dirty" if dirty else ""), "cuda": torch.version.cuda, **versions,
             "installed_packages": len(installed), "installed_digest": hashlib.sha1("\n".join(installed).encode()).hexdigest()[:16],
             "imported_sources": n_src, "imported_digest": src, "mapped_libraries": n_lib, "libraries_digest": lib,
             "files_read": n_read, "files_read_digest": data,
