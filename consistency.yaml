@@ -4437,23 +4437,26 @@ branches:
       revision and every installed package and its version, its process environment's variables, the
       digest of every data file it read other than the checkpoint it evaluates (the demonstrations and any
       file derived from anything, the backbone's files, task and initial-state files, sets of starts), its
-      configuration as values -- for training: device, numeric precision, batch composition and every
-      optimisation setting; for evaluation: device, numeric precision, rendering settings, batch
-      composition and every inference setting of the policy (how an output is turned into an action, how
-      many actions are executed per query) -- its per-run inputs (the training or evaluation seed, the
-      sighted or blind switch), and, for an evaluation, the digest of the checkpoint it loaded, which must
-      equal the digest its training run recorded for the model it ended with; every run's record is kept,
-      a superseded run's included, and the order of runs is the order in which their records were written;
-      within one comparison every training run has the same record as every other training run, and every
-      evaluation run the same as every other evaluation run, except in the per-run inputs and the
-      checkpoint digest. The measure counts as evidence only through its signed margin: the sighted
-      models' mean over the named training seeds minus the blind models' mean over the same seeds, which
-      counts only when it is positive and exceeds twice the larger of the two models' sample standard
-      deviations across those seeds (divided by n - 1), a standard deviation below one episode's share of
-      the suite (one over its number of episodes) being taken as that share -- a difference not exceeding
-      that is what this claim calls within training-seed spread. Success rates are measured by LIBERO's
-      protocol -- each task's initial states once each, the suite's step limit, LIBERO's predicate on the
-      reached state (AXM-libero-scores-final-state) -- through the VLA's decode, the same for every model
+      configuration as values -- every argument it was launched with other than its output's location and
+      the processor cores it runs on (every setting a run can change without changing its code or the data
+      files it reads is one of them), and the numeric precision and rendering settings its code fixes --
+      and, for an evaluation, the training run whose checkpoint it loaded (that run's training seed and
+      switch, read from that run's own record) and the checkpoint's digest, which must equal the digest
+      that training run recorded for the model it ended with; every run's record is kept, a superseded
+      run's included, and the order of runs is the order in which their records were written. Within one
+      comparison every training run has the same record as every other training run except in its per-run
+      inputs, the training seed and the sighted or blind switch; every evaluation run has the same record
+      as every other evaluation run except in the training run it names and the checkpoint it loaded, the
+      evaluation seed being one of the comparison's fixed items; an evaluation's switch is the switch of
+      the training run it names; and each of the comparison's models is evaluated by exactly one
+      evaluation run. The measure counts as evidence only through its signed margin: the sighted models'
+      mean over the named training seeds minus the blind models' mean over the same seeds, which counts
+      only when it is positive and exceeds twice the larger of the two models' sample standard deviations
+      across those seeds (divided by n - 1), a standard deviation below one episode's share of the suite
+      (one over its number of episodes) being taken as that share -- a difference not exceeding that is
+      what this claim calls within training-seed spread. Success rates are measured by LIBERO's protocol
+      -- each task's initial states once each, the suite's step limit, LIBERO's predicate on the reached
+      state (AXM-libero-scores-final-state) -- through the VLA's decode, the same for every model
       (BRN-vla-decodes-twists-exactly), with numpy's global generator seeded from (seed, initial state)
       immediately before every reset and nothing drawing from it between the seeding and the reset, so the
       fixture poses of an episode are the same for both models (LMA-seed-fixtures-per-init-state). Every
@@ -4486,7 +4489,11 @@ branches:
       untracked source), TRL-1267 (library digests dropped: a compiled module left built in a worktree;
       runs on another host) -- so the record is again everything the code records, with the host and GPU
       model added (526b380). Every trim of this record needs a mistake it no longer has to catch; none was
-      found. The fixed items are committed before a comparison's first evaluation (the TRL-1267 note:
+      found. TRL-1273 then refuted the list of what may differ between runs (an evaluation seed left at a
+      default for the blind runs, a per-run input the rule exempted); the statement now names the per-run
+      inputs of each kind of run -- training seed and switch; for an evaluation, only the training run it
+      names -- records every launch argument as a value, and names the training run each evaluation loads
+      (b28922c). The fixed items are committed before a comparison's first evaluation (the TRL-1267 note:
       otherwise a choice after results is forbidden but undetectable). Everything that caught a real
       problem stays: every episode executed twice in separate processes and compared step by step
       (multisampled renders of a bit-identical state differed by one level on 2 of 16384 wrist pixels and
