@@ -556,6 +556,24 @@ axioms:
       and asking which contact balances a finger's squeeze, both read fields derived from a
       configuration rather than integrated from one.
 
+  - id: AXM-mujoco-contacts-pairwise
+    domain: environment
+    statement: >-
+      After a forward pass, whether MuJoCo reports a contact between two geoms, and that contact's
+      distance, is determined by those two geoms -- their shapes (type, size, mesh), their world poses,
+      their contact filters (contype and conaffinity, the filtering of a body against its parent and of
+      bodies welded to one body, and the model's exclusions and explicit pairs naming them), their
+      margins and gaps -- and by the model's contact options. The model's other geoms do not change
+      it, as long as the contact buffer does not overflow, which MuJoCo reports as a warning.
+    rationale: >-
+      BRN-lv-action-space screens the arm's contacts with the table and fixtures once, in a reference
+      scene, and relies on the answer in every scene that matches it; those scenes differ in their free
+      objects, so the screen carries over only if a pair's contact does not depend on the geoms beside
+      it. MuJoCo's collision pipeline filters candidate pairs by the rules listed, then tests each
+      remaining pair on its own -- bounding volumes grown by the margins, then the pair's narrow phase
+      (MuJoCo documentation, Computation: collision detection). A verifier refuted the action space's
+      match without it (TRL-1483): a scene compiled with another contact margin matched and reported
+      contacts the reference did not.
   - id: AXM-robosuite-controller-cache
     domain: environment
     statement: >-
