@@ -88,16 +88,22 @@ class ReachMap:
 
 # -- the reference match ------------------------------------------------------------------
 def _reference_bodies(m) -> list[int]:
-    return [b for b in range(1, m.nbody) if m.body(b).name.startswith(REFERENCE_PARTS) or m.body(b).name == TABLE]
+    """The robot's, gripper's and mount's bodies, the table and the fixtures a reset draws, with every body
+    attached below them."""
+    from ..sim.task_env_place import drawn_fixtures
+    roots = [b for b in range(1, m.nbody) if m.body(b).name.startswith(REFERENCE_PARTS) or m.body(b).name == TABLE]
+    roots += drawn_fixtures(m)
+    return [b for b in range(1, m.nbody) if b in roots or any(_descends(m, b, r) for r in roots)]
 
 
 def match_digest(m) -> str:
-    """A digest of what BRN-lv-action-space's match compares: the robot's, its gripper's, its mount's and the
-    table's bodies -- each with its parent's name, its pose in its parent (so, the chain rooted at the world,
-    its world pose), its inertia -- their geoms with their shapes (a mesh's vertices and faces too) and contact
-    filters, margins and gaps, and their joints; and the model's contact settings: its options, and its contact
-    exclusions and explicit pairs by name. The fixtures a reset draws, with their poses and joint positions, are
-    compared separately (fixtures_of). The arm's joint positions are not in it."""
+    """A digest of what BRN-lv-action-space's match compares: the robot's, its gripper's and its mount's bodies,
+    the table and the fixtures a reset draws, with every body below them -- each with its parent's name, its pose
+    in its parent (so, the chain rooted at the world, its world pose at given joint positions), its inertia -- their
+    geoms, each with its pose in its body, its shape (a mesh's vertices and faces too), contact filters, margins
+    and gaps, and their joints; and the model's contact settings: its options, and its contact exclusions and
+    explicit pairs by name. The fixtures' joint positions are compared separately (fixtures_of). The arm's joint
+    positions are not in it."""
     h = hashlib.sha1()
     for name in sorted(n for n in dir(m.opt) if not n.startswith("_")):
         h.update(name.encode())

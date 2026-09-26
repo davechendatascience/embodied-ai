@@ -124,6 +124,9 @@ class TaskEnv(SimArm):
             if self._max_object_speed() < REST_SPEED:
                 break
             self._settle(SETTLE_CHUNK)
+        # a step leaves the contacts of the configuration before its integration: forward, so that what is read
+        # at rest (contacts, the goal) is the rest state's own, as an episode placed from it will read it
+        self.env.sim.forward()
         return sampled
 
     def keep_model(self) -> None:
