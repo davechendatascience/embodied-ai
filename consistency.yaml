@@ -3051,38 +3051,39 @@ branches:
     subject: CMP-skill-library
     claim_type: contract
     statement: >-
-      Terms are BRN-regression-planner's, DEF-skill-contract's and BRN-place-done-when-released's (the
-      planner's candidate at a step); joint positions, the tool point and the scene's geometry are read
-      from each step's state (AXM-mujoco-forward-is-a-function-of-state); LIBERO's open threshold fixes
-      which way a drawer's or the microwave door's joint opens (AXM-libero-joint-bands), and each joint's
-      range is a constant of the model. For a place into a region that is such a container's -- a drawer's
-      region, carried by its joint's body, or the microwave's interior, behind its door; the container's
-      joint is that drawer's or door's, and it has one handle -- the planner does not evaluate
-      DEF-skill-contract's admits(R, o) itself but a stand-in for it, the open test, read at each control
-      step. The travel is the joint's position past LIBERO's open threshold, signed toward opening, and
-      the room the part of the joint's range still to go that way. A spot is open when the object's
-      footprint -- its box's extent in plan at its present pose, about a point of the region, at a
-      declared set of sample points -- has, at every sample, a ray down from a declared height above the
-      region's top meeting no geom other than the robot's and the object's higher than the top plus a
-      declared clearance; the region has a spot when some point of a declared grid over it is one. The
-      container is being driven at a step when the drive of that container was the planner's candidate at
-      the previous control step of the same episode and the tool point lies within a declared distance of
-      the container's handle. The open test holds when the travel is at least the smaller of a declared
-      margin and the room less a declared small amount, both in the joint's own units; or when the travel
-      is at least minus a declared slack, the region has a spot, and the container is not being driven. Up
-      to this branch the last condition was the tool point's distance alone. Claimed: (1) at a step at
-      which the container is being driven, the open test holds only by the margin clause; (2) at a step at
-      which the drive of that container was not the candidate at the previous step of the episode, whether
-      the open test holds, taken with every container's joint position and the pose of every body but the
-      robot's and the placed object's held fixed, does not depend on the tool point, the robot's geometry
-      or the placed object's pose beyond its box's plan extent; (3) whether the open test holds at a step
-      is a function of that step's state, the placed object, the region, the candidate at the previous
-      step of the same episode, the model's joint ranges and declared constants. Not claimed: that the
-      open test is DEF-skill-contract's admits(R, o); that moving the hand leaves other bodies or the
-      joints where they were -- an object riding on the placed one or held beside it, or a handle the hand
-      still touches, moves with it; that a container passed by the slack clause stays open while the
-      object is carried in, or that the object fits; that a drive, once selected, reaches the margin.
-    premises: [BRN-regression-planner, DEF-skill-contract, BRN-place-done-when-released, AXM-libero-joint-bands, AXM-mujoco-forward-is-a-function-of-state]
+      Terms are DEF-skill-contract's and BRN-place-done-when-released's; the teacher's step at a control
+      step is the step of its plan it selected to act on at that step; joint positions, the tool point and
+      the scene's geometry are read from each step's state (AXM-mujoco-forward-is-a-function-of-state);
+      LIBERO's open threshold fixes which way a drawer's or the microwave door's joint opens
+      (AXM-libero-joint-bands), and each joint's range is a constant of the model. For a place into a
+      region that is such a container's -- a drawer's region, carried by its joint's body, or the
+      microwave's interior, behind its door; the container's joint is that drawer's or door's, and it has
+      one handle -- the teacher does not evaluate DEF-skill-contract's admits(R, o) itself but a stand-in
+      for it, the open test, read at each control step. The travel is the joint's position past LIBERO's
+      open threshold, signed toward opening, and the room the part of the joint's range still to go that
+      way. A spot is open when the object's footprint -- its box's extent in plan at its present pose,
+      about a point of the region, at a declared set of sample points -- has, at every sample, a ray down
+      from a declared height above the region's top meeting no geom other than the robot's and the
+      object's higher than the top plus a declared clearance; the region has a spot when some point of a
+      declared grid over it is one. The container is being driven at a step when the teacher's step at the
+      previous control step of the same episode was the drive of that container and the tool point lies
+      within a declared distance of the container's handle. The open test holds when the travel is at
+      least the smaller of a declared margin and the room less a declared small amount, both in the
+      joint's own units; or when the travel is at least minus a declared slack, the region has a spot, and
+      the container is not being driven. Up to this branch the last condition was the tool point's
+      distance alone. Claimed: (1) at a step at which the container is being driven, the open test holds
+      only by the margin clause; (2) at a step at which the teacher's step at the previous step of the
+      episode was not the drive of that container, whether the open test holds, taken with every
+      container's joint position and the pose of every body but the robot's and the placed object's held
+      fixed, does not depend on the tool point, the robot's geometry or the placed object's pose beyond
+      its box's plan extent; (3) whether the open test holds at a step is a function of that step's state,
+      the placed object, the region, the teacher's step at the previous step of the same episode, the
+      model's joint ranges and declared constants. Not claimed: that the open test is DEF-skill-contract's
+      admits(R, o); that moving the hand leaves other bodies or the joints where they were -- an object
+      riding on the placed one or held beside it, or a handle the hand still touches, moves with it; that
+      a container passed by the slack clause stays open while the object is carried in, or that the object
+      fits; that a drive, once selected, reaches the margin.
+    premises: [DEF-skill-contract, BRN-place-done-when-released, AXM-libero-joint-bands, AXM-mujoco-forward-is-a-function-of-state]
     derivation_rule: >-
       The slack clause's condition was the tool point more than 10 cm from the container's handle,
       standing in for "not mid-drag": stopping the hook at LIBERO's threshold had left libero_goal 3's
@@ -3107,6 +3108,10 @@ branches:
       needs DEF-holding; the containers are those whose opening direction AXM-libero-joint-bands fixes.
       Restated per the verifier's note: the microwave's interior is not carried by its door, so the scope
       names it beside the drawers; the positions held fixed in claim (2) are the containers' joints.
+      Restated 2026-09-26 in the running teacher's terms: it was stated in BRN-regression-planner's, a
+      design that is not built (the teacher walks the plan task_spec builds), so live code rested on an
+      unbuilt premise; the selected step it reads is the teacher's own, recorded at the previous control
+      step.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-pinch-leans-when-upright-unreachable
