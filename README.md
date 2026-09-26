@@ -65,6 +65,16 @@ benchmark generated from LIBERO's assets whose scenes and tasks are valid and do
 
 Features by date, newest first. Numbers are measured at the stated commit.
 
+- **2026-09-27** -- Theory and code cleanup. Pruned the dormant optimization teacher (search on the task
+  loss, verdicts, state restore; 7 branches, a lemma, a component with 5 contracts, 20 files), SimArm's lean
+  step, the unused intended-contact screen and the retired randomized set (b312e00, 6a0e0de). A liveness audit
+  found ten skill-teacher branches stating designs the code does not implement as stated; each was restated to
+  what the code does, its shortfalls named rather than cited as met (d71552c, 456388c), and two live but
+  undeclared designs were declared (clear-before-opening, trial provenance). Two defects fixed on the way:
+  skill_eval recorded the wrong seed and episode index under --split, so no split episode could be re-run from its
+  trial (34d1df5; now 4 of 4 re-run exactly), and the teacher could read the previous episode's released and
+  last-held objects at an episode's first step (bce70d4; episode-identical on 30 episodes). Ledger: 47 proven
+  (was 43), 23 open (was 34), 4 refuted (was 8) -- the four refuted are lemmas of the planned regression planner.
 - **2026-09-26** -- The Panda VLA paused; the teacher pushed to widened randomized starts. P0 (Qwen3-VL-2B on
   LIBERO's demonstrations) stopped at step 5000, before any evaluation (docs/vla_comparisons.md). VLA-JEPA
   (lerobot/VLA-JEPA-LIBERO) on libero_spatial: 476/500 from LIBERO's starts, 140/200 (tasks 0-3) from this
