@@ -4211,22 +4211,20 @@ branches:
       stored at j -- both camera images and the proprioception -- which shows the recorded state j+1
       (AXM-libero-demo-observations-follow-their-actions), and a label in two parts. The arm part is
       computed from the recorded states alone: the constant body twist whose motion over one control
-      period (1/20 s) carries the tool pose of the recorded state j+1 to the tool pose of the recorded
-      state j+2 (the SE(3) logarithm of their relative pose divided by the period, the tool poses being
-      the forward kinematics of the recorded arm joints through the Panda's chain and its fixed tool
-      frame, AXM-libero-demos-record-a-panda), divided componentwise by the action range's bounds -- 1 m/s
-      and 10 rad/s, constants of the action space (robosuite's operational-space scales, 0.05 m and 0.5
-      rad per unit action, at the 20 Hz control rate), fixed before any pair is read and set by no
-      statistic of any training set. The gripper part is the gripper command the demonstration recorded at
-      step j+1 (AXM-libero-demos-record-their-actions). A stored observation with no recorded state two
-      steps after it has no pair. Consequently each label is the displacement the demonstrator's arm made
-      over the control period that began in the state its observation shows, exact at the period's end --
-      the pose it names is the forward kinematics of the next recorded state -- while it fixes neither the
-      path the tool took within the period nor, on the seven-joint arm, the joints it ended at; and
-      nothing in such a pair depends on our simulator or execution path. Not claimed: that the
-      evaluation's execution reproduces a label's displacement (the decode is its own design); that the
-      labels lie within the action range; that a policy trained on these pairs succeeds or uses its
-      images.
+      period carries the tool pose of the recorded state j+1 to the tool pose of the recorded state j+2
+      (the SE(3) logarithm of their relative pose divided by the period, a fixed constant, the tool poses
+      being the forward kinematics of the recorded arm joints through the Panda's chain and its fixed tool
+      frame, AXM-libero-demos-record-a-panda), divided componentwise by the action range's bounds, fixed
+      constants: set before any pair is read and by no statistic of any training set. The gripper part is
+      the gripper command the demonstration recorded at step j+1 (AXM-libero-demos-record-their-actions).
+      A stored observation with no recorded state two steps after it has no pair. Consequently each label
+      is the displacement the demonstrator's arm made over the control period that began in the state its
+      observation shows, exact at the period's end -- the pose it names is the forward kinematics of the
+      next recorded state -- while it fixes neither the path the tool took within the period nor, on the
+      seven-joint arm, the joints it ended at; and nothing in such a pair depends on our simulator or
+      execution path. Not claimed: that the evaluation's execution reproduces a label's displacement (the
+      decode is its own design); that the labels lie within the action range; that a policy trained on
+      these pairs succeeds or uses its images.
     premises: [AXM-libero-demos-record-a-panda, AXM-libero-demos-record-their-actions, AXM-libero-demo-observations-follow-their-actions]
     derivation_rule: >-
       The user's call (2026-09-26): keep the labels pristine -- LIBERO's own data, no relabelling by
@@ -4242,9 +4240,10 @@ branches:
       state j+1. Evidence: CTR-vla-libero-success. Scoped 2026-09-26 to pairs taken from LIBERO's
       demonstrations (TRL-1281: 'every training pair is LIBERO's' contradicted training on the skill
       teacher's episodes as well, BRN-vla-teacher-pairs-as-demo-pairs); what it says of those pairs is
-      unchanged. Restated after TRL-1286: the action-range bounds, the control period and the tool frame
-      are named as constants fixed by no training set, so pairs from other sources cannot move a LIBERO
-      label; the arm part (from states) and the gripper part (from the recorded action) are stated apart.
+      unchanged. Restated after TRL-1286 and TRL-1289: the action-range bounds, the control period and the
+      tool frame are stated as fixed constants set by no training set (their values are the code's, not
+      premises here), so pairs from other sources cannot move a LIBERO label; the arm part (from states)
+      and the gripper part (from the recorded action) are stated apart.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-vla-decodes-twists-exactly
