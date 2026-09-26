@@ -32,6 +32,8 @@ IGNORE=(
   joint_pos joint_vel mass_matrix cur_time
   # task_loss's stub domain: LIBERO's predicate code reads these attributes of the env it is given
   objects_dict fixtures_dict
+  # SimArm._set_render_samples: MuJoCo reads offsamples when a render context is made; robosuite reads the context
+  offsamples _render_context_offscreen
 )
 IGNORE_CSV=$(IFS=,; echo "${IGNORE[*]}")
 

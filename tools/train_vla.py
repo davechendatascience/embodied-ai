@@ -33,11 +33,12 @@ class Pairs:
 
         from screwhead.student import libero_data as D
         chain = D.panda_chain()
-        self.demos, self.language = [], []
+        self.demos, self.language, self.files = [], [], []
         for suite in suites:
             bm = benchmark.get_benchmark_dict()[suite]()
             for t in (tasks if tasks is not None else range(bm.n_tasks)):
                 task = bm.get_task(t)
+                self.files.append(str(D.task_file(suite, task.name)))
                 with h5py.File(D.task_file(suite, task.name)) as f:
                     keys = sorted(f["data"].keys(), key=lambda k: int(k.split("_")[1]))[demos]
                     for k in keys:
@@ -153,7 +154,7 @@ def _train(model, loader, vloader, args) -> int:
                 with open(log, "a") as fh:
                     fh.write(json.dumps(rec) + "\n")
             if step % args.save_every == 0 or step >= args.steps:
-                model.save(args.out)
+                model.save(args.out, read=args.read)
             if step >= args.steps:
                 break
     return step
@@ -183,8 +184,17 @@ def main() -> int:
                          collate_fn=lambda s: collate(s, pad)) if val else None
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
+    args.read = sorted(set(train.files + (val.files if val else [])))
     step = _train(model, loader, vloader, args)
-    model.save(args.out)
+    model.save(args.out, read=args.read)
+    # BRN-vla-reported-beside-a-blind-twin: the configuration as values and the digest of the model training ended
+    # with, beside the checkpoint (which cannot hold its own digest); an evaluation checks the checkpoint against it
+    from screwhead.student.qwen_vla import environment_record, file_digest
+    config = {k: v for k, v in vars(args).items() if k not in ("read",)}
+    Path(args.out + ".record.json").write_text(json.dumps(
+        {"checkpoint_digest": file_digest(args.out), "steps": step, "configuration": config,
+         "precision": "bfloat16 backbone, float32 heads", "trained_in": environment_record(read=args.read)},
+        indent=1, sort_keys=True, default=str))
     print(f"saved {args.out} after {step} steps ({(time.time() - t0) / 3600:.2f} h)")
     return 0
 

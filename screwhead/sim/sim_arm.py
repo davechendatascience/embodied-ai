@@ -122,6 +122,10 @@ class Execution:
     observe_end: bool = False         # return a read forced after each step's physics: env.step's observation is
     #                                   stale after a forced read (AXM-robosuite-step-observes-the-period-end), and
     #                                   execute() forces one at its start
+    render_samples: int | None = None  # offscreen multisampling of the observation cameras; None: MuJoCo's default (4).
+    #                                   With it, renders of one bit-identical state differed by one level on a few
+    #                                   wrist pixels while a model shared the GPU, and closed-loop episodes diverged;
+    #                                   without it (0) they repeated (BRN-vla-reported-beside-a-blind-twin)
 
 
 class SimArm:
@@ -177,6 +181,8 @@ class SimArm:
         self.servo.tol = ex.servo_tol
         self.joint_ramp = ex.joint_ramp
         self.lean, self.anchoring = ex.lean, ex.anchor
+        if render and ex.render_samples is not None:
+            self._set_render_samples(ex.render_samples)
         self.t = 0
         return bddl
 
@@ -480,6 +486,35 @@ class SimArm:
         """An upright px x px image from a named camera -- for videos; the observation
         cameras are CAMERA_PX."""
         return np.ascontiguousarray(self.env.sim.render(width=px, height=px, camera_name=camera)[::-1])
+
+    def model_fingerprint(self) -> str:
+        """A digest of every numeric field of the compiled task model, the poses of the fixtures the reset draws
+        (world-attached <object>_main bodies) and the records of the files it was read from excepted
+        (BRN-random-starts-test-set: two environments place the same scenes only if these agree)."""
+        import hashlib
+        from .task_env_place import drawn_fixtures
+        m = self.env.sim.model._model
+        drawn = drawn_fixtures(m)
+        h = hashlib.sha1()
+        for name in sorted(dir(m)):
+            if name.startswith("_") or name.endswith("_pathadr") or name == "paths":
+                continue
+            v = getattr(m, name, None)
+            if isinstance(v, np.ndarray):
+                a = np.array(v, copy=True)
+                if name in ("body_pos", "body_quat") and a.shape[0] == m.nbody:
+                    a[drawn] = 0
+                h.update(name.encode())
+                h.update(np.ascontiguousarray(a).tobytes())
+        return h.hexdigest()[:16]
+
+    def _set_render_samples(self, n: int) -> None:
+        """The observation cameras' multisampling: the offscreen context reads it when made, so a new one is made."""
+        from robosuite.utils.binding_utils import MjRenderContextOffscreen
+        sim = self.env.sim
+        sim.model._model.vis.quality.offsamples = int(n)
+        sim._render_context_offscreen = None
+        sim.add_render_context(MjRenderContextOffscreen(sim, device_id=self.env.env.render_gpu_device_id))
 
     def observe(self) -> dict:
         return self.env.env._get_observations(force_update=True)

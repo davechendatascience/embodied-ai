@@ -13,6 +13,7 @@ training labels, H and the k actions executed per query, the image size -- is st
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -24,12 +25,84 @@ BACKBONE = "Qwen/Qwen3-VL-2B-Instruct"
 # The VLA's execution (BRN-vla-decodes-twists-exactly), one definition for its evaluation and its replay gate: the
 # skill teacher's servo and controller, the free-motion acceleration bound kept while holding, the IK iterated to
 # 1e-6 mm / 1e-6 rad in at most 30 iterations, the null space pulled to the start posture, the simulator's own
-# gripper command, the read after each step's physics. Keyword arguments of screwhead.sim.sim_arm.Execution.
+# gripper command, the read after each step's physics, cameras rendered without multisampling (episodes repeat).
+# Keyword arguments of screwhead.sim.sim_arm.Execution.
 VLA_EXECUTION = dict(gripper_mode="command", max_lin_acc_holding=None, servo_iters=30, servo_tol=(1e-9, 1e-6),
-                     posture_start=True, observe_end=True)
+                     posture_start=True, observe_end=True, render_samples=0)
 PROPRIO_TOKEN = 151900     # rows past len(tokenizer) (151669): never produced by the tokenizer
 ACTION_TOKEN = 151901
 LORA_TARGETS = r"model\.language_model\.layers\.\d+\.(self_attn\.(q|k|v|o)_proj|mlp\.(gate|up|down)_proj)"
+
+
+_DIGESTS: dict = {}
+
+
+def file_digest(path) -> str:
+    """Content digest of a file, computed once per (path, size, modification time) in a process."""
+    import hashlib
+    import os
+    st = os.stat(path)
+    key = (str(path), st.st_size, st.st_mtime_ns)
+    if key not in _DIGESTS:
+        h = hashlib.sha1()
+        with open(path, "rb") as f:
+            for block in iter(lambda: f.read(1 << 22), b""):
+                h.update(block)
+        _DIGESTS[key] = h.hexdigest()[:16]
+    return _DIGESTS[key]
+
+
+def _combined(paths) -> tuple[int, str]:
+    import hashlib
+    h = hashlib.sha1()
+    paths = sorted(set(map(str, paths)))
+    for p in paths:
+        h.update(p.encode())
+        h.update(file_digest(p).encode())
+    return len(paths), h.hexdigest()[:16]
+
+
+def backbone_files() -> dict:
+    """The backbone snapshot's revision and a digest of its processor and tokenizer files."""
+    from huggingface_hub import snapshot_download
+    root = Path(snapshot_download(BACKBONE, local_files_only=True))
+    files = [f for f in root.iterdir() if f.suffix in (".json", ".txt") or f.name.startswith(("tokenizer", "vocab", "merges"))]
+    n, digest = _combined(files)
+    return {"backbone_revision": root.name, "backbone_config_files": n, "backbone_config_digest": digest}
+
+
+def environment_record(read: list | None = None, models: dict | None = None) -> dict:
+    """What a run executed and read (BRN-vla-reported-beside-a-blind-twin; one comparison uses runs whose records
+    agree): the code revision, every installed package, the GPU driver, a digest of every source file imported and
+    every shared library mapped into the process, the data files it read (`read`), the fingerprints of the task
+    models it built (`models`), the backbone's files and the process environment. Call it at the end of a run."""
+    import hashlib
+    import importlib.metadata as md
+    import os
+    import subprocess
+    import sys
+    root = Path(__file__).resolve().parents[2]
+    rev = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=root, capture_output=True, text=True).stdout.strip()
+    dirty = bool(subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=root,
+                                capture_output=True, text=True).stdout.strip())
+    installed = sorted(f"{d.metadata['Name']}=={d.version}" for d in md.distributions())
+    versions = {pkg: next((i.split("==")[1] for i in installed if i.split("==")[0].lower() == pkg), None)
+                for pkg in ("mujoco", "robosuite", "torch", "torchvision", "transformers", "peft", "numpy")}
+    driver = subprocess.run(["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
+                            capture_output=True, text=True).stdout.strip()
+    sources = [f for mod in list(sys.modules.values()) if (f := getattr(mod, "__file__", None)) and os.path.isfile(f)]
+    with open("/proc/self/maps") as fh:
+        libraries = {line.split()[-1] for line in fh if ".so" in line.split()[-1] and os.path.isfile(line.split()[-1])}
+    n_src, src = _combined(sources)
+    n_lib, lib = _combined(libraries)
+    n_read, data = _combined(read or [])
+    env = sorted(os.environ.items())
+    return {"code_revision": rev + ("+dirty" if dirty else ""), "cuda": torch.version.cuda, "gpu_driver": driver, **versions,
+            "installed_packages": len(installed), "installed_digest": hashlib.sha1("\n".join(installed).encode()).hexdigest()[:16],
+            "imported_sources": n_src, "imported_digest": src, "mapped_libraries": n_lib, "libraries_digest": lib,
+            "files_read": n_read, "files_read_digest": data,
+            "task_models": dict(sorted((models or {}).items())), **backbone_files(),
+            "environment_digest": hashlib.sha1(repr(env).encode()).hexdigest()[:16], "environment": dict(env)}
 
 
 @dataclass
@@ -88,8 +161,9 @@ class QwenVLA(nn.Module):
         keep = {n for n, p in self.named_parameters() if p.requires_grad}
         return {n: t.detach().cpu() for n, t in self.state_dict().items() if n in keep}
 
-    def save(self, path: str) -> None:
-        torch.save({"config": asdict(self.cfg), "backbone": BACKBONE, "weights": self.trainable_state()}, path)
+    def save(self, path: str, read: list | None = None) -> None:
+        torch.save({"config": asdict(self.cfg), "backbone": BACKBONE, "weights": self.trainable_state(),
+                    "trained_in": environment_record(read=read)}, path)
 
 
 def build(cfg: VLAConfig, device: str = "cuda") -> tuple[QwenVLA, object]:

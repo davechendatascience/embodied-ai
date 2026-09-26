@@ -84,6 +84,28 @@ class TaskEnv(SimArm):
         self.raw = self.observe()
         return self.raw
 
+    def place_stored(self, state: np.ndarray, fixtures: dict, fingerprint: str | None = None) -> bool:
+        """Start an episode from a stored start (BRN-random-starts-test-set): the stored fixture poses written, then
+        the stored state, then the forward pass, execution memory anchored there. False if the model then differs
+        from the stored fingerprint or fixture poses -- the episode is not to be scored."""
+        from .task_env_place import write_fixtures
+        self.episode += 1
+        self.init_index = -1
+        self._reset_scene(0)
+        m = self.env.sim.model._model
+        write_fixtures(m, fixtures)
+        self.env.set_init_state(np.asarray(state, float))
+        self.env.sim.forward()
+        self._anchor()
+        self.servo.reset(np.asarray(self.observe()["robot0_joint_pos"]))
+        if self.execution.posture_start:
+            self.servo.posture, self.servo.posture_gain = self.servo.ref.copy(), POSTURE_GAIN
+        self.t = 0
+        self.raw = self.observe()
+        same_fixtures = all(np.array_equal(m.body_pos[m.body(n).id], p) and np.array_equal(m.body_quat[m.body(n).id], q)
+                            for n, (p, q) in fixtures.items())
+        return same_fixtures and (fingerprint is None or self.model_fingerprint() == fingerprint)
+
     def skip_episode(self) -> None:
         """Advance the episode stream past one episode without simulating it: an episode's draws
         depend on its index and its init state alone, so the episodes after it are unchanged."""
