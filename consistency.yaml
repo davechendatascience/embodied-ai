@@ -210,6 +210,25 @@ axioms:
       after a -1 it widened on 70% and shrank on 8% (mean +1.1 mm). robosuite 1.4.0's PandaGripper
       moves its finger target toward the command's sign (AXM-robosuite-gripper-target-persists).
 
+  - id: AXM-robosuite-step-observation-starts-the-period
+    domain: environment
+    statement: >-
+      robosuite 1.4.0's env.step runs a control period's physics substeps and after each one updates every
+      observable. LIBERO's observables -- the arm and finger joints, the objects, the cameras -- sample at
+      the control rate with no delay, and such an observable samples at the first substep of a period and
+      not again before the period ends, so the observation env.step returns reports the state one physics
+      substep (2 ms) into the period that just ran, not the state it ended in. A forced observation
+      (_get_observations(force_update=True)) reads the state as it stands.
+    rationale: >-
+      Read from robosuite/environments/base.py (step: forward, _pre_action, sim.step and
+      _update_observables per substep) and utils/observables.py (update samples when it has not sampled
+      this period and the sampling period minus the delay is at least the time since the last sample,
+      which first holds at the period's first substep; the timer resets once a sampling period has
+      passed); LIBERO's bddl_base_domain.py and robosuite's single_arm.py set sampling_rate to the control
+      frequency. Measured 2026-09-26 over demonstration replays (libero_spatial 0, libero_goal 0 and 3, 20
+      each): the arm joints env.step reported differed from the end-of-period state by 0.009-0.019 rad
+      (median) and up to 0.145 rad.
+
   - id: AXM-libero-soft-reset-state
     domain: environment
     statement: >-
@@ -4148,45 +4167,61 @@ branches:
       Every training pair of the Panda VLA comes from a replay of one of LIBERO's human demonstrations
       through the execution path the evaluation uses (AXM-one-execution-path), whose gripper channel is an
       aperture target in which +1 is the closed end, executed by closing the fingers until they stop, and
-      -1 the fully open end. A demonstration is placed from its first recorded state, with the fixture
-      poses written from its own recorded model (AXM-libero-demos-record-a-panda), since the reset
-      re-samples them and writing the state restores neither (AXM-libero-resamples-fixtures). At each
-      control step t of the replay, the action is the body twist that carries the servo's pose reference,
-      as it stands at t, to the tool pose the demonstration recorded at t+1 (the forward kinematics of its
-      recorded arm joints through the Panda's chain) in one control period, normalized to the action's
-      range and clipped to it, with the gripper channel set to the gripper command the demonstration
-      recorded at t (AXM-libero-demos-record-their-actions: +1 closes, -1 opens); after the
-      demonstration's last recorded pose the replay holds that pose and its last gripper command. The pair
-      is the replay's own observation at t -- rendered by the evaluation's renderer, with the evaluation's
-      proprioception -- and that action. A replay contributes its pairs only if LIBERO's predicate accepts
-      some state it reaches within the demonstration's length plus a declared settling allowance
-      (AXM-libero-scores-final-state); otherwise it contributes none and is counted. Consequently every
-      action in the training set was executed by the evaluation's execution path from a state that path
-      reached; each label is computed from the servo's reference at its own step, so a twist the servo
-      limited at one step does not become a fixed offset in the labels after it; and the gripper label
-      closes where the demonstration closed and opens where it opened, not holding at the opening an
-      object stopped the fingers at. Not claimed: how many demonstrations replay successfully; that the
-      replay's states equal the demonstration's recorded ones; that the replays' fixture poses are
-      distributed as the evaluation's seeded resets draw them; that a policy trained on these pairs
+      -1 the fully open end, and whose observation at each step is read from the state the previous
+      control period ended in (a forced observation, not the one env.step samples at the period's first
+      substep, AXM-robosuite-step-observation-starts-the-period). A demonstration is placed from its first
+      recorded state, with the poses of the fixtures the reset re-samples written from its own recorded
+      model (AXM-libero-demos-record-a-panda), since the reset re-samples them and writing the state
+      restores neither (AXM-libero-resamples-fixtures); no other body's pose is taken from the recorded
+      model. At each control step t of the replay, the action is the body twist that carries the tool pose
+      the replay's observation at t reports (the forward kinematics of its arm joints) to the tool pose
+      the demonstration recorded at t+1 (the forward kinematics of its recorded arm joints through the
+      same chain) in one control period, normalized to the action's range and clipped to it, with the
+      gripper channel set to the gripper command the demonstration recorded at t
+      (AXM-libero-demos-record-their-actions: +1 closes, -1 opens); after the demonstration's last
+      recorded pose the replay keeps its last recorded pose as the target and holds its last gripper
+      command. The pair is the replay's observation at t -- rendered by the evaluation's renderer, with
+      the evaluation's proprioception -- and that action. A replay contributes its pairs only if LIBERO's
+      predicate accepts some state it reaches within the demonstration's length plus a declared settling
+      allowance (AXM-libero-scores-final-state); otherwise it contributes none and is counted.
+      Consequently every action in the training set was executed by the evaluation's execution path from a
+      state that path reached; each label is a function of the pair's own observation and the
+      demonstration, not of execution memory the observation does not carry
+      (AXM-dagger-needs-markov-labels), so a twist the servo limited at one step does not become a fixed
+      offset in the labels after it, the next label being computed from where the tool then is; and the
+      gripper label closes where the demonstration closed and opens where it opened, not holding at the
+      opening an object stopped the fingers at. Not claimed: how many demonstrations replay successfully;
+      that the replay's states equal the demonstration's recorded ones; that the replays' fixture poses
+      are distributed as the evaluation's seeded resets draw them; that a policy trained on these pairs
       succeeds, or that it uses its images.
-    premises: [AXM-libero-demos-record-a-panda, AXM-libero-demos-record-their-actions, AXM-libero-resamples-fixtures, AXM-libero-scores-final-state, AXM-mujoco-forward-is-a-function-of-state, AXM-one-execution-path, AXM-reproducible-measurement, AXM-servo-lead-bounds-travel, BRN-servo-lead-scaled-uniformly]
+    premises: [AXM-libero-demos-record-a-panda, AXM-libero-demos-record-their-actions, AXM-libero-resamples-fixtures, AXM-libero-scores-final-state, AXM-mujoco-forward-is-a-function-of-state, AXM-one-execution-path, AXM-reproducible-measurement, AXM-servo-lead-bounds-travel, AXM-dagger-needs-markov-labels, AXM-robosuite-step-observation-starts-the-period, BRN-servo-lead-scaled-uniformly]
     derivation_rule: >-
-      A relabel-then-test pipeline, labels computed in one action interface and a policy tested through
-      another, invalidated a round of student results in this project (AXM-one-execution-path's
-      rationale). LIBERO's demonstrations were recorded through robosuite's operational-space controller;
-      our policies act through the twist servo. Replaying each demonstration through the servo and keeping
-      the replay's own observations and executed actions makes training and evaluation one execution path.
-      The label closes the loop on the servo's reference (AXM-servo-lead-bounds-travel) because the servo
-      bounds how fast the commanded twist may change: open-loop twists from consecutive recorded poses
-      would leave the reference behind whenever the bound binds. Measured 2026-09-26: no demonstration's
-      first state is one of the test initial states (1000 demonstrations of libero_spatial and
-      libero_goal; the nearest differs by at least 0.07 in some object coordinate). Restated after
-      TRL-1160 (the demonstrations' layout and models a premise), after TRL-1165..1167's note (the
-      recorded opening while an object is held is its width, a target the servo would hold rather than
-      squeeze), and after TRL-1174..1176 (the demonstrations' gripper command and its sign are now a
-      premise, AXM-libero-demos-record-their-actions; the execution path's channel convention is stated in
-      the claim, which the implementation must meet). Evidence: CTR-demo-replay-succeeds (to be declared
-      with the replay tool).
+      A relabel-then-test pipeline invalidated a round of student results in this project
+      (AXM-one-execution-path's rationale); replaying each demonstration through the servo and keeping the
+      replay's own observations and executed actions makes training and evaluation one execution path.
+      Restated after TRL-1180..1182 on measurements of 2026-09-26. (1) The label closes on the observed
+      tool pose, not on the servo's pose reference. The twist-to-joint decode is exact to 0.06-0.34 mm (IK
+      residual of the joint reference against the pose reference); the error is the joint controller's
+      lag, the arm ending each period about 0.6 of a demonstration step behind its joint reference (3-6 mm
+      median, up to 11 mm). Closed on the reference, the reference sat on the demonstration and the tool
+      trailed it by that lag, and where the humans hook a drawer handle with open fingers it slipped off:
+      first 20 demonstrations, reference-closed against observation-closed, libero_goal 0 9 -> 16,
+      libero_goal 3 7 -> 15, libero_spatial 0 20 -> 20 (tool's largest distance from the path 13-22 mm ->
+      3.6-7.2 mm; median distance on libero_goal 0 demo 1 3.35 -> 0.48 mm); libero_goal 5, a push, 9 -> 8:
+      contact forces differ between the humans' operational-space controller and this joint controller
+      whatever the path. A label read from the observation is also what AXM-dagger-needs-markov-labels
+      asks: the reference is execution memory the policy never observes. When the label asks past a
+      blocked tool the reference cannot run away: the servo scales its joint lead to the limit and resets
+      the pose reference to that reference's pose (BRN-servo-lead-scaled-uniformly). (2) The observation
+      is the end-of-period state: closed on env.step's observation, which reported arm joints 0.009-0.019
+      rad (median, up to 0.145 rad) from the end-of-period state, the same labels replayed 9, 6 and 7 of
+      20 with the tool up to 22-79 mm off the path -- feedback on a period-old measurement overshoots. (3)
+      Only re-sampled fixtures are written: the recorded models describe other bodies in other frames
+      (libero_10 6's table at (-0.25, 0.25) turned 90 deg with its region sites in that frame, against
+      ours at the origin), and writing the table's recorded pose moved our region sites 0.6 m: 0 of 50 met
+      the predicate, 9 of 10 with only the re-sampled fixtures written. Measured earlier: no
+      demonstration's first state is one of the test initial states (1000 demonstrations of libero_spatial
+      and libero_goal). Evidence: CTR-demo-replay-succeeds.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 policies:
