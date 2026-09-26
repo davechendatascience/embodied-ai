@@ -168,7 +168,8 @@ def _task(job: tuple) -> list[dict]:
     from libero.libero import benchmark, get_libero_path
     spec = benchmark.get_benchmark_dict()[suite]().get_task(task)
     read = [os.path.join(get_libero_path("bddl_files"), spec.problem_folder, spec.bddl_file),
-            os.path.join(get_libero_path("init_states"), spec.problem_folder, spec.init_states_file)]
+            os.path.join(get_libero_path("init_states"), spec.problem_folder, spec.init_states_file),
+            *([starts_file] if starts_file else [])]
     # at the end: every source the episodes imported is in it
     evaluated_in = environment_record(read=read, models={f"{suite}:{task}": env.model_fingerprint()})
     for r in rows:
