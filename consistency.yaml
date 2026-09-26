@@ -611,6 +611,24 @@ axioms:
       seven reward weights), and found the skill teacher's squeeze thresholds tuned to a 0-24
       substep observation lag.
 
+  - id: AXM-libero-soft-reset-misplaces-hosted-objects
+    domain: environment
+    statement: >-
+      With robosuite's hard_reset off, LIBERO's env.reset() samples an object whose initial region lies on
+      a fixture other than the table (a stove's cook region, a cabinet drawer's region) at a height raised
+      by that fixture's own height above its correct placement, so the object falls off its host when the
+      scene runs; with hard_reset on (the scene rebuilt from its task file) the same objects are sampled
+      at their hosts' heights. Objects whose region lies on the table are sampled at their correct heights
+      either way.
+    rationale: >-
+      Measured 2026-09-26: libero_spatial 7 (bowl on the stove) and 4 (bowl in the top drawer), four seeds
+      each: with hard_reset off the bowl was sampled at z 1.915 and 2.056 m, with it on at 1.010 and 1.151
+      m -- a difference of 0.905 m, the height the fixtures stand at -- and after settling the soft-reset
+      bowls lay on the floor (z 0.317 m; 0.00 m, 1.7 m away); libero_spatial 0's bowl, on the table, was
+      sampled at 0.970 m and settled at 0.898 m. Found by the teacher push's first round, whose
+      blocked-reaching failures on those two tasks had every grasp without inverse kinematics because the
+      bowl was on the floor. LIBERO's stored initial states were drawn with scenes built anew and are not
+      affected.
 definitions:
   - id: DEF-single-operator-lab
     term: The single-operator lab
