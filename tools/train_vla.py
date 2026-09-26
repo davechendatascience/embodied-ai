@@ -187,7 +187,7 @@ def main() -> int:
     args.read = sorted(set(train.files + (val.files if val else [])))
     step = _train(model, loader, vloader, args)
     model.save(args.out, read=args.read)
-    # BRN-vla-reported-beside-a-blind-twin: the configuration as values and the digest of the model training ended
+    # docs/vla_comparisons.md, items 5 and 7: the configuration as values and the digest of the model training ended
     # with, beside the checkpoint (which cannot hold its own digest); an evaluation checks the checkpoint against it
     from screwhead.student.qwen_vla import environment_record, file_digest
     config = {k: v for k, v in vars(args).items() if k not in ("read",)}

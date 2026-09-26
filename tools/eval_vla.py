@@ -8,7 +8,7 @@ its one interface (BRN-vla-sees-and-acts-as-trained).
 
 Each worker holds its own copy of the model on the GPU and runs its share of the episodes on one core. Every
 episode is executed twice, in two rounds of fresh worker processes, and its trial records whether the two agree
-in every observation, every action and the outcome (BRN-vla-reported-beside-a-blind-twin): a rate is evidence
+in every observation, every action and the outcome (docs/vla_comparisons.md, item 8): a rate is evidence
 only if all did. From a randomized set (--starts), a trial records whether its episode was placed: its task admitted
 and its model matching the set's (BRN-random-starts-test-set); an episode not placed is reported, not scored. It also
 records the set file's digest and the digest of the integration state at placement, which begins the episode's
@@ -159,7 +159,8 @@ def _task(job: tuple) -> list[dict]:
     for e in episodes:
         start = None if stored is None else (stored["states"][e], stored["fixtures"][e], stored["references"]["model_fingerprint"])
         m = _episode(pol, env, suite, e, start)
-        m.update(gpu_peak_gib=round(torch.cuda.max_memory_allocated() / 2**30, 2))
+        m.update(gpu_peak_gib=round(torch.cuda.max_memory_allocated() / 2**30, 2),
+                 checkpoint_is_training_end=ended_with == file_digest(ckpt))
         placed = {} if start is None else {"placed_digest": m.pop("placed_digest", None),
                                           "starts_digest": file_digest(starts_file)}
         rows.append({"metrics": m,
@@ -172,7 +173,6 @@ def _task(job: tuple) -> list[dict]:
                                                             "image_px": cfg.image_px, "precision": "bfloat16",
                                                             "gripper": "positive score closes"}, sort_keys=True),
                                "checkpoint_digest": file_digest(ckpt),
-                               "checkpoint_is_training_end": ended_with == file_digest(ckpt),
                                "training_run": training_run, "arguments": arguments, **placed}})
     from libero.libero import benchmark, get_libero_path
     spec = benchmark.get_benchmark_dict()[suite]().get_task(task)
@@ -212,7 +212,7 @@ def main() -> int:
         for i in range(0, len(eps), max(per, 5)):
             jobs.append((args.ckpt, args.suite, t, eps[i:i + max(per, 5)], args.seed, rev, args.starts, arguments))
     t0 = time.time()
-    # BRN-vla-reported-beside-a-blind-twin: every episode executed twice, in two rounds of fresh worker processes
+    # docs/vla_comparisons.md, item 8: every episode executed twice, in two rounds of fresh worker processes
     # started at different times; the rounds are compared episode by episode in the digest of every observation the
     # model received and every action it chose, and in the outcome
     rounds = []
@@ -252,6 +252,8 @@ def _report(suite: str, rev: str, tasks: list[int], trials: list[dict], seconds:
              if len(scored) < len(trials) else "")
           + (f" -- MEASUREMENT FAILED: {unrepro} episodes not executed or not reproduced, the rate is not evidence"
              if unrepro else "; every episode reproduced"))
+    if not all(r["metrics"]["checkpoint_is_training_end"] for r in scored):
+        print("  CHECKPOINT IS NOT THE ONE ITS TRAINING RUN ENDED WITH (or no training record): not a comparison's model")
     for t in tasks:
         rs = [r for r in scored if r["conditions"]["task"] == t]
         print(f"  task {t}: {sum(r['metrics']['success'] for r in rs)}/{len(rs)}")

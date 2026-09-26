@@ -125,7 +125,7 @@ class Execution:
     render_samples: int | None = None  # offscreen multisampling of the observation cameras; None: MuJoCo's default (4).
     #                                   With it, renders of one bit-identical state differed by one level on a few
     #                                   wrist pixels while a model shared the GPU, and closed-loop episodes diverged;
-    #                                   without it (0) they repeated (BRN-vla-reported-beside-a-blind-twin)
+    #                                   without it (0) they repeated (docs/vla_comparisons.md, item 8)
 
 
 class SimArm:

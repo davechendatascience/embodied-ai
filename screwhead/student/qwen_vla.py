@@ -72,7 +72,7 @@ def backbone_files() -> dict:
 
 
 def environment_record(read: list | None = None, models: dict | None = None) -> dict:
-    """What a run executed and read (BRN-vla-reported-beside-a-blind-twin; one comparison uses runs whose records
+    """What a run executed and read (docs/vla_comparisons.md, item 5; one comparison uses runs whose records
     agree): the host, its GPU and driver, the code revision, every installed package, a digest of every source file imported and
     every shared library mapped into the process, the data files it read (`read`), the fingerprints of the task
     models it built (`models`), the backbone's files and the process environment. Call it at the end of a run."""
