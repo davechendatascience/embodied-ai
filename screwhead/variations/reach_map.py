@@ -186,10 +186,11 @@ def _descends(m, body: int, root: int) -> bool:
 
 
 def matches(m, d, reference: dict) -> bool:
-    """The scene matches the reference: the same robot, mount and table (match_digest), rooted at the world, their
-    joints other than the arm's and gripper's at the reference's positions, and the same fixtures at the same poses
-    and joint positions."""
-    return (match_digest(m) == reference["match_digest"] and fixtures_of(m, d) == reference["fixtures"]
+    """The scene matches the reference: no flex (deformable collision geometry, which match_digest does not see), the
+    same robot, mount and table (match_digest), rooted at the world, their joints other than the arm's and gripper's
+    at the reference's positions, and the same fixtures at the same poses and joint positions."""
+    return (int(m.nflex) == 0 and match_digest(m) == reference["match_digest"]
+            and fixtures_of(m, d) == reference["fixtures"]
             and held_joints(m, d, set(reference["moving_joints"])) == reference["held_joints"])
 
 
@@ -283,6 +284,8 @@ def compute(env, spec: MapSpec | None = None, log=print) -> ReachMap:
     roots = {m.body(int(m.body_parentid[b])).name for b in _reference_bodies(m)} - {m.body(b).name for b in _reference_bodies(m)}
     if roots != {"world"}:
         raise ValueError(f"the matched bodies hang from {sorted(roots)}, not the world alone")
+    if int(m.nflex):
+        raise ValueError("the reference holds a flex: its collision geometry is not geoms, which the match compares")
     if any(int(m.body_mocapid[b]) >= 0 for b in _reference_bodies(m)):
         raise ValueError("a matched body is a mocap body: its pose is the state's, not its chain's")
     return ReachMap(spec=spec, origin=(float(origin[0]), float(origin[1])), inside=inside, reference=reference)

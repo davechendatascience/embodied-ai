@@ -38,13 +38,15 @@ def _worker(remote, job_fields: dict) -> None:
     from screwhead.teacher.skill_teacher import SkillTeacher
     from screwhead.variations import generator
     bench = generator.Benchmark.load(job.bench)
+    # the revision of what this process loaded, recorded with its trial: the inputs are read here, not in main
+    gen_rev = generator.generator_revision(job.bench)
     t0 = time.time()
     try:
         env, kept, _history = generator.generate(bench, job.seed, job.task, tempfile.mkdtemp(), render=False,
                                                  horizon=job.horizon, robot=job.robot)
     except Exception as e:  # noqa: BLE001  a generation that keeps nothing is the generator's failure, not the teacher's
         row = _failed_row(job.task, job.task, 0, "", f"generation: {type(e).__name__}: {e}"[:400], "generation")
-        remote.send(dict(row, seed=job.seed, env_episode=0, generated=False))
+        remote.send(dict(row, seed=job.seed, env_episode=0, generated=False, generator_revision=gen_rev))
         remote.send(None)
         return
     generated_s = time.time() - t0
@@ -59,6 +61,7 @@ def _worker(remote, job_fields: dict) -> None:
     row.update(generated=True, template=d.template, moved=d.categories[d.a], target=d.categories[d.target],
                objects=[p.category for p in d.placements], task_seed=kept.seed, attempt=kept.attempt,
                task_digest=kept.digest, placed_digest=kept.placed_digest, fingerprint=kept.fingerprint,
+               generator_revision=gen_rev,
                generated_s=round(generated_s, 1))
     remote.send(row)
     remote.send(None)
@@ -152,7 +155,8 @@ def _write_trials(rows: list[dict], args, bench_meta: dict, rev: str, gen_rev: s
          "detail": dict(r.get("detail", {}), steps=r["steps"], language=r["language"],
                         objects=r.get("objects", []), moved=r.get("moved", ""), target=r.get("target", "")),
          "repro": {"bench": os.path.relpath(args.bench, ROOT), "bench_version": bench_meta["version"],
-                   "task_suite": suite, "template": r.get("template", ""), "generator_revision": gen_rev,
+                   "task_suite": suite, "template": r.get("template", ""),
+                   "generator_revision": r.get("generator_revision", gen_rev),
                    "split_seed": args.seed, "task": r["task"], "task_seed": r.get("task_seed"),
                    "attempt": r.get("attempt"), "task_digest": r.get("task_digest"),
                    "placed_digest": r.get("placed_digest"), "fingerprint": r.get("fingerprint"),
@@ -182,6 +186,9 @@ def main() -> int:
     rows += [dict(_failed_row(j.task, j.task, 0, "", "lost: the worker died before sending it", "lost"),
                   seed=j.seed, env_episode=0, generated=None) for j in jobs if j.task not in have]
     _summarise(rows, time.time() - t0)
+    drift = sorted({r["generator_revision"] for r in rows if r.get("generator_revision")} - {gen_rev})
+    if drift:
+        print(f"WARNING: workers loaded generator revisions {drift}, not {gen_rev}: the inputs changed during the run")
     if args.check_against:
         _reproduced(rows, args.check_against)
     if args.trials:
