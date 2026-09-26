@@ -629,6 +629,18 @@ axioms:
       blocked-reaching failures on those two tasks had every grasp without inverse kinematics because the
       bowl was on the floor. LIBERO's stored initial states were drawn with scenes built anew and are not
       affected.
+  - id: AXM-category-supports-declared
+    domain: environment
+    statement: >-
+      What a bddl category supports -- a surface objects are set on, a container objects are set in, or
+      neither -- is declared once per category in screwhead/teacher/affordances.yaml's supports field,
+      tagged measured, declared or open like the table's other fields; an open value is not relied on.
+    rationale: >-
+      The affordance table has carried a supports field per category since it was written (a bowl supports
+      as a container: On(cream_cheese, bowl) in libero_goal); AXM-category-affordances-declared names the
+      table's other fields and not this one, and extending it would set eighteen proven branches stale for
+      a field none of them uses. Stated on its own on 2026-09-27 for LIBERO-Variations' templates
+      (BRN-lv-tasks-doable, TRL-1457).
 definitions:
   - id: DEF-single-operator-lab
     term: The single-operator lab
