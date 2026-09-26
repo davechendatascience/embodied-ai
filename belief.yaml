@@ -1128,9 +1128,10 @@ contracts:
     evaluable_by: [TST-teacher-reliability]
     sufficiency: {n_min: 100, max_ci_width: 0.25}
 
-  # The first gate of the Panda VLA (docs/design_VLA_qwen.md): a demonstration replayed through the VLA's
-  # execution path meets LIBERO's predicate. Every replay that does not is data the VLA never sees; the
-  # design's target is most tasks at 45 of 50. Evidence for BRN-vla-trains-on-demos-replayed-through-the-servo.
+  # The first gate of the Panda VLA (docs/design_VLA_qwen.md): a demonstration's recorded motion, replayed open
+  # loop through the VLA's execution path as the twists it is labelled with, meets LIBERO's predicate -- how
+  # faithfully the evaluation's decode executes what the policy is taught. The trials before 2026-09-26 16:40 are
+  # of the withdrawn relabelling replay (servo-closed labels, and a fixture write that moved the table).
   - id: CTR-demo-replay-succeeds
     subject: CMP-vla-student
     claim_type: capability
