@@ -4376,18 +4376,15 @@ branches:
       within the step limit by a policy with privileged state acting through the action step; and for any
       two models compared on it, every start compared was placed in the same model -- task, scene,
       appearance, robot, cameras and physics parameters -- with the same integration state
-      (AXM-mujoco-integration-state), so the physics that follows the placement can differ between them
-      under the same inputs written between steps (actuator controls, applied forces, mocap poses,
-      equality activations, user data) only if their simulators, of one release, compute a step
-      differently, which admission tests from one start for 500 steps. Not claimed: that simulators
-      agreeing on that trajectory agree from every state or under every input; that the model is unchanged
-      after placement while the episode runs; that the set's difficulty matches LIBERO's test set or is
-      unbiased (it is the part of the randomizer's distribution the skill teacher solves); that every task
-      fills fifty; that rendered images are pixel-identical across environments; that the models evaluated
-      execute through the same controller, or that a policy acting through another controller can solve
-      every start; that it covers other suites or other arms; that success on it measures the use of
-      vision (only a margin over a blind twin does); anything about runs made outside the single-operator
-      lab.
+      (AXM-mujoco-integration-state). Not claimed: anything about the simulator after placement -- what a
+      runner writes to its state or model between steps, or that simulators of one release compute every
+      step alike (admission compares one start for 500 steps under fixed inputs); that the set's
+      difficulty matches LIBERO's test set or is unbiased (it is the part of the randomizer's distribution
+      the skill teacher solves); that every task fills fifty; that rendered images are pixel-identical
+      across environments; that the models evaluated execute through the same controller, or that a policy
+      acting through another controller can solve every start; that it covers other suites or other arms;
+      that success on it measures the use of vision (only a margin over a blind twin does); anything about
+      runs made outside the single-operator lab.
     premises: [DEF-single-operator-lab, AXM-libero-init-states-record-a-panda, AXM-libero-resamples-fixtures, AXM-libero-scores-final-state, AXM-libero-demos-record-a-panda, AXM-mujoco-forward-is-a-function-of-state, AXM-mujoco-integration-state]
     derivation_rule: >-
       Restated under DEF-single-operator-lab (2026-09-26, the user's call on theory bloat). The
@@ -4396,22 +4393,25 @@ branches:
       AXM-libero-soft-reset-state covers only this project's way of opening LIBERO, not another project's
       runner); it is now digested at every placement and compared, not derived. The same note: the
       references are stored inside the set, so admission cannot see a stale copy of it -- the set file's
-      digest is now recorded with every result. Measured 2026-09-26: six placements (libero_spatial 0 and
-      5, starts 0, 1 and 7) give identical integration-state digests and fingerprints in this project's
-      TaskEnv and in VLA-JEPA's lerobot runner, each through its own reset. Earlier restatements:
-      TRL-1216..1242 (git history has each). Measured 2026-09-26 with independent installs (VLA-JEPA's
-      LIBERO given its own configuration, task files and asset copy): of 469 fields of libero_spatial 0's
-      compiled model all agree except mesh_pathadr and tex_pathadr, with the cabinet and the stove
-      excluded; both run MuJoCo 3.8.1; the task file and the first initial state are byte-identical; 100
-      and 500 physics steps under the same random actuator inputs give bit-identical positions and
-      velocities. The set as generated (2026-09-26, seed 2601): 500 starts, fifty per task; the skill
-      teacher solved 94.2% of the novel draws (task 4: 72%); the nearest LIBERO or demonstration start is
-      2.1-4.7 cm away per task. The user's call: LIBERO's own test starts are too close to its
-      demonstrations' to show generalization (LIBERO-PRO: models above 90% collapse to 0.0% under
-      perturbed layouts and starts; LIBERO-Plus: 97.1% -> 37.2% with the start joints perturbed by 0.1-0.5
-      rad). The randomizer's bounds are this project's declared randomized evaluation. Evidence: the set's
-      generation report; CTR-random-set-placed (every episode of every evaluation on the set admitted and
-      placed with its model matching).
+      digest is now recorded with every result. The consequence about the physics after placement was
+      dropped after TRL-1264..1266 (it listed the inputs written between steps but not a runner's other
+      writes to state or model); what happens after placement is named as not claimed. Measured
+      2026-09-26: six placements (libero_spatial 0 and 5, starts 0, 1 and 7) give identical
+      integration-state digests and fingerprints in this project's TaskEnv and in VLA-JEPA's lerobot
+      runner, each through its own reset. Earlier restatements: TRL-1216..1242 (git history has each).
+      Measured 2026-09-26 with independent installs (VLA-JEPA's LIBERO given its own configuration, task
+      files and asset copy): of 469 fields of libero_spatial 0's compiled model all agree except
+      mesh_pathadr and tex_pathadr, with the cabinet and the stove excluded; both run MuJoCo 3.8.1; the
+      task file and the first initial state are byte-identical; 100 and 500 physics steps under the same
+      random actuator inputs give bit-identical positions and velocities. The set as generated
+      (2026-09-26, seed 2601): 500 starts, fifty per task; the skill teacher solved 94.2% of the novel
+      draws (task 4: 72%); the nearest LIBERO or demonstration start is 2.1-4.7 cm away per task. The
+      user's call: LIBERO's own test starts are too close to its demonstrations' to show generalization
+      (LIBERO-PRO: models above 90% collapse to 0.0% under perturbed layouts and starts; LIBERO-Plus:
+      97.1% -> 37.2% with the start joints perturbed by 0.1-0.5 rad). The randomizer's bounds are this
+      project's declared randomized evaluation. Evidence: the set's generation report;
+      CTR-random-set-placed (every episode of every evaluation on the set admitted and placed with its
+      model matching).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-vla-reported-beside-a-blind-twin
