@@ -62,10 +62,18 @@ One family -- the kitchen tabletop without fixtures -- with LIBERO's bowls, plat
 templates put A on B, put A in C (basket, tray, bowl), stack A on B. Then fixtures (drawers, microwave, stove) and
 two-step templates.
 
+## Decisions (2026-09-27, the user's)
+
+- **Action space: a top-down reach map.** A grid over the table, computed once per robot and stored with the
+  metadata by digest: a point is in when the tool, pointing down, reaches it at each of a declared set of yaws and
+  heights (table + 2 cm to + 25 cm) as a reachable pose (DEF-reachable-pose), with a 5 cm border removed. Front
+  approaches join when fixtures do.
+- **Capacity: category and measured fit.** The affordance table (screwhead/teacher/affordances.yaml) decides which
+  categories can hold or support which; the objects' footprints, measured from the compiled model, decide whether
+  this object fits, with a clearance margin.
+- **LIBERO's standard suites** stay as a secondary reference, run now and then so the VLA's numbers remain
+  comparable with published ones; LIBERO-Variations is the target.
+
 ## Open
 
-- The action space's exact definition: which approaches (top-down, from the front) and which tool orientations it
-  must admit, and its margin from the reach boundary.
-- Capacity and clearance rules for containers and supports, per category (screwhead/teacher/affordances.yaml has
-  held_by / rests per category).
-- Whether LIBERO's standard suites stay as a secondary reference for comparisons with published VLAs.
+- The yaws and heights of the reach map; the clearance margins; how many objects per scene in v0.

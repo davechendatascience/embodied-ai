@@ -237,6 +237,28 @@ components:
       - tools/eval_vla.py                  # LIBERO's protocol through the VLA's decode
       - tools/demo_replay.py               # the recorded motion through the decode, open loop (the decode's gate)
       - tests/test_eval_rounds.py          # the two evaluation rounds compared episode by episode
+  # LIBERO-Variations (docs/design_libero_variations.md): a benchmark generated from LIBERO's assets, whose scenes,
+  # instructions and doability hold by construction, stored as metadata only. The teacher push's target from
+  # 2026-09-27; LIBERO's own suites stay a secondary reference.
+  - id: CMP-libero-variations
+    purpose: >-
+      Generate LIBERO-format tasks from LIBERO's assets -- a scene assembled inside the robot's action
+      space, a goal from a template whose preconditions hold, an instruction written from the scene -- all
+      regenerated from a metadata file that is the benchmark
+    testable_capability: >-
+      Every task a metadata file names regenerates identically; every generated scene passes its validity
+      checks when built for evaluation; the skill teacher solves each template above 95% in three rounds
+      on fresh seeds
+    failure_modes:
+      - {id: FM-invalid-scene, observable: an object falls, slides, overlaps another or leaves its support when the generated scene is built}
+      - {id: FM-ambiguous-instruction, observable: the instruction names an object another object of the scene also fits}
+      - {id: FM-undoable-task, observable: every template precondition holds yet the task cannot be done -- the object does not fit, cannot be grasped or carried}
+      - {id: FM-irreproducible-generation, observable: the same metadata and seed produce a different scene or task}
+    remediation: >-
+      Checks at generation and at build; failures diagnosed as teacher or generator, a generator fix bumping
+      the metadata's version
+    code:
+      - docs/design_libero_variations.md
   - id: CMP-twist-servo
     purpose: Execute a body twist on the simulator's joint-position controller
     inputs: [IFC-expert__ik]

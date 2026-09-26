@@ -32,6 +32,7 @@ components:
   - {id: CMP-twist-servo, note: "the twist servo and the joint ramp every policy's action goes through"}
   - {id: CMP-skill-library, note: "the hand-written skill teacher that still drives the student's demonstrations"}
   - {id: CMP-vla-student, note: "the Panda VLA on Qwen3-VL-2B -- recorded-motion labels, the twist decode, one interface"}
+  - {id: CMP-libero-variations, note: "a benchmark generated from LIBERO's assets -- valid, unambiguous and doable by construction"}
 
 axioms:
   - id: AXM-libero-scores-final-state
