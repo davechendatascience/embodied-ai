@@ -2105,48 +2105,72 @@ branches:
       The place skill's lower phase ends, and the release is commanded, when the held object's origin is
       within the lower phase's tolerance of the region-derived target height (the height every other use
       reads: the carry height, the grasp screen, the delivered test); or, for an object that the
-      affordance table does not declare held by its handle, that is carried level (its box's lowest corner
-      within the lower phase's tolerance of the centre of its box face nearest to facing down) and that
-      touches something besides the fingers -- each read at that step -- when its origin is no higher than
-      that tolerance above the height at which that bottom-face centre lies a declared place clearance
-      above the first collision surface met by a vertical downward ray through the centre's plan position
-      at the drop point, cast from above the region's top by the object's height, the object's own body
-      and the robot excluded (where the ray meets nothing, the region-derived height); or, for an object
-      the affordance table declares held by its handle, when it touches something besides the fingers and
-      is at rest -- its linear speed plus its angular speed times its box's bounding radius below a
-      declared rest speed -- each read at that step; "held by its handle" is the affordance table's
-      held_by: handle with evidence measured or declared. Claimed: for such an object resting with its
-      bottom face's centre at the point where that ray meets the surface, where that surface stands above
-      the region-derived height, the lower phase's exit is reachable, so it is not pressed against it to
-      the horizon; the release is never commanded on the second or third ground while the object touches
-      only the fingers, nor on the third while the object moves at or above the rest speed; for an object
-      held by its handle that comes to rest on a surface standing above the region-derived height, the
-      lower phase's exit is reachable; and for an object not held by its handle and tilted at that step,
-      the lower phase ends exactly as before. Not claimed: that the surface under the bottom-face centre
-      is where the object first touches or rests (a book across two compartment walls rests on the walls
-      while the ray meets the floor between them, and is pressed on: BRN-scan-then-place's resting test is
-      the general case); that the object stays upright or inside the region after the release; the
-      provenance of the clearance and the tolerance.
+      affordance table does not declare held by its handle, that is carried level (its box's lowest
+      corner within the lower phase's tolerance of the centre of its box face nearest to facing down)
+      and that touches something besides the fingers -- each read at that step -- when its origin is no
+      higher than that tolerance above the height at which that bottom-face centre lies a declared place
+      clearance above the first collision surface met by a vertical downward ray through the centre's
+      plan position at the drop point, cast from above the region's top by the object's height, the
+      object's own body and the robot excluded (where the ray meets nothing, the region-derived height);
+      or, for an object the affordance table declares held by its handle, when it touches something
+      besides the fingers and is at rest -- its linear speed plus its angular speed times its box's
+      bounding radius below a declared rest speed -- each read at that step; "held by its handle" is the
+      affordance table's held_by: handle with evidence measured or declared. Fourth, for a placement on
+      to an object (not on to a site region, nor into a region's interior) of an object not declared
+      held by its handle and carried level, when the height that ray gives lies more than the tolerance
+      below the region-derived target height, the first ground does not apply: the lower phase goes on
+      toward that lower height at the drop point, and ends -- the release commanded -- when the object
+      touches the body the ray met (that body's own, or one attached below it) or its origin comes
+      within the tolerance of that lower height, each read at that step. Claimed: for such an object
+      resting with its bottom face's centre at the point where that ray meets the surface, where that
+      surface stands above the region-derived height, the lower phase's exit is reachable, so it is not
+      pressed against it to the horizon; the release is never commanded on the second or third ground
+      while the object touches only the fingers, nor on the third while the object moves at or above the
+      rest speed; for an object held by its handle that comes to rest on a surface standing above the
+      region-derived height, the lower phase's exit is reachable; on the fourth ground, the release is
+      never commanded while the object's origin is more than the tolerance above that lower height and
+      it does not touch the body the ray met -- so it is not let go at the region-derived height over a
+      lower surface of its support untouched -- and the lower phase's exit is reachable, at the lower
+      height if that body is not met before; and for an object not held by its handle and tilted at that
+      step, the lower phase ends exactly as before. Not claimed: that the surface under the bottom-face
+      centre is where the object first touches or rests (a book across two compartment walls rests on
+      the walls while the ray meets the floor between them, and is pressed on: BRN-scan-then-place's
+      resting test is the general case); that a touch of the body the ray met on the fourth ground is
+      where the object comes to rest; that the object stays upright or inside the region after the
+      release; the provenance of the clearance and the tolerance.
     premises: [AXM-object-geometry-known, AXM-support-scannable, AXM-libero-scores-final-state, DEF-holding, AXM-category-affordances-declared]
     derivation_rule: >-
       LIBERO's region boxes are sites, not surfaces (AXM-libero-scores-final-state reads them as sites):
-      the basket's contain region reaches 3 mm below the table while its floor stands 16 mm above it, and
-      libero_90 69's plate-left region lies 20 mm below the table top. The region-derived target was 5-7
-      mm below where the object can go, the lower phase ends within 4 mm of its target, and once LIBERO's
-      first success no longer ended the episode the teacher pressed the object into the floor with the
-      jaws shut to the horizon (TST-teacher-settled RUN-0247: libero_object 2 0 and 4 3 of 20 settled with
-      20 of 20 success; libero_90 69 and 70 0 of 20, 48 13 of 20). With the second ground, 10 of 10
-      settled on each. Read everywhere, the raised height moved the grasp screen and the carry height and
-      cost libero_10 3's drawer (10 -> 4 of 10); read only to end the lower phase it does not. The moka
-      pot hangs 21 deg from its handle and is righted by being pressed on to the burner, which stands 23
-      mm above its region; stopped at the burner it went 14 -> 6, then 8 when the stop also required
-      contact, of 20; excluded as handle-held (AXM-category-affordances-declared), 14 of 20, the same
-      episodes as without the rule. evidence: CTR-teacher-settled, CTR-teacher-reliable. Pressed to the
-      region-derived height alone, libero_10 8's first moka pot sat seated on the burner 7 mm above it, at
-      rest, for 600 steps and was never let go, so the second pot was never placed (0 of 50) -- hence the
-      third ground, at rest rather than at contact: a pot still swinging on to its seat moves. With it
-      (and the shared-surface spread), libero_10 8 8 of 10, inits 0-9; libero_10 2, the single pot, 5 of
-      10 the same episodes as without it.
+      the basket's contain region reaches 3 mm below the table while its floor stands 16 mm above it,
+      and libero_90 69's plate-left region lies 20 mm below the table top. The region-derived target was
+      5-7 mm below where the object can go, the lower phase ends within 4 mm of its target, and once
+      LIBERO's first success no longer ended the episode the teacher pressed the object into the floor
+      with the jaws shut to the horizon (TST-teacher-settled RUN-0247: libero_object 2 0 and 4 3 of 20
+      settled with 20 of 20 success; libero_90 69 and 70 0 of 20, 48 13 of 20). With the second ground,
+      10 of 10 settled on each. Read everywhere, the raised height moved the grasp screen and the carry
+      height and cost libero_10 3's drawer (10 -> 4 of 10); read only to end the lower phase it does
+      not. The moka pot hangs 21 deg from its handle and is righted by being pressed on to the burner,
+      which stands 23 mm above its region; stopped at the burner it went 14 -> 6, then 8 when the stop
+      also required contact, of 20; excluded as handle-held (AXM-category-affordances-declared), 14 of
+      20, the same episodes as without the rule. evidence: CTR-teacher-settled, CTR-teacher-reliable.
+      Pressed to the region-derived height alone, libero_10 8's first moka pot sat seated on the burner
+      7 mm above it, at rest, for 600 steps and was never let go, so the second pot was never placed (0
+      of 50) -- hence the third ground, at rest rather than at contact: a pot still swinging on to its
+      seat moves. With it (and the shared-surface spread), libero_10 8 8 of 10, inits 0-9; libero_10 2,
+      the single pot, 5 of 10 the same episodes as without it. The fourth ground (2026-09-27,
+      LIBERO-Variations): an object target's region-derived height is its collision box's top, so over a
+      ramekin the release came 14-17 mm above the rim while the object stood within 1 mm of its centre;
+      53 mm milk and juice cartons, too wide for the 66 mm opening, dropped on to the rim and came to
+      rest leaning 20-23 deg or on their side (a dev split of tall bottles on a ramekin or cookie box:
+      settled 48 of 64 -- milk 3 of 11, juice 1 of 7). Lowered until they touch the support: 63 of 64
+      (milk 11 of 11, juice 7 of 7), every other pair as before. Measured against the previous teacher
+      on LIBERO's 130 tasks, 3 episodes each at seed 561: 21 episodes changed, 20 of them only in the
+      steps to settle; the one outcome changed is libero_10 6 (the white mug on the plate, the pudding
+      beside it), and there at 20 episodes, seed 562, settled 13 -> 9 of 20, success 20 of 20 either way
+      -- the pudding's hand knocks the mug off the plate in 7 of 20 before the rule, and where the rule
+      seats the mug it is knocked off more often. Released on touching anything rather than the support,
+      or applied on to site regions as well, the numbers were the same; it is kept to objects, whose
+      tops are rims, as the narrower rule.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-supports-moved-first

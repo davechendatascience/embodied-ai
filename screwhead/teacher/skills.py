@@ -874,8 +874,9 @@ class Skills:
             goal = p + np.array([delta[0], delta[1], max(0.0, carry_z - q[2])])
             return self.action(self.twist_to(R, p, R_fit, goal, v_max=k.carry_speed), 0.0)
         R_reg, p_reg, half = self.region_pose(region)
-        stop_z = self._on_support(obj, self.scene.object_box(obj), q, target_q[:2], R_reg, p_reg, half,
-                                  float(target_q[2]))
+        floor_z, support = self._on_support(obj, self.scene.object_box(obj), q, target_q[:2], R_reg, p_reg, half,
+                                            float(target_q[2]))
+        stop_z = max(floor_z, float(target_q[2]))       # the second ground raises the region-derived height
         # an object held by its handle hangs tilted and is seated by being pressed on to its support, as
         # before: stopped at the support, the moka pot went 14 -> 8 of 20 (libero_10 2)
         by_handle = self._held_by(obj) == "handle"
@@ -885,6 +886,19 @@ class Skills:
         # settled object) and touching something besides the fingers. Pressed to the region-derived height
         # instead, libero_10 8's moka pot sat seated on the burner 7 mm above it for 600 steps, never let go
         seated = by_handle and touching and self._still(obj)
+        on_object = region in getattr(getattr(self.env, "task_spec", None), "objects", {})
+        if not inside and on_object and not by_handle and floor_z < float(target_q[2]) - k.lower_done:
+            # on to an object whose surface under the held one lies below its box's top (a ramekin's floor inside
+            # its rim, a plate's inside its lip): lowered on until it touches that support, or to the place
+            # clearance above its surface. Let go at the region-derived height, 15 mm over the ramekin's rim, milk
+            # cartons came to rest leaning 20-23 deg or on their side (dev, settled 4 of 18). On to a site region
+            # it does not apply: lowered on to the table beside libero_10 6's plate, the pudding's hand knocked the
+            # mug off it (settled 13 -> 9 of 20)
+            if q[2] - floor_z > k.lower_done and not self._touches(obj, support):
+                self.phase = "lower"
+                return self.action(self.twist_to(R, p, R_fit, p + (np.r_[target_q[:2], floor_z] - q),
+                                                 v_max=k.lower_speed, v_min=k.lower_speed_min), 0.0)
+            return self._release(obj, region, entry, target_q, p)
         if delta[2] < -k.lower_done and not (resting and q[2] - stop_z <= k.lower_done) and not seated:
             self.phase = "lower"
             # on to the drop point, not only down: lowered straight, the bowl drifted 13 mm toward
@@ -1284,10 +1298,12 @@ class Skills:
         return p_reg + np.array([0.0, 0.0, cls._region_up(R_reg, half)])
 
     def _on_support(self, obj: str, box, q: np.ndarray, xy: np.ndarray, R_reg, p_reg, half,
-                    region_z: float) -> float:
-        """The origin height at which the lower phase ends: the region-derived one, raised to where the
-        object's bottom is place_clearance above the surface under its footprint's centre at the drop
-        point (BRN-place-onto-physical-support). Read only there, and only once the object touches something
+                    region_z: float) -> tuple[float, int]:
+        """(the origin height at which the object's bottom is place_clearance above the surface under its
+        footprint's centre at the drop point, the root body of that surface), or (the region-derived height, -1)
+        where that does not apply (a tilted object, nothing under it) -- the place raises the region-derived
+        height to it (the second ground of BRN-place-onto-physical-support) or, on to a support below it, lowers
+        on to it (the fourth). Read only there, and only once the object touches something
         besides the fingers -- not for the carry height, the grasp screen or the delivered test, which keep
         the region-derived height. A moka pot swings level for a step mid-air; let go there, it fell 15 mm
         and tipped (libero_10 2, 14 -> 6 of 20). LIBERO's regions are sites, not surfaces: the basket's
@@ -1303,15 +1319,27 @@ class Skills:
         # that centre; lowered to the region's height it is pressed on to the burner, which rights it
         # (libero_10 2, 8 of 10), and raised to the burner's it is let go tilted and tips (1 of 10)
         if sum(abs(float(R[2, i])) * float(box.half[i]) for i in range(3) if i != up) > self.k.lower_done:
-            return region_z
+            return region_z, -1
         bottom = box.world_centre - R[:, up] * float(box.half[up]) * float(np.sign(R[2, up]) or 1.0)
         centre = np.asarray(xy, float)[:2] + (bottom - q)[:2]
         top = float(p_reg[2] + (np.abs(R_reg) @ np.abs(np.asarray(half, float)))[2])
         z_from = top + 2.0 * float((np.abs(R) @ box.half)[2])
-        _g, dist = self.planner.ray_scene(np.array([centre[0], centre[1], z_from]), -Z, self.scene.body_id(obj))
+        g, dist = self.planner.ray_scene(np.array([centre[0], centre[1], z_from]), -Z, self.scene.body_id(obj))
         if dist < 0:
-            return region_z
-        return max(region_z, z_from - dist + float((q - bottom)[2]) + self.k.place_clearance)
+            return region_z, -1
+        return z_from - dist + float((q - bottom)[2]) + self.k.place_clearance, self._root(int(self.scene.m.geom_bodyid[g]))
+
+    def _root(self, body: int) -> int:
+        """The body hanging from the world that `body` belongs to."""
+        m = self.scene.m
+        while body > 0 and int(m.body_parentid[body]) != 0:
+            body = int(m.body_parentid[body])
+        return body
+
+    def _touches(self, obj: str, support: int) -> bool:
+        """The held object touches the support body (or a body attached below it)."""
+        m, d = self.scene.m, self.scene.d
+        return support > 0 and any(self._root(b) == support for b in contacts.touching(m, d, self.scene.body_id(obj)))
 
     def _drop_xy(self, obj: str, region: str, R_reg, p_reg, half, box) -> np.ndarray:
         """The point of the region nearest its centre that is open from above.
