@@ -95,9 +95,10 @@ Features by date, newest first. Numbers are measured at the stated commit.
   names and options, so two objects of a category could have swapped bodies unseen (fixed). Theory: four branches
   (action space, scene validity, doable tasks, unambiguous instructions), three proven so far, and an axiom that a
   MuJoCo contact depends on its pair alone (AXM-mujoco-contacts-pairwise, d8eaa16). The action-space branch was
-  refuted or doubted nine times, each on something the reference match left free -- contact settings,
+  refuted or doubted ten times, each on something the reference match left free -- contact settings,
   geom poses in their bodies, other joints, joint reference positions and limit enforcement, buffer overflow, flex
-  elements, the simulator release -- and each is now compared (bf532b0), its tenth statement under verification; a kinematics axiom was declared on the way
+  elements, the simulator release, the world body's own geoms -- and each is now compared (5d528da); all four
+  branches are declared proven (cbc0931); a kinematics axiom was declared on the way
   (AXM-mujoco-kinematics-by-chain, fa535c2). A teacher change for the unsettled tall bottles was measured and
   reverted (ae00b13, 903f63a; see LIBERO-Variations above).
 
