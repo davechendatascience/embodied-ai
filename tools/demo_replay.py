@@ -63,10 +63,14 @@ def replay_revision() -> str:
 
 
 def _write_fixtures(m, xml: str) -> None:
-    """Every fixed body attached to the world, at the pose the demonstration's model gives it."""
+    """The fixtures LIBERO's reset re-samples -- each a scene object's root body (<object>_main) fixed to the
+    world -- at the poses the demonstration's model gives them. Only those: a recorded model can describe the
+    rest of the scene in other body frames. libero_10 6's table is at the origin here and at (-0.25, 0.25),
+    turned 90 deg, in its demonstrations' models, with its region sites expressed in each frame; written from
+    the recorded model, the table carried our sites 0.6 m off and no demonstration met the predicate (0 of 50)."""
     for b in range(1, m.nbody):
         name = m.body(b).name
-        if int(m.body_parentid[b]) != 0 or int(m.body_jntnum[b]) != 0 or name.startswith(("robot", "mount")):
+        if int(m.body_parentid[b]) != 0 or int(m.body_jntnum[b]) != 0 or not name.endswith("_main"):
             continue
         tag = re.search(rf'<body[^>]*name="{re.escape(name)}"[^>]*>', xml)
         if tag is None:
