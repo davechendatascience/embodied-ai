@@ -10,7 +10,9 @@ Each worker holds its own copy of the model on the GPU and runs its share of the
 episode is executed twice, in two rounds of fresh worker processes, and its trial records whether the two agree
 in every observation, every action and the outcome (BRN-vla-reported-beside-a-blind-twin): a rate is evidence
 only if all did. From a randomized set (--starts), a trial records whether its episode was placed: its task admitted
-and its model matching the set's (BRN-random-starts-test-set); an episode not placed is reported, not scored. A
+and its model matching the set's (BRN-random-starts-test-set); an episode not placed is reported, not scored. It also
+records the set file's digest and the digest of the integration state at placement, which begins the episode's
+digest; two models are compared on a start only where both agree. A
 trial also records success, the
 steps taken, the model's queries and their latency, clipped steps, the servo's counted decode events and the
 peak GPU memory of its worker.
@@ -85,7 +87,7 @@ def _episode(pol: Policy, env, suite: str, e: int, start=None) -> dict:
     sv = env.servo
     ev0 = (sv.acc_limited, sv.scaled, sv.iter_cap, sv.reanchors)
     success, lat, queries, clipped = False, [], 0, 0
-    digest = hashlib.sha1()
+    digest = hashlib.sha1((env.placed_digest if start is not None else "").encode())
     while env.t < MAX_STEPS[suite] and not success:
         raw = env.raw                   # the observation the model receives, in the digest with the actions it chose
         for key in ("agentview_image", "robot0_eye_in_hand_image", "robot0_joint_pos", "robot0_gripper_qpos"):
@@ -103,7 +105,8 @@ def _episode(pol: Policy, env, suite: str, e: int, start=None) -> dict:
             if env.t >= MAX_STEPS[suite]:
                 break
     ev = [n - n0 for n, n0 in zip((sv.acc_limited, sv.scaled, sv.iter_cap, sv.reanchors), ev0, strict=True)]
-    return dict(**({} if start is None else {"placed": True}), success=success, steps=env.t, queries=queries,
+    return dict(**({} if start is None else {"placed": True, "placed_digest": env.placed_digest}), success=success,
+                steps=env.t, queries=queries,
                 digest=digest.hexdigest(),
                 latency_ms_median=round(1000 * float(np.median(lat)), 1), latency_ms_max=round(1000 * float(np.max(lat)), 1),
                 clipped_steps=clipped, acc_limited_steps=ev[0], scaled_steps=ev[1], iter_cap_steps=ev[2],
@@ -154,6 +157,8 @@ def _task(job: tuple) -> list[dict]:
         start = None if stored is None else (stored["states"][e], stored["fixtures"][e], stored["references"]["model_fingerprint"])
         m = _episode(pol, env, suite, e, start)
         m.update(gpu_peak_gib=round(torch.cuda.max_memory_allocated() / 2**30, 2))
+        placed = {} if start is None else {"placed_digest": m.pop("placed_digest", None),
+                                          "starts_digest": file_digest(starts_file)}
         rows.append({"metrics": m,
                      "conditions": {"task_suite": suite, "task": task, "init_index": e, "blind": cfg.blind},
                      "repro": {"task_suite": suite, "task": task, "init_index": e, "seed": seed * 100 + task,
@@ -164,7 +169,7 @@ def _task(job: tuple) -> list[dict]:
                                                             "image_px": cfg.image_px, "precision": "bfloat16",
                                                             "gripper": "positive score closes"}, sort_keys=True),
                                "checkpoint_digest": file_digest(ckpt),
-                               "checkpoint_is_training_end": ended_with == file_digest(ckpt)}})
+                               "checkpoint_is_training_end": ended_with == file_digest(ckpt), **placed}})
     from libero.libero import benchmark, get_libero_path
     spec = benchmark.get_benchmark_dict()[suite]().get_task(task)
     read = [os.path.join(get_libero_path("bddl_files"), spec.problem_folder, spec.bddl_file),

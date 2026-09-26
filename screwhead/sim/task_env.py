@@ -86,9 +86,10 @@ class TaskEnv(SimArm):
 
     def place_stored(self, state: np.ndarray, fixtures: dict, fingerprint: str | None = None) -> bool:
         """Start an episode from a stored start (BRN-random-starts-test-set): the stored fixture poses written, then
-        the stored state, then the forward pass, execution memory anchored there. False if the model then differs
-        from the stored fingerprint or fixture poses -- the episode is not to be scored."""
-        from .task_env_place import write_fixtures
+        the stored state, then the forward pass, execution memory anchored there; the integration state after the
+        forward pass is digested into placed_digest. False if the model then differs from the stored fingerprint or
+        fixture poses -- the episode is not to be scored."""
+        from .task_env_place import integration_digest, write_fixtures
         self.episode += 1
         self.init_index = -1
         self._reset_scene(0)
@@ -96,6 +97,7 @@ class TaskEnv(SimArm):
         write_fixtures(m, fixtures)
         self.env.set_init_state(np.asarray(state, float))
         self.env.sim.forward()
+        self.placed_digest = integration_digest(m, self.env.sim.data._data)
         self._anchor()
         self.servo.reset(np.asarray(self.observe()["robot0_joint_pos"]))
         if self.execution.posture_start:

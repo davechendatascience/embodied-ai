@@ -23,6 +23,18 @@ def write_fixtures(m, fixtures: dict) -> None:
         m.body_quat[b] = np.asarray(quat, float)
 
 
+def integration_digest(m, d) -> str:
+    """The digest of the simulator's integration state (mjSTATE_INTEGRATION: everything one step reads from the one
+    before, AXM-mujoco-integration-state) -- recorded at every placement of a stored start (BRN-random-starts-test-set)."""
+    import hashlib
+
+    import mujoco
+    spec = mujoco.mjtState.mjSTATE_INTEGRATION
+    s = np.empty(mujoco.mj_stateSize(m, spec))
+    mujoco.mj_getState(m, d, s, spec)
+    return hashlib.sha1(s.tobytes()).hexdigest()[:16]
+
+
 STEP_CHECK = (100, 500)           # physics steps after which a stepping reference is digested
 
 
