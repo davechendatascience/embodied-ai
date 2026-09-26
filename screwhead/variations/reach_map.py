@@ -142,8 +142,12 @@ def _digest_body(h, m, b: int) -> None:
             v0, nv = int(m.mesh_vertadr[k]), int(m.mesh_vertnum[k])
             f0, nf = int(m.mesh_faceadr[k]), int(m.mesh_facenum[k])
             _put(h, m.mesh_vert[v0:v0 + nv], m.mesh_face[f0:f0 + nf])
+    h.update(f"mocap {int(m.body_mocapid[b])}".encode())     # -1: posed by its chain, not by the state
     for j in np.nonzero(m.jnt_bodyid == b)[0]:
-        _put(h, m.jnt_type[j:j + 1], m.jnt_axis[j], m.jnt_pos[j], m.jnt_range[j])
+        a = int(m.jnt_qposadr[j])
+        width = 7 if int(m.jnt_type[j]) == 0 else 4 if int(m.jnt_type[j]) == 1 else 1
+        # the reference position (qpos0) too: a hinge or slide poses its child by its value less the reference
+        _put(h, m.jnt_type[j:j + 1], m.jnt_axis[j], m.jnt_pos[j], m.jnt_range[j], m.qpos0[a:a + width])
     if m.body(b).name.startswith(REFERENCE_PARTS):
         for k in np.nonzero(m.site_bodyid == b)[0]:
             h.update(m.site(int(k)).name.encode())
@@ -264,4 +268,6 @@ def compute(env, spec: MapSpec | None = None, log=print) -> ReachMap:
     roots = {m.body(int(m.body_parentid[b])).name for b in _reference_bodies(m)} - {m.body(b).name for b in _reference_bodies(m)}
     if roots != {"world"}:
         raise ValueError(f"the matched bodies hang from {sorted(roots)}, not the world alone")
+    if any(int(m.body_mocapid[b]) >= 0 for b in _reference_bodies(m)):
+        raise ValueError("a matched body is a mocap body: its pose is the state's, not its chain's")
     return ReachMap(spec=spec, origin=(float(origin[0]), float(origin[1])), inside=inside, reference=reference)
