@@ -51,6 +51,23 @@ The goal is at least 95% on every task within LIBERO's limits. What works and wh
 task by task and against LIBERO's own human demonstrations, is in
 [`docs/skill_teacher_task_notes.md`](docs/skill_teacher_task_notes.md).
 
+### Widened randomized starts: the push to 95% on every task
+
+Since 2026-09-26 the teacher is also scored away from LIBERO's 50 stored initial states
+(`tools/skill_eval.py --wide 1.5`, `CTR-teacher-wide`): every episode starts from a fresh layout LIBERO's own
+samplers draw inside the task file's regions, with the tool's start moved up to 15 cm across, 7.5 cm up or down,
+45 deg in yaw, 15 deg in tilt and the redundant joint 0.45 rad (1.5x the randomized test set's bounds); 600 steps
+(libero_10 800). Five episodes per task per round, each round on a seed never used before, so a fix tuned to one
+round's scenes earns nothing on the next. Done when three rounds in a row score every task 5/5.
+
+| round | seed | commit | spatial | object | goal | libero_10 | libero_90 | all | tasks 5/5 |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 2702 | a0d3a73 | 43/50 | 50/50 | 49/50 | 46/50 | 446/450 | 634/650 (97.5%) | 121/130 |
+
+Below 5/5 in round 1: libero_spatial 7 (0/5, blocked reaching the bowl on the stove), libero_spatial 4 (3/5,
+blocked reaching into the drawer), libero_10 1 and 9 (3/5), libero_goal 5, libero_90 3, 32, 36 and 55 (4/5).
+Half the failures (8 of 16) are one mechanism: the approach is blocked and the teacher does not recover.
+
 ## How the work is kept honest
 
 - `consistency.yaml` -- the design as axioms, definitions, lemmas and branches, verified by
@@ -83,6 +100,16 @@ of that workflow applied to one engineering problem.
 
 Features by date, newest first. Numbers are measured at the stated commit.
 
+- **2026-09-26** -- The Panda VLA paused; the teacher pushed to widened randomized starts. P0 (Qwen3-VL-2B on
+  LIBERO's demonstrations) stopped at step 5000, before any evaluation (docs/vla_comparisons.md). VLA-JEPA
+  (lerobot/VLA-JEPA-LIBERO) on libero_spatial: 476/500 from LIBERO's starts, 140/200 (tasks 0-3) from this
+  project's randomized set, 72% of its failures precision misses (the right bowl set down 3.1-5.8 cm from the
+  plate's centre, where every success ended within 3.0 cm). The comparison protocol is a checklist with measured
+  contracts (reproduction, placement, the checkpoint training ended with); pairs recorded from the teacher are
+  declared equivalent to LIBERO's for training (BRN-vla-teacher-pairs-as-demo-pairs, proven). The teacher at 1.5x
+  the randomized set's range: 450/475 on libero_spatial's other nine tasks, task 4 (the drawer) 50/164, as poor
+  with its own gripper as with the VLA's two-valued one (11 vs 10 of 30 paired starts). `skill_eval.py --wide`
+  (a0d3a73) runs every task from fresh LIBERO layouts with widened starts: round 1, 634/650, 121 tasks at 5/5.
 - **2026-09-26** -- Servo transfer, the teacher on other arms (docs/design_servo_transfer.md). Another arm
   now starts in the Panda's scene: its tool at the pose LIBERO's Panda was recorded at, the fixtures drawn
   from the Panda's random stream (2c371d4; before, robosuite's own start poses knocked objects on 42 of 160

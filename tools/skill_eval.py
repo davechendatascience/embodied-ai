@@ -428,7 +428,8 @@ def _write_trials(rows: list[dict], args, rev: str) -> None:
          "detail": dict(r.get("detail", {}), episode=r["episode"], steps=r["steps"], language=r["language"]),
          "repro": {"seed": args.seed * 100 + r["task"], "task": r["task"], "task_suite": args.suite,
                    "episode": r["episode"], "horizon": args.horizon, "init_index": r.get("init_index"),
-                   "teacher_revision": rev, **embodiment}} for r in rows]}, indent=1))
+                   "teacher_revision": rev, **embodiment, **({"wide": args.wide} if args.wide else {})}}
+        for r in rows]}, indent=1))
     written = json.loads(Path(args.trials).read_text())["trials"]
     leaked = [t for t in written if t["metrics"].get("refused") and "success" in t["metrics"]]
     assert not leaked, (f"{len(leaked)} refused trials carry a success metric; they would be "

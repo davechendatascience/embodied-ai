@@ -1134,6 +1134,19 @@ contracts:
     evaluable_by: [TST-teacher-reliability]
     sufficiency: {n_min: 100, max_ci_width: 0.25}
 
+  # The teacher push of 2026-09-26: every task from fresh LIBERO layouts (TaskEnv.reset_fresh) with the tool's
+  # start at 1.5x the randomized test set's bounds, five episodes per task per round, each round on a seed never
+  # used before. Done when three rounds in a row score every task 5/5 (README). A slice is a suite at one revision.
+  - id: CTR-teacher-wide
+    subject: CMP-skill-library
+    claim_type: capability
+    metrics:
+      - {id: success, unit: bool}
+    acceptance: {rule: "success == true", target_rate: 0.95}
+    compatibility_key: [task_suite, teacher_revision, wide]
+    evaluable_by: [TST-teacher-wide]
+    sufficiency: {n_min: 50, max_ci_width: 0.15}
+
   # The first gate of the Panda VLA (docs/design_VLA_qwen.md): a demonstration's recorded motion, replayed open
   # loop through the VLA's execution path as the twists it is labelled with, meets LIBERO's predicate -- how
   # faithfully the evaluation's decode executes what the policy is taught. The trials before 2026-09-26 16:40 are
@@ -1722,6 +1735,16 @@ tests:
     metrics: [success, refused, release_gap_mm, drop_count]
     capture: [task, task_suite, teacher_revision, mechanism]
     cost: 80.0
+    timeout_s: 10800
+
+  # One round of the teacher push: all 130 tasks, five episodes each, on a seed given per round ($SEED, never reused)
+  - id: TST-teacher-wide
+    layer: e2e
+    targets: [CMP-skill-library]
+    run: mkdir -p $OUT && for S in libero_spatial libero_object libero_goal libero_10 libero_90; do H=600; [ $S = libero_10 ] && H=800; T=""; [ $S = libero_90 ] && T="--tasks $(seq -s ' ' 0 89)"; HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/skill_eval.py --suite $S $T --episodes 5 --wide 1.5 --seed $SEED --horizon $H --cpus 5,6,7,8,9,15,16,17 --trials $OUT/$S.trials.json; done
+    metrics: [success, refused]
+    capture: [task, task_suite, teacher_revision, wide, mechanism]
+    cost: 30.0
     timeout_s: 10800
 
   # Every demonstration of the four suites' 40 tasks, one trials file per suite under $OUT
