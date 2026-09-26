@@ -559,7 +559,9 @@ definitions:
       release (17, in 9 episodes). Each rule was forced by a case: rims pinched as deep as the palm
       touch the fingers above the pads (the closing volume runs to the palm); the plate in goal 5 is
       pushed (pushed); a body wedged between the Jaco's fingers pressed back along the approach for
-      733 steps (the gripping normal); two closed fingers touch (the gripper exception).
+      733 steps (the gripping normal); two closed fingers touch (the gripper exception); the Panda
+      closes a drawer by pushing it with its hand, while the Kinova3's hand pinned itself on the
+      drawer above the one it drove (the jointed body at the tool point).
 
   - id: DEF-reachable-pose
     term: Reachable pose
