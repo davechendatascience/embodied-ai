@@ -4431,70 +4431,73 @@ branches:
       has been trained; those models, each the one its training procedure ended with, are the comparison's
       models; a model trained after any model of the comparison has been evaluated, or any of the fixed
       items changed after that comparison's results were seen, starts a new comparison with new training
-      seeds, and the earlier one is still reported. Every run records its code revision, its environment's
-      setup-script revision and every installed package and its version, the digest of the data files it
-      read (for training, the demonstrations its pairs are made from; for evaluation, the task and
-      initial-state files), its configuration as values -- for training: device, numeric precision, batch
-      composition and every optimisation setting; for evaluation: device, numeric precision, rendering
-      settings, batch composition and every inference setting of the policy (how an output is turned into
-      an action, how many actions are executed per query) -- its per-run inputs (the training or
-      evaluation seed, the sighted or blind switch), and, for an evaluation, the digest of the checkpoint
-      it loaded, which must equal the digest its training run recorded for the model it ended with; every
-      run's record is kept, a superseded run's included, and the order of runs is the order in which their
-      records were written; within one comparison every training run has the same record as every other
-      training run, and every evaluation run the same as every other evaluation run, except in the per-run
-      inputs and the checkpoint digest. The measure counts as evidence only through its signed margin: the
-      sighted models' mean over the named training seeds minus the blind models' mean over the same seeds,
-      which counts only when it is positive and exceeds twice the larger of the two models' sample
-      standard deviations across those seeds (divided by n - 1), a standard deviation below one episode's
-      share of the suite (one over its number of episodes) being taken as that share -- a difference not
-      exceeding that is what this claim calls within training-seed spread. Success rates are measured by
-      LIBERO's protocol -- each task's initial states once each, the suite's step limit, LIBERO's
-      predicate on the reached state (AXM-libero-scores-final-state) -- through the VLA's decode, the same
-      for every model (BRN-vla-decodes-twists-exactly), with numpy's global generator seeded from (seed,
-      initial state) immediately before every reset and nothing drawing from it between the seeding and
-      the reset, so the fixture poses of an episode are the same for both models
-      (LMA-seed-fixtures-per-init-state). Every episode is executed twice, in two separate evaluation
-      processes started at different times, and the two executions are compared at every step in the
-      observation the model received (both images and the proprioception) and the action it chose, and in
-      the outcome, the comparison only reading them; a success rate is evidence only if every episode
-      completed in both executions and its two executions agree in all of these
-      (AXM-reproducible-measurement), and a pair of runs with any episode that did not reports that as a
-      failure of the measurement, not a rate (AXM-instruments-do-not-decide). Consequently no report
-      credits vision for what the twin also achieves, for a difference within training-seed spread, for a
-      blind twin that does better, for a difference between the runs of a comparison in code, installed
-      software, data read or configuration -- precision and inference settings included -- or for a
-      checkpoint other than the one training ended with, from runs whose episodes did not each complete
-      and reproduce across processes, through a measure, seed, model, procedure, configuration or
-      checkpoint chosen or trained after that comparison's results were seen, or while leaving out a
-      comparison that did not credit. Not claimed: anything about runs made outside the single-operator
-      lab; that training is deterministic per seed; that the twin fails; that the margin measures vision
-      alone rather than any difference the zeroed images make to training; that inference or rendering
-      reproduces (each pair of runs measures it, episode by episode and step by step; the twin's zeroed
-      images leave only the sighted runs testing the renderer); that the two models' episodes start from
-      identical simulator states beyond the fixture poses; that the decision rule's false-credit rate or
-      power has any particular value, or that the ranges of the two models' per-seed values cannot overlap
-      when the rule credits a margin; or anything about initial states other than the protocol's.
+      seeds, and the earlier one is still reported. Every run records its code revision and the digest of
+      every source file it imported, its environment's setup-script revision and every installed package
+      and its version, its process environment's variables, the digest of every data file it read other
+      than the checkpoint it evaluates (the demonstrations and any file derived from anything, the
+      backbone's files, task and initial-state files, sets of starts), its configuration as values -- for
+      training: device, numeric precision, batch composition and every optimisation setting; for
+      evaluation: device, numeric precision, rendering settings, batch composition and every inference
+      setting of the policy (how an output is turned into an action, how many actions are executed per
+      query) -- its per-run inputs (the training or evaluation seed, the sighted or blind switch), and,
+      for an evaluation, the digest of the checkpoint it loaded, which must equal the digest its training
+      run recorded for the model it ended with; every run's record is kept, a superseded run's included,
+      and the order of runs is the order in which their records were written; within one comparison every
+      training run has the same record as every other training run, and every evaluation run the same as
+      every other evaluation run, except in the per-run inputs and the checkpoint digest. The measure
+      counts as evidence only through its signed margin: the sighted models' mean over the named training
+      seeds minus the blind models' mean over the same seeds, which counts only when it is positive and
+      exceeds twice the larger of the two models' sample standard deviations across those seeds (divided
+      by n - 1), a standard deviation below one episode's share of the suite (one over its number of
+      episodes) being taken as that share -- a difference not exceeding that is what this claim calls
+      within training-seed spread. Success rates are measured by LIBERO's protocol -- each task's initial
+      states once each, the suite's step limit, LIBERO's predicate on the reached state
+      (AXM-libero-scores-final-state) -- through the VLA's decode, the same for every model
+      (BRN-vla-decodes-twists-exactly), with numpy's global generator seeded from (seed, initial state)
+      immediately before every reset and nothing drawing from it between the seeding and the reset, so the
+      fixture poses of an episode are the same for both models (LMA-seed-fixtures-per-init-state). Every
+      episode is executed twice, in two separate evaluation processes started at different times, and the
+      two executions are compared at every step in the observation the model received (both images and the
+      proprioception) and the action it chose, and in the outcome, the comparison only reading them; a
+      success rate is evidence only if every episode completed in both executions and its two executions
+      agree in all of these (AXM-reproducible-measurement), and a pair of runs with any episode that did
+      not reports that as a failure of the measurement, not a rate (AXM-instruments-do-not-decide).
+      Consequently no report credits vision for what the twin also achieves, for a difference within
+      training-seed spread, for a blind twin that does better, for a difference between the runs of a
+      comparison in code or source imported, installed software, environment variables, data read or
+      configuration -- precision and inference settings included -- or for a checkpoint other than the one
+      training ended with, from runs whose episodes did not each complete and reproduce across processes,
+      through a measure, seed, model, procedure, configuration or checkpoint chosen or trained after that
+      comparison's results were seen, or while leaving out a comparison that did not credit. Not claimed:
+      anything about runs made outside the single-operator lab; that training is deterministic per seed;
+      that the twin fails; that the margin measures vision alone rather than any difference the zeroed
+      images make to training; that inference or rendering reproduces (each pair of runs measures it,
+      episode by episode and step by step; the twin's zeroed images leave only the sighted runs testing
+      the renderer); that the two models' episodes start from identical simulator states beyond the
+      fixture poses; that the decision rule's false-credit rate or power has any particular value, or that
+      the ranges of the two models' per-seed values cannot overlap when the rule credits a margin; or
+      anything about initial states other than the protocol's.
     premises: [DEF-single-operator-lab, AXM-instruments-do-not-decide, AXM-libero-scores-final-state, AXM-reproducible-measurement, LMA-seed-fixtures-per-init-state, BRN-vla-decodes-twists-exactly]
     derivation_rule: >-
       Trimmed under DEF-single-operator-lab (2026-09-26, the user's call on theory bloat): the record
-      keeps what mistakes need -- code revision, the setup script's revision and the installed packages,
-      configuration values, per-run inputs, the checkpoint's digest matched to its training run's -- and
-      drops what only tampering needed (digests of every imported source and mapped library, environment
-      variables; the code still records them). The data files' digest was dropped too and restored after
-      TRL-1255: two worktrees at one commit with untracked pair caches from before and after a label
-      rebuild, the blind runs launched from the stale one by mistake, pass every other check and credit a
-      difference in training data as vision. Everything that caught a real problem stays: every episode
-      executed twice in separate processes and compared step by step (multisampled renders of a
-      bit-identical state differed by one level on 2 of 16384 wrist pixels and episodes diverged; without
-      multisampling every episode reproduced across two rounds of fresh processes), one model per seed and
-      condition trained before any evaluation (TRL-1249: a seed retrained after its results flipped a
-      non-credit into a credit), the signed margin over at least three seeds, the measure and all fixed
-      items named in advance, every comparison reported. Proven before the trim as TRL-1252..1254. With
-      three seeds and equal spread the rule credits a null difference about 2.1% of the time; power is to
-      be simulated against the measured seed spread before any margin is reported. Evidence:
-      CTR-vla-random-set-success and CTR-vla-libero-success (the measures on either set of starts),
-      CTR-vla-episodes-reproduce.
+      keeps what mistakes can change -- code revision and imported sources, the setup script's revision
+      and the installed packages, environment variables, every data file read, configuration values,
+      per-run inputs, the checkpoint's digest matched to its training run's -- and no longer requires the
+      digests of mapped shared libraries, which only a library replaced outside the setup script could
+      change (the code still records them). Two narrower trims were refuted: dropping the data files
+      (TRL-1255: a blind run launched from a worktree with a stale pair cache) and digesting only the
+      demonstrations rather than every file read (TRL-1261: a stale derived pair file from an older
+      labelling); the second pass also named untracked source in a worktree, hence the imported sources.
+      Everything that caught a real problem stays: every episode executed twice in separate processes and
+      compared step by step (multisampled renders of a bit-identical state differed by one level on 2 of
+      16384 wrist pixels and episodes diverged; without multisampling every episode reproduced across two
+      rounds of fresh processes), one model per seed and condition trained before any evaluation
+      (TRL-1249: a seed retrained after its results flipped a non-credit into a credit), the signed margin
+      over at least three seeds, the measure and all fixed items named in advance, every comparison
+      reported. Proven before the trim as TRL-1252..1254. With three seeds and equal spread the rule
+      credits a null difference about 2.1% of the time; power is to be simulated against the measured seed
+      spread before any margin is reported. Evidence: CTR-vla-random-set-success and
+      CTR-vla-libero-success (the measures on either set of starts), CTR-vla-episodes-reproduce.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 policies:
