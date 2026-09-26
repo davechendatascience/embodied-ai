@@ -144,6 +144,26 @@ axioms:
       before wrote the same fixture poses exactly, on the Panda and the UR5e, in 16 tasks over the
       four suites.
 
+  - id: AXM-servo-pins-when-blocked
+    domain: physics
+    statement: >-
+      Call the arm pinned at a step when the servo's joint reference leads the measured joints by at
+      least 0.095 rad on some joint (its lead cap is 0.1 rad) while every arm joint moves slower than
+      0.05 rad/s. Over the Panda teacher's 40 matrix episodes (libero_spatial, object, goal and 10,
+      init 0, all successful) the arm is pinned on 5 of 7,160 steps, in one run of 5. Over the
+      corrected cross-embodiment matrix (UR5e, IIWA, Kinova3, Jaco, the same 40 tasks each) no
+      successful episode is pinned at all; the failures are pinned on 3,771 steps, in runs of up to
+      733, and at 3,672 of them some robot contact is unintended in DEF-intended-contact's sense. A
+      pinned arm stays pinned while its command keeps pressing the same way.
+    rationale: >-
+      Measured 2026-09-26 at 2c371d4 with screwhead/sim/intent.py:
+      runs/matrix_{UR5e,IIWA,Kinova3,Jaco}. What pins the arm, per failure: the UR5e's forearm on the
+      cabinet base (goal 5) and on the wine rack (libero_10 3), and against its own gripper (goal 0);
+      the Kinova3's hand on the cabinet's other drawer (libero_10 3), its fingers on the moka pot
+      (libero_10 2), its hand in the microwave (libero_10 9); the Jaco's fingertips on the moka pot
+      (libero_10 2) and its finger against its second link (libero_10 9). The IIWA's failures are
+      frozen at a joint limit or loop, not pinned.
+
   - id: AXM-libero-soft-reset-state
     domain: environment
     statement: >-
@@ -511,6 +531,35 @@ axioms:
       substep observation lag.
 
 definitions:
+  - id: DEF-intended-contact
+    term: Intended contact
+    meaning: >-
+      At a step, a contact between a geom of the robot's and a geom of a body B that is not the
+      robot's is intended when, read from that step's state and the model alone, one of these holds:
+      (held) both finger groups touch B or the object B belongs to; (jaws) a finger touches B at a
+      point inside the jaws' closing volume -- between the two pads' inner faces along the jaw line,
+      within the fingers' width across it, and from the palm's face to the finger tips along the
+      approach, each widened by 1 mm, more than a contact point lies off the surfaces in contact --
+      with the contact's normal nearer the jaw line than the approach; (pushed) a finger touches B and
+      B's category is moved by pushing in the affordance table; (joint) a finger touches B and B moves
+      on a slide or hinge joint of its own; (support) a finger touches B while both finger groups
+      touch another body that touches B; (inside) the tool point lies inside a region site of B's
+      object. Every other contact between the robot and anything else is unintended, and so is every
+      contact between two of the robot's bodies more than one joint apart in the kinematic tree,
+      unless both are the gripper's. The rules read no policy's intent, so a teacher and a student in
+      the same state are judged alike. This names what the per-intent rules allow; it does not say an
+      intended contact is harmless or an unintended one harmful.
+    rationale: >-
+      The user's decision of 2026-09-26: exemptions are per-intent state rules, not one finger zone,
+      so a fingertip striking a wall stays guarded. Calibrated on the Panda teacher's 40 matrix
+      episodes (all successful): of 12,806 contact-steps, 81 are unintended -- a cream-cheese box
+      shoved along with the plate in libero_goal 5 (42), the hand brushing the plate beside the
+      cabinet in libero_goal 0 (22), and transients of 1 to 4 steps at the onset of a squeeze or the
+      release (17, in 9 episodes). Each rule was forced by a case: rims pinched as deep as the palm
+      touch the fingers above the pads (the closing volume runs to the palm); the plate in goal 5 is
+      pushed (pushed); a body wedged between the Jaco's fingers pressed back along the approach for
+      733 steps (the gripping normal); two closed fingers touch (the gripper exception).
+
   - id: DEF-reachable-pose
     term: Reachable pose
     meaning: >-

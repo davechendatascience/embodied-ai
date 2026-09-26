@@ -229,6 +229,53 @@ the horizon. Saturation in free motion does occur (the Jaco's wrist, joint 6, on
 the approach phases at 0.8-0.9 rad/s), but those phases finish; what ends the failed episodes is the servo pressing
 on something that does not give.
 
+Nor do the other arms follow the commanded path worse. In free motion (successful episodes, commanded speed over
+5 mm/s), the tool's lead on the servo's pose reference and its deviation across the commanded direction:
+
+| arm | lead p50 | lead p95 | lead p99 | lateral p95 | lateral p99 |
+|---|---|---|---|---|---|
+| Panda | 7.8 mm | 15.9 | 19.0 | 0.7 | 1.7 |
+| UR5e | 7.8 | 16.0 | 18.9 | 0.6 | 1.3 |
+| iiwa | 7.9 | 16.3 | 18.9 | 1.0 | 4.9 |
+| Kinova3 | 7.9 | 17.0 | 34.2 | 1.9 | 7.8 |
+| Jaco | 7.9 | 15.0 | 18.5 | 0.8 | 3.6 |
+
+The tool goes where it is sent on every arm, Kinova3's tail aside. What differs is where the rest of the arm goes: a
+forearm, a wrist link or a fingertip ends up in a body the Panda's configuration never came near, on a motion the
+screen checked only at its probed poses, or not at all (articulate, push, carry). The pinned contacts are all ones no
+intent of the teacher's calls for: a fingertip on top of the moka pot rather than across its handle, a forearm on
+the cabinet base or the wine rack, fingers on the cabinet's frame rather than its drawer, the arm on itself.
+
+### Theory direction (2026-09-26)
+
+The user's exemption decision (per-intent state rules) turns out to be the missing concept for all of it. One
+definition of *intended contact*, computed from the state, serves three designs:
+
+1. **The reach screen grades unintended contact along the motion**, not only at the probes, and not with the target
+   exempted wholesale: a fingertip on the target outside the jaws counts. This is prevention, and it is Markov.
+2. **The clearance servo** (`BRN-servo-keeps-clearance`) exempts exactly the intended contacts.
+3. **A blocked motion is recognised and ends**: pinned at the lead cap for longer than the Panda ever is (10
+   periods, twice its longest run), by an unintended contact, the skill stops and records a refusal with its cause
+   instead of pressing to the horizon. The pinned count is execution-layer state, like the servo's reference.
+
+Before any of it is declared, the definition is measured against the Panda: every contact the Panda teacher makes
+in its successful episodes must classify as intended, or the rule is wrong (or the Panda brushes something the
+screen tolerates today, which is then named).
+
+**Declared: `DEF-intended-contact`** (screwhead/sim/intent.py), after four rounds against the census. Each rule was
+forced by a case: rims pinched as deep as the palm touch the fingers above the pads, so the closing volume runs from
+the palm's face to the finger tips; the plate in libero_goal 5 is pushed, so a finger on a push-moved category is
+intended; a moka pot wedged between the Jaco's fingers pressed back along the approach for 733 steps, so a jaws
+contact must grip (its normal nearer the jaw line than the approach); two closed fingers touch, so pairs within the
+gripper are not self-contact. On the Panda's 40 episodes, 81 of 12,806 contact-steps are unintended: a cream-cheese
+box shoved along with the plate in goal 5 (42), the hand brushing the plate beside the cabinet in goal 0 (22), and
+transients of 1-4 steps at a squeeze's onset or a release (17, in 9 episodes).
+
+**Declared: `AXM-servo-pins-when-blocked`.** On all five arms no successful episode is pinned at all; the other arms'
+failures are pinned on 3,771 steps, and at 3,672 of them (97%) some robot contact is unintended. Blocked progress is
+therefore observable from the state, and its cause is named by the same rules the screen and the clearance servo
+will use.
+
 ## 5. What has to hold (for the ledger)
 
 Proposed as branches in `consistency.yaml`, each verified before it is built:
