@@ -116,6 +116,12 @@ class Execution:
     #                                   to a far rim (libero_spatial 3) tilted the tool 18.6 deg off its
     #                                   reference, the wrist went out to keep the fingertips on target,
     #                                   the elbow ran into its stop and the arm stayed there 550 steps
+    # The Panda VLA's decode (BRN-vla-decodes-twists-exactly); off for the skill teacher, certified without them
+    servo_tol: tuple[float, float] | None = None   # (m, rad): iterate the servo's IK to this, servo_iters at most
+    posture_start: bool = False       # pull the servo's null space toward the joint posture the episode starts in
+    observe_end: bool = False         # return a read forced after each step's physics: env.step's observation is
+    #                                   stale after a forced read (AXM-robosuite-step-observes-the-period-end), and
+    #                                   execute() forces one at its start
 
 
 class SimArm:
@@ -168,6 +174,7 @@ class SimArm:
         self.servo.max_lin_acc, self.servo.max_ang_acc = ex.max_lin_acc, ex.max_ang_acc
         self.servo.max_lin_acc_holding = ex.max_lin_acc_holding
         self.servo.scale_lead = ex.scale_lead
+        self.servo.tol = ex.servo_tol
         self.joint_ramp = ex.joint_ramp
         self.lean, self.anchoring = ex.lean, ex.anchor
         self.t = 0
@@ -252,6 +259,8 @@ class SimArm:
             raw, done = self.observe(), self.success()
         else:
             raw, _, done, _ = self.env.step(cmd)
+            if self.execution.observe_end:
+                raw = self.observe()
         self.t += 1
         self.raw = raw
         if getattr(self, "diag", None) is not None:

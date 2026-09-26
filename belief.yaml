@@ -206,9 +206,10 @@ components:
       - scripts/token_vla.sh                # the student pipeline end to end
       - scripts/heldout_task.sh
 
-  # The Panda VLA the teacher push handed over to (docs/design_VLA_qwen.md). Planned: its designs are
-  # staged in consistency-belief (BRN-vla-trains-on-demos-replayed-through-the-servo,
-  # BRN-vla-reported-beside-a-blind-twin); code, contracts and tests land with the first of them built.
+  # The Panda VLA the teacher push handed over to (docs/design_VLA_qwen.md): LIBERO's stored demonstrations as
+  # they are, labelled with the recorded motion (BRN-vla-learns-the-recorded-motion), executed by an exact twist
+  # decode (BRN-vla-decodes-twists-exactly) through one interface (BRN-vla-sees-and-acts-as-trained), reported
+  # beside a blind twin (BRN-vla-reported-beside-a-blind-twin).
   - id: CMP-vla-student
     purpose: >-
       The Panda VLA -- Qwen3-VL-2B-Instruct reads both cameras and the instruction; an action expert
@@ -230,7 +231,11 @@ components:
       predicate accepts it; a blind twin beside every number and several training seeds; flow
       matching only if mode averaging is measured to hurt; latency and VRAM reported with accuracy
     code:
-      - tools/demo_replay.py               # the demonstrations through the VLA's execution path (the training pairs)
+      - screwhead/student/libero_data.py   # the stored demonstrations as pairs, and the one input preprocessing
+      - screwhead/student/qwen_vla.py      # Qwen3-VL-2B with LoRA, action queries, the VLA's execution
+      - tools/train_vla.py
+      - tools/eval_vla.py                  # LIBERO's protocol through the VLA's decode
+      - tools/demo_replay.py               # the recorded motion through the decode, open loop (the decode's gate)
   - id: CMP-twist-servo
     purpose: Execute a body twist on the simulator's joint-position controller
     inputs: [IFC-expert__ik]
@@ -1143,6 +1148,22 @@ contracts:
     evaluable_by: [TST-demo-replay]
     sufficiency: {n_min: 200, max_ci_width: 0.1}
 
+  # The Panda VLA on LIBERO's protocol: each task's initial states once, the suite's step limit, LIBERO's
+  # predicate, through the VLA's decode. The blind twin is the same measure with the camera images zeroed; a
+  # sighted rate is evidence of vision only through its margin over the twin's (BRN-vla-reported-beside-a-blind-twin).
+  - id: CTR-vla-libero-success
+    subject: CMP-vla-student
+    claim_type: capability
+    metrics:
+      - {id: success, unit: bool}
+    acceptance: {rule: "success == true", target_rate: 0.9}
+    conditions:
+      - {id: sighted, when: "blind == false"}
+      - {id: blind, when: "blind == true"}
+    compatibility_key: [task_suite, policy_revision, execution]
+    evaluable_by: [TST-vla-libero]
+    sufficiency: {n_min: 500, max_ci_width: 0.06}
+
   # The teacher on another arm with the Panda's gripper, started at the recorded Panda's tool pose in
   # the Panda's scene (CTR-other-arm-scene-as-panda). Tuning paused 2026-09-26 at 149 of 160 tasks
   # succeeding at init 0; this holds what it reached, per arm, not a bar it met.
@@ -1661,6 +1682,16 @@ tests:
     capture: [task_suite, task, demo, replay_revision, execution]
     cost: 20.0
     timeout_s: 7200
+
+  # The student checkpoint on libero_spatial's 500 test episodes (the blind twin: checkpoints/vla_student_blind.pt)
+  - id: TST-vla-libero
+    layer: e2e
+    targets: [CMP-vla-student]
+    run: HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/eval_vla.py --ckpt checkpoints/vla_student.pt --suite libero_spatial --trials $OUT
+    metrics: [success, steps, queries, latency_ms_median, gpu_peak_gib]
+    capture: [task_suite, task, init_index, policy_revision, execution, blind]
+    cost: 30.0
+    timeout_s: 10800
 
   # Four suites x ten tasks x initial states 0-4, per arm, one trials file per (arm, suite) under $OUT
   - id: TST-teacher-other-arms

@@ -26,6 +26,9 @@ from .sim_arm import Execution, SimArm
 
 __all__ = ["Execution", "StartNoise", "TaskEnv"]
 
+POSTURE_GAIN = 0.1     # the start-posture pull (Execution.posture_start): replayed demonstrations kept their joints within
+#                        0.18-0.29 rad of the recorded ones with it, against 0.28-0.44 rad with the pull to mid-range
+
 
 @dataclass(frozen=True)
 class StartNoise:
@@ -75,6 +78,8 @@ class TaskEnv(SimArm):
         if any(v > 0 for v in self.start.values()):
             self._randomize_start()
         self.servo.reset(np.asarray(self.observe()["robot0_joint_pos"]))
+        if self.execution.posture_start:
+            self.servo.posture, self.servo.posture_gain = self.servo.ref.copy(), POSTURE_GAIN
         self.t = 0
         self.raw = self.observe()
         return self.raw

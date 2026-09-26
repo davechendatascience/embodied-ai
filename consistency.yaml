@@ -4175,6 +4175,42 @@ branches:
       tasks), so only the UR5e declares a home family. evidence: CTR-other-arm-scene-as-panda.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-vla-learns-the-recorded-motion
+    subject: CMP-vla-student
+    claim_type: contract
+    statement: >-
+      Every training pair of the Panda VLA is taken from LIBERO's human demonstrations as they are stored;
+      nothing is re-simulated or re-rendered. The pair at stored step j is the observation stored at j --
+      both camera images and the proprioception -- which shows the recorded state j+1
+      (AXM-libero-demo-observations-follow-their-actions), and a label computed from the recorded states
+      alone: the constant body twist whose motion over one control period carries the tool pose of the
+      recorded state j+1 to the tool pose of the recorded state j+2 (the SE(3) logarithm of their relative
+      pose divided by the period, the tool poses being the forward kinematics of the recorded arm joints
+      through the Panda's chain, AXM-libero-demos-record-a-panda), divided componentwise by the action
+      range's bounds, with the gripper command the demonstration recorded at step j+1
+      (AXM-libero-demos-record-their-actions). A stored observation with no recorded state two steps after
+      it has no pair. Consequently each label is the displacement the demonstrator's arm made over the
+      control period that began in the state its observation shows, exact at the period's end -- the pose
+      it names is the forward kinematics of the next recorded state -- while it fixes neither the path the
+      tool took within the period nor, on the seven-joint arm, the joints it ended at; and nothing in a
+      pair depends on our simulator or execution path. Not claimed: that the evaluation's execution
+      reproduces a label's displacement (the decode is its own design); that the labels lie within the
+      action range; that a policy trained on these pairs succeeds or uses its images.
+    premises: [AXM-libero-demos-record-a-panda, AXM-libero-demos-record-their-actions, AXM-libero-demo-observations-follow-their-actions]
+    derivation_rule: >-
+      The user's call (2026-09-26): keep the labels pristine -- LIBERO's own data, no relabelling by
+      re-execution, no re-rendered dataset (94 GB of demonstrations already on disk; the rendered replays
+      would have added about 60 GB) -- and learn twists, which our own decode turns into joint motion.
+      LIBERO's stored actions are operational-space set-point offsets, not displacements: the arm moved
+      0.23x the commanded offset per step (median; p10 0.16, p90 0.28, 5 libero_spatial demonstrations),
+      and replayed open loop as displacements through our decode they failed 28 of 30 (tool 24-30 cm off
+      the path). The recorded motion is what the arm did: from recorded joint states j+1 and j+2 the
+      finite twist and back through converged inverse kinematics the pose agrees to 9.5e-11 mm (max over
+      469 steps), while the joints differ by up to 0.0136 rad in the seventh joint's null space. The
+      stored observation at j shows state j+1 exactly (4941 steps), which is why the label starts from
+      state j+1. Evidence: CTR-vla-libero-success.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:

@@ -11,7 +11,9 @@ uv pip install --python .venv-libero/bin/python \
     "robosuite==1.4.0" \
     "mujoco==3.8.1" \
     bddl h5py easydict "gym==0.25.2" cloudpickle termcolor matplotlib
-uv pip install --python .venv-libero/bin/python torch --index-url https://download.pytorch.org/whl/cu130
+uv pip install --python .venv-libero/bin/python torch "torchvision==0.29.0" --index-url https://download.pytorch.org/whl/cu130
+# the Panda VLA's backbone (Qwen3-VL-2B): transformers' Qwen image processor needs torchvision
+uv pip install --python .venv-libero/bin/python "transformers==5.16.1" "peft==0.20.0"
 uv pip install --python .venv-libero/bin/python -e third_party/LIBERO --no-deps
 
 # mujoco 3.8.1, NOT latest. On 3.12, robosuite 1.4.0's get_joint_qpos_addr

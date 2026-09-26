@@ -26,39 +26,46 @@ vision.
 
 ## Pipeline
 
-1. **Demonstrations through our execution path.** Each of LIBERO's human demonstrations (50 per task) is placed
-   from its own first recorded state, its fixture poses written from its model file (demo_survey.py: without them 37
-   of 50 libero_goal 9 demos fail LIBERO's predicate on replay). It is then re-executed through the servo: at each
-   control step the action is the twist that takes the servo's pose reference to the demonstration's next recorded
-   tool pose, with the demonstration's own gripper command (+1 close, -1 open; AXM-libero-demos-record-their-actions)
-   in the aperture channel. Not the recorded finger opening: while an object is held that opening is the object's
-   width, a target GripperServo would hold rather than squeeze. A replay that meets LIBERO's predicate enters the
-   training set as the replay's own observations and executed actions; one that does not is counted and left out
-   (BRN-vla-trains-on-demos-replayed-through-the-servo). First gate: the replay success rate per task.
+1. **Labels: LIBERO's demonstrations as they are stored** (BRN-vla-learns-the-recorded-motion; the user's call:
+   pristine labels, nothing re-simulated or re-rendered). The stored observation at step j shows the recorded state
+   j+1 exactly (AXM-libero-demo-observations-follow-their-actions); its label is the recorded motion from state j+1
+   to j+2 -- the constant body twist between the two tool poses over one control period, by forward kinematics only
+   (exact: applied back it lands on state j+2 within 1.8e-7 mm) -- and the gripper command recorded at j+1.
+   LIBERO's stored actions are not used for the arm: they are operational-space set-point offsets, and the arm moved
+   0.23x of each (median), so read as displacements they overshoot about 4x (28 of 30 open-loop replays failed).
 
-   Left to the implementation by the branch, each able to lower the replay rate unnoticed (verifier notes,
-   TRL-1180..1182): the recorded state at t is the one action t ran from; the replay's control period is one
-   demonstration step; the servo's reference is synced to the placed first state; the servo's pose reference and
-   the chain's forward kinematics use the same tool frame; the gripper keeps squeezing after the fingers stop
-   (GripperServo commands close for any target at the closed end); and whether pairs after a first brief success
-   are kept.
-2. **Model.** Qwen3-VL-2B reads the agent-view and wrist images and the instruction; a small action expert reads its
-   final hidden states and the tool state and predicts a chunk of the next H actions (twist and aperture). First
-   version: L1 regression on the chunk, vision tower frozen, LoRA on the language model; flow matching only if
-   regression's averaging of modes is measured to hurt.
-3. **Evaluation.** LIBERO's protocol (each task's 50 initial states once, the suite's horizon), through the same
-   servo; success per task, the blind control's success, and per-step latency and memory.
+   Measured and dropped on the way (2026-09-26): relabelling by re-executing the demonstrations through the servo
+   (it worked, 88-95% kept, but changes the labels and needs a 60 GB re-rendered dataset); keyposes extracted AWE-style
+   (2 mm keyposes matched the dense motion, 735 vs 733 of 800 replays, 4.2x fewer decisions, but action chunking
+   gives the same query rate); a control-barrier safety filter on 5 mm keyposes (held the hand 5 mm off fixtures the
+   humans pass closer, 144 vs 149 of 160) and viability-refined keyposes (+57% keyposes, no gain).
+2. **Decode** (BRN-vla-decodes-twists-exactly): the twist servo on the joint-position controller, its IK iterated to
+   1e-6 mm, the null space pulled to the start posture, the simulator's own gripper command, the observation read
+   after each step's physics (a read forced at the start of a step left robosuite's next observation up to 0.145 rad
+   stale; AXM-robosuite-step-observes-the-period-end). The recorded motion replayed open loop through it succeeds on
+   733 of 800 demonstrations (91.6%, four suites): the ceiling of executing the humans' motion with a stiff joint
+   controller in place of their compliant one.
+3. **Model** (screwhead/student/qwen_vla.py): Qwen3-VL-2B reads both cameras (128 px, as stored and as rendered;
+   the processor enlarges them to 256) and the instruction, then a proprioception token (the tool pose and finger
+   opening) and H = 8 action queries whose final hidden states give a chunk of normalized twists (L1) and gripper
+   logits; the vision tower frozen, LoRA r = 32 on the language model (41 M trainable parameters). The first k = 4
+   actions of a chunk are executed per query. Normalization constants, H and k are stored with the weights
+   (BRN-vla-sees-and-acts-as-trained). Measured: 90 ms per training sample at batch 16 (16 GiB); 59.5 ms per query
+   at evaluation, 4.2 GiB per worker.
+4. **Evaluation** (tools/eval_vla.py): LIBERO's protocol -- each task's 50 initial states once, the published step
+   limits (220 / 280 / 300 / 520) -- success per task, the blind twin's success, latency and memory.
 
 ## Gates, in order
 
-- The replay success rate is high enough that every task keeps demonstrations (target: most tasks at 45 of 50).
-- A small model overfits a handful of replays (the pipeline learns at all).
-- libero_spatial, with the blind control; then the other three suites; libero_90 last.
+- The pipeline learns: 5 demonstrations of one task, 400 steps: twist L1 0.75 -> 0.11, gripper 82% -> 99.7%; that
+  overfit checkpoint already succeeded on 3 of 4 of the task's test initial states (a plumbing check, not a result).
+- libero_spatial, with the blind twin; then the other three suites; libero_90 last.
 
 ## What has to hold (for the ledger)
 
-- The training pairs are what the execution path did: observations and actions of the replay through the servo,
-  kept only where LIBERO's predicate accepts the replay's final state.
-- The label at a step closes the loop on the servo's reference, so the replay follows the demonstration's tool path
-  without accumulating the twist limiter's lag.
-- The evaluation's initial states are none of the demonstrations' (to be measured, not assumed).
+- The pairs are LIBERO's stored observations with the recorded motion from the state each shows
+  (BRN-vla-learns-the-recorded-motion, proven).
+- The decode adds no kinematic error beyond counted events; the observation is read where the stored ones were
+  (BRN-vla-decodes-twists-exactly).
+- Training and evaluation share one interface (BRN-vla-sees-and-acts-as-trained).
+- Every number offered as evidence of vision is a margin over the blind twin (BRN-vla-reported-beside-a-blind-twin).

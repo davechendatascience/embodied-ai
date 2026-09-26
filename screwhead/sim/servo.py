@@ -72,6 +72,12 @@ class TwistServo:
         self._span = np.maximum(lim[:, 1] - lim[:, 0], 1e-6)
         self.limit_clamps = 0
         self.scale_lead = False     # scale the whole lead to max_lag rather than clip per joint
+        # the IK iterates until the joint reference's pose is within (m, rad) of the pose reference, at most
+        # `iters` times; None: exactly `iters` times (BRN-vla-decodes-twists-exactly)
+        self.tol: tuple[float, float] | None = None
+        self.acc_limited = 0        # steps at which the acceleration bound changed the twist
+        self.scaled = 0             # steps at which the lead limit scaled the joint reference
+        self.iter_cap = 0           # steps whose IK stopped at the cap outside the tolerance
 
     def grip(self, asked_closed: bool, pinched: bool) -> None:
         """Holding while the jaws are commanded closed and both fingers touched one body within the
@@ -91,6 +97,7 @@ class TwistServo:
     def _limit(self, V: np.ndarray) -> np.ndarray:
         """V moved toward the request by at most the acceleration bounds times dt."""
         dV = V - self.V_prev
+        limited = False
         lin = (self.max_lin_acc_holding if self.holding and self.max_lin_acc_holding is not None
                else self.max_lin_acc)
         for sl, a_max in ((slice(0, 3), self.max_ang_acc), (slice(3, 6), lin)):
@@ -99,8 +106,13 @@ class TwistServo:
             n, cap = float(np.linalg.norm(dV[sl])), a_max * self.spec.dt
             if n > cap:
                 dV[sl] *= cap / n
+                limited = True
+        self.acc_limited += int(limited)
         self.V_prev = self.V_prev + dV
         return self.V_prev.copy()
+
+    def _within(self, e: np.ndarray) -> bool:
+        return float(np.linalg.norm(e[3:])) <= self.tol[0] and float(np.linalg.norm(e[:3])) <= self.tol[1]
 
     def command(self, theta_measured: np.ndarray, twist: np.ndarray) -> np.ndarray:
         """twist: body twist RATE (rad/s, m/s), moment first. Returns normalised joint action.
@@ -120,6 +132,8 @@ class TwistServo:
         for _ in range(self.iters):
             T, J = kin_np.fk_jac(self._np, th)
             e = kin_np.log_se3(kin_np.inverse(T) @ self.T_ref[None])         # body-frame pose error
+            if self.tol is not None and self._within(e[0]):
+                break
             secondary = None
             if self.limit_gain > 0:
                 # The 7th joint is not specified by a 6-D twist. Spend it staying off the
@@ -136,6 +150,7 @@ class TwistServo:
             self.limit_clamps += int(bool(clamped.any()))
         T = kin_np.fk(self._np, th)
         e = kin_np.log_se3(kin_np.inverse(T) @ self.T_ref[None])[0]
+        self.iter_cap += int(self.tol is not None and not self._within(e))
         lead = th[0] - meas
         widest = float(np.max(np.abs(lead)))
         if self.scale_lead and widest > self.max_lag:
@@ -144,6 +159,7 @@ class TwistServo:
             # the pose that reference reaches, so it cannot wind up past a blocked arm (clipped,
             # it ran 71 mm ahead in a free carry and 362 mm into a press)
             self.ref = meas + lead * (self.max_lag / widest)
+            self.scaled += 1
             self.T_ref = kin_np.fk(self._np, self.ref)[0]
             self.reanchors += int(float(np.linalg.norm(e)) > self.max_pose_err)
             return np.clip((self.ref - meas) / self.jas, -1.0, 1.0)
