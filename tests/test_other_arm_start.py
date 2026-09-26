@@ -57,3 +57,24 @@ def test_ur5e_draws_the_pandas_fixtures():
     got = _fixtures(env)
     env.close()
     assert got.shape == ref.shape and np.array_equal(got, ref)
+
+
+def test_ur5e_starts_in_its_home_family():
+    """BRN-other-arm-starts-in-its-home-family: the UR5e starts with its shoulder panned to the far side of the base
+    (the family calibrated on libero_90), its tool still at the recorded pose; an arm without a declared home family
+    starts as before."""
+    from screwhead.geometry.kin_np import NpChain, fk
+    from screwhead.sim.libero_env import panda_tool_pose
+    from screwhead.sim.sim_arm import HOME_FAMILY, ik_family
+    env = _reset("UR5e", "libero_goal", 0)
+    q = np.asarray(env.raw["robot0_joint_pos"], float)
+    tool = fk(NpChain.of(env.chain), q[None])[0][:3, 3]
+    recorded = panda_tool_pose(env.init_states[0])[:3, 3]
+    reached = env.home_family_reached
+    env.close()
+    assert reached is True
+    assert ik_family(q) == HOME_FAMILY[("UR5e", "PandaGripper")]
+    assert float(np.linalg.norm(tool - recorded)) < 1e-3
+    other = _reset("Kinova3", "libero_goal", 0)
+    assert other.home_family_reached is None
+    other.close()

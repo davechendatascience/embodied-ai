@@ -37,6 +37,45 @@ SETTLE_ROUNDS = 10            # at most this many chunks
 
 
 ROBOT_MODEL = {"Panda": "panda", "UR5e": "ur5e", "IIWA": "iiwa", "Jaco": "jaco", "Kinova3": "kinova3"}
+# BRN-other-arm-starts-in-its-home-family: the IK family an arm with a gripper starts in, where it is not the family of
+# the model's own start joints. Measured on libero_90 at initial state 0 (episode seed 555 * 100 + task, code 2de75e7,
+# the Panda gripper), outside the four suites the arms' transfer is reported on: the UR5e with its shoulder panned to
+# the far side of the base succeeds on 90 of 90 tasks against 85 in its start family; the Kinova3, the IIWA and the
+# Jaco keep theirs (85, 88, 85 -- no other family scored higher).
+HOME_FAMILY = {("UR5e", "PandaGripper"): (0, 0, 1)}
+
+
+def ik_family(q) -> tuple[int, int, int]:
+    """The family bits of a configuration, from sines and cosines so whole turns do not change them: on the six-joint
+    UR5e the shoulder's side (cos q1 > 0), the elbow (sin q3 > 0) and the wrist (sin q5 > 0); on a seven-joint arm
+    sin q2, sin q4, sin q6 > 0."""
+    q = np.asarray(q, float)
+    if len(q) == 6:
+        return int(np.cos(q[0]) > 0), int(np.sin(q[2]) > 0), int(np.sin(q[4]) > 0)
+    return int(np.sin(q[1]) > 0), int(np.sin(q[3]) > 0), int(np.sin(q[5]) > 0)
+
+
+def mirrored_seed(q_s, family, lo, hi):
+    """The model's start joints mirrored on the joints that define the family wherever their bit disagrees with
+    `family`, or None where the mirror leaves the joint limits: a seven-joint arm's joint negated; on the UR5e the
+    third or fifth negated and the first turned half a turn, up if that stays within its limits, else down."""
+    q = np.asarray(q_s, float).copy()
+    have = ik_family(q)
+    if len(q) == 6:
+        if have[0] != family[0]:
+            if q[0] + np.pi <= hi[0]:
+                q[0] += np.pi
+            elif q[0] - np.pi >= lo[0]:
+                q[0] -= np.pi
+            else:
+                return None
+        pairs = ((1, 2), (2, 4))
+    else:
+        pairs = ((0, 1), (1, 3), (2, 5))
+    for bit, joint in pairs:
+        if have[bit] != family[bit]:
+            q[joint] = -q[joint]
+    return None if np.any(q < lo) or np.any(q > hi) else q
 #               robosuite's arm name -> its model in screwhead/assets/robots
 
 
@@ -335,6 +374,8 @@ class SimArm:
         seeds = np.vstack([np.asarray(self.robot.init_qpos, float),
                            rng.uniform(np.maximum(lo, -np.pi), np.minimum(hi, np.pi), size=(draws, c.n))])
         target = panda_tool_pose(recorded)
+        if self._start_in_home_family(c, target, lo, hi):
+            return
         res = solve_ik(c, np.repeat(target[None], len(seeds), 0), seeds, **IK)
         th = res["theta"]
         margin = np.minimum(th - lo, hi - th).min(1)
@@ -348,6 +389,38 @@ class SimArm:
         sim.forward()
         raise RuntimeError(f"{self.label}: no seed puts the {self.execution.robot} at the recorded tool pose of init {k} "
                            f"touching nothing ({int(ok.sum())} reachable of {len(seeds)})")
+
+    def _start_in_home_family(self, c, target, lo, hi) -> bool:
+        """BRN-other-arm-starts-in-its-home-family: where the arm and gripper have a declared home family other than
+        the start joints', place the one IK solution from the mirrored seed if it lies in that family, is reachable
+        (DEF-reachable-pose) and penetrates nothing. Records in `home_family_reached` whether it did (None: no
+        home family to reach); False sends the placement on to the seed list as before."""
+        from ..geometry.kin_np import sigma_min, solve_ik
+        from ..teacher.reach import IK, MIN_MARGIN, MIN_SIGMA
+        self.home_family_reached = None
+        home = HOME_FAMILY.get((self.execution.robot, self.execution.gripper))
+        q_s = np.asarray(self.robot.init_qpos, float)
+        if home is None or ik_family(q_s) == home:
+            return False
+        self.home_family_reached = False
+        seed = mirrored_seed(q_s, home, lo, hi)
+        if seed is None:
+            return False
+        res = solve_ik(c, target[None], seed[None], **IK)
+        q = res["theta"][0]
+        if not (bool(res["converged"][0]) and float(sigma_min(c, q[None])[0]) > MIN_SIGMA
+                and float(np.minimum(q - lo, hi - q).min()) > MIN_MARGIN and ik_family(q) == home):
+            return False
+        sim, idx = self.env.sim, self.joint_indexes
+        q_before = sim.data.qpos[idx].copy()
+        sim.data.qpos[idx] = q
+        sim.forward()
+        if self._robot_contact():
+            sim.data.qpos[idx] = q_before
+            sim.forward()
+            return False
+        self.home_family_reached = True
+        return True
 
     def _anchor(self) -> None:
         """Clear execution memory left from before a placement: robosuite's finger target to

@@ -4060,6 +4060,56 @@ branches:
       from 146 to 149 of 160, losing none. evidence: CTR-teacher-reliable.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-other-arm-starts-in-its-home-family
+    subject: CMP-scene-randomizer
+    claim_type: contract
+    statement: >-
+      This refines BRN-other-arm-starts-at-the-panda-tool-pose in one clause, which configuration of the
+      target T* is placed; everything else it states (the seeded fixture draws, the object block, the
+      fingers, T*, the contact screen, raising when no candidate passes) stands as it states it. The
+      family of a configuration q is a triple of bits computed from sines and cosines, so it is the same
+      whatever whole turns a joint carries: on the six-joint UR5e, whether the cosine of the first joint
+      is positive, whether the sine of the third is positive, whether the sine of the fifth is positive;
+      on a seven-joint arm, whether the sines of the second, fourth and sixth joints are positive. An arm
+      with a given gripper may carry a declared home family H. If it does and H differs from the family of
+      the model's own start joints q_s, one further candidate is formed before the refined branch's seed
+      list: the damped IK solution of T* from a single seed, q_s mirrored on the joints that define the
+      family wherever q_s's bit disagrees with H -- on a seven-joint arm that joint negated; on the UR5e
+      the third or fifth joint negated, and the first joint set to q_s's value plus half a turn if that
+      lies within its limits, else minus half a turn if that does; if neither does, or a negated joint
+      leaves its limits, there is no such candidate. That candidate is placed, exactly as solved, if it
+      lies in H, is reachable in DEF-reachable-pose's sense, and, written into the state with the fingers
+      as the branch places them and forwarded, no robot geom penetrates a non-robot geom; otherwise the
+      refined branch places its configuration from its own seed list, and the placement records that H was
+      not reached. An arm with no declared home family, or whose home family is q_s's, starts exactly as
+      the refined branch has it. The home family is a constant of the (arm, gripper) pair, taken from a
+      measurement on tasks outside those on which the pair's transfer is reported (libero_spatial,
+      libero_object, libero_goal, libero_10): over the 90 libero_90 tasks at initial state 0, each family
+      H is scored by the number of episodes that succeed when started by this rule with H declared, every
+      other input of the episodes fixed and named with the measurement (the episode seed, the code
+      revision, the gripper); the home family is the family with the highest count, ties going to q_s's
+      family if it is among them and otherwise to the smallest triple in lexicographic order
+      (AXM-parameters-derived). Consequently the placed configuration is a function of the initial state,
+      the models, the fixture poses, k and the declared family; no number of random draws enters the
+      home-family candidate; and on an arm whose home family is its start family nothing changes. Not
+      claimed: that the mirrored seed reaches H at every k or on every arm; that the home family is best
+      on any other suite, initial state or gripper; that one family serves every task; or anything about
+      the configurations the arm passes through after placement.
+    premises: [BRN-other-arm-starts-at-the-panda-tool-pose, DEF-reachable-pose, AXM-mujoco-forward-is-a-function-of-state, AXM-parameters-derived, AXM-reproducible-measurement]
+    derivation_rule: >-
+      The refined branch's clauses stand; this one adds a single candidate formed before its seed list.
+      Its placement is deterministic (one IK solve from a seed fixed by q_s and H, no random draws) and
+      passes the same reachability and contact screens, so the refined branch's consequences carry over,
+      and where H is not reached the refined branch places as before. Family bits are sines and cosines,
+      so no whole turn changes them. Proven 3/3 as TRL-1156..1158 after restatements answering
+      TRL-1150..1155. The calibration, measured 2026-09-26 at 2de75e7 (libero_90, initial state 0, episode
+      seed 555 * 100 + task, the Panda gripper): the UR5e's family (0, 0, 1) -- the shoulder panned to the
+      far side of the base -- succeeds on 90 of 90 tasks against 85 for its start family (1, 1, 0), the
+      other six scoring 54 to 85; the Kinova3's, the IIWA's and the Jaco's start families score 85, 88 and
+      85 and no other family of theirs scores higher (the mirrored seed reaches them on 0-5, 51-71 and 0
+      tasks), so only the UR5e declares a home family. evidence: CTR-other-arm-scene-as-panda.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:
