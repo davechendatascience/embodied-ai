@@ -9,8 +9,8 @@ matched the sighted one, the correlation carried by proprioception.
 
 This is a procedure, not a proven claim. It was a proof obligation (BRN-vla-reported-beside-a-blind-twin) until
 2026-09-26; five verification passes each found another lab mistake its text did not exclude (TRL-1255..1278), the
-statement grew with every fix, and it was retired. What a verifier can settle is proven or measured instead: the
-randomized starts (BRN-random-starts-test-set, proven) and the contracts named below, measured on every run.
+statement grew with every fix, and it was retired. What can be measured is measured on every run instead: the
+contracts named below.
 
 Before any model of the comparison is trained, committed in this file:
 1. **The measure:** one suite's overall success rate, from LIBERO's starts or a randomized set named by file digest.
@@ -38,9 +38,10 @@ Evaluation:
    (`checkpoint_is_training_end`, CTR-vla-evaluates-training-end).
 8. **Reproduction:** every episode reproduces across the two rounds, in every observation, action and outcome
    (CTR-vla-episodes-reproduce). A run with any that did not is a failed measurement, not a rate.
-9. **Randomized sets:** on a randomized set, every episode is placed (CTR-random-set-placed). Models are compared
-   only on results with the same set-file digest, and on a start only where both placements' integration-state
-   digests agree. The number of starts compared is reported.
+9. **Sets of stored starts:** models are compared only on results with the same set-file digest, and on a start
+   only where both placements' integration-state digests agree; the number of starts compared is reported.
+   (LIBERO-spatial's randomized set and its contracts were retired on 2026-09-26 with the move to LIBERO-Variations,
+   whose own splits replace it.)
 
 Reporting:
 

@@ -30,8 +30,6 @@ IGNORE=(
   set_goal get_interpolated_goal
   # SimArm's lean step refreshes robosuite's controller cache and env clock, which robosuite reads
   joint_pos joint_vel mass_matrix cur_time
-  # task_loss's stub domain: LIBERO's predicate code reads these attributes of the env it is given
-  objects_dict fixtures_dict
   # SimArm._set_render_samples: MuJoCo reads offsamples when a render context is made; robosuite reads the context
   offsamples _render_context_offscreen
 )
