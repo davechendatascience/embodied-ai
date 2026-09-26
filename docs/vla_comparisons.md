@@ -18,9 +18,11 @@ committed before evaluation.
   --val-demos 2 --steps 20000 --batch 16 --lr 2e-4 --warmup 500 --chunk 8 --execute 4 --workers 6 --seed 0
   [--blind]`, launched with a controlled environment (`env -i`, the declared variables only). Both models are trained
   before either is evaluated.
-- **Evaluation:** code revision 8582a63, `tools/eval_vla.py` with evaluation seed 555, `VLA_EXECUTION` (the twist
+- **Evaluation:** code revision fac96f7, `tools/eval_vla.py` with evaluation seed 555, `VLA_EXECUTION` (the twist
   decode, cameras without multisampling), every episode twice in fresh processes; on LIBERO's starts
-  (`--episodes 50`) and on the randomized set (`--starts ...`).
+  (`--episodes 50`) and on the randomized set (`--starts ...`). Changed from 8582a63 before any model was
+  evaluated: at 8582a63 a task not admitted or an episode whose model differed crashed the run after both rounds;
+  fac96f7 reports them as not scored. Episode execution is unchanged.
 
 ## E1 -- evidence (to be fixed here before its first evaluation)
 

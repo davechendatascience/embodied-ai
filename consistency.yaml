@@ -611,6 +611,32 @@ axioms:
       substep observation lag.
 
 definitions:
+  - id: DEF-single-operator-lab
+    term: The single-operator lab
+    meaning: >-
+      The threat model this project's protocol and reporting claims are judged under. Every run is
+      launched by a runner script kept under version control -- this repository's, or, for a model
+      evaluated in another project's environment, a runner kept in that project -- from a working tree
+      checked out at a recorded, committed revision with no tracked file modified; the software installed
+      in an environment changes only through that environment's setup script, recorded with the run; and
+      no process alters another run's code, data, installed software or simulator, neither while that run
+      is in progress nor between the runs of one comparison. Mistakes are within it -- a checkpoint loaded
+      by the wrong name, a setting left different between two runs, a seed retrained after its results
+      were seen, a nondeterministic kernel or renderer -- and are what protocol claims must detect or
+      exclude; deliberate tampering with code, data, installed software or the simulator is not. This is a
+      stipulation about the conditions a claim is made under, not a property of any run: a claim citing it
+      says nothing about runs made otherwise.
+    rationale: >-
+      Eight verification passes on BRN-vla-reported-beside-a-blind-twin and six on
+      BRN-random-starts-test-set (2026-09-26) raised gaps of two kinds: mistakes this lab can make (a seed
+      retrained after its results, a checkpoint loaded by name, multisampled renders that diverge, a
+      harness setting left on) and tampering it does not face (a same-version rebuild of the physics
+      library placed between two evaluations, an untracked module slipped into a working tree). With no
+      declared threat model a verifier must defend against both, and a claim that must record every
+      channel of tampering never closes. The user asked that protocol claims be judged against the lab as
+      it is -- one operator, runners kept in version control, frozen worktrees -- with full adversarial
+      verification kept for design claims, where a flaw changes what a model learns or does.
+
   - id: DEF-intended-contact
     term: Intended contact
     meaning: >-
@@ -4313,114 +4339,113 @@ branches:
     subject: CMP-scene-randomizer
     claim_type: contract
     statement: >-
-      A randomized test set for libero_spatial holds, for each of its ten tasks, up to fifty initial
-      states drawn by the scene randomizer on a seed used for nothing else, drawing until fifty are kept
-      or a thousand have been drawn; a task that keeps fewer is reported with the number it kept. A draw
-      starts from one of LIBERO's initial states of the task, moves the objects in rigid groups within 8
-      cm of where they were and turns them, and moves the tool's start up to 10 cm across, 5 cm up or
-      down, 30 deg in yaw and 10 deg in tilt, with the redundant joint up to 0.3 rad, and is then settled.
-      A settled draw is kept only if no object slid or was ejected by more than 10 mm or is still moving,
-      and the instruction's relation still singles out the object it names (the randomizer's acceptance
-      checks); if, for each of its task's LIBERO initial states and each of its task's demonstrations'
-      first recorded states, some free object of the settled state lies at least 2 cm from where it lies
-      in that state; and if the skill teacher, run from the state as stored and placed exactly as an
-      evaluation places it, meets LIBERO's predicate within the suite's step limit, acting on the
-      simulator only through the environment's action step (its screens write a configuration, read it and
-      restore the state they found, AXM-mujoco-forward-is-a-function-of-state); the draws each check
-      discards are counted. Each kept state is stored as the simulator's flattened state together with the
-      poses of the fixtures as they stand in the model when the state is captured; and with the set, for
-      each task, its references: the task file's digest, the simulator release, a fingerprint of every
+      Under the single-operator lab (DEF-single-operator-lab), a randomized test set for libero_spatial
+      holds, for each of its ten tasks, up to fifty initial states drawn by the scene randomizer on a seed
+      used for nothing else, drawing until fifty are kept or a thousand have been drawn; a task that keeps
+      fewer is reported with the number it kept. A draw starts from one of LIBERO's initial states of the
+      task, moves the objects in rigid groups within 8 cm of where they were and turns them, moves the
+      tool's start up to 10 cm across, 5 cm up or down, 30 deg in yaw and 10 deg in tilt and the redundant
+      joint up to 0.3 rad, and is settled. A settled draw is kept only if the randomizer's acceptance
+      checks pass (no object slid or was ejected by more than 10 mm or is still moving; the instruction's
+      relation still singles out the object it names); if, for each of its task's LIBERO initial states
+      and each of its task's demonstrations' first recorded states, some free object of the settled state
+      lies at least 2 cm from where it lies in that state; and if the skill teacher, run from the state
+      placed exactly as an evaluation places it and acting on the simulator only through the environment's
+      action step (its screens write a configuration, read it and restore the state they found,
+      AXM-mujoco-forward-is-a-function-of-state), meets LIBERO's predicate within the suite's step limit;
+      the draws each check discards are counted. Each kept state is stored as the simulator's flattened
+      state with the poses of the fixtures as they stand in the model when it is captured; and per task
+      the set stores its references: the task file's digest, the simulator release, a fingerprint of every
       field of the compiled model except the poses of the fixtures the reset draws and the records of the
       files it was read from, and the digests of the states reached from the task's first stored start
       after 100 and after 500 physics steps under fixed actuator inputs stored with them. An environment
-      is admitted for a task only if its task file, simulator release and stepping from that start under
-      those inputs match the stored references bit for bit; an environment that differs is reported as
-      differing and not evaluated on that task. Placing writes the stored fixture poses, then the stored
-      state, then runs the forward pass (AXM-libero-resamples-fixtures: a reset draws the fixture poses
-      anew and writing the state restores neither; AXM-mujoco-forward-is-a-function-of-state: the
-      configuration is then the stored one); then, at every placement, the model's fingerprint and its
-      fixture poses are compared with the stored ones, and an episode whose model differs in anything is
-      reported as differing and not scored. Every model evaluated on the set starts each episode from the
-      same stored state, placed and checked that way, and is scored by LIBERO's predicate on the state it
-      reaches within the suite's step limit (AXM-libero-scores-final-state). Consequently a success rate
-      on the set is measured from starts none of which is one of its task's LIBERO test starts or
-      demonstration starts, each solved within the step limit by a policy with privileged state acting
-      through the action step, from exactly the scene every scored episode starts in, and identical at
-      every placement -- task, scene, appearance, robot, cameras and physics parameters, and stepping as
-      far as it was measured -- for every model evaluated on it. Not claimed: that the model is unchanged
-      after placement while the episode runs; that the set's difficulty matches LIBERO's test set or is
-      unbiased (it is the part of the randomizer's distribution the skill teacher solves); that every task
-      fills fifty; that the rendered images are pixel-identical across environments; that stepping agrees
-      under inputs other than the ones measured; that the models evaluated execute through the same
-      controller, or that a policy acting through another controller can solve every start; that it covers
-      other suites or other arms; that success on it measures the use of vision (only a margin over a
-      blind twin does).
-    premises: [AXM-libero-init-states-record-a-panda, AXM-libero-resamples-fixtures, AXM-libero-scores-final-state, AXM-libero-demos-record-a-panda, AXM-mujoco-forward-is-a-function-of-state]
+      is evaluated on a task only if its task file, simulator release and that stepping match the
+      references bit for bit (admission); one that differs is reported as differing and not evaluated on
+      that task. Placing a start resets the simulator's data to the model's defaults (LIBERO's reset does,
+      AXM-libero-soft-reset-state, and also draws the fixture poses anew, AXM-libero-resamples-fixtures),
+      writes the stored fixture poses, then the stored state, then runs the forward pass; at every
+      placement the model's fingerprint and fixture poses are compared with the stored ones, and an
+      episode whose model differs in anything is reported as differing and not scored. Every model
+      evaluated on the set starts each episode from a stored state placed and checked that way, and is
+      scored by LIBERO's predicate on the state it reaches within the suite's step limit
+      (AXM-libero-scores-final-state). Consequently a success rate on the set is measured from starts none
+      of which is one of its task's LIBERO test starts or demonstration starts, each solved within the
+      step limit by a policy with privileged state acting through the action step; and at every scored
+      placement of a start, in every admitted environment, the simulator holds the same model -- task,
+      scene, appearance, robot, cameras and physics parameters -- and the same integration state (the
+      defaults a reset leaves, with the stored state written, AXM-mujoco-integration-state), so the
+      physics that follows a placement can differ between two admitted environments under the same
+      actuator inputs only if their simulators, of one release, compute a step differently, which
+      admission tests from one start for 500 steps. Not claimed: that simulators agreeing on that
+      trajectory agree from every state or under every input; that the model is unchanged after placement
+      while the episode runs; that the set's difficulty matches LIBERO's test set or is unbiased (it is
+      the part of the randomizer's distribution the skill teacher solves); that every task fills fifty;
+      that rendered images are pixel-identical across environments; that the models evaluated execute
+      through the same controller, or that a policy acting through another controller can solve every
+      start; that it covers other suites or other arms; that success on it measures the use of vision
+      (only a margin over a blind twin does); anything about runs made outside the single-operator lab.
+    premises: [DEF-single-operator-lab, AXM-libero-init-states-record-a-panda, AXM-libero-resamples-fixtures, AXM-libero-soft-reset-state, AXM-libero-scores-final-state, AXM-libero-demos-record-a-panda, AXM-mujoco-forward-is-a-function-of-state, AXM-mujoco-integration-state]
     derivation_rule: >-
-      Restated after TRL-1240..1242: the model is checked at every placement against references stored
-      with the set (the gap: a harness rewriting camera or light fields per episode after a one-time
-      check; the note: without stored references a later check compares against current code, and only
-      task 0 had been measured). Earlier restatements: the simulator release, a stepping check and the
-      task file in the identity (TRL-1234..1236); the whole compiled model as the identity and the teacher
-      acting through the action step (TRL-1228..1230); the teacher's run placed as evaluation places
-      (TRL-1222..1224); placement only where measured the same, fixture poses stored at capture, the draw
-      budget, the forward pass (TRL-1216..1218). Measured 2026-09-26 with independent installs (VLA-JEPA's
-      LIBERO given its own configuration, task files and asset copy): of 469 fields of libero_spatial 0's
-      compiled model all agree except mesh_pathadr and tex_pathadr, with the cabinet and the stove
-      excluded; both run MuJoCo 3.8.1; the task file and the first initial state are byte-identical; 100
-      and 500 physics steps under the same random actuator inputs give bit-identical positions and
-      velocities. The user's call: LIBERO's own test starts are too close to its demonstrations' to show
-      generalization (LIBERO-PRO: models above 90% collapse to 0.0% under perturbed layouts and starts;
-      LIBERO-Plus: 97.1% -> 37.2% with the start joints perturbed by 0.1-0.5 rad). The randomizer's bounds
-      are this project's declared randomized evaluation. To be measured with the set: the fraction of
-      draws each check discards, and each kept state's distance from the nearest LIBERO and demonstration
-      start of its task. Declared DOUBTED (TRL-1246..1248), the user having asked to stop iterating on
-      protocol claims: the one open gap is that stepping is compared at admission, not at every placement
-      -- read "stepping as far as it was measured" as at admission. Evidence: the set's own generation
-      report.
+      Restated under DEF-single-operator-lab (2026-09-26, the user's call on theory bloat), closing the
+      gap recorded as DOUBTED in TRL-1246..1248 (stepping compared at admission, not at every placement)
+      by what placement does rather than by a new check: a reset returns every simulator data field to the
+      model's defaults (AXM-libero-soft-reset-state), so with the stored state written and the model
+      checked at the placement, the simulator's integration state is the same at every placement of a
+      start in every admitted environment (AXM-mujoco-integration-state); what remains unmeasured --
+      whether two simulators of one release that agree on the admission trajectory agree everywhere -- is
+      named as not claimed rather than defended against. Earlier restatements: TRL-1216..1242 (git history
+      has each). Measured 2026-09-26 with independent installs (VLA-JEPA's LIBERO given its own
+      configuration, task files and asset copy): of 469 fields of libero_spatial 0's compiled model all
+      agree except mesh_pathadr and tex_pathadr, with the cabinet and the stove excluded; both run MuJoCo
+      3.8.1; the task file and the first initial state are byte-identical; 100 and 500 physics steps under
+      the same random actuator inputs give bit-identical positions and velocities. The set as generated
+      (2026-09-26, seed 2601): 500 starts, fifty per task; the skill teacher solved 94.2% of the novel
+      draws (task 4: 72%); the nearest LIBERO or demonstration start is 2.1-4.7 cm away per task. The
+      user's call: LIBERO's own test starts are too close to its demonstrations' to show generalization
+      (LIBERO-PRO: models above 90% collapse to 0.0% under perturbed layouts and starts; LIBERO-Plus:
+      97.1% -> 37.2% with the start joints perturbed by 0.1-0.5 rad). The randomizer's bounds are this
+      project's declared randomized evaluation. Evidence: the set's generation report;
+      CTR-random-set-placed (every episode of every evaluation on the set admitted and placed with its
+      model matching).
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-vla-reported-beside-a-blind-twin
     subject: CMP-vla-student
     claim_type: contract
     statement: >-
-      Evidence that the Panda VLA acts on what it sees is offered per comparison through one measure only,
-      named before any result of that comparison is seen: the overall success rate on one suite named in
-      advance; every other number (per-task rates, other suites, offline action errors) is reported beside
-      it and is not offered as that evidence, and every comparison made is reported, whether or not it
-      credits. That measure is reported beside the same measure of a blind twin: a model of the same
-      architecture, trained on the same pairs by the same procedure, whose camera images are replaced by
-      zeros of the same size in training and in evaluation. Before any model of a comparison is evaluated,
-      its training procedure and training configuration, its set of training seeds (at least three), its
-      evaluation seed and its execution configuration are fixed, and for each training seed exactly one
-      sighted and exactly one blind model has been trained; those models, each the one its training
-      procedure ended with, are the comparison's models; a model trained after any model of the comparison
-      has been evaluated, or any of the fixed items changed after that comparison's results were seen,
-      starts a new comparison with new training seeds, and the earlier one is still reported. Every run
-      records what it executed and read: its code revision; every installed package and its version, and
-      the GPU driver; a content digest of every source file it imported and of every shared library mapped
-      into its process, wherever each lies; content digests of the task files, initial-state files and
-      demonstration files it read and a fingerprint of every field of each task's compiled simulation
-      model; the backbone's snapshot revision and a digest of its processor and tokenizer files; its
-      process environment variables; its configuration as values -- for training: device, numeric
-      precision, batch composition and every optimisation setting; for evaluation: device, numeric
-      precision, rendering settings, batch composition and every inference setting of the policy (how an
-      output is turned into an action, how many actions are executed per query) -- and its per-run inputs
-      (the training or evaluation seed, the sighted or blind switch); and, for an evaluation, the digest
-      of the checkpoint it loaded, which must equal the digest the training run recorded for the model it
-      ended with. Within one comparison every training run has the same record as every other training
-      run, and every evaluation run the same as every other evaluation run, except in the per-run inputs
-      and the checkpoint digest. The measure counts as evidence only through its signed margin: the
-      sighted models' mean over the named training seeds minus the blind models' mean over the same seeds,
-      which counts only when it is positive and exceeds twice the larger of the two models' sample
-      standard deviations across those seeds (divided by n - 1), a standard deviation below one episode's
-      share of the suite (one over its number of episodes) being taken as that share -- a difference not
-      exceeding that is what this claim calls within training-seed spread. Success rates are measured by
-      LIBERO's protocol -- each task's initial states once each, the suite's step limit, LIBERO's
-      predicate on the reached state (AXM-libero-scores-final-state) -- through the VLA's decode, the same
-      for every model (BRN-vla-decodes-twists-exactly), with numpy's global generator seeded from (seed,
-      initial state) immediately before every reset and nothing drawing from it between the seeding and
-      the reset, so the fixture poses of an episode are the same for both models
+      Under the single-operator lab (DEF-single-operator-lab), evidence that the Panda VLA acts on what it
+      sees is offered per comparison through one measure only, named before any result of that comparison
+      is seen: the overall success rate on one suite named in advance; every other number (per-task rates,
+      other suites, offline action errors) is reported beside it and is not offered as that evidence, and
+      every comparison made is reported, whether or not it credits. That measure is reported beside the
+      same measure of a blind twin: a model of the same architecture, trained on the same pairs by the
+      same procedure, whose camera images are replaced by zeros of the same size in training and in
+      evaluation. Before any model of a comparison is evaluated, its training procedure and training
+      configuration, its set of training seeds (at least three), its evaluation seed and its execution
+      configuration are fixed, and for each training seed exactly one sighted and exactly one blind model
+      has been trained; those models, each the one its training procedure ended with, are the comparison's
+      models; a model trained after any model of the comparison has been evaluated, or any of the fixed
+      items changed after that comparison's results were seen, starts a new comparison with new training
+      seeds, and the earlier one is still reported. Every run records its code revision, its environment's
+      setup-script revision and every installed package and its version, its configuration as values --
+      for training: device, numeric precision, batch composition and every optimisation setting; for
+      evaluation: device, numeric precision, rendering settings, batch composition and every inference
+      setting of the policy (how an output is turned into an action, how many actions are executed per
+      query) -- its per-run inputs (the training or evaluation seed, the sighted or blind switch), and,
+      for an evaluation, the digest of the checkpoint it loaded, which must equal the digest its training
+      run recorded for the model it ended with; within one comparison every training run has the same
+      record as every other training run, and every evaluation run the same as every other evaluation run,
+      except in the per-run inputs and the checkpoint digest. The measure counts as evidence only through
+      its signed margin: the sighted models' mean over the named training seeds minus the blind models'
+      mean over the same seeds, which counts only when it is positive and exceeds twice the larger of the
+      two models' sample standard deviations across those seeds (divided by n - 1), a standard deviation
+      below one episode's share of the suite (one over its number of episodes) being taken as that share
+      -- a difference not exceeding that is what this claim calls within training-seed spread. Success
+      rates are measured by LIBERO's protocol -- each task's initial states once each, the suite's step
+      limit, LIBERO's predicate on the reached state (AXM-libero-scores-final-state) -- through the VLA's
+      decode, the same for every model (BRN-vla-decodes-twists-exactly), with numpy's global generator
+      seeded from (seed, initial state) immediately before every reset and nothing drawing from it between
+      the seeding and the reset, so the fixture poses of an episode are the same for both models
       (LMA-seed-fixtures-per-init-state). Every episode is executed twice, in two separate evaluation
       processes started at different times, and the two executions are compared at every step in the
       observation the model received (both images and the proprioception) and the action it chose, and in
@@ -4429,39 +4454,36 @@ branches:
       (AXM-reproducible-measurement), and a pair of runs with any episode that did not reports that as a
       failure of the measurement, not a rate (AXM-instruments-do-not-decide). Consequently no report
       credits vision for what the twin also achieves, for a difference within training-seed spread, for a
-      blind twin that does better, for any difference between the runs of a comparison that their records
-      show other than the per-run inputs themselves -- code, imported sources, loaded libraries, installed
-      software, data and model files, environment variables, configuration values, precision and inference
-      settings included, or a checkpoint other than the one training ended with -- from runs whose
-      episodes did not each complete and reproduce across processes, through a measure, seed, model,
-      procedure, configuration or checkpoint chosen or trained after that comparison's results were seen,
-      or while leaving out a comparison that did not credit. Not claimed: that a difference no entry of
-      the records shows is excluded; that training is deterministic per seed; that the twin fails; that
-      the margin measures vision alone rather than any difference the zeroed images make to training; that
-      inference or rendering reproduces (each pair of runs measures it, episode by episode and step by
-      step; the twin's zeroed images leave only the sighted runs testing the renderer); that the two
-      models' episodes start from identical simulator states beyond the fixture poses; that the decision
-      rule's false-credit rate or power has any particular value, or that the ranges of the two models'
-      per-seed values cannot overlap when the rule credits a margin; or anything about initial states
-      other than the protocol's.
-    premises: [AXM-instruments-do-not-decide, AXM-libero-scores-final-state, AXM-reproducible-measurement, LMA-seed-fixtures-per-init-state, BRN-vla-decodes-twists-exactly]
+      blind twin that does better, for a difference between the runs of a comparison in code, installed
+      software or configuration -- precision and inference settings included -- or for a checkpoint other
+      than the one training ended with, from runs whose episodes did not each complete and reproduce
+      across processes, through a measure, seed, model, procedure, configuration or checkpoint chosen or
+      trained after that comparison's results were seen, or while leaving out a comparison that did not
+      credit. Not claimed: anything about runs made outside the single-operator lab; that training is
+      deterministic per seed; that the twin fails; that the margin measures vision alone rather than any
+      difference the zeroed images make to training; that inference or rendering reproduces (each pair of
+      runs measures it, episode by episode and step by step; the twin's zeroed images leave only the
+      sighted runs testing the renderer); that the two models' episodes start from identical simulator
+      states beyond the fixture poses; that the decision rule's false-credit rate or power has any
+      particular value, or that the ranges of the two models' per-seed values cannot overlap when the rule
+      credits a margin; or anything about initial states other than the protocol's.
+    premises: [DEF-single-operator-lab, AXM-instruments-do-not-decide, AXM-libero-scores-final-state, AXM-reproducible-measurement, LMA-seed-fixtures-per-init-state, BRN-vla-decodes-twists-exactly]
     derivation_rule: >-
-      Restated after TRL-1249..1251, the one counterexample the last pass found (retraining the blind
-      twin's high seed after the results): exactly one sighted and one blind model per training seed, all
-      trained before any evaluation, a later model starting a new comparison; the per-run inputs are
-      excluded from the differences a credit must not rest on. The user asked to stop iterating
-      adversarial passes on reporting claims; this restatement closes a counterexample, not a gap.
-      Earlier: configuration values and checkpoint digests recorded (TRL-1243..1245); libraries, data
-      files and model fingerprints recorded, the consequence narrowed to what records show
-      (TRL-1237..1239); imported sources and environment variables, evaluation seed and configuration
-      fixed in advance (TRL-1231..1233); precision and inference settings, signed margin, procedure fixed
-      (TRL-1225..1227); separate processes (TRL-1219..1221); environment pinned (TRL-1213..1215); training
-      pinned (TRL-1210..1212); one revision and configuration, step-by-step comparison (TRL-1207..1209).
-      Measured 2026-09-26: without offscreen multisampling every episode reproduced step by step across
-      two rounds of fresh processes; with it, a render of a bit-identical state differed by one level on 2
-      of 16384 pixels and episodes diverged. With three seeds and equal spread the rule credits a null
-      difference about 2.1% of the time; power is to be simulated against the measured seed spread before
-      any margin is reported. Evidence: CTR-vla-libero-success.
+      Trimmed under DEF-single-operator-lab (2026-09-26, the user's call on theory bloat): the record
+      keeps what mistakes need -- code revision, the setup script's revision and the installed packages,
+      configuration values, per-run inputs, the checkpoint's digest matched to its training run's -- and
+      drops what only tampering needed (digests of every imported source and mapped library, data files,
+      environment variables; the code still records them). Everything that caught a real problem stays:
+      every episode executed twice in separate processes and compared step by step (multisampled renders
+      of a bit-identical state differed by one level on 2 of 16384 wrist pixels and episodes diverged;
+      without multisampling every episode reproduced across two rounds of fresh processes), one model per
+      seed and condition trained before any evaluation (TRL-1249: a seed retrained after its results
+      flipped a non-credit into a credit), the signed margin over at least three seeds, the measure and
+      all fixed items named in advance, every comparison reported. Proven before the trim as
+      TRL-1252..1254. With three seeds and equal spread the rule credits a null difference about 2.1% of
+      the time; power is to be simulated against the measured seed spread before any margin is reported.
+      Evidence: CTR-vla-random-set-success and CTR-vla-libero-success (the measures on either set of
+      starts), CTR-vla-episodes-reproduce.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 policies:
