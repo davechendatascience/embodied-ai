@@ -4,13 +4,16 @@ test starts or its demonstrations' starts, each solved by the skill teacher, sto
 environment must match before the set is placed in it.
 
   random_starts.py [--per-task 50] [--max-draws 1000] [--seed 2601] --out runs/evidence/random_starts/libero_spatial.npz
+  random_starts.py --scale 1.5 --exclude runs/evidence/random_starts/libero_spatial.npz --seed 2603 --out ...
 
 Per task: the scene randomizer draws from LIBERO's initial states (objects moved in rigid groups within 8 cm and
 turned, the instruction's relation kept; the tool's start moved 10 cm across, 5 cm up or down, 30 deg in yaw, 10 deg
 in tilt, the redundant joint 0.3 rad), settled. A draw is kept if some free object lies at least NOVELTY_M from where
 it lies in each of the task's LIBERO initial states and demonstrations' first states, and if the skill teacher, run
 from the stored state placed as an evaluation places it, meets LIBERO's predicate within the suite's step limit.
-Discards are counted by reason. The file holds the kept states, their fixture poses, and per task the references:
+With --scale every randomizer bound is multiplied by it; with --exclude a kept draw must also lie NOVELTY_M from each
+start of that set's task (training starts drawn around a test set, none of them its starts). Discards are counted by
+reason. The file holds the kept states, their fixture poses, and per task the references:
 the task file's digest, the simulator release, the model's fingerprint and the states reached from the first kept
 start after 100 and 500 physics steps under fixed actuator inputs.
 """
@@ -52,7 +55,7 @@ def _free_positions(m, states: np.ndarray) -> np.ndarray:
 
 
 def _task(job: tuple) -> dict:
-    task, per_task, max_draws, seed = job
+    task, per_task, max_draws, seed, scale, exclude = job
     import h5py
     import torch
     torch.set_num_threads(1)
@@ -66,13 +69,19 @@ def _task(job: tuple) -> dict:
     from screwhead.student.qwen_vla import file_digest
     from screwhead.teacher.skill_teacher import SkillTeacher
     spec = benchmark.get_benchmark_dict()[SUITE]().get_task(task)
-    draw = PrivilegedEnv(task, suite=SUITE, horizon=STEP_LIMIT, seed=seed * 100 + task, **RANDOMIZER)
+    draw = PrivilegedEnv(task, suite=SUITE, horizon=STEP_LIMIT, seed=seed * 100 + task,
+                         **{k: v * scale for k, v in RANDOMIZER.items()})
     solve = TaskEnv(SUITE, task, horizon=STEP_LIMIT, seed=0, render=False)
     m = solve.env.sim.model._model
     with h5py.File(task_file(SUITE, spec.name)) as f:
         demo_starts = np.stack([f["data"][k]["states"][0] for k in f["data"]])
     refs = np.concatenate([_free_positions(m, np.stack([np.asarray(s, float).ravel() for s in draw.init_states])),
                            _free_positions(m, demo_starts)])
+    if exclude:
+        from screwhead.sim.task_env_place import load_starts
+        excluded = load_starts(exclude).get(task)
+        if excluded is not None:
+            refs = np.concatenate([refs, _free_positions(m, np.asarray(excluded["states"], float))])
     kept, counts, draws = [], collections.Counter(), 0
     while len(kept) < per_task and draws < max_draws:
         draws += 1
@@ -117,6 +126,8 @@ def main() -> int:
     ap.add_argument("--max-draws", type=int, default=1000)
     ap.add_argument("--seed", type=int, default=2601, help="used for nothing else")
     ap.add_argument("--tasks", type=int, nargs="*", default=list(range(10)))
+    ap.add_argument("--scale", type=float, default=1.0, help="every randomizer bound times this")
+    ap.add_argument("--exclude", default=None, help="a set whose starts no kept draw may be near (a test set)")
     ap.add_argument("--cpus", default=CPUS)
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
@@ -124,7 +135,7 @@ def main() -> int:
     free = multiprocessing.Manager().Queue()
     for c in cpus:
         free.put(c)
-    jobs = [(t, args.per_task, args.max_draws, args.seed) for t in args.tasks]
+    jobs = [(t, args.per_task, args.max_draws, args.seed, args.scale, args.exclude) for t in args.tasks]
     with ProcessPoolExecutor(len(cpus), initializer=_pin, initargs=(free,),
                              mp_context=multiprocessing.get_context("spawn")) as pool:
         results = list(pool.map(_task, jobs))
@@ -133,10 +144,13 @@ def main() -> int:
     tasks = np.array([r["task"] for r in results for _ in r["states"]])
     meta = [{k: v for k, v in r.items() if k not in ("states",)} for r in results]
     np.savez_compressed(args.out, states=states, tasks=tasks, meta=json.dumps(
-        {"suite": SUITE, "seed": args.seed, "randomizer": RANDOMIZER, "novelty_m": NOVELTY_M, "step_limit": STEP_LIMIT,
+        {"suite": SUITE, "seed": args.seed, "randomizer": {k: v * args.scale for k, v in RANDOMIZER.items()},
+         "scale": args.scale, "excluded": args.exclude, "novelty_m": NOVELTY_M, "step_limit": STEP_LIMIT,
          "tasks": meta}))
     for r in results:
-        print(f"task {r['task']}: kept {r['kept']} of {r['draws']} draws; discarded {r['discarded']}; "
+        failed = r["discarded"].get("teacher did not solve", 0)
+        print(f"task {r['task']}: kept {r['kept']} of {r['draws']} draws; teacher solved {r['kept']}/{r['kept'] + failed}; "
+              f"discarded {r['discarded']}; "
               f"randomizer rejections {r['randomizer_rejections']}; nearest LIBERO/demo start "
               f"{min(r['novelty_m']) * 100 if r['novelty_m'] else float('nan'):.1f} cm")
     print(f"{len(states)} starts -> {args.out}")
