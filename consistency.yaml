@@ -196,6 +196,20 @@ axioms:
       predicate in 50 of 50 demonstrations when the recorded fixture poses are written into the model,
       and in 13 of 50 without them.
 
+  - id: AXM-libero-demos-record-their-actions
+    domain: environment
+    statement: >-
+      Each of LIBERO's human demonstrations records, per step, the action it executed through
+      robosuite's controller. The action's last entry is the Panda gripper's command, which robosuite
+      reads by sign: a positive command closes the fingers and a negative one opens them. In the
+      demonstrations that command takes only the values -1 and +1.
+    rationale: >-
+      Measured 2026-09-26 on 100 demonstrations (the first 10 of every 13th of the 130 task files):
+      all 15167 gripper entries are -1 or +1. Over the five steps after a +1 the finger aperture
+      shrank on 37% of steps and widened on 14% (mean -3.0 mm; a held object stops the fingers);
+      after a -1 it widened on 70% and shrank on 8% (mean +1.1 mm). robosuite 1.4.0's PandaGripper
+      moves its finger target toward the command's sign (AXM-robosuite-gripper-target-persists).
+
   - id: AXM-libero-soft-reset-state
     domain: environment
     statement: >-
