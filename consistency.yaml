@@ -4015,6 +4015,51 @@ branches:
       evidence: CTR-other-arm-scene-as-panda.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  - id: BRN-screen-probes-the-grasp-not-the-column
+    subject: CMP-skill-library
+    claim_type: contract
+    statement: >-
+      The reach screen probes, for each grasp candidate, the poses of one list: the grasp, the pre-grasp,
+      the approach between them at the declared step, the via point when one is given, and the poses its
+      caller adds (the drive's stations, the release). It adds no pose at a fixed height above the
+      pre-grasp: a pose above the pre-grasp is probed only if it is one of the listed poses. Each probed
+      pose is solved by the declared IK from the arm's joints as read at the step, independently of the
+      other probes and of their order, and is judged from that solution alone. A candidate is feasible
+      exactly when every pose in its list is reachable in DEF-reachable-pose's sense and no probe puts the
+      arm inside a fixture; asked for a feasible candidate, the screen answers with one or with none
+      (DEF-witness-or-refusal) -- what a caller does with none, including forcing a candidate as the grasp
+      choice does today, is outside this claim. A chosen grasp -- its tool frame and grasp point, and so
+      its pre-grasp -- is fixed in the world, kept until the object's centre has moved more than a
+      declared distance from where it was when the grasp was chosen, and then chosen again. The pick's
+      crossing plane (BRN-pick-descends-beside-overhang) is a travel height, not a witness of any
+      predicate: no caller assumes the arm can hold it. It is set with the grasp, each time the grasp is
+      chosen, and kept with it: of a declared ladder of heights running down from the higher of what the
+      obstacles ask for and the pre-grasp's height plus the back-off, to the pre-grasp's height plus the
+      back-off, the highest at which the tool, at the grasp's orientation over the pre-grasp, has a
+      solution from the arm's joints at that step that is reachable in DEF-reachable-pose's sense with the
+      arm not inside a fixture; if no rung passes, the lowest rung, the pre-grasp's height plus the
+      back-off, whether or not it passed. So while a grasp is kept its crossing plane is at least the
+      back-off above its pre-grasp. Consequently the feasible candidates include every candidate that a
+      screen whose lists also held poses 5 and 10 cm above the pre-grasp found feasible, since each
+      remaining probe's verdict is unchanged. Not claimed: that the straight descent from the crossing
+      plane to the pre-grasp is reachable at every point of it -- where the lowest rung is taken without
+      passing, the descent passes poses no screen tested, and where a pose is unreachable the tool does
+      not follow the command there (AXM-servo-tracks-reachable-poses); that the choice among candidates is
+      unchanged; or anything about skills whose motions the screen does not probe.
+    premises: [DEF-reachable-pose, DEF-witness-or-refusal, BRN-pick-descends-beside-overhang, AXM-servo-tracks-reachable-poses]
+    derivation_rule: >-
+      Feasibility is a conjunction over the candidate's list, and each probe's verdict depends only on its
+      own pose and the arm's joints at the step (the declared IK is deterministic in its start joints,
+      target and joint ranges), so removing the fixed-height poses from every list can only admit
+      candidates. The crossing plane is set once per grasp choice from the ladder, whose every rung, the
+      fallback included, is at least the pre-grasp's height plus the back-off, and the grasp is fixed in
+      the world while kept, so the plane cannot fall below that. Proven 3/3 as TRL-1147..1149 after
+      restatements answering TRL-1138..1146. Measured 2026-09-26: without the fixed-height probes the
+      Panda's 6,500-episode sweep scores 6,444, as v48 did (10 episodes differ: libero_spatial 4 +4 -1,
+      libero_90 32 +1 -3 and 64 -1, each a fragile grasp choice flipping), and the four-arm matrix goes
+      from 146 to 149 of 160, losing none. evidence: CTR-teacher-reliable.
+    sufficiency: {n_min: 3, min_consensus: 0.8}
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:

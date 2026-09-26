@@ -15,7 +15,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..sim import contacts
-from ..geometry.frames import Z, pose
+from ..geometry.frames import pose
 from ..geometry.kin_np import NpChain, sigma_min, solve_ik
 from ..sim.scene import geom_box
 
@@ -24,7 +24,6 @@ MIN_SIGMA = 0.05          # a crossing or carry pose must be at least this well 
 MIN_MARGIN = 0.15         # rad from every joint limit
 SIGMA_WEIGHT = 8.0        # sigma is scaled to compete with joint margin in a grasp's score
 CONDITION_BARS = (0.35, 0.20, 0.05)   # take the first candidate clearing the highest bar
-COLUMN_PROBES = (0.05, 0.10)          # heights above the pre-grasp checked on the way down
 APPROACH_PROBE_STEP = 0.02            # m between probes on the approach from the pre-grasp to the
 #                                       grasp. Probed only at its ends, a descent 100 mm long passed
 #                                       the screen while the hand's side wings, which span only 30-70
@@ -58,7 +57,7 @@ class Reach:
         self._geom_half: np.ndarray | None = None
         self._geom_centre: np.ndarray | None = None
         # what solve() and collides() answered at this step, by pose and by configuration: the release
-        # screens re-judge the same grasps (grasp, column, approach probes) with only the release pose
+        # screens re-judge the same grasps (grasp, pre-grasp, approach probes) with only the release pose
         # changed, and re-solving them doubled the teacher's time per step (libero_10 9: 17-20 -> 36-41
         # ms, 3 -> 8 screen calls). Each row of the solve depends only on its own pose and the start
         # joints, and a screen restores what it writes, so an answer holds until the state moves -- the
@@ -134,7 +133,7 @@ class Reach:
                force: bool = False):
         """The candidate grasp the arm can use, or None when there is no such candidate.
 
-        Reachable at the grasp, down the column above it, and (when known) at the place pose the
+        Reachable at the grasp, the pre-grasp and the approach between them, and (when known) at the place pose the
         same grasp must reach. Shape proposes in list order (narrow faces first), conditioning
         decides how far down that list to look: the first merely-feasible candidate put the arm
         where the damped solve clamps on a limit, the best-conditioned one ignored the shape.
@@ -150,11 +149,14 @@ class Reach:
         Ts, meta, kind = [], [], []
         for i, (R, p_g, _w, app) in enumerate(cands):
             pre = p_g - app * self.k.approach
-            column = [pre + Z * h for h in COLUMN_PROBES]
             along = np.arange(APPROACH_PROBE_STEP, self.k.approach - 1e-9, APPROACH_PROBE_STEP)
-            names = ["grasp", "pre"] + [f"column{h:g}" for h in COLUMN_PROBES] + \
+            # no pose at a fixed height above the pre-grasp (BRN-screen-probes-the-grasp-not-the-column): the
+            # crossing plane is a travel height chosen after the grasp, and two poses 5 and 10 cm over the
+            # pre-grasp, at the edge of the Kinova3's and the Jaco's reach, rejected every handle grasp of the
+            # moka pot (libero_10 2), each of which succeeds when taken
+            names = ["grasp", "pre"] + \
                     [f"approach{a:g}" for a in along] + (["via"] if via is not None else [])
-            for pt, nm in zip([p_g, pre, *column] + [p_g - app * a for a in along]
+            for pt, nm in zip([p_g, pre] + [p_g - app * a for a in along]
                               + ([via] if via is not None else []), names, strict=True):
                 Ts.append(pose(R, pt))
                 meta.append(i)
