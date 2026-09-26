@@ -9,7 +9,9 @@ its one interface (BRN-vla-sees-and-acts-as-trained).
 Each worker holds its own copy of the model on the GPU and runs its share of the episodes on one core. Every
 episode is executed twice, in two rounds of fresh worker processes, and its trial records whether the two agree
 in every observation, every action and the outcome (BRN-vla-reported-beside-a-blind-twin): a rate is evidence
-only if all did. A trial also records success, the
+only if all did. From a randomized set (--starts), a trial records whether its episode was placed: its task admitted
+and its model matching the set's (BRN-random-starts-test-set); an episode not placed is reported, not scored. A
+trial also records success, the
 steps taken, the model's queries and their latency, clipped steps, the servo's counted decode events and the
 peak GPU memory of its worker.
 """
@@ -79,7 +81,7 @@ def _episode(pol: Policy, env, suite: str, e: int, start=None) -> dict:
     if start is None:
         env.reset(init_index=e)
     elif not env.place_stored(*start):
-        return dict(success=False, steps=0, queries=0, digest="model differs", model_differs=True)
+        return dict(placed=False, steps=0, queries=0, digest="model differs")      # reported, not scored
     sv = env.servo
     ev0 = (sv.acc_limited, sv.scaled, sv.iter_cap, sv.reanchors)
     success, lat, queries, clipped = False, [], 0, 0
@@ -101,7 +103,8 @@ def _episode(pol: Policy, env, suite: str, e: int, start=None) -> dict:
             if env.t >= MAX_STEPS[suite]:
                 break
     ev = [n - n0 for n, n0 in zip((sv.acc_limited, sv.scaled, sv.iter_cap, sv.reanchors), ev0, strict=True)]
-    return dict(success=success, steps=env.t, queries=queries, digest=digest.hexdigest(),
+    return dict(**({} if start is None else {"placed": True}), success=success, steps=env.t, queries=queries,
+                digest=digest.hexdigest(),
                 latency_ms_median=round(1000 * float(np.median(lat)), 1), latency_ms_max=round(1000 * float(np.max(lat)), 1),
                 clipped_steps=clipped, acc_limited_steps=ev[0], scaled_steps=ev[1], iter_cap_steps=ev[2],
                 reanchored_steps=ev[3])
@@ -143,7 +146,8 @@ def _task(job: tuple) -> list[dict]:
             and ref["stepping"] == stepping_digests(env, stored["states"][0], stored["fixtures"][0])
         if not admitted:
             env.close()
-            return [{"metrics": {"admitted": False}, "conditions": {"task_suite": suite, "task": task, "init_index": e},
+            return [{"metrics": {"admitted": False, "placed": False},
+                     "conditions": {"task_suite": suite, "task": task, "init_index": e, "blind": cfg.blind},
                      "repro": {"task_suite": suite, "task": task, "init_index": e, "starts": starts_file}} for e in episodes]
         episodes = [e for e in episodes if e < len(stored["states"])]
     for e in episodes:
@@ -206,26 +210,42 @@ def main() -> int:
             rounds.append([r for rows in pool.map(_task, jobs) for r in rows])
         for c in cpus:
             free.put(c)
-    second = {(r["repro"]["task"], r["repro"]["init_index"]): r["metrics"] for r in rounds[1]}
-    trials = rounds[0]
-    for r in trials:
-        other = second[(r["repro"]["task"], r["repro"]["init_index"])]
-        r["metrics"]["reproduced"] = (r["metrics"]["digest"] == other["digest"]
-                                      and r["metrics"]["success"] == other["success"])
-        r["metrics"].pop("digest")
+    trials = reproduce(rounds[0], rounds[1])
     Path(args.trials).parent.mkdir(parents=True, exist_ok=True)
     Path(args.trials).write_text(json.dumps({"trials": trials}, indent=1))
-    ok = sum(r["metrics"]["success"] for r in trials)
-    unrepro = sum(not r["metrics"]["reproduced"] for r in trials)
-    print(f"{args.suite} {rev}: {ok}/{len(trials)} ({100 * ok / len(trials):.1f}%) in {(time.time() - t0) / 60:.1f} min"
-          + (f" -- MEASUREMENT FAILED: {unrepro} episodes did not reproduce, the rate is not evidence" if unrepro
-             else "; every episode reproduced"))
-    for t in tasks:
-        rs = [r for r in trials if r["conditions"]["task"] == t]
-        print(f"  task {t}: {sum(r['metrics']['success'] for r in rs)}/{len(rs)}")
-    lat = [r["metrics"]["latency_ms_median"] for r in trials]
-    print(f"  query latency median {np.median(lat):.1f} ms; GPU peak per worker {max(r['metrics']['gpu_peak_gib'] for r in trials):.2f} GiB")
+    _report(args.suite, rev, tasks, trials, time.time() - t0)
     return 0
+
+
+def reproduce(first: list[dict], second: list[dict]) -> list[dict]:
+    """The first round's trials, each executed episode marked reproduced if the second round's execution of it agrees
+    in the digest of what the model received and chose and in the outcome. An episode of a task that was not admitted
+    was never executed and has nothing to compare."""
+    other = {(r["repro"]["task"], r["repro"]["init_index"]): r["metrics"] for r in second}
+    for r in first:
+        m, o = r["metrics"], other.get((r["repro"]["task"], r["repro"]["init_index"]), {})
+        if "digest" in m:
+            m["reproduced"] = m.pop("digest") == o.get("digest") and m.get("success") == o.get("success")
+    return first
+
+
+def _report(suite: str, rev: str, tasks: list[int], trials: list[dict], seconds: float) -> None:
+    """The rate over scored episodes; episodes not scored (task not admitted, model differs) and episodes that did not
+    reproduce are reported, the latter as a failed measurement."""
+    scored = [r for r in trials if "success" in r["metrics"]]
+    ok = sum(r["metrics"]["success"] for r in scored)
+    unrepro = sum(not r["metrics"].get("reproduced", False) for r in trials)
+    print(f"{suite} {rev}: {ok}/{len(scored)} ({100 * ok / max(1, len(scored)):.1f}%) in {seconds / 60:.1f} min"
+          + (f"; {len(trials) - len(scored)} episodes not scored (task not admitted or model differs)"
+             if len(scored) < len(trials) else "")
+          + (f" -- MEASUREMENT FAILED: {unrepro} episodes not executed or not reproduced, the rate is not evidence"
+             if unrepro else "; every episode reproduced"))
+    for t in tasks:
+        rs = [r for r in scored if r["conditions"]["task"] == t]
+        print(f"  task {t}: {sum(r['metrics']['success'] for r in rs)}/{len(rs)}")
+    if scored:
+        print(f"  query latency median {np.median([r['metrics']['latency_ms_median'] for r in scored]):.1f} ms; "
+              f"GPU peak per worker {max(r['metrics']['gpu_peak_gib'] for r in scored):.2f} GiB")
 
 
 if __name__ == "__main__":
