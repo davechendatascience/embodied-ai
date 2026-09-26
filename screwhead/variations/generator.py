@@ -78,6 +78,11 @@ def generator_revision(bench_path: str) -> str:
     return f"lv{meta['version']}:{h.hexdigest()[:10]}"
 
 
+def table_xy(bench: Benchmark, world) -> np.ndarray:
+    """A world position's table coordinates (the task file's region coordinates)."""
+    return np.asarray(world, float)[:2] - np.asarray(bench.reach.reference.get("table_origin", (0.0, 0.0)), float)
+
+
 def catalog_digest(raw: dict) -> str:
     return hashlib.sha1(json.dumps(raw, sort_keys=True).encode()).hexdigest()[:16]
 
@@ -211,7 +216,7 @@ def draft(bench: Benchmark, seed: int, attempt: int) -> Draft | None:
         return None
     placements = [task_file.Placement(n, c, (float(xy[0]), float(xy[1])), sc["region_half"], yaw)
                   for n, c, (xy, yaw) in zip(insts, cats, layout, strict=True)]
-    base = np.asarray(bench.reach.reference["base_world"][:2])
+    base = table_xy(bench, bench.reach.reference["base_world"])
     # planned centres: the words must survive the sampler's and the settling's shifts, so plan with them added
     planned_gap = sc["order_gap"] + 2 * (sc["region_half"] + sc["rest_shift"])
     cat_of = {p.name: p.category for p in placements}
@@ -266,8 +271,9 @@ def check_scene(bench: Benchmark, env, dr: Draft, sampled: dict[str, np.ndarray]
         body = m.body(f"{p.name}_main").id
         pos = d.xpos[body]
         lo, hi = np.asarray(p.ranges()[:2]), np.asarray(p.ranges()[2:])
-        if not ((pos[:2] >= lo).all() and (pos[:2] <= hi).all()):
-            fails[f"region:{p.name}"] = f"origin {pos[:2].round(4).tolist()} outside {p.ranges()}"
+        at = table_xy(bench, pos)
+        if not ((at >= lo).all() and (at <= hi).all()):
+            fails[f"region:{p.name}"] = f"origin {at.round(4).tolist()} outside {p.ranges()}"
         shift = float(np.linalg.norm(pos[:2] - sampled[p.name][:2]))
         if shift > sc["rest_shift"]:
             fails[f"shift:{p.name}"] = f"{shift * 1000:.1f} mm from where sampled"
@@ -277,10 +283,11 @@ def check_scene(bench: Benchmark, env, dr: Draft, sampled: dict[str, np.ndarray]
         scene_body = env.scene.body_id(p.name)
         if not (_touches(m, d, scene_body, table) or _touches(m, d, body, table)):
             fails[f"table:{p.name}"] = "not touching the table"
-        glo, ghi = shapes.plan_bounds(env.scene, p.name, grow=sc["clearance"])
+        origin = bench.reach.reference.get("table_origin", (0.0, 0.0))
+        glo, ghi = shapes.plan_bounds(env.scene, p.name, grow=sc["clearance"], origin=origin)
         if not bench.reach.contains(glo, ghi):
             fails[f"reach:{p.name}"] = "footprint and clearance leave the action space"
-        boxes[p.name] = shapes.plan_bounds(env.scene, p.name)
+        boxes[p.name] = shapes.plan_bounds(env.scene, p.name, origin=origin)
     names = list(boxes)
     for i, u in enumerate(names):
         for v in names[i + 1:]:
@@ -307,9 +314,9 @@ def check_task(bench: Benchmark, env, dr: Draft) -> dict[str, str]:
         fails["fit"] = f"{a} {np.round(sa.half, 3).tolist()} in/on {t} {np.round(st.half, 3).tolist()}"
     if env.success():
         fails["goal"] = "the goal already holds"
-    xy = {p.name: env.env.sim.data.body_xpos[env.env.sim.model.body_name2id(f"{p.name}_main")][:2].copy()
+    xy = {p.name: table_xy(bench, env.env.sim.data.body_xpos[env.env.sim.model.body_name2id(f"{p.name}_main")])
           for p in dr.placements}
-    base = np.asarray(bench.reach.reference["base_world"][:2])
+    base = table_xy(bench, bench.reach.reference["base_world"])
     lang = instruction(bench, dr.template, dr.a, dr.target, cats, xy, base, bench.scene["order_gap"])
     if lang != dr.language:
         fails["instruction"] = f"at rest it reads {lang!r}, the task file says {dr.language!r}"

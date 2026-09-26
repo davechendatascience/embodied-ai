@@ -81,13 +81,14 @@ def upright_angle(scene, name: str, shape: Shape) -> float:
     return float(np.degrees(np.arccos(np.clip(R[2] @ np.asarray(shape.up), -1.0, 1.0))))
 
 
-def plan_bounds(scene, name: str, grow: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
-    """(lo, hi) in table coordinates of the plan box that holds the object's collision box as it now stands,
-    grown by `grow` on every side. It contains the footprint, so tests on it are conservative."""
+def plan_bounds(scene, name: str, grow: float = 0.0, origin=(0.0, 0.0)) -> tuple[np.ndarray, np.ndarray]:
+    """(lo, hi) in table coordinates -- world x, y less the table's `origin` -- of the plan box that holds the object's
+    collision box as it now stands, grown by `grow` on every side. It contains the footprint, so tests on it are
+    conservative."""
     box = scene.object_box(name)
     corners = np.array([[sx, sy, sz] for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)], float) * box.half
     world = box.p + (box.centre + corners) @ box.R.T
-    xy = world[:, :2] + scene.base[:2]
+    xy = world[:, :2] + scene.base[:2] - np.asarray(origin, float)
     return xy.min(0) - grow, xy.max(0) + grow
 
 

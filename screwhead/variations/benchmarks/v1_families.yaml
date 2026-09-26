@@ -1,0 +1,32 @@
+# LIBERO-Variations v1's scene families (docs/design_libero_variations.md, v1). A family is a table and its fixtures at
+# exact poses (LIBERO's own placements, table coordinates) with its drawers and doors at declared positions; each has
+# its own reference scene and reach map (BRN-lv-action-space). A variant differs only in fixture joints: a task that
+# needs a drawer open at the start is drawn from the variant with it open.
+families:
+  K1:                                   # LIBERO's kitchen: the wooden cabinet (three drawers) and the flat stove
+    workspace: kitchen_table
+    fixtures:
+      - {category: wooden_cabinet, xy: [0.0, -0.30], yaw: 3.141592653589793}
+      - {category: flat_stove, xy: [-0.2, 0.25], yaw: 0.0}
+    park: [0.30, 0.0]                   # the reference's one object (a task file needs a goal), out of reach
+    variants:
+      closed: {}
+      top_open: {wooden_cabinet_1_top_level: -0.16}
+      stove_on: {flat_stove_1_button: 1.0}
+  K2:                                   # the microwave and the white cabinet
+    workspace: kitchen_table
+    fixtures:
+      - {category: microwave, xy: [0.0, -0.25], yaw: 3.141592653589793}
+      - {category: white_cabinet, xy: [0.0, 0.30], yaw: 0.0}
+    park: [0.30, 0.0]
+    variants:
+      closed: {}
+      microwave_open: {microwave_1_microjoint: -1.6}
+  S1:                                   # the study table: the desk caddy and the two-layer shelf
+    workspace: study_table
+    fixtures:
+      - {category: desk_caddy, xy: [-0.2, -0.14], yaw: 3.141592653589793}
+      - {category: wooden_two_layer_shelf, xy: [0.0, 0.28], yaw: 0.0}
+    park: [0.25, 0.0]
+    variants:
+      closed: {}

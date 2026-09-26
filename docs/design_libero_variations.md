@@ -95,6 +95,46 @@ two-step templates.
 - **Found building it**: the model fingerprint left out the model's names and options, so two objects of a category
   could have swapped bodies unseen (fixed); PyYAML reads a bare `On` as true (goals are quoted, and a test checks).
 
+## v1: fixtures, articulated, desk and two-step tasks (planned, 2026-09-27)
+
+v0 generates pick-and-place only -- two templates on a table without fixtures -- so its 120/120 says little about
+breadth. The user chose all four extensions: articulated tasks, tasks into fixtures, a desk family, and two-step
+tasks. They are layered on v0's four proven branches rather than restating them.
+
+**Families.** A family is a table with a fixed layout of fixtures at declared poses and declared joint positions;
+BRN-lv-action-space already requires its reference scene to hold exactly those, so each family gets its own map.
+A fixture's joint is part of the match, so a task that needs a drawer open at the start comes from a variant of the
+family with that drawer open, with its own reference and map. Planned: a kitchen with a wooden cabinet (three
+drawers and a top), a flat stove and a microwave; a kitchen variant with the top drawer open and the microwave door
+open; a study table with a two-layer shelf, a desk caddy (four compartments) and a wooden tray.
+
+**Fixture reach.** Besides the top-down grid, each family stores the poses its fixtures are worked from, screened
+once in the reference with the teacher's own screens: each drawer's and door's handle grasp along its drive from
+closed to the open threshold, the stove's knob, and the drop point of every fixture region (a drawer's interior when
+open, the microwave's heating region, the cook region, the cabinet top, each shelf level, each caddy compartment).
+A template naming a fixture region is drawn only if its poses passed. The argument that carries a screen from the
+reference to a matching scene is v0's, generalised from top-down poses to any screened configuration.
+
+**Scenes.** Objects may start on fixtures (the cabinet top, a shelf level, the stove); such hosted objects need the
+hard reset (AXM-libero-soft-reset-misplaces-hosted-objects), which v0 already uses. The at-rest checks extend to
+hosted objects: at rest on their host, inside the host region, upright.
+
+**Templates.** Articulated: open or close a drawer or a door, turn the stove on or off -- LIBERO's predicates compare
+one joint with a threshold (AXM-libero-scores-final-state); the goal must be false at the start and the fixture's
+handle or knob poses must have passed. Into fixtures: put A in an open drawer or the microwave (In with the region),
+on the stove, the cabinet top or a shelf level (On). Desk: a book into a caddy compartment, A on or into the tray, a
+book on a shelf level. Fit for a region is A's footprint grown by the clearance inside the region's plan box, and,
+for an enclosed region (a drawer, the microwave, a shelf level), A's height below the opening's clearance, both
+measured. Two-step: a conjunction of two goals, one of them possibly articulated -- open the drawer and put A in
+it, put A in the microwave and close it, put A on B and C in D; LIBERO scores the conjunction at the final state.
+
+**Instructions.** Fixtures and their regions get declared noun phrases ("the top drawer of the cabinet", "the
+microwave", "the stove", "the left compartment of the caddy", "the top of the cabinet", "the top shelf"); the
+distinct-and-not-nested rule covers objects, fixtures and regions together.
+
+**Order of work.** The kitchen family's articulated and into-fixture single-step templates first, then two-step,
+then the study family; each measured on three fresh rounds and reported with success and settled.
+
 ## Open
 
 - How many objects per scene; the order-word gap (4 cm) against what an instruction reader resolves; fixtures and

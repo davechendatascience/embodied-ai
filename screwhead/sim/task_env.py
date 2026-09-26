@@ -45,6 +45,18 @@ class StartNoise:
                     tilt=np.deg2rad(self.tilt_deg), null=self.null_rad)
 
 
+def pin_fixtures(m, d, pins: dict) -> None:
+    """Write each fixture's model pose and its joints' positions (their velocities zeroed)."""
+    for name, (pos, quat, joints) in pins.items():
+        b = m.body(name).id
+        m.body_pos[b] = np.asarray(pos, float)
+        m.body_quat[b] = np.asarray(quat, float)
+        for jn, q in joints.items():
+            j = m.joint(jn).id
+            d.qpos[m.jnt_qposadr[j]] = float(q)
+            d.qvel[m.jnt_dofadr[j]] = 0.0
+
+
 class TaskEnv(SimArm):
     def __init__(self, suite: str, task_index: int | str, horizon: int = 600, seed: int = 0,
                  render: bool | int = True, execution: Execution | None = None, start: StartNoise | None = None):
@@ -108,14 +120,20 @@ class TaskEnv(SimArm):
                             for n, (p, q) in fixtures.items())
         return same_fixtures and (fingerprint is None or self.model_fingerprint() == fingerprint)
 
-    def draw_scene(self, k: int) -> dict[str, np.ndarray]:
+    def draw_scene(self, k: int, pins: dict | None = None) -> dict[str, np.ndarray]:
         """A generated task's scene (LIBERO-Variations, BRN-lv-scenes-valid): LIBERO's samplers draw every object in
         its task-file region -- numpy's global generator seeded by this env's seed and k, the scene rebuilt from the
         task file when the env was opened with Execution(hard_reset=True) -- and the scene is held until every free
-        object is at rest. Returns where the sampler put each free object's origin (world), before it moved."""
+        object is at rest. `pins`: a family's fixtures, {body: (position, quaternion, {joint: position})}, written
+        exactly after the reset (LIBERO draws a fixture within its region; its family's reference fixes where it
+        stands and how far its drawers or doors are open). Returns where the sampler put each free object's origin
+        (world), before it moved."""
         from .sim_arm import INITIAL_SETTLE, REST_SPEED, SETTLE_CHUNK, SETTLE_ROUNDS
         self._reset_scene(k)
         self.scene = Scene(self.env.env)            # a rebuilt scene is a new model: nothing read before holds
+        if pins:
+            pin_fixtures(self.env.sim.model._model, self.env.sim.data._data, pins)
+            self.env.sim.forward()
         m, d = self.env.sim.model, self.env.sim.data
         sampled = {n: d.body_xpos[m.body_name2id(f"{n}_main")].copy() for n in self.task_spec.objects}
         self._anchor()

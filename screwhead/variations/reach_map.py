@@ -20,7 +20,6 @@ from dataclasses import asdict, dataclass, field
 import numpy as np
 
 REFERENCE_PARTS = ("robot0_", "gripper0_", "mount0_")   # the robot, its gripper and its mount, by body name
-TABLE = "table"
 MESH = 7                  # mjGEOM_MESH
 
 
@@ -91,7 +90,7 @@ def _reference_bodies(m) -> list[int]:
     """The robot's, gripper's and mount's bodies, the table and the fixtures a reset draws, with every body
     attached below them."""
     from ..sim.task_env_place import drawn_fixtures
-    roots = [b for b in range(1, m.nbody) if m.body(b).name.startswith(REFERENCE_PARTS) or m.body(b).name == TABLE]
+    roots = [b for b in range(1, m.nbody) if m.body(b).name.startswith(REFERENCE_PARTS) or b == table_body(m)]
     roots += drawn_fixtures(m)
     return [b for b in range(1, m.nbody) if b in roots or any(_descends(m, b, r) for r in roots)]
 
@@ -107,8 +106,9 @@ def match_digest(m) -> str:
     positions are not in it."""
     h = hashlib.sha1()
     _digest_contact_settings(h, m)
+    table = table_body(m)
     for b in [0] + sorted(_reference_bodies(m), key=lambda b: m.body(b).name):   # the world's own geoms too
-        _digest_body(h, m, b)
+        _digest_body(h, m, b, sites=b not in (0, table))
     return h.hexdigest()[:16]
 
 
@@ -129,9 +129,10 @@ def _digest_contact_settings(h, m) -> None:
         _put(h, m.pair_margin[i:i + 1], m.pair_gap[i:i + 1])
 
 
-def _digest_body(h, m, b: int) -> None:
-    """A body's name, parent, pose in its parent and inertia; its geoms (meshes too), joints and -- on the robot and
-    its gripper, whose sites hold the tool frame -- its sites. Not the table's sites: they carry each task's regions."""
+def _digest_body(h, m, b: int, sites: bool) -> None:
+    """A body's name, parent, pose in its parent and inertia; its geoms (meshes too) and joints; and, with `sites`,
+    its sites with their poses and sizes -- the robot's and gripper's (the tool frame) and the fixtures' (their
+    regions: a drawer's interior, the heating region). Not the table's: they carry each task's own regions."""
     h.update(m.body(b).name.encode())
     h.update(m.body(int(m.body_parentid[b])).name.encode())
     _put(h, m.body_pos[b], m.body_quat[b], m.body_ipos[b], m.body_iquat[b], m.body_mass[b:b + 1], m.body_inertia[b])
@@ -150,10 +151,10 @@ def _digest_body(h, m, b: int) -> None:
         # the reference position (qpos0) too: a hinge or slide poses its child by its value less the reference
         _put(h, m.jnt_type[j:j + 1], m.jnt_axis[j], m.jnt_pos[j], m.jnt_range[j], m.jnt_limited[j:j + 1],
              m.qpos0[a:a + width])
-    if m.body(b).name.startswith(REFERENCE_PARTS):
+    if sites:
         for k in np.nonzero(m.site_bodyid == b)[0]:
             h.update(m.site(int(k)).name.encode())
-            _put(h, m.site_pos[k], m.site_quat[k])
+            _put(h, m.site_pos[k], m.site_quat[k], m.site_size[k], m.site_type[k:k + 1])
 
 
 def simulator() -> str:
@@ -227,26 +228,48 @@ def erode(passed: np.ndarray, r: int) -> np.ndarray:
     return inside
 
 
-def table_top(scene) -> tuple[float, np.ndarray, np.ndarray]:
+def table_body(m) -> int:
+    """The table: the body hanging from the world named table or <kind>_table (kitchen, study, living room)."""
+    found = [b for b in range(1, m.nbody) if int(m.body_parentid[b]) == 0
+             and (m.body(b).name == "table" or m.body(b).name.endswith("_table"))]
+    if len(found) != 1:
+        raise ValueError(f"expected one table, found {[m.body(b).name for b in found]}")
+    return found[0]
+
+
+def table_origin(scene, region: str, centre) -> np.ndarray:
+    """The table coordinates' origin, world xy: where a task-file region's site stands, less the centre the task file
+    gave it. Table coordinates are the task file's region coordinates; the kitchen table's origin is the world's, the
+    study table's is not."""
+    # rounded to a micrometre: read through float arithmetic the kitchen table's came out -1e-17, which moved the
+    # table's edge off a grid line and dropped a row of the grid (26 reachable points of K1)
+    origin = scene.region(region)[1][:2] + scene.base[:2] - np.asarray(centre, float)
+    return np.round(origin, 6) + 0.0
+
+
+def table_top(scene, origin) -> tuple[float, np.ndarray, np.ndarray]:
     """(height of the top, base frame; plan lo, hi in table coordinates) from the table's collision geometry."""
-    box = scene.object_box(TABLE)
+    m = scene.m
+    box = scene.object_box(m.body_id2name(table_body(getattr(m, "_model", m))))
     centre = box.world_centre
     half = np.abs(box.R @ np.diag(box.half)).sum(1)
-    base = scene.base
-    return float(centre[2] + half[2]), centre[:2] - half[:2] + base[:2], centre[:2] + half[:2] + base[:2]
+    world = centre[:2] + scene.base[:2]
+    return float(centre[2] + half[2]), world - half[:2] - origin, world + half[:2] - origin
 
 
-def compute(env, spec: MapSpec | None = None, log=print) -> ReachMap:
+def compute(env, origin, spec: MapSpec | None = None, log=print) -> ReachMap:
     """The map, in env's scene (the reference scene: its free objects play no part, only contacts with the
-    table and fixtures fail a pose). env: a TaskEnv at its start joints."""
+    table and fixtures fail a pose). env: a TaskEnv at its start joints; origin: the table coordinates' origin."""
     from ..geometry.frames import pose, top_down
     from ..teacher.reach import MIN_MARGIN, MIN_SIGMA, Reach
     spec = spec or MapSpec()
     m, d = env.env.sim.model._model, env.env.sim.data._data
     env.raw = env.observe()
     reach = Reach(env, None)
-    top, lo, hi = table_top(env.scene)
+    table_origin = np.asarray(origin, float)
+    top, lo, hi = table_top(env.scene, table_origin)
     base = env.scene.base
+    to_base = table_origin - base[:2]                    # table coordinates to the base frame, in plan
     s = spec.spacing
     origin = np.ceil(lo / s) * s                         # grid points on multiples of the spacing
     nx, ny = (np.floor((hi - origin) / s) + 1).astype(int)
@@ -264,7 +287,7 @@ def compute(env, spec: MapSpec | None = None, log=print) -> ReachMap:
                 live = np.nonzero(here)[0]
                 if not len(live):
                     break
-                Ts = [pose(R, np.array([xy[i, 0] - base[0], xy[i, 1] - base[1], top + h])) for i in live]
+                Ts = [pose(R, np.array([xy[i, 0] + to_base[0], xy[i, 1] + to_base[1], top + h])) for i in live]
                 th, conv, sig, margin = reach.solve(Ts)
                 good = conv & (sig > MIN_SIGMA) & (margin > MIN_MARGIN)
                 for k in np.nonzero(good)[0]:
@@ -284,6 +307,7 @@ def compute(env, spec: MapSpec | None = None, log=print) -> ReachMap:
         "robot": env.execution.robot, "gripper": env.execution.gripper,
         "start_joints": np.asarray(env.raw["robot0_joint_pos"], float).round(9).tolist(),
         "base_world": base.round(9).tolist(), "table_top": round(top, 9),
+        "table_origin": np.asarray(table_origin, float).round(9).tolist(),
         "match_digest": match_digest(m), "fixtures": fixtures_of(m, d), "simulator": simulator(),
     }
     moving = [m.joint(int(j)).name for j in range(m.njnt)
