@@ -556,6 +556,22 @@ axioms:
       and asking which contact balances a finger's squeeze, both read fields derived from a
       configuration rather than integrated from one.
 
+  - id: AXM-mujoco-kinematics-by-chain
+    domain: environment
+    statement: >-
+      After a forward pass, the world pose of a MuJoCo body that is not a mocap body is determined by the
+      chain from the world to it: each body's pose in its parent, and each joint on the chain with its
+      type, axis, anchor, reference position and value in the state. A geom's or site's world pose is its
+      body's composed with its own pose in that body. A mocap body's pose is read from the state instead.
+    rationale: >-
+      BRN-lv-action-space solves inverse kinematics once in a reference scene and relies on the joints
+      it found in every scene whose robot, mount and table match the reference's; that carries over only
+      if the same joint values put the same bodies at the same poses, which is what a kinematic tree is
+      (MuJoCo documentation, Computation: forward kinematics; the joint's ref attribute sets the value at
+      which its child stands at its pose in the parent, stored as qpos0). A verifier refuted the match
+      without the reference positions (TRL-1519): a shoulder joint with ref -0.5 matched and pitched the
+      arm half a radian.
+
   - id: AXM-mujoco-contacts-pairwise
     domain: environment
     statement: >-
