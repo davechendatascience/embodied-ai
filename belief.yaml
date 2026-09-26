@@ -209,7 +209,7 @@ components:
   # The Panda VLA the teacher push handed over to (docs/design_VLA_qwen.md): LIBERO's stored demonstrations as
   # they are, labelled with the recorded motion (BRN-vla-learns-the-recorded-motion), executed by an exact twist
   # decode (BRN-vla-decodes-twists-exactly) through one interface (BRN-vla-sees-and-acts-as-trained), reported
-  # beside a blind twin (BRN-vla-reported-beside-a-blind-twin).
+  # beside a blind twin by the checklist in docs/vla_comparisons.md.
   - id: CMP-vla-student
     purpose: >-
       The Panda VLA -- Qwen3-VL-2B-Instruct reads both cameras and the instruction; an action expert
@@ -1151,7 +1151,7 @@ contracts:
 
   # The Panda VLA on LIBERO's protocol: each task's initial states once, the suite's step limit, LIBERO's
   # predicate, through the VLA's decode. The blind twin is the same measure with the camera images zeroed; a
-  # sighted rate is evidence of vision only through its margin over the twin's (BRN-vla-reported-beside-a-blind-twin).
+  # sighted rate is evidence of vision only through its margin over the twin's (docs/vla_comparisons.md).
   - id: CTR-vla-libero-success
     subject: CMP-vla-student
     claim_type: capability
@@ -1166,7 +1166,7 @@ contracts:
     sufficiency: {n_min: 500, max_ci_width: 0.06}
 
   # Every episode of a VLA evaluation is executed twice, in two rounds of fresh processes, and the rounds compared
-  # in every observation, action and outcome (BRN-vla-reported-beside-a-blind-twin). A run's rate is evidence only
+  # in every observation, action and outcome (docs/vla_comparisons.md, item 8). A run's rate is evidence only
   # if all of its episodes reproduced; this holds the rate over every evaluation, sighted and blind, either set.
   - id: CTR-vla-episodes-reproduce
     subject: CMP-vla-student
@@ -1174,6 +1174,17 @@ contracts:
     metrics: [{id: reproduced, unit: bool}]
     acceptance: {rule: "reproduced == true", target_rate: 0.995}
     compatibility_key: [policy_revision, execution]
+    evaluable_by: [TST-vla-libero, TST-vla-random-starts]
+    sufficiency: {n_min: 500, max_ci_width: 0.02}
+
+  # Every evaluated checkpoint is the one its training run ended with: its digest equals the one that run recorded
+  # (docs/vla_comparisons.md, item 7). A checkpoint loaded by the wrong name, or one saved mid-training, fails it.
+  - id: CTR-vla-evaluates-training-end
+    subject: CMP-vla-student
+    claim_type: capability
+    metrics: [{id: checkpoint_is_training_end, unit: bool}]
+    acceptance: {rule: "checkpoint_is_training_end == true", target_rate: 0.995}
+    compatibility_key: [policy_revision]
     evaluable_by: [TST-vla-libero, TST-vla-random-starts]
     sufficiency: {n_min: 500, max_ci_width: 0.02}
 
@@ -1728,7 +1739,7 @@ tests:
     layer: e2e
     targets: [CMP-vla-student]
     run: HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/eval_vla.py --ckpt checkpoints/vla_student.pt --suite libero_spatial --trials $OUT
-    metrics: [success, reproduced, steps, queries, latency_ms_median, gpu_peak_gib]
+    metrics: [success, reproduced, checkpoint_is_training_end, steps, queries, latency_ms_median, gpu_peak_gib]
     capture: [task_suite, task, init_index, policy_revision, execution, blind]
     cost: 30.0
     timeout_s: 10800
@@ -1738,7 +1749,7 @@ tests:
     layer: e2e
     targets: [CMP-vla-student, CMP-scene-randomizer]
     run: HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/eval_vla.py --ckpt checkpoints/vla_student.pt --suite libero_spatial --starts runs/evidence/random_starts/libero_spatial.npz --trials $OUT
-    metrics: [success, placed, reproduced, steps, queries, latency_ms_median, gpu_peak_gib]
+    metrics: [success, placed, reproduced, checkpoint_is_training_end, steps, queries, latency_ms_median, gpu_peak_gib]
     capture: [task_suite, task, init_index, policy_revision, execution, blind, starts]
     cost: 30.0
     timeout_s: 10800

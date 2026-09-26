@@ -68,4 +68,5 @@ vision.
 - The decode adds no kinematic error beyond counted events; the observation is read where the stored ones were
   (BRN-vla-decodes-twists-exactly).
 - Training and evaluation share one interface (BRN-vla-sees-and-acts-as-trained).
-- Every number offered as evidence of vision is a margin over the blind twin (BRN-vla-reported-beside-a-blind-twin).
+- Every number offered as evidence of vision is a margin over the blind twin, by the checklist in
+  `docs/vla_comparisons.md`.
