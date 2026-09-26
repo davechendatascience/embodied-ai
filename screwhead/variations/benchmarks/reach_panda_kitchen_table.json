@@ -26,6 +26,7 @@
   ],
   "robot": "Panda",
   "screens_overflowed": 0,
+  "simulator": "mujoco 3.8.1",
   "start_joints": [
    0.0,
    -0.161037389,

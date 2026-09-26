@@ -155,6 +155,13 @@ def _digest_body(h, m, b: int) -> None:
             _put(h, m.site_pos[k], m.site_quat[k])
 
 
+def simulator() -> str:
+    """The simulator release the screen ran under: collision and kinematics are the same function of a model only
+    within one release."""
+    import mujoco
+    return f"mujoco {mujoco.__version__}"
+
+
 def held_joints(m, d, moving: set[str]) -> dict[str, float]:
     """{joint: position} of every joint of the robot's, gripper's and mount's bodies and the table other than the
     arm's and gripper's own (`moving`) -- BRN-lv-action-space pins them all; the Panda on its mount has none."""
@@ -186,10 +193,11 @@ def _descends(m, body: int, root: int) -> bool:
 
 
 def matches(m, d, reference: dict) -> bool:
-    """The scene matches the reference: no flex (deformable collision geometry, which match_digest does not see), the
-    same robot, mount and table (match_digest), rooted at the world, their joints other than the arm's and gripper's
-    at the reference's positions, and the same fixtures at the same poses and joint positions."""
-    return (int(m.nflex) == 0 and match_digest(m) == reference["match_digest"]
+    """The scene matches the reference: the same simulator release, no flex (deformable collision geometry, which
+    match_digest does not see), the same robot, mount and table (match_digest), rooted at the world, their joints
+    other than the arm's and gripper's at the reference's positions, and the same fixtures at the same poses and
+    joint positions."""
+    return (simulator() == reference["simulator"] and int(m.nflex) == 0 and match_digest(m) == reference["match_digest"]
             and fixtures_of(m, d) == reference["fixtures"]
             and held_joints(m, d, set(reference["moving_joints"])) == reference["held_joints"])
 
@@ -275,7 +283,7 @@ def compute(env, spec: MapSpec | None = None, log=print) -> ReachMap:
         "robot": env.execution.robot, "gripper": env.execution.gripper,
         "start_joints": np.asarray(env.raw["robot0_joint_pos"], float).round(9).tolist(),
         "base_world": base.round(9).tolist(), "table_top": round(top, 9),
-        "match_digest": match_digest(m), "fixtures": fixtures_of(m, d),
+        "match_digest": match_digest(m), "fixtures": fixtures_of(m, d), "simulator": simulator(),
     }
     moving = [m.joint(int(j)).name for j in range(m.njnt)
               if int(m.jnt_qposadr[j]) in set(env.joint_indexes) | set(env.gripper_indexes)]
