@@ -164,6 +164,21 @@ axioms:
       (libero_10 2) and its finger against its second link (libero_10 9). The IIWA's failures are
       frozen at a joint limit or loop, not pinned.
 
+  - id: AXM-joint-controller-law
+    domain: environment
+    statement: >-
+      robosuite 1.4.0's JOINT_POSITION controller, as SimArm runs it, commands at every physics
+      substep the arm torques clip(M(q) (kp (q_goal - q) - kd q') + b(q, q'), actuator limits): q_goal
+      the joint goal the execution layer sets (ramped across the control period), q and q' the
+      measured joints and their rates, M the joint-space inertia, b MuJoCo's bias forces (gravity,
+      Coriolis and centrifugal), kp = 4000 on every arm joint and kd = 2 sqrt(kp). The only term that
+      drives the arm towards anything is kp (q_goal - q): with the goal at the measured joints the
+      command is the bias less the damping, which holds the arm where it stands.
+    rationale: >-
+      robosuite/controllers/joint_pos.py run_controller (desired torque = position error x kp +
+      velocity error x kd, times the mass matrix, plus torque_compensation = qfrc_bias), single_arm.py
+      (clipped to the actuator range); SimArm's set_joint_gains sets kp and kd each period.
+
   - id: AXM-libero-soft-reset-state
     domain: environment
     statement: >-
@@ -536,20 +551,21 @@ definitions:
     meaning: >-
       At a step, a contact between a geom of the robot's and a geom of a body B that is not the
       robot's is intended when, read from that step's state and the model alone, one of these holds:
-      (held) both finger groups touch B or the object B belongs to; (jaws) a finger touches B at a
-      point inside the jaws' closing volume -- between the two pads' inner faces along the jaw line,
-      within the fingers' width across it, and from the palm's face to the finger tips along the
-      approach, each widened by 1 mm, more than a contact point lies off the surfaces in contact --
-      with the contact's normal nearer the jaw line than the approach; (pushed) a finger touches B and
-      B's category is moved by pushing in the affordance table; (joint) any part of the gripper
-      touches B, and B is, of the bodies that move on a slide or hinge joint of their own, the one
-      whose collision geometry lies nearest the tool point; (support) a finger touches B while both
-      finger groups touch another body that touches B; (inside) the tool point lies inside a region
-      site of B's object. Every other contact between the robot and anything else is unintended, and
-      so is every contact between two of the robot's bodies more than one joint apart in the kinematic
-      tree, unless both are the gripper's. The rules read no policy's intent, so a teacher and a
-      student in the same state are judged alike. This names what the per-intent rules allow; it does
-      not say an intended contact is harmless or an unintended one harmful.
+      (held) both finger groups touch B or the object B belongs to, and that object moves on a free
+      joint (fingertips either side of a table hold nothing); (jaws) a finger touches B at a point
+      inside the jaws' closing volume -- between the two pads' inner faces along the jaw line, within
+      the fingers' width across it, and from the palm's face to the finger tips along the approach,
+      each widened by 1 mm, more than a contact point lies off the surfaces in contact -- with the
+      contact's normal nearer the jaw line than the approach; (pushed) a finger touches B and B's
+      category is moved by pushing in the affordance table; (joint) any part of the gripper touches B,
+      and B is, of the bodies that move on a slide or hinge joint of their own, the one whose
+      collision geometry lies nearest the tool point; (support) a finger touches B while both finger
+      groups touch another body that touches B; (inside) the tool point lies inside a region site of
+      B's object. Every other contact between the robot and anything else is unintended, and so is
+      every contact between two of the robot's bodies more than one joint apart in the kinematic tree,
+      unless both are the gripper's. The rules read no policy's intent, so a teacher and a student in
+      the same state are judged alike. This names what the per-intent rules allow; it does not say an
+      intended contact is harmless or an unintended one harmful.
     rationale: >-
       The user's decision of 2026-09-26: exemptions are per-intent state rules, not one finger zone,
       so a fingertip striking a wall stays guarded. Calibrated on the Panda teacher's 40 matrix

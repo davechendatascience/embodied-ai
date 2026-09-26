@@ -4,7 +4,8 @@ Per-intent state rules, decided 2026-09-26 over a single "finger zone": each con
 own rule, computed from the simulator state alone, so a student executing through the same layer is judged the same
 way. A contact between a robot geom and a body B is intended when
 
-  held     both finger groups touch B (the jaws hold it, or are closing on it);
+  held     both finger groups touch B, and B belongs to an object that moves on a free joint (the jaws hold it,
+           or are closing on it); fingertips on either side of a table hold nothing;
   jaws     a finger touches B inside the jaws' closing volume: between the two fingers' inner faces, within the
            fingers' width across the jaw line, and along the approach from the palm's face to the finger tips (a rim
            pinched as deep as the palm touches the fingers above their pads), widened by CONTACT_TOL, where a
@@ -64,6 +65,8 @@ class Intent:
         self.palm_geoms = [g for g in collide if self.gripper_body(int(mm.geom_bodyid[g])) and not self.finger[int(mm.geom_bodyid[g])]]
         self.jointed = {b for b in range(mm.nbody) if not self.robot[b] and int(mm.body_jntnum[b]) > 0
                         and int(mm.jnt_type[int(mm.body_jntadr[b])]) in (mujoco.mjtJoint.mjJNT_SLIDE, mujoco.mjtJoint.mjJNT_HINGE)}
+        self.free_roots = {b for b in range(mm.nbody) if int(mm.body_parentid[b]) == 0 and int(mm.body_jntnum[b]) > 0
+                           and int(mm.jnt_type[int(mm.body_jntadr[b])]) == mujoco.mjtJoint.mjJNT_FREE}
         self.jointed_geoms = [(g, int(mm.geom_bodyid[g])) for g in collide if int(mm.geom_bodyid[g]) in self.jointed]
         self.regions = [s for s in range(mm.nsite) if "region" in (mujoco.mj_id2name(mm, mujoco.mjtObj.mjOBJ_SITE, s) or "")
                         and int(mm.site_type[s]) == mujoco.mjtGeom.mjGEOM_BOX and not self.robot[int(mm.site_bodyid[s])]]
@@ -159,7 +162,7 @@ class Intent:
                 touching.setdefault(x, set()).add(y)
                 if self.finger[x] and not self.robot[y]:
                     sides.setdefault(y, set()).add("left" if self.left[x] else "right")
-        return found, touching, {b for b, s in sides.items() if len(s) == 2}
+        return found, touching, {b for b, s in sides.items() if len(s) == 2 and self._root(b) in self.free_roots}
 
     def _is_self(self, b1: int, b2: int) -> bool:
         return b1 != b2 and not (self.gripper_body(b1) and self.gripper_body(b2)) and self._joint_count(b1, b2) > 1
