@@ -274,7 +274,6 @@ components:
       - screwhead/sim/contacts.py      # every contact query, once
       - tools/arm_scene_check.py            # another arm's scene against the Panda's
       - tests/test_other_arm_start.py
-      - tests/test_lean_step.py             # the lean period against env.step
       - scripts/setup_libero_venv.sh        # the pinned stack both environments run in
 
   - id: CMP-scripted-teacher

@@ -28,8 +28,6 @@ IGNORE=(
   forward
   # called on sim/joint_ramp.JointRamp by robosuite's JointPositionController (its interpolator API)
   set_goal get_interpolated_goal
-  # SimArm's lean step refreshes robosuite's controller cache and env clock, which robosuite reads
-  joint_pos joint_vel mass_matrix cur_time
   # SimArm._set_render_samples: MuJoCo reads offsamples when a render context is made; robosuite reads the context
   offsamples _render_context_offscreen
 )

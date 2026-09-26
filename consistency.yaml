@@ -859,19 +859,6 @@ definitions:
       flow moving an object clear exists for -- and 'start' was undefined for a plan re-derived every
       step.
 
-  - id: DEF-lean-period-reads
-    term: What a lean control period reads
-    meaning: >-
-      Besides MuJoCo's integration state and the model, SimArm._advance and execute under
-      Execution(lean=True) read, between control periods: the joint ramp's start, goal and k;
-      the joint controller's joint_pos, joint_vel, mass matrix (in its stored memory layout) and
-      new_update flag; the twist servo's ref, T_ref and V_prev; the gripper's current_action;
-      and the command. The controller's goal is overwritten at each period's first substep,
-      robosuite's clock is read only by env.step, and GripperServo carries no state between
-      calls. Audited in the code (SimArm._advance and execute, TwistServo, GripperServo,
-      JointRamp, robosuite's set_goal, run_controller, update and grip_action) by two
-      independent reviews (TRL-0224, TRL-0239).
-
   - id: DEF-plan
     term: Plan
     meaning: >-
@@ -1187,51 +1174,6 @@ lemmas:
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
 branches:
-  # ---- CMP-scene-randomizer: resets, layouts and what a policy reads: one execution core, two environments
-  - id: BRN-lean-step-is-env-step
-    subject: CMP-scene-randomizer
-    claim_type: contract
-    statement: >-
-      A lean control period -- for each of the 25 physics substeps: mj_step1; refresh the
-      JointPositionController's inputs (joint_pos, joint_vel, the arm block of the mass matrix)
-      from that state with its new_update flag cleared; on the first substep set_goal(arm
-      command); torques = clip(run_controller(), torque_limits); grip_action(gripper command);
-      write both into data.ctrl; mj_step2 -- leaves the MuJoCo state (qpos, qvel, act,
-      qacc_warmstart, ctrl, time) bit-identical to robosuite's env.step for the same command.
-    premises: [AXM-one-execution-path, AXM-reproducible-measurement]
-    derivation_rule: >-
-      Falsified before implementation by an independent reviewer: it refreshes on every substep, but
-      robosuite's first period after a reset runs on the controller's stale cache
-      (AXM-robosuite-controller-cache), so the two paths differ from period 0 and never re-converge.
-      Superseded by BRN-lean-step-keeps-controller-cache. evidence: CTR-execution-reproducible.
-    sufficiency: {n_min: 3, min_consensus: 0.8}
-
-  - id: BRN-lean-step-keeps-controller-cache
-    subject: CMP-scene-randomizer
-    claim_type: contract
-    statement: >-
-      A lean control period -- for each of the 25 physics substeps: mj_step1; if the
-      JointPositionController's new_update flag is set, refresh its cached joint_pos, joint_vel
-      and arm mass-matrix block from that state and clear the flag (update() without its
-      mj_forward); on the first substep set_goal(arm command); torques =
-      clip(run_controller(), torque_limits); grip_action(gripper command); write both into
-      data.ctrl; mj_step2 -- leaves every MuJoCo integration-state field and the controller's
-      cache, flag and joint ramp bit-identical to robosuite's env.step for the same command,
-      the first period after a reset included. What it skips (the two redundant mj_forward
-      calls per substep, observables, the robot's recent-value buffers, LIBERO's visual-state
-      update, reward) writes nothing the next substep reads.
-    premises: [AXM-one-execution-path, AXM-reproducible-measurement, AXM-robosuite-controller-cache]
-    derivation_rule: >-
-      mj_forward has no effect on the next step beyond what mj_step recomputes (warmstart reads only
-      qacc_warmstart, written in the advance), and mj_step1 + mj_step2 is mj_step for the Euler
-      integrator: 300 substeps from a 37-contact state were bit-identical three ways. Honouring the flag
-      reproduces robosuite's refresh schedule exactly: 60 periods / 1500 substeps from TaskEnv
-      libero_goal 8 reset(0), gripper closing, all mjSTATE_INTEGRATION fields and qacc with max
-      difference 0; 2.88x faster (12.05 -> 4.18 ms per period). Implementation: screwhead/sim/sim_arm.py
-      (to be written), held by a test that runs both paths from one saved state. evidence:
-      CTR-execution-reproducible.
-    sufficiency: {n_min: 3, min_consensus: 0.8}
-
   - id: BRN-reset-anchors-all-execution
     subject: CMP-scene-randomizer
     claim_type: contract
@@ -1278,39 +1220,6 @@ branches:
       PrivilegedEnv a redraw that lands on an init state not yet settled starts the reset over), and
       that every episode's draws come from a generator seeded by its index (PrivilegedEnv's come from
       the process's one generator). evidence: CTR-execution-reproducible.
-    sufficiency: {n_min: 3, min_consensus: 0.8}
-
-  - id: BRN-policies-read-one-forwarded-state
-    subject: CMP-scene-randomizer
-    claim_type: contract
-    statement: >-
-      The execution core's one control-period helper -- used by execute() and by the settling holds,
-      which read the placed state themselves before holding -- ends with one mj_forward, and every
-      policy input is read from that forwarded state: the teacher's snapshot and scene poses, the
-      student's state and images, the recorder's frames, and success, which is LIBERO's predicate
-      evaluated on the forwarded state (env.step's own done, computed before the forward, is discarded
-      for decisions and logged alongside for comparability). Observations are forced only (no
-      per-substep sampling), refreshed by every function that changes the state (the IK write, object
-      writes, layout proposals and restores, set_init_state, begin()), the observation a period ends
-      with is the one the next period's servo reads, and reading an observation never renders a second
-      time (PrivilegedEnv.obs() reuses the period's frames). Each action is then chosen from the exact
-      state it acts on, positions and everything derived from them agree to 0 mm, and reading or
-      rendering an observation never changes the simulated state or a teacher's trajectory; rendered
-      frames, like every EGL render, can differ by one intensity level between renders of one state, so
-      image-conditioned policies are reproducible only up to that. It is adopted together with the reset
-      anchor (BRN-reset-anchors-all-execution), which makes a hold after a placement start from the
-      placed state. Adopting it changes what every policy sees, so before any data is collected under it
-      the skill teacher is re-validated (per BRN-teacher-switches-dwell), the scripted labeller is
-      re-run, and every student dataset -- DAgger rounds, frame and token caches, checkpoints -- is
-      recollected or retrained; keeping trials from before and after apart is BRN-trial-provenance.
-    premises: [AXM-reproducible-measurement, AXM-one-execution-path, AXM-dagger-needs-markov-labels, BRN-reset-anchors-all-execution]
-    derivation_rule: >-
-      Restated after a confirmation whose only gap was scope: "reading or rendering never changes a
-      trajectory" held for the simulated state and teacher trajectories (0 of 600 steps changed by extra
-      reads), but a second render of one forwarded state differed at 2 of 600 steps (3 wrist pixels, 1
-      level) and PrivilegedEnv.obs() without raw re-rendered and replaced self.raw
-      (teacher_env.py:204-205), swapping a student's frame at 1 of 600 -- now obs() reuses the period's
-      frames and the EGL limit is named, as in the reset branch. evidence: CTR-execution-reproducible.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   # ---- CMP-twist-servo: the twist servo and the joint ramp every policy's action goes through

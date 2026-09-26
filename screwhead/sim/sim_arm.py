@@ -100,12 +100,6 @@ class Execution:
     #                                   goal; a ramped arm trails by a period more, the 0.05 clips
     #                                   saturated, and the tool sank 52 mm below its transit plane and
     #                                   surged at 0.64 m/s against a 0.25 m/s command
-    # lean is off by default: the certified skill teacher runs without it until its grasp switches
-    # are re-validated (BRN-teacher-switches-dwell); the RL teacher runs with it.
-    lean: bool = False                # a control period without env.step's bookkeeping, then one
-    #                                   mj_forward and a forced observation of that state
-    #                                   (BRN-lean-step-keeps-controller-cache, BRN-policies-read-one-
-    #                                   forwarded-state)
     anchor: bool = True               # reset execution memory at every placement (BRN-reset-anchors-
     #                                   all-execution). Off, robosuite's finger target carried over from
     #                                   the episode before (half open in a fresh process), the settle
@@ -180,7 +174,7 @@ class SimArm:
         self.servo.scale_lead = ex.scale_lead
         self.servo.tol = ex.servo_tol
         self.joint_ramp = ex.joint_ramp
-        self.lean, self.anchoring = ex.lean, ex.anchor
+        self.anchoring = ex.anchor
         if render and ex.render_samples is not None:
             self._set_render_samples(ex.render_samples)
         self.t = 0
@@ -231,13 +225,12 @@ class SimArm:
         return np.asarray(self.env.sim.get_state().flatten()).copy()
 
     # -- acting -------------------------------------------------------------------------
-    def execute(self, action: np.ndarray, substep=None) -> tuple[dict, bool]:
+    def execute(self, action: np.ndarray) -> tuple[dict, bool]:
         """action: 6 normalised body-twist + 1 gripper channel, each in [-1, 1].
 
         The twist is executed through TwistServo onto an absolute joint reference (per-step
         deltas lose 18% of every step to controller lag, and it compounds -- servo.py); the
-        gripper channel is robosuite's command, or a target aperture run by GripperServo.
-        `substep(i)`, lean execution only, is called after each 2 ms physics substep."""
+        gripper channel is robosuite's command, or a target aperture run by GripperServo."""
         a = np.clip(np.asarray(action, np.float64), -1, 1)
         o = self.observe()
         cmd = np.zeros(self.env.env.action_dim)
@@ -260,13 +253,9 @@ class SimArm:
         else:
             cmd[-1] = a[6]
         self._gains()
-        if self.lean:
-            self._advance(cmd, substep)
-            raw, done = self.observe(), self.success()
-        else:
-            raw, _, done, _ = self.env.step(cmd)
-            if self.execution.observe_end:
-                raw = self.observe()
+        raw, _, done, _ = self.env.step(cmd)
+        if self.execution.observe_end:
+            raw = self.observe()
         self.t += 1
         self.raw = raw
         if getattr(self, "diag", None) is not None:
@@ -316,53 +305,6 @@ class SimArm:
                     torque_saturated_steps=dg["sat_steps"], self_contact_steps=dg["self_steps"],
                     self_pairs=dict(sorted(dg["pairs"].items(), key=lambda kv: -kv[1])[:4]),
                     reanchors=self.servo.reanchors - dg["reanchors0"], limit_clamps=self.servo.limit_clamps - dg["clamps0"])
-
-    def _advance(self, cmd: np.ndarray, substep=None) -> None:
-        """One control period of env.step's physics without its bookkeeping, then one forward.
-
-        Per 2 ms substep: mj_step1; robosuite's own joint controller, its cache refreshed only
-        when its new_update flag says robosuite would refresh it (a reset leaves it stale on
-        purpose for the first period); set_goal on the first substep; clipped torques and the
-        gripper action into ctrl; mj_step2. What env.step does besides -- two more mj_forward
-        per substep, observables, the robot's recent-value buffers, LIBERO's visual flags,
-        reward -- writes nothing the next substep's physics reads, so the integration state and
-        the controller's joint_pos, joint_vel, mass matrix and ramp stay bit-identical. It is
-        not a drop-in for env.step's outputs: the observation is the forwarded end-of-period
-        one (env.step's comes from a mid-period substep, up to 0.11 rad behind), success read
-        after the forward can fire on a different step (11 of 120 teacher episodes), LIBERO's
-        visual flags (the stove burner) are not updated for renders, and robosuite's horizon
-        never ends the episode. Measured 2.7-2.8x faster for the period alone, 2.1-2.2x for
-        the whole execute() without rendering. The closing forward makes every quantity
-        derived from positions current for whoever reads the state next. `substep(i)` is
-        called after each substep."""
-        import mujoco
-        env = self.env.env
-        m, d = env.sim.model._model, env.sim.data._data
-        robot = self.robot
-        c = robot.controller
-        arm, grip = cmd[:c.control_dim], cmd[c.control_dim:]
-        low, high = robot.torque_limits
-        mass = np.empty((m.nv, m.nv))
-        for i in range(round(env.control_timestep / env.model_timestep)):
-            mujoco.mj_step1(m, d)
-            if c.new_update:
-                c.joint_pos = np.array(d.qpos[c.qpos_index])
-                c.joint_vel = np.array(d.qvel[c.qvel_index])
-                mujoco.mj_fullM(m, mass, d.qM)
-                c.mass_matrix = mass[c.qvel_index, :][:, c.qvel_index]
-                c.new_update = False
-            if i == 0:
-                c.set_goal(arm)
-            torques = np.clip(c.run_controller(), low, high)
-            robot.torques = torques
-            robot.grip_action(gripper=robot.gripper, gripper_action=grip)
-            d.ctrl[robot._ref_joint_actuator_indexes] = torques
-            mujoco.mj_step2(m, d)
-            if substep is not None:
-                substep(i)
-        env.timestep += 1
-        env.cur_time += env.control_timestep
-        mujoco.mj_forward(m, d)
 
     def _start_at_recorded_tool(self, k: int, draws: int = 63) -> None:
         """Put this arm's tool where LIBERO's Panda held it in initial state k
@@ -543,10 +485,7 @@ class SimArm:
             cmd[:self.robot.controller.control_dim] = np.clip((hold - meas) / self.joint_step, -1, 1)
             cmd[-1] = gripper
             self._gains()
-            if self.lean:
-                self._advance(cmd)
-            else:
-                self.env.step(cmd)
+            self.env.step(cmd)
 
     def _max_object_speed(self) -> float:
         """Fastest linear speed of any free object -- the scene is at rest when it is small."""
