@@ -56,6 +56,12 @@ difference the zeroed images make to training; anything about starts other than 
 
 ## P0 -- pilot (declared 2026-09-26; unreplicated by design, no vision claim)
 
+**Stopped 2026-09-26 21:34 by the user's decision, before any model was evaluated.** The sighted model stopped at
+step 5000 of 20000 (val L1 0.444, val gripper accuracy 93.8%); the blind model was never trained. VLA-JEPA on the
+randomized set had shown the gap P0 was meant to measure (99.0% -> 70.0% on tasks 0-3), and the work moved to
+training data from the skill teacher over widened starts (E2). No margin is reported. The step-5000 checkpoint
+(`checkpoints/p0/vla_spatial_sighted_s0.pt`, no training record) is a diagnostic model only, never a comparison's.
+
 - **Why:** the user's choice to see first numbers after one seed pair (about 17 h) rather than after six models
   (about 49 h). With one seed per model its margin is reported as unreplicated, never as evidence.
 - **Measure (named in advance):** overall success rate on libero_spatial from the randomized starts
