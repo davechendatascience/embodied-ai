@@ -229,6 +229,8 @@ components:
       Labels close the loop on the servo's reference; a replay enters the data only when LIBERO's
       predicate accepts it; a blind twin beside every number and several training seeds; flow
       matching only if mode averaging is measured to hurt; latency and VRAM reported with accuracy
+    code:
+      - tools/demo_replay.py               # the demonstrations through the VLA's execution path (the training pairs)
   - id: CMP-twist-servo
     purpose: Execute a body twist on the simulator's joint-position controller
     inputs: [IFC-expert__ik]
@@ -1126,6 +1128,20 @@ contracts:
     evaluable_by: [TST-teacher-reliability]
     sufficiency: {n_min: 100, max_ci_width: 0.25}
 
+  # The first gate of the Panda VLA (docs/design_VLA_qwen.md): a demonstration replayed through the VLA's
+  # execution path meets LIBERO's predicate. Every replay that does not is data the VLA never sees; the
+  # design's target is most tasks at 45 of 50. Evidence for BRN-vla-trains-on-demos-replayed-through-the-servo.
+  - id: CTR-demo-replay-succeeds
+    subject: CMP-vla-student
+    claim_type: capability
+    metrics:
+      - {id: success, unit: bool}
+      - {id: max_track_mm, unit: mm}
+    acceptance: {rule: "success == true", target_rate: 0.9}
+    compatibility_key: [task_suite, replay_revision, execution]
+    evaluable_by: [TST-demo-replay]
+    sufficiency: {n_min: 200, max_ci_width: 0.1}
+
   # The teacher on another arm with the Panda's gripper, started at the recorded Panda's tool pose in
   # the Panda's scene (CTR-other-arm-scene-as-panda). Tuning paused 2026-09-26 at 149 of 160 tasks
   # succeeding at init 0; this holds what it reached, per arm, not a bar it met.
@@ -1634,6 +1650,16 @@ tests:
     capture: [task, task_suite, teacher_revision, mechanism]
     cost: 80.0
     timeout_s: 10800
+
+  # Every demonstration of the four suites' 40 tasks, one trials file per suite under $OUT
+  - id: TST-demo-replay
+    layer: component
+    targets: [CMP-vla-student, CMP-twist-servo]
+    run: mkdir -p $OUT && for S in libero_spatial libero_object libero_goal libero_10; do HF_HUB_OFFLINE=1 PYTHONPATH=third_party/LIBERO:. MUJOCO_GL=egl .venv-libero/bin/python tools/demo_replay.py --suite $S --trials $OUT/$S.trials.json; done
+    metrics: [success, max_track_mm, mean_track_mm, first_success_step, demo_steps]
+    capture: [task_suite, task, demo, replay_revision, execution]
+    cost: 20.0
+    timeout_s: 7200
 
   # Four suites x ten tasks x initial states 0-4, per arm, one trials file per (arm, suite) under $OUT
   - id: TST-teacher-other-arms
