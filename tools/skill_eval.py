@@ -121,7 +121,8 @@ def _run_episode(env, teacher, job: Job, ep: int, record: bool):
     track = log.track if log is not None else {}
     forced = {o: g.get("rejected", {}) for o, g in
               (detail.get("grasp") or {}).items() if g.get("forced")}
-    row = dict(task=job.task, episode=job.ep_offset + ep * job.stride, success=ok, steps=env.t,
+    row = dict(task=job.task, episode=job.ep_offset + ep * job.stride, seed=job.seed, env_episode=env.episode,
+               success=ok, steps=env.t,
                refused=refusal is not None, **(refusal.as_row() if refusal else {}),
                forced_grasp=bool(forced), rejected_by=forced, **gentle,
                last_phase=teacher.phase, step_index=teacher.step_index, phases=dict(phases),
@@ -155,6 +156,7 @@ def _crashed_row(job: Job, ep: int, env, e: Exception) -> dict:
     what = f"crash: {type(e).__name__}: {e} at {Path(where.filename).name}:{where.lineno}"
     row = _failed_row(job.task, job.ep_offset + ep * job.stride, env.t, env.language, what, "crash")
     row["init_index"] = getattr(env, "init_index", None)
+    row["seed"], row["env_episode"] = job.seed, env.episode
     return row
 
 
@@ -162,7 +164,10 @@ def _fill_lost(rows: list[dict], jobs: list[Job]) -> list[dict]:
     """Every episode a job owed is a row. One a dead worker never sent is a failure, not an
     absence: dropped, it biased the rate toward the episodes that got to finish."""
     have = {(r["task"], r["episode"]) for r in rows}
-    return rows + [_failed_row(j.task, ep, 0, "", "lost: the worker died before sending it", "lost")
+    # env_episode as the worker would have counted it: an interleaved worker skips the stream's other
+    # episodes (so its count is the task's episode + 1), a split worker starts its own stream at 1
+    return rows + [dict(_failed_row(j.task, ep, 0, "", "lost: the worker died before sending it", "lost"),
+                        seed=j.seed, env_episode=ep + 1 - (j.ep_offset if j.stride == 1 else 0))
                    for j in jobs for ep in range(j.ep_offset, j.ep_offset + j.episodes * j.stride, j.stride)
                    if (j.task, ep) not in have]
 
@@ -253,11 +258,16 @@ def _parse() -> argparse.Namespace:
     return ap.parse_args()
 
 
+def _start(args) -> dict:
+    """The start-pose noise every worker's TaskEnv is given (StartNoise's fields)."""
+    return dict(xy_m=args.start_xy, z_m=args.start_z, yaw_deg=args.start_yaw,
+                tilt_deg=args.start_tilt, null_rad=args.start_null)
+
+
 def _jobs(args) -> list[Job]:
     tasks = args.tasks if args.tasks is not None else list(range(10))
     cpus = [int(c) for c in args.cpus.split(",")]
-    start = dict(xy_m=args.start_xy, z_m=args.start_z, yaw_deg=args.start_yaw,
-                 tilt_deg=args.start_tilt, null_rad=args.start_null)
+    start = _start(args)
     if args.interleave > 1 and args.split > 1:
         raise SystemExit("--interleave and --split are exclusive")
     per = -(-args.episodes // args.split)
@@ -409,8 +419,12 @@ def _write_trials(rows: list[dict], args, rev: str) -> None:
                         "mechanism": r.get("mechanism", ""),
                         "refused_predicate": r.get("refused_predicate", "")},
          "detail": dict(r.get("detail", {}), episode=r["episode"], steps=r["steps"], language=r["language"]),
-         "repro": {"seed": args.seed * 100 + r["task"], "task": r["task"], "task_suite": args.suite,
-                   "episode": r["episode"], "horizon": args.horizon, "init_index": r.get("init_index"),
+         # seed and env_episode as the worker's TaskEnv held them: under --split worker j runs on
+         # (seed * 100 + task) * 1000 + j and counts its own episodes from 1, so neither follows
+         # from --seed and the task's episode index
+         "repro": {"seed": r["seed"], "env_episode": r["env_episode"], "task": r["task"],
+                   "task_suite": args.suite, "episode": r["episode"], "horizon": args.horizon,
+                   "init_index": r.get("init_index"), "start": _start(args), "refuse": args.refuse,
                    "teacher_revision": rev, **embodiment}} for r in rows]}, indent=1))
     written = json.loads(Path(args.trials).read_text())["trials"]
     leaked = [t for t in written if t["metrics"].get("refused") and "success" in t["metrics"]]
