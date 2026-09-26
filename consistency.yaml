@@ -4289,40 +4289,43 @@ branches:
     subject: CMP-vla-student
     claim_type: contract
     statement: >-
-      The Panda VLA's model receives, in training and in evaluation, inputs made by one preprocessing
-      applied to an observation read at the same point of a step: both camera images at the resolution
-      LIBERO stores them, turned upright the same way; the task's instruction, the language string
-      LIBERO's benchmark defines for that task, in training and in evaluation alike; and a proprioceptive
-      vector -- the tool pose in the robot's base frame (the forward kinematics of the observed arm joints
-      through the Panda's chain, with the tool frame the labels use) and the finger opening -- computed by
-      the same function. In evaluation every observation the model acts on is a forced read of the state
-      as it stands: the first of an episode taken of the placed state, every later one after a step's
-      physics (BRN-vla-decodes-twists-exactly, AXM-robosuite-step-observes-the-period-end). Its outputs
-      are a chunk of H actions, each a normalized twist and a gripper score; position i of the chunk for
-      the pair at stored step j is trained on the label of stored step j+i of the same demonstration, and
-      positions past the demonstration's last pair are left out of the loss. Each twist target is its
-      label minus a mean and divided by a standard deviation, per component, both fitted on the training
-      labels alone and stored with the weights, with no clipping; each gripper score is trained by binary
-      cross-entropy toward the recorded command, +1 or -1 (AXM-libero-demos-record-their-actions), mapped
-      to 1 and 0, so its decision boundary is a score of 0 with +1 on the positive side. At evaluation
-      each twist output is multiplied by the same standard deviation and has the same mean added, which
-      undoes the training map exactly, is clipped to the action range if it falls outside it, is
-      multiplied by the same action-range bounds the labels were divided by, and is executed over the same
-      control period as a body twist of that same tool frame (BRN-vla-decodes-twists-exactly); the gripper
-      command executed is +1 for a positive score and -1 otherwise; the first k actions of a chunk are
-      executed before the model is queried again, H and k stored with its weights; and the model's
-      parameters are read nowhere but from those weights. Consequently the model's inputs are the same
-      function of the observation and the task in training and in evaluation, each observation showing the
-      state as it stands where the stored ones show the state their step led to
+      The Panda VLA's model receives, in training on pairs taken from LIBERO's demonstrations and in
+      evaluation, inputs made by one preprocessing applied to an observation read at the same point of a
+      step: both camera images at the resolution LIBERO stores them, turned upright the same way; the
+      task's instruction, the language string LIBERO's benchmark defines for that task, in training and in
+      evaluation alike; and a proprioceptive vector -- the tool pose in the robot's base frame (the
+      forward kinematics of the observed arm joints through the Panda's chain, with the tool frame the
+      labels use) and the finger opening -- computed by the same function. In evaluation every observation
+      the model acts on is a forced read of the state as it stands: the first of an episode taken of the
+      placed state, every later one after a step's physics (BRN-vla-decodes-twists-exactly,
+      AXM-robosuite-step-observes-the-period-end). Its outputs are a chunk of H actions, each a normalized
+      twist and a gripper score; position i of the chunk for the pair at stored step j is trained on the
+      label of stored step j+i of the same demonstration, and positions past the demonstration's last pair
+      are left out of the loss. Each twist target is its label minus a mean and divided by a standard
+      deviation, per component, both fitted on the training labels alone and stored with the weights, with
+      no clipping; each gripper score is trained by binary cross-entropy toward the recorded command, +1
+      or -1 (AXM-libero-demos-record-their-actions), mapped to 1 and 0, so its decision boundary is a
+      score of 0 with +1 on the positive side. At evaluation each twist output is multiplied by the same
+      standard deviation and has the same mean added, which undoes the training map exactly, is clipped to
+      the action range if it falls outside it, is multiplied by the same action-range bounds the labels
+      were divided by, and is executed over the same control period as a body twist of that same tool
+      frame (BRN-vla-decodes-twists-exactly); the gripper command executed is +1 for a positive score and
+      -1 otherwise; the first k actions of a chunk are executed before the model is queried again, H and k
+      stored with its weights; and the model's parameters are read nowhere but from those weights.
+      Consequently, for pairs taken from LIBERO's demonstrations, the model's inputs are the same function
+      of the observation and the task in training and in evaluation, each observation showing the state as
+      it stands where the stored ones show the state their step led to
       (AXM-libero-demo-observations-follow-their-actions); and at every step whose twist output lies in
       the action range and at which none of BRN-vla-decodes-twists-exactly's four counted events occurs,
-      the executed displacement is the one a label of that output's value encodes
-      (BRN-vla-learns-the-recorded-motion), and every executed gripper command is one a label can take: no
-      difference between training and evaluation lies in the input or output interface at those steps. Not
-      claimed: that the evaluation reaches states like the training ones; that a state's rendered images
-      are pixel-identical to the stored ones (they are rendered anew, not read from the files); that no
-      step clips or has a counted event (a chunk's first twist can differ from the last executed one by
-      more than the acceleration bound allows); that the policy succeeds or uses its images.
+      the executed displacement is the one such a pair's label of that output's value encodes
+      (BRN-vla-learns-the-recorded-motion), and every executed gripper command is one such a label can
+      take: no difference between training on those pairs and evaluation lies in the input or output
+      interface at those steps. Not claimed: anything about training pairs from other sources (a source is
+      covered only by a claim that its pairs meet the training-side conditions stated here); that the
+      evaluation reaches states like the training ones; that a state's rendered images are pixel-identical
+      to the stored ones (they are rendered anew, not read from the files); that no step clips or has a
+      counted event (a chunk's first twist can differ from the last executed one by more than the
+      acceleration bound allows); that the policy succeeds or uses its images.
     premises: [AXM-one-execution-path, AXM-robosuite-step-observes-the-period-end, AXM-libero-demo-observations-follow-their-actions, AXM-libero-demos-record-their-actions, BRN-vla-learns-the-recorded-motion, BRN-vla-decodes-twists-exactly]
     derivation_rule: >-
       Restated after TRL-1201..1203: the first observation of an episode is a forced read of the placed
@@ -4336,7 +4339,10 @@ branches:
       evaluation renders them, and Qwen3-VL's processor enlarges any image under 256 x 256 the same way in
       both; on a demonstration the proprioceptive vector of stored observation j equals that of recorded
       state j+1 exactly, and the label applied at state j+1 lands on state j+2 within 1.8e-7 mm; the
-      labels lie well inside the action range (largest component 0.27 of it on libero_spatial 0).
+      labels lie well inside the action range (largest component 0.27 of it on libero_spatial 0). Scoped
+      2026-09-26 to training on pairs taken from LIBERO's demonstrations (TRL-1283: its training-side
+      clauses rest on LIBERO-only premises once BRN-vla-learns-the-recorded-motion was scoped); another
+      source is covered by a claim that its pairs meet the same conditions.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
   - id: BRN-random-starts-test-set
