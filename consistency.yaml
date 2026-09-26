@@ -179,6 +179,23 @@ axioms:
       velocity error x kd, times the mass matrix, plus torque_compensation = qfrc_bias), single_arm.py
       (clipped to the actuator range); SimArm's set_joint_gains sets kp and kd each period.
 
+  - id: AXM-libero-demos-record-a-panda
+    domain: environment
+    statement: >-
+      LIBERO's human demonstrations, 50 per task for all 130 tasks, each record the flattened
+      simulator states the demonstration passed through, in the layout of the task's test initial
+      states (the Panda's seven arm joints and two finger joints, then the object joints in the
+      model's order; AXM-libero-init-states-record-a-panda), and the model the demonstration was
+      recorded with, whose fixture poses its states were recorded against. Written into the task's
+      model with those fixture poses, a demonstration's recorded states are the states it was recorded
+      in.
+    rationale: >-
+      Measured 2026-09-26 over all 130 demonstration files (6,500 demonstrations): every first state
+      has the test initial states' length and every demonstration carries its recorded model
+      (model_file). tools/demo_survey.py: libero_goal 9's recorded final states satisfy LIBERO's
+      predicate in 50 of 50 demonstrations when the recorded fixture poses are written into the model,
+      and in 13 of 50 without them.
+
   - id: AXM-libero-soft-reset-state
     domain: environment
     statement: >-
