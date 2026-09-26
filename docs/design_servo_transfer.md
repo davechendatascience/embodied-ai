@@ -272,9 +272,31 @@ box shoved along with the plate in goal 5 (42), the hand brushing the plate besi
 transients of 1-4 steps at a squeeze's onset or a release (17, in 9 episodes).
 
 **Declared: `AXM-servo-pins-when-blocked`.** On all five arms no successful episode is pinned at all; the other arms'
-failures are pinned on 3,771 steps, and at 3,672 of them (97%) some robot contact is unintended. Blocked progress is
+failures are pinned on 3,771 steps, and at 3,680 of them (98%) some robot contact is unintended. Blocked progress is
 therefore observable from the state, and its cause is named by the same rules the screen and the clearance servo
 will use.
+
+### Grading the screen by intent: built, measured, not adopted (2026-09-26)
+
+Of the 8 pinned failures, grading the chosen candidate's own probes by the definition flags the pinning contact in 3
+(the Kinova3's and the Jaco's fingertips on the moka pot outside the jaws, libero_10 2; the UR5e's forearm against its
+gripper, goal 0); the other 5 pin in motions no screen probes (the push entry, closing a drawer, clearing the
+microwave) or between probes. A draft screen kept the old grade and raised it to 2 for an unintended self-contact or
+an unintended contact with the target. On the Panda it changed 2 of the 40 matrix episodes (libero_10 3,
+libero_spatial 9), both still successful, at 10.0 against 9.0 ms per step. On the other arms it lowered the matrix
+from 146 to 144 of 160 and fixed none of the three: without the fingertip-on-pot handle grasps the Kinova3 and the
+Jaco took a whole-body pinch of the moka pot and dropped it on the lift; without the self-contacting handle grasps
+the UR5e forced one and stalled on the cabinet as before; and it lost Kinova3 libero_10 8 and Jaco goal 2, whose
+working grasps it now rejected. Rejection at the probes does not supply a better candidate: the moka pot needs its
+handle approached from the side, the UR5e's middle drawer an arm posture its handle candidates do not reach. The
+branch is withdrawn; the definition stays, as the instrument that names what blocks the arm. (A first draft that
+let an intended contact lower the grade changed 6 Panda episodes and lost libero_10 9: intent must never excuse
+penetrating a fixture.)
+
+What remains open: candidates the other arms can use (approach directions, postures), screening the motions no
+screen probes, and the blocked-motion halt (`BRN-execution-halts-when-blocked`, staged and refuted as first stated:
+MuJoCo's soft contacts push a halted arm back, so the claim can only be that the goal stops leading it), to be run
+first as a detector over the Panda's benchmark sweep.
 
 ## 5. What has to hold (for the ledger)
 

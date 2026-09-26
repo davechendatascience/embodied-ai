@@ -153,7 +153,7 @@ axioms:
       init 0, all successful) the arm is pinned on 5 of 7,160 steps, in one run of 5. Over the
       corrected cross-embodiment matrix (UR5e, IIWA, Kinova3, Jaco, the same 40 tasks each) no
       successful episode is pinned at all; the failures are pinned on 3,771 steps, in runs of up to
-      733, and at 3,672 of them some robot contact is unintended in DEF-intended-contact's sense. A
+      733, and at 3,680 of them some robot contact is unintended in DEF-intended-contact's sense. A
       pinned arm stays pinned while its command keeps pressing the same way.
     rationale: >-
       Measured 2026-09-26 at 2c371d4 with screwhead/sim/intent.py:
@@ -551,33 +551,40 @@ definitions:
     meaning: >-
       At a step, a contact between a geom of the robot's and a geom of a body B that is not the
       robot's is intended when, read from that step's state and the model alone, one of these holds:
-      (held) both finger groups touch B or the object B belongs to, and that object moves on a free
-      joint (fingertips either side of a table hold nothing); (jaws) a finger touches B at a point
-      inside the jaws' closing volume -- between the two pads' inner faces along the jaw line, within
-      the fingers' width across it, and from the palm's face to the finger tips along the approach,
-      each widened by 1 mm, more than a contact point lies off the surfaces in contact -- with the
-      contact's normal nearer the jaw line than the approach; (pushed) a finger touches B and B's
-      category is moved by pushing in the affordance table; (joint) any part of the gripper touches B,
-      and B is, of the bodies that move on a slide or hinge joint of their own, the one whose
-      collision geometry lies nearest the tool point; (support) a finger touches B while both finger
-      groups touch another body that touches B; (inside) the tool point lies inside a region site of
-      B's object. Every other contact between the robot and anything else is unintended, and so is
-      every contact between two of the robot's bodies more than one joint apart in the kinematic tree,
-      unless both are the gripper's. The rules read no policy's intent, so a teacher and a student in
-      the same state are judged alike. This names what the per-intent rules allow; it does not say an
-      intended contact is harmless or an unintended one harmful.
+      (held) both finger groups touch B or the object B belongs to across the jaw line -- each with a
+      contact whose normal is nearer the jaw line than the approach -- and that object moves on a free
+      joint (fingertips either side of a table hold nothing, and closed fingertips pressed into a
+      bowl's floor do not hold it); (jaws) a finger touches B at a point inside the jaws' closing
+      volume -- between the two pads' inner faces along the jaw line, within the fingers' width across
+      it, and from the palm's face to the finger tips along the approach, each widened by 1 mm, more
+      than a contact point lies off the surfaces in contact -- with the contact's normal nearer the
+      jaw line than the approach; (pushed) a finger touches B and B is an object the task's plan
+      pushes (its category is moved by pushing in the affordance table and a goal of the task places
+      it); (joint) any part of the gripper touches B, and B is, of the bodies that move on a slide or
+      hinge joint of their own, the one whose collision geometry lies nearest the tool point;
+      (support) a finger touches B while both finger groups touch another body that touches B;
+      (inside) the tool point lies inside a region site of B's object. Every other contact between the
+      robot and anything else is unintended, and so is every contact between two of the robot's bodies
+      more than one joint apart in the kinematic tree, unless both are the gripper's. The rules read
+      no policy's intent, so a teacher and a student in the same state are judged alike. This names
+      what the per-intent rules allow; it does not say an intended contact is harmless or an
+      unintended one harmful.
     rationale: >-
       The user's decision of 2026-09-26: exemptions are per-intent state rules, not one finger zone,
       so a fingertip striking a wall stays guarded. Calibrated on the Panda teacher's 40 matrix
-      episodes (all successful): of 12,806 contact-steps, 81 are unintended -- a cream-cheese box
+      episodes (all successful): of 12,729 contact-steps, 103 are unintended -- a cream-cheese box
       shoved along with the plate in libero_goal 5 (42), the hand brushing the plate beside the
-      cabinet in libero_goal 0 (22), and transients of 1 to 4 steps at the onset of a squeeze or the
-      release (17, in 9 episodes). Each rule was forced by a case: rims pinched as deep as the palm
-      touch the fingers above the pads (the closing volume runs to the palm); the plate in goal 5 is
-      pushed (pushed); a body wedged between the Jaco's fingers pressed back along the approach for
-      733 steps (the gripping normal); two closed fingers touch (the gripper exception); the Panda
-      closes a drawer by pushing it with its hand, while the Kinova3's hand pinned itself on the
-      drawer above the one it drove (the jointed body at the tool point).
+      cabinet in libero_goal 0 (22), the moka pot resting on the fingertips as it is lowered in
+      libero_10 2 (16), and transients of 1 to 4 steps at the onset of a squeeze or the release (23,
+      in 10 episodes). Each rule was forced by a case: rims pinched as deep as the palm touch the
+      fingers above the pads (the closing volume runs to the palm); the plate in goal 5 is pushed
+      (pushed); a body wedged between the Jaco's fingers pressed back along the approach for 733 steps
+      (the gripping normal); two closed fingers touch (the gripper exception); the Panda closes a
+      drawer by pushing it with its hand, while the Kinova3's hand pinned itself on the drawer above
+      the one it drove (the jointed body at the tool point); closed fingertips pushed into a bowl's
+      floor counted as holding it, where the screen test expected a rejection (held needs gripping
+      contacts); a plate counted as pushed in libero_spatial 0, which never pushes it (pushed is the
+      task's).
 
   - id: DEF-reachable-pose
     term: Reachable pose

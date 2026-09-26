@@ -4,16 +4,18 @@ Per-intent state rules, decided 2026-09-26 over a single "finger zone": each con
 own rule, computed from the simulator state alone, so a student executing through the same layer is judged the same
 way. A contact between a robot geom and a body B is intended when
 
-  held     both finger groups touch B, and B belongs to an object that moves on a free joint (the jaws hold it,
-           or are closing on it); fingertips on either side of a table hold nothing;
+  held     both finger groups touch B across the jaw line (each with a contact whose normal is nearer the jaw line
+           than the approach), and B belongs to an object that moves on a free joint (the jaws hold it, or are
+           closing on it); fingertips either side of a table hold nothing, and closed fingertips pressed down into
+           a bowl's floor do not hold it;
   jaws     a finger touches B inside the jaws' closing volume: between the two fingers' inner faces, within the
            fingers' width across the jaw line, and along the approach from the palm's face to the finger tips (a rim
            pinched as deep as the palm touches the fingers above their pads), widened by CONTACT_TOL, where a
            contact point between two touching surfaces lies -- and gripping: its normal nearer the jaw line than the
            approach (a body wedged between the fingers and pressing back along the approach is not held by them;
            it pinned the Jaco's descent on the moka pot for 733 steps, libero_10 2);
-  pushed   a finger touches B and B's category is moved by pushing (the affordance table), passed in as
-           `pushed`;
+  pushed   a finger touches B and B is an object the task's plan pushes (its category is moved by pushing in
+           the affordance table and a goal places it), passed in as `pushed`;
   joint    the gripper touches B, and B is the body at the tool point among those that move on a joint of their
            own (a drawer, a door, a knob): the one whose collision geometry is nearest the tool point. The hand
            pushes a drawer shut (BRN-push-closes-sliding-drawer); a hand on the drawer above it is not driving it;
@@ -148,8 +150,8 @@ class Intent:
                 out.add(self._root(int(self.m.site_bodyid[s])))
         return out
 
-    def _contacts(self):
-        """(contacts as (b1, b2, point, normal), bodies touching each body, bodies both finger groups touch)."""
+    def _contacts(self, R_tool: np.ndarray):
+        """(contacts as (b1, b2, point, normal), bodies touching each body, bodies both finger groups grip)."""
         m, d = self.m, self.d
         found, sides, touching = [], {}, {}
         for i in range(d.ncon):
@@ -157,10 +159,12 @@ class Intent:
             if c.dist > 0:
                 continue
             b1, b2 = int(m.geom_bodyid[c.geom1]), int(m.geom_bodyid[c.geom2])
-            found.append((b1, b2, np.asarray(c.pos, float), np.asarray(c.frame[:3], float)))
+            normal = np.asarray(c.frame[:3], float)
+            found.append((b1, b2, np.asarray(c.pos, float), normal))
+            gripping = abs(float(normal @ R_tool[:, 1])) >= abs(float(normal @ R_tool[:, 2]))
             for x, y in ((b1, b2), (b2, b1)):
                 touching.setdefault(x, set()).add(y)
-                if self.finger[x] and not self.robot[y]:
+                if self.finger[x] and not self.robot[y] and gripping:
                     sides.setdefault(y, set()).add("left" if self.left[x] else "right")
         return found, touching, {b for b, s in sides.items() if len(s) == 2 and self._root(b) in self.free_roots}
 
@@ -189,7 +193,7 @@ class Intent:
 
     def classify(self, R_tool: np.ndarray, p_tool_world: np.ndarray) -> list[Contact]:
         """Every robot contact of negative or zero distance, with the rule that makes it intended, or none."""
-        found, touching, held = self._contacts()
+        found, touching, held = self._contacts(R_tool)
         at = dict(held=held, held_roots={self._root(b) for b in held}, touching=touching, R=R_tool,
                   vol=self._jaws_volume(R_tool, p_tool_world), inside=self._inside(p_tool_world),
                   at_tool=self._at_tool(p_tool_world))
