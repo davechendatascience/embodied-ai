@@ -4143,6 +4143,212 @@ branches:
       conclusion is of episodes that returned; TRL-1433's counter gap stated.
     sufficiency: {n_min: 3, min_consensus: 0.8}
 
+  # LIBERO-Variations (docs/design_libero_variations.md), declared 2026-09-27 as verified in the ledger
+  - id: BRN-lv-action-space
+    subject: CMP-libero-variations
+    claim_type: contract
+    statement: >-
+      The action space of a robot over a table family is a set of points of a declared square grid over the
+      table's top, computed once in a reference scene -- the robot's declared model on its declared mount with
+      its base at a declared pose, the table at its declared pose, and the fixtures the family declares at
+      declared poses and joint positions, and no others, every pose in the world frame, and no flex
+      (deformable) element in the model -- under a simulator release recorded with it, and stored, by digest,
+      with the benchmark's metadata. The gripper's joints are exactly its fingers' joints, and a declared
+      aperture sets each of them, every one written separately. A jaw line is a horizontal direction together
+      with its opposite. A grid point passes when, for each of a declared set of jaw lines, one of the line's
+      two directions is such that, at each of a declared set of heights above the top (from 2 cm to 25 cm),
+      the tool pointing straight down over the point with its jaw along that direction passes
+      DEF-reachable-pose's screen in the reference scene as the simulator reports it -- its inverse kinematics
+      solved from the robot's declared start joints, the arm's joints written at the solution and every
+      gripper joint written from the declared aperture, the state forwarded, no robot geom reported in contact
+      with the table, a fixture, or a geom of the world body itself, and the simulator's contact and
+      constraint buffers not overflowing during that screen (a screen during which the simulator warns of
+      either counts as failed). A grid point is in the set when it passes and every grid point within a
+      declared border of it passes. A plan region is inside the action space when it lies within the union of
+      the grid cells (squares of the grid's spacing centred on its points) of points in the set. The matched
+      bodies are the world body, for its own geoms, and those of the robot, its gripper and its mount, the
+      table and the fixtures, with every body attached below them. A scene matches the reference when it is
+      simulated by the recorded release, holds no flex element, and its matched bodies are the reference's:
+      each other than the world hanging from the world or from another matched body, none of them a mocap
+      body; the same bodies under the same parents, each at the same pose in its parent and carrying the same
+      joints (type, axis, anchor, range, whether that range is enforced, and reference position); the same
+      geoms on each, the world body's among them, each at the same pose in its body, with the same shape
+      (meshes included), contact filters, margins and gaps; the robot's and the gripper's sites, the tool
+      frame among them, each at the same pose in its body; every joint of the matched bodies other than the
+      arm's and the gripper's at the reference's position (a fixture's joints among them); and the same
+      contact options, contact exclusions and explicit contact pairs. The positions of the arm's and the
+      gripper's joints are not part of the match. Consequently, in any scene that matches the reference, for
+      every grid point of the action space, or within the border of one, and every listed jaw line, there is
+      one direction of the line at which every listed height over the point is reached, pointing down, by a
+      configuration that passes the same screen there whenever the scene's buffers do not overflow: the arm's
+      joints the reference's inverse kinematics found for it, with every gripper joint set from the declared
+      aperture. Within the one simulator release, with every other joint of the matched bodies where the
+      reference had it and every arm and gripper joint written as in the reference, every matched body's chain
+      from the world is the reference's, so every matched body, and with it the tool frame and every robot,
+      table, fixture and world geom, stands at the world pose it had in the reference
+      (AXM-mujoco-kinematics-by-chain) -- the tool at the same pose relative to the base, with the same
+      conditioning and, every joint's range and its enforcement being the reference's, the same joint margin.
+      With no flex in either model every contact reported is between two geoms, and with neither simulator's
+      buffers overflowing, whether a robot geom is reported in contact with a table, fixture or world geom is
+      fixed by the two geoms' shapes, world poses, filters (their bodies' parents and joints included),
+      margins and gaps and by the model's contact options (AXM-mujoco-contacts-pairwise) -- every one as in
+      the reference, where none was reported -- so none is reported, whatever free objects the scene holds
+      besides. Not claimed: anything in a scene that does not match the reference -- simulated by another
+      release among them -- or at a screen during which its buffers overflow; that the screen's verdict is
+      DEF-reachable-pose's beyond what the simulator reports -- overlaps it does not report as contacts are
+      not excluded; that both directions of a line are reachable; that inverse kinematics solved from other
+      joints finds that configuration or another reachable one; reachability with the fingers at other
+      apertures, between grid points, or at other jaw lines, heights or tilts; that a path from the arm's
+      joints to that configuration, or between the heights, is reachable throughout
+      (LMA-whole-path-reachable); that the servo tracks these poses, which DEF-reachable-pose disclaims;
+      approaches other than from above; that free objects in a scene leave these poses clear.
+    premises: [AXM-mujoco-forward-is-a-function-of-state, AXM-mujoco-contacts-pairwise, AXM-mujoco-kinematics-by-chain, AXM-object-geometry-known, DEF-reachable-pose]
+    derivation_rule: >-
+      The user's choice (2026-09-27) for LIBERO-Variations: objects and targets inside the robot's action
+      space, a top-down reach map computed once per robot and table family. Restated after TRL-1624..1626
+      (REFUTED: the world body's own geoms were never compared, so a table modelled as a world geom could
+      stand higher in a matching scene): the world body joins the matched bodies for its geoms, and the screen
+      counts contacts with them. Built so at 5d528da: the kitchen family's world geoms (the floor, the walls
+      and five more) are the same in every generated scene, and the map is unchanged at 1279 points (the
+      screen already counted every fixed body, the world's geoms included). Before: TRL-1579..1581 (simulator
+      release, bf532b0), TRL-1567..1569 (flex; AXM-mujoco-contacts-pairwise amended at 53a31d6),
+      TRL-1555..1557 (range enforcement), TRL-1543..1545 (buffer overflow), TRL-1531..1533 (gripper joints,
+      mocap), TRL-1519..1521 (reference positions; AXM-mujoco-kinematics-by-chain, fa535c2), TRL-1507..1509,
+      TRL-1495..1497, TRL-1483..1485 (AXM-mujoco-contacts-pairwise, d8eaa16), TRL-1474..1476, TRL-1462..1464,
+      TRL-1450..1452. Evidence: the map's computation recorded with its digest; a re-check of sampled points
+      (a contract to declare).
+  - id: BRN-lv-scenes-valid
+    subject: CMP-libero-variations
+    claim_type: contract
+    statement: >-
+      A kept scene of LIBERO-Variations is drawn as follows, against the action space and reference scene
+      (BRN-lv-action-space) that the benchmark's metadata names by digest when the task is generated. The
+      generator's revision is a digest of the generator's sources, the benchmark's metadata, its stored map
+      and catalog, and the affordance table, taken by the process that generates and scores a task as it loads
+      them; a task is scored only in the process that generates it, and each of its trials records that
+      revision, so every trial names the action space its task was checked against. The generator writes a
+      task file in LIBERO's format that places every movable object, each of a category that rests upright, in
+      a rectangular region of its own on the table, and LIBERO's environment builds it with the scene rebuilt
+      from the task file (a hard reset: AXM-libero-soft-reset-misplaces-hosted-objects), numpy's global
+      generator seeded by the task's seed and attempt. The scene is held until every free object is at rest,
+      and kept only if, at rest: the scene matches that reference (BRN-lv-action-space's match); every
+      object's origin lies inside its region's rectangle and within 10 mm, across the table, of where the
+      reset sampled it; every object's upward axis lies within a declared angle of the vertical; every object
+      touches the table; every object's plan footprint, measured from its collision geometry at rest
+      (AXM-object-geometry-known) and grown by a declared clearance, lies inside that action space; and no two
+      objects' plan footprints overlap. Otherwise the next attempt is drawn. Recorded with a kept task: the
+      simulator's state at that rest, the poses of the fixtures the reset draws, the compiled model's
+      fingerprint -- a digest of every numeric field, every name and every option of the model, the robot, its
+      mount and the table included, those fixtures' poses excepted, so that each named object is the same body
+      with the same geometry -- and a digest of the integration state after the state and fixture poses are
+      written and forwarded. An episode on the task is scored only if it starts in an environment built from
+      the task file whose compiled model has the recorded fingerprint and in which, the recorded state and
+      fixture poses written and forwarded (AXM-mujoco-forward-is-a-function-of-state), the fixtures' poses and
+      the integration state's digest are the recorded ones. Consequently every scored episode on a generated
+      task starts in the kept scene: matching the reference of the action space its trial's generator revision
+      names, with every movable object at rest on the table, upright within the declared angle, inside its
+      region and within 10 mm across the table of where the reset sampled it, its footprint and clearance over
+      that action space, and no two objects over each other. Not claimed: that the digested files are not
+      edited between being digested and being loaded within one process; that the objects fit together in
+      three dimensions beyond their plan footprints; that the layouts kept are uniformly distributed; anything
+      about the scene once the episode has started; anything about episodes that are not scored; that a digest
+      match excludes a hash collision; scenes with objects placed on or in other objects, or objects that rest
+      lying (none are generated in this version).
+    premises: [AXM-libero-soft-reset-misplaces-hosted-objects, AXM-mujoco-forward-is-a-function-of-state, AXM-object-geometry-known, BRN-lv-action-space]
+    derivation_rule: >-
+      LIBERO-Variations generates its own task files, so a scene's validity is checked against the generator's
+      own regions rather than inferred from LIBERO's. Restated after TRL-1570..1572 (DOUBTED: the claim did
+      not say what the recorded revision identifies -- a commit id would miss uncommitted or mid-run edits):
+      the revision is a digest of the input files' bytes, taken by the process that generates and scores the
+      task as it loads them (built so since 80178d4: each worker hashes its inputs on loading and records that
+      revision; the run warns if any worker's differs from the run's). Earlier: TRL-1558..1560 (scored in the
+      generating process), TRL-1552..1554 (which action space), TRL-1486..1488 (names and options in the
+      fingerprint), TRL-1477..1479, TRL-1465..1467, TRL-1453..1455. Evidence: every kept scene's checks,
+      fingerprint and digests recorded, and CTR-lv-regenerates: a split generated three times reproduced every
+      placed-state digest (6 of 6, development).
+  - id: BRN-lv-tasks-doable
+    subject: CMP-libero-variations
+    claim_type: contract
+    statement: >-
+      A generated task is a goal of one template, instantiated in a kept scene (BRN-lv-scenes-valid) only when
+      the generator's preconditions hold, read from the affordance table as it stands when the task is
+      generated. The generator's revision is a digest of the generator's sources, the benchmark's metadata,
+      its stored map and catalog, and the affordance table, taken by the process that generates and scores a
+      task as it loads them; a task is scored only in the process that generates it, and each of its trials
+      records that revision, so every trial names the declarations its task was generated under. The
+      templates: put A on B, the goal On(A, B), B of a category declared to support as a surface; put A in C,
+      the goal In(A, R) for a region R that C's own object declares, C of a category declared to support as a
+      container; stack A on B, the goal On(A, B), B of a category declared to support as a container
+      (AXM-category-supports-declared), those values not open. For every template: A's category is declared
+      moved_by pick, with its moved_by and held_by values not open (AXM-category-affordances-declared); A's
+      plan footprint, measured from its collision geometry at rest and grown by a declared clearance on every
+      side (AXM-object-geometry-known), fits inside the plan extent of B's top, or of C's or B's opening for a
+      container, measured the same way; A's footprint and the target's top or opening lie inside the action
+      space (BRN-lv-action-space); and the goal does not hold in the kept scene by LIBERO's predicate, which
+      scores the episode (AXM-libero-scores-final-state), read on the kept state itself after a forward pass.
+      Consequently, since every scored episode starts in the kept scene, every scored episode on a generated
+      task starts with its goal not achieved, on a task that names an object whose category was declared, in
+      the affordance table of its trial's generator revision, picked with a declared grasp tier (its held_by
+      value) and a target declared there to take objects as a surface or a container whose top or opening
+      takes the object's footprint with the clearance, both over the action space. Doable here means these
+      preconditions -- a policy of the generator, neither necessary nor sufficient for a policy to achieve the
+      goal: LIBERO's predicate can hold for an object the clearance rules out. Not claimed: that the digested
+      files are not edited between being digested and being loaded within one process; anything about episodes
+      that are not scored; that any policy can achieve a generated task; that A fits in three dimensions (its
+      height, an overhang, a container's depth) or at the orientation a grasp leaves it in; that the carry
+      between A and its target is reachable throughout; that the grasps the planner offers pass the teacher's
+      screen; that the object stays on or in its target once released.
+    premises: [AXM-category-affordances-declared, AXM-category-supports-declared, AXM-libero-scores-final-state, AXM-object-geometry-known, BRN-lv-action-space, BRN-lv-scenes-valid]
+    derivation_rule: >-
+      The user's choices (2026-09-27): doable by construction, objects inside the action space so that no
+      inverse kinematics is needed per task, capacity as the affordance table's category plus measured fit.
+      Restated after TRL-1573..1575 (DOUBTED: what the recorded revision identifies was unstated): it is a
+      digest of the input files' bytes -- the affordance table among them -- taken by the generating and
+      scoring process as it loads them (80178d4). Earlier: TRL-1561..1563, TRL-1537..1539, TRL-1489..1491,
+      TRL-1468..1470, TRL-1456..1458. As built, v0 draws put-on (plate, cookie box, ramekin) and put-in (the
+      basket); stack is off because nothing in the pool fits the bowl's opening by this rule. Evidence: the
+      generator's per-task precondition record; CTR-lv-teacher-template.
+  - id: BRN-lv-instructions-unambiguous
+    subject: CMP-libero-variations
+    claim_type: contract
+    statement: >-
+      A generated task's instruction is written from its goal and its kept scene at rest
+      (BRN-lv-scenes-valid), in which every scored episode on the task starts, with the noun phrases the
+      benchmark's metadata declares when the task is generated. The generator's revision is a digest of the
+      generator's sources, the benchmark's metadata, its stored map and catalog, and the affordance table,
+      taken by the process that generates and scores a task as it loads them; a task is scored only in the
+      process that generates it, and each of its trials records that revision, so every trial names the
+      phrases its instruction was written with. Each category of the scene's objects and fixtures has one
+      declared noun phrase, and a scene is generated only from categories whose noun phrases are distinct and
+      none of which contains another as a whole-word substring. Each object the instruction names is named by
+      its category's noun phrase alone when it is the only object of its category in the scene; otherwise by
+      the phrase preceded by an order word, with a declared positive gap: with two of its category, "front" or
+      "back" by the smaller or larger signed coordinate of its origin along the robot base's x axis, in the
+      base's frame, when the two coordinates differ by at least the gap, and otherwise "left" or "right" by
+      the larger or smaller signed coordinate along the base's y axis when those differ by at least the gap;
+      with three, "front", "middle" or "back" by the order of their x coordinates, which must then differ
+      pairwise by at least the gap. A scene with more than three objects of a category, or a named object
+      whose category no usable axis orders, is not generated. Consequently, in every scored episode on a
+      generated task, each object the instruction names is, as the episode starts, the only object of the
+      scene whose category's noun phrase -- in the metadata of its trial's generator revision -- the
+      instruction uses for it, or, among those, the only one holding that place -- smallest, middle or largest
+      -- in the order of their coordinates along that axis. Not claimed: that the digested files are not
+      edited between being digested and being loaded within one process; that the order still holds once the
+      scene has moved; that a reader resolves the words as defined here beyond front, middle and back as the
+      order along the base's x axis and left and right as the order along its y axis; relations to objects of
+      other categories; variety of wording; anything about episodes that are not scored.
+    premises: [AXM-object-geometry-known, BRN-lv-scenes-valid]
+    derivation_rule: >-
+      A generated instruction can be checked against the generator's own ground truth instead of LIBERO's
+      templates. Restated after TRL-1576..1578 (DOUBTED: what the recorded revision identifies was unstated):
+      it is a digest of the input files' bytes -- the metadata's noun phrases among them -- taken by the
+      generating and scoring process as it loads them (80178d4). The table has a declared noun phrase
+      (e42735c), so the distinctness rule covers the scene's fixtures. Earlier: TRL-1564..1566,
+      TRL-1540..1542, TRL-1492..1494. As built, the instruction is written again from the rest scene and the
+      task is kept only if it equals the task file's; v0 declares a 4 cm gap and plans centres a further 3 cm
+      apart. Evidence: the generator's per-task record; a declared test that the v0 noun phrases, the table's
+      included, are distinct and not nested.
+
 policies:
   - id: POL-teacher-design-consistent
     criteria:
