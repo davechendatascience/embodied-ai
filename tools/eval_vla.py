@@ -114,7 +114,7 @@ def _episode(pol: Policy, env, suite: str, e: int, start=None) -> dict:
 
 
 def _task(job: tuple) -> list[dict]:
-    ckpt, suite, task, episodes, seed, rev, starts_file = job
+    ckpt, suite, task, episodes, seed, rev, starts_file, arguments = job
     os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     import torch
     torch.set_num_threads(1)
@@ -126,7 +126,10 @@ def _task(job: tuple) -> list[dict]:
     model, proc = load(ckpt)
     trained_in = torch.load(ckpt, map_location="cpu", weights_only=False).get("trained_in", {})
     record = Path(ckpt + ".record.json")
-    ended_with = json.loads(record.read_text())["checkpoint_digest"] if record.exists() else None
+    trained = json.loads(record.read_text()) if record.exists() else {}
+    ended_with = trained.get("checkpoint_digest")
+    # the training run this checkpoint ended: its per-run inputs, from that run's own record
+    training_run = json.dumps({k: trained.get("configuration", {}).get(k) for k in ("seed", "blind")}, sort_keys=True)
     cfg = model.cfg
     stats = dict(tm=np.array(cfg.twist_mean), ts=np.array(cfg.twist_std),
                  pm=np.array(cfg.proprio_mean, np.float32), ps=np.array(cfg.proprio_std, np.float32))
@@ -169,7 +172,8 @@ def _task(job: tuple) -> list[dict]:
                                                             "image_px": cfg.image_px, "precision": "bfloat16",
                                                             "gripper": "positive score closes"}, sort_keys=True),
                                "checkpoint_digest": file_digest(ckpt),
-                               "checkpoint_is_training_end": ended_with == file_digest(ckpt), **placed}})
+                               "checkpoint_is_training_end": ended_with == file_digest(ckpt),
+                               "training_run": training_run, "arguments": arguments, **placed}})
     from libero.libero import benchmark, get_libero_path
     spec = benchmark.get_benchmark_dict()[suite]().get_task(task)
     read = [os.path.join(get_libero_path("bddl_files"), spec.problem_folder, spec.bddl_file),
@@ -196,6 +200,8 @@ def main() -> int:
     tasks = args.tasks if args.tasks is not None else list(range(90 if args.suite == "libero_90" else 10))
     rev = "vla:" + hashlib.sha1(Path(args.ckpt).read_bytes()).hexdigest()[:10]
     cpus = [int(c) for c in args.cpus.split(",")]
+    # every launch argument as a value, but the checkpoint loaded, the output's location and the cores used
+    arguments = json.dumps({k: v for k, v in vars(args).items() if k not in ("ckpt", "trials", "cpus")}, sort_keys=True)
     free = multiprocessing.Manager().Queue()
     for c in cpus:
         free.put(c)
@@ -204,7 +210,7 @@ def main() -> int:
     for t in tasks:
         eps = list(range(args.episodes))
         for i in range(0, len(eps), max(per, 5)):
-            jobs.append((args.ckpt, args.suite, t, eps[i:i + max(per, 5)], args.seed, rev, args.starts))
+            jobs.append((args.ckpt, args.suite, t, eps[i:i + max(per, 5)], args.seed, rev, args.starts, arguments))
     t0 = time.time()
     # BRN-vla-reported-beside-a-blind-twin: every episode executed twice, in two rounds of fresh worker processes
     # started at different times; the rounds are compared episode by episode in the digest of every observation the
