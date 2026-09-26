@@ -11,7 +11,7 @@ robot: {name: Panda, gripper: PandaGripper}
 
 action_space:                   # BRN-lv-action-space: tools/lv_reach_map.py
   map: reach_panda_kitchen_table.json
-  digest: 8ad682838ced25dd
+  digest: 587a196a0b95b7a2
 catalog:                        # each category's shape at rest, for layout planning only: tools/lv_reach_map.py --catalog
   file: catalog_v0.json
   digest: eeebe68a446656b0

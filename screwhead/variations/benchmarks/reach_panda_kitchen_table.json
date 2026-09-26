@@ -11,7 +11,19 @@
   ],
   "fixtures": {},
   "gripper": "PandaGripper",
-  "match_digest": "019f13f05e3ab2bf",
+  "held_joints": {},
+  "match_digest": "d03a66b48855e407",
+  "moving_joints": [
+   "gripper0_finger_joint1",
+   "gripper0_finger_joint2",
+   "robot0_joint1",
+   "robot0_joint2",
+   "robot0_joint3",
+   "robot0_joint4",
+   "robot0_joint5",
+   "robot0_joint6",
+   "robot0_joint7"
+  ],
   "robot": "Panda",
   "start_joints": [
    0.0,

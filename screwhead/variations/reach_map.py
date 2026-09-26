@@ -105,38 +105,60 @@ def match_digest(m) -> str:
     explicit pairs by name. The fixtures' joint positions are compared separately (fixtures_of). The arm's joint
     positions are not in it."""
     h = hashlib.sha1()
+    _digest_contact_settings(h, m)
+    for b in sorted(_reference_bodies(m), key=lambda b: m.body(b).name):
+        _digest_body(h, m, b)
+    return h.hexdigest()[:16]
+
+
+def _put(h, *arrays) -> None:
+    for a in arrays:
+        h.update(np.ascontiguousarray(a, float).tobytes())
+
+
+def _digest_contact_settings(h, m) -> None:
+    """The model's options, and its contact exclusions and explicit pairs by name."""
     for name in sorted(n for n in dir(m.opt) if not n.startswith("_")):
         h.update(name.encode())
-        h.update(np.ascontiguousarray(getattr(m.opt, name), float).tobytes())
+        _put(h, getattr(m.opt, name))
     for sig in sorted(int(v) for v in m.exclude_signature):
         h.update(f"exclude {m.body(sig >> 16).name} {m.body(sig & 0xFFFF).name}".encode())
     for i in range(m.npair):
         h.update(f"pair {m.geom(int(m.pair_geom1[i])).name} {m.geom(int(m.pair_geom2[i])).name}".encode())
-        for a in (m.pair_margin[i:i + 1], m.pair_gap[i:i + 1]):
-            h.update(np.ascontiguousarray(a, float).tobytes())
-    for b in sorted(_reference_bodies(m), key=lambda b: m.body(b).name):
-        h.update(m.body(b).name.encode())
-        h.update(m.body(int(m.body_parentid[b])).name.encode())
-        for a in (m.body_pos[b], m.body_quat[b], m.body_ipos[b], m.body_iquat[b], m.body_mass[b:b + 1],
-                  m.body_inertia[b]):
-            h.update(np.ascontiguousarray(a, float).tobytes())
-        for g in range(m.ngeom):
-            if int(m.geom_bodyid[g]) == b:
-                for a in (m.geom_type[g:g + 1], m.geom_size[g], m.geom_pos[g], m.geom_quat[g],
-                          m.geom_contype[g:g + 1], m.geom_conaffinity[g:g + 1], m.geom_margin[g:g + 1],
-                          m.geom_gap[g:g + 1]):
-                    h.update(np.ascontiguousarray(a, float).tobytes())
-                if int(m.geom_dataid[g]) >= 0 and int(m.geom_type[g]) == MESH:
-                    k = int(m.geom_dataid[g])
-                    v0, nv = int(m.mesh_vertadr[k]), int(m.mesh_vertnum[k])
-                    f0, nf = int(m.mesh_faceadr[k]), int(m.mesh_facenum[k])
-                    h.update(np.ascontiguousarray(m.mesh_vert[v0:v0 + nv], float).tobytes())
-                    h.update(np.ascontiguousarray(m.mesh_face[f0:f0 + nf], float).tobytes())
-        for j in range(m.njnt):
-            if int(m.jnt_bodyid[j]) == b:
-                for a in (m.jnt_type[j:j + 1], m.jnt_axis[j], m.jnt_pos[j], m.jnt_range[j]):
-                    h.update(np.ascontiguousarray(a, float).tobytes())
-    return h.hexdigest()[:16]
+        _put(h, m.pair_margin[i:i + 1], m.pair_gap[i:i + 1])
+
+
+def _digest_body(h, m, b: int) -> None:
+    """A body's name, parent, pose in its parent and inertia; its geoms (meshes too), joints and -- on the robot and
+    its gripper, whose sites hold the tool frame -- its sites. Not the table's sites: they carry each task's regions."""
+    h.update(m.body(b).name.encode())
+    h.update(m.body(int(m.body_parentid[b])).name.encode())
+    _put(h, m.body_pos[b], m.body_quat[b], m.body_ipos[b], m.body_iquat[b], m.body_mass[b:b + 1], m.body_inertia[b])
+    for g in np.nonzero(m.geom_bodyid == b)[0]:
+        _put(h, m.geom_type[g:g + 1], m.geom_size[g], m.geom_pos[g], m.geom_quat[g], m.geom_contype[g:g + 1],
+             m.geom_conaffinity[g:g + 1], m.geom_margin[g:g + 1], m.geom_gap[g:g + 1])
+        if int(m.geom_type[g]) == MESH and int(m.geom_dataid[g]) >= 0:
+            k = int(m.geom_dataid[g])
+            v0, nv = int(m.mesh_vertadr[k]), int(m.mesh_vertnum[k])
+            f0, nf = int(m.mesh_faceadr[k]), int(m.mesh_facenum[k])
+            _put(h, m.mesh_vert[v0:v0 + nv], m.mesh_face[f0:f0 + nf])
+    for j in np.nonzero(m.jnt_bodyid == b)[0]:
+        _put(h, m.jnt_type[j:j + 1], m.jnt_axis[j], m.jnt_pos[j], m.jnt_range[j])
+    if m.body(b).name.startswith(REFERENCE_PARTS):
+        for k in np.nonzero(m.site_bodyid == b)[0]:
+            h.update(m.site(int(k)).name.encode())
+            _put(h, m.site_pos[k], m.site_quat[k])
+
+
+def held_joints(m, d, moving: set[str]) -> dict[str, float]:
+    """{joint: position} of every joint of the robot's, gripper's and mount's bodies and the table other than the
+    arm's and gripper's own (`moving`) -- BRN-lv-action-space pins them all; the Panda on its mount has none."""
+    from ..sim.task_env_place import drawn_fixtures
+    fixtures = set(drawn_fixtures(m))
+    bodies = {b for b in _reference_bodies(m)
+              if b not in fixtures and not any(_descends(m, b, f) for f in fixtures)}
+    return {m.joint(j).name: round(float(d.qpos[m.jnt_qposadr[j]]), 9) for j in range(m.njnt)
+            if int(m.jnt_bodyid[j]) in bodies and m.joint(j).name not in moving}
 
 
 def fixtures_of(m, d) -> dict:
@@ -159,9 +181,11 @@ def _descends(m, body: int, root: int) -> bool:
 
 
 def matches(m, d, reference: dict) -> bool:
-    """The scene matches the reference: the same robot, mount and table (match_digest), and the same fixtures
-    at the same poses and joint positions."""
-    return match_digest(m) == reference["match_digest"] and fixtures_of(m, d) == reference["fixtures"]
+    """The scene matches the reference: the same robot, mount and table (match_digest), rooted at the world, their
+    joints other than the arm's and gripper's at the reference's positions, and the same fixtures at the same poses
+    and joint positions."""
+    return (match_digest(m) == reference["match_digest"] and fixtures_of(m, d) == reference["fixtures"]
+            and held_joints(m, d, set(reference["moving_joints"])) == reference["held_joints"])
 
 
 # -- computing it ---------------------------------------------------------------------------
@@ -234,4 +258,10 @@ def compute(env, spec: MapSpec | None = None, log=print) -> ReachMap:
         "base_world": base.round(9).tolist(), "table_top": round(top, 9),
         "match_digest": match_digest(m), "fixtures": fixtures_of(m, d),
     }
+    moving = [m.joint(int(j)).name for j in range(m.njnt)
+              if int(m.jnt_qposadr[j]) in set(env.joint_indexes) | set(env.gripper_indexes)]
+    reference.update(moving_joints=sorted(moving), held_joints=held_joints(m, d, set(moving)))
+    roots = {m.body(int(m.body_parentid[b])).name for b in _reference_bodies(m)} - {m.body(b).name for b in _reference_bodies(m)}
+    if roots != {"world"}:
+        raise ValueError(f"the matched bodies hang from {sorted(roots)}, not the world alone")
     return ReachMap(spec=spec, origin=(float(origin[0]), float(origin[1])), inside=inside, reference=reference)
